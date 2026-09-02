@@ -1,0 +1,118 @@
+name: CodeQL
+
+# ADVANCED SETUP. This file replaces code scanning's *default* setup, which
+# cannot be configured per-PR and so kept analyzing Yukon submission PRs that
+# gate nothing (see the `if:` guard below for why that is waste).
+#
+# Default setup MUST stay disabled while this file exists: with both active,
+# GitHub refuses the advanced run's SARIF ("analyses from advanced
+# configurations cannot be processed when default setup is enabled"). If you
+# ever re-enable default setup in the UI, delete this file in the same change.
+#
+# The settings below deliberately mirror what default setup was configured
+# with, so alert history carries over instead of resetting:
+#   languages     actions, rust      -> the matrix
+#   query_suite   default            -> no `queries:`/`packs:` input
+#   threat_model  remote             -> the action's default; left unset
+#   schedule      weekly             -> the cron below
+#   runner        standard           -> ubuntu-latest
+# The `category` values also match the analyses default setup already
+# uploaded (`/language:actions`, `/language:rust`), which is what lets GitHub
+# treat these as the same logical analysis and update existing alerts rather
+# than opening duplicates.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, matching default setup's cadence. Off-peak, off the hour.
+    - cron: '27 3 * * 1'
+
+permissions:
+  contents: read
+
+# Analysis is idempotent and only the newest result for a ref matters, so a
+# superseded in-flight PR run is worth cancelling. Pushes to main and
+# scheduled runs are NOT cancelled: those are the runs that keep the default
+# branch's alert set current.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    # Job name is load-bearing: it is what the check is called. Keeping it
+    # `Analyze (<language>)` preserves the exact check names default setup
+    # produced, so any branch protection or dashboard referring to them by
+    # name keeps working.
+    name: Analyze (${{ matrix.language }})
+
+    # Evaluated before a runner is assigned, so a skipped PR costs no runner
+    # minutes. Yukon submission PRs are skipped: a Yukon app opens
+    # `submissions/<uuid>` branches in this repo, and every Yukon app is a
+    # bypass actor (`bypass_mode: always`) on the `main protection` ruleset —
+    # two Integration actors as of this commit, app ids 3891566
+    # (`yukon-eigen[bot]`) and 4231003. They land submissions regardless of
+    # any check on the PR, so scanning there gates nothing.
+    #
+    # Rationale for the exact shape of the test (kept in sync with
+    # pr-security.yml, which guards on the same thing):
+    #   - `github.event_name != 'pull_request'` first, because on push and
+    #     schedule the `pull_request` context is empty; without this the whole
+    #     condition would be false and main would silently stop being scanned.
+    #   - `user.type == 'Bot'`, not a list of bot logins: the bypass list gains
+    #     apps over time (it just went from one to two) and a login allowlist
+    #     stops matching the day a new one is added.
+    #   - the head-ref prefix as well, so ordinary bot PRs (Dependabot) are
+    #     still scanned. `user.type` is set by GitHub, so a human cannot skip
+    #     scanning by naming a branch `submissions/...`.
+    # Fork PRs are intentionally NOT excluded here: unlike pr-security.yml,
+    # read-only analysis of a fork's head is still worth running.
+    if: >-
+      github.event_name != 'pull_request'
+      || !(github.event.pull_request.user.type == 'Bot'
+      && startsWith(github.event.pull_request.head.ref, 'submissions/'))
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    permissions:
+      # Required to upload SARIF results.
+      security-events: write
+      contents: read
+      # Required because this repository is internal/private: the action reads
+      # workflow run status through the Actions API.
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # `none` for both languages, which is what default setup used.
+          # `actions` is a configuration language and has no build; Rust is
+          # extracted without a build too. Note this repo has no committed
+          # Cargo.toml (scripts/prepare-build.sh generates it from
+          # Cargo.toml.in), so a build mode that shelled out to cargo would
+          # need that script to run first; `none` sidesteps it and matches the
+          # coverage default setup was already producing.
+          - language: actions
+            build-mode: none
+          - language: rust
+            build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        # No `lfs: true`: the dev corpus LFS object is data, not analyzed code.
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9 (SHA-pinned)
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9 (SHA-pinned)
+        with:
+          category: "/language:${{ matrix.language }}"

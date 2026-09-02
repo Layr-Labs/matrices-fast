@@ -33,14 +33,13 @@ it, rather than deleting it — a resolved question is a useful signpost.
       `lt_1k`). A bucket-weighted budget — more restarts where a win is worth
       more — was never tested. Note `n` is known inside `order()`, so this stays
       a pure function of `(n, nnz)`.
-- [ ] **The big tied matrices are gated out of everything.** `faclay75`
-      (n=272878), `acopf_case9241pegase_qcqp` (n=313068), `gabriel10` (n=244056),
-      `unitcommit_200_100_1_mod_8` (n=146830) all tie at 1.000 and receive only
-      AMD plus at most one AMF pass, because the candidate gates are capped on
-      `n`. But cost tracks nnz, not n, so some may have unused budget —
-      `acopf_case9241pegase_qcqp` gets literally nothing but the baseline. These
-      are the highest-leverage matrices on the corpus (gt_10k weight 0.40 over
-      only 45 matrices). `probe_large` is written to measure exactly this.
+- [ ] **The big tied matrices are gated out of everything.** PARTIALLY answered
+      by [0018](experiments/0018-large-sparse-gt10k-restart-floor.md): `gabriel10`
+      (n=244056) and `unitcommit_200_100_1_mod_8` (n=146830) now get a 4-restart
+      AMD floor when sparse+non-hub+n≤250k. `faclay75` (n=272878) is **explicitly
+      excluded** — 4 extra AMD passes SIGKILL it locally. `acopf_case9241pegase_qcqp`
+      (n=313068) still gets nothing but the baseline. Do not raise the n cap
+      without a per-matrix timing probe. `probe_large` is written to measure this.
 - [ ] **How fast is the grader, really?** Partly answered and partly reopened by
       [0003](experiments/0003-relabelled-amd-multistart.md): the header's "3-5×
       slower than local" claim is false (a 1.019 s local revision passed), and

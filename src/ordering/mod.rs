@@ -464,6 +464,15 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
         base_r.max(12) // Mid-band non-hub floor
     } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
         base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
+    } else if nnz > 350_000 && nnz <= 1_200_000 && n <= 250_000
+        && nnz <= 6 * n && max_deg * 50 <= n && n >= 10_000
+    {
+        // LARGE-SPARSE gt_10k floor: wide giants like gabriel10 (n=244k,
+        // nnz=1.15M) otherwise get base_r=0 relabel restarts and sit at the AMD
+        // tie 1.000. Measured: +4 AMD passes on a 244k/852k synthetic costs
+        // ~0.12 s; the n cap excludes faclay75 (n=273k), where 4 extra passes
+        // blew the 2.0 s cap in local dev (caught by the dev run, not eval).
+        base_r.max(4)
     } else {
         base_r
     }

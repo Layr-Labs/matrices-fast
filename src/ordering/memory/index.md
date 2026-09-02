@@ -4,11 +4,12 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.863272** (weighted geomean flop ratio vs AMD; fill tiebreak
-  0.956976), dev corpus **300** matrices, 2026-09-02
-  ([0015](experiments/0015-small-simplicial-cycled-amd-minfill.md), small-graph
-  simplicial promotion, 6-way cycled AMD & scaled minfill). Previous: 0.863609 / fill 0.957121, 2026-09-02.
-- Per bucket: lt_1k 0.9041 (147) · 1k_10k 0.8903 (108) · gt_10k 0.8124 (45).
+- Best score: **0.860589** (weighted geomean flop ratio vs AMD; fill tiebreak
+  0.955822), dev corpus **300** matrices, 2026-09-02
+  ([0018](experiments/0018-large-sparse-gt10k-restart-floor.md), large-sparse
+  gt_10k restart floor on top of promoted `7c25e77`). Previous shipped local:
+  0.860780 / fill 0.955916 (merged 0015+0016+0017 stack).
+- Per bucket: lt_1k 0.8965 (147) · 1k_10k 0.8903 (108) · gt_10k 0.8114 (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer

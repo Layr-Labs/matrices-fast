@@ -21,6 +21,9 @@ first; keep it current whenever you add, rename, or retire a page.
   [0003](experiments/0003-relabelled-amd-multistart.md). Use the comparative rule
   instead: stay at or below the worst case of a revision known to have passed
   (1.019 s). Measure with `probe_timing_and_score` before adding anything.
+- **The search policy of the relabel multi-start is settled: uniform i.i.d. is
+  optimal at fixed cost.** 17 explore/exploit policies swept, none robustly better;
+  see [0004](experiments/0004-structured-relabelings.md). Do not re-derive it.
 - See the latest entry in [log.md](log.md).
 
 ## Tooling
@@ -36,6 +39,19 @@ first; keep it current whenever you add, rename, or retire a page.
   - `probe_relabel_budget` — relabelled-AMD under a per-matrix time BUDGET;
     reports score AND true combined worst case for each `(budget, cap)`. This is
     the one that chose the shipped policy.
+  - `probe_relabel_search` — relabelled-AMD SEARCH POLICIES at a FIXED restart
+    count (i.e. at identical cost): explore/exploit split x perturbation strength
+    x schedule. Scores the pure relabel family against AMD, so policy differences
+    are not masked by the rest of the portfolio, and needs no timing measurement
+    (cost-neutrality is structural). ~10 s for the whole corpus. It also reports
+    **robustness columns** — the advantage on two disjoint corpus halves, and with
+    the single biggest-contributing matrix dropped. Use those before believing any
+    delta on this corpus; see [0004](experiments/0004-structured-relabelings.md).
+
+> **Package matters.** `src/ordering/` compiles only into `ssi-candidate-worker`,
+> so a probe command without `-p` (or with `-p matrices-fast`) matches ZERO tests
+> and exits green, looking like a pass. Use:
+> `cargo test --release -p ssi-candidate-worker --offline --locked -- --ignored --nocapture --test-threads=1 probe_<name>`
 
 ## Literature
 _(papers — one note each; see [literature/_TEMPLATE.md](literature/_TEMPLATE.md))_
@@ -55,7 +71,8 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0000-identity-baseline.md](experiments/0000-identity-baseline.md) — the starter stub; reference point, not competitive.
 - [0001-amd-quotient-graph.md](experiments/0001-amd-quotient-graph.md) — AMD port; matched the baseline. **Superseded**: that hand-rolled `amd.rs` is no longer in the tree.
 - [0002-measured-gates-metis-kahip.md](experiments/0002-measured-gates-metis-kahip.md) — measure the cap, then buy candidates with the slack. 0.888132 → **0.883906**. WIN. (Its 1.019 s timing figure is ±1.6×; corrected in 0003.)
-- [0003-relabelled-amd-multistart.md](experiments/0003-relabelled-amd-multistart.md) — `AMD(Q A Qᵀ)` composed back through `Q` as a randomized-restart minimum degree, on a per-matrix time budget. 0.883906 → **0.876925**. WIN, the largest single gain so far.
+- [0003-relabelled-amd-multistart.md](experiments/0003-relabelled-amd-multistart.md) — `AMD(Q A Qᵀ)` composed back through `Q` as a randomized-restart minimum degree, on a per-matrix time budget. 0.883906 → **0.876925**. WIN, the largest single gain so far. (Its "wins land in the first handful of restarts" is corrected by [0004](experiments/0004-structured-relabelings.md): true on average, false for the tail wins that carry the score.)
+- [0004-structured-relabelings.md](experiments/0004-structured-relabelings.md) — hill-climbing / structured `Q` instead of i.i.d. `Q`, at equal cost. 17 policies swept. **NEGATIVE**: nothing beats i.i.d. robustly; every apparent win is one matrix (`chp_shorttermplan2d`) and flips sign across corpus halves. Closes the top open question. Adds `probe_relabel_search` and the robustness columns.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

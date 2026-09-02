@@ -799,3 +799,264 @@ fn probe_relabel_budget() {
         println!();
     }
 }
+
+
+/// Search-policy modes for [`probe_relabel_search`].
+/// * `FIXED` — perturb the accepted base by `max(1, n/div)` transpositions.
+/// * `DECAY` — geometrically shrinking strength `n/2, n/4, n/8, …` (the first
+///   exploit step is nearly a uniform draw, so little breadth is given up).
+/// * `NOCHAIN` — always perturb the best *i.i.d.* relabeling and never adopt a
+///   perturbation as the new base: pure neighbourhood sampling, no hill climb.
+const FIXED: u8 = 0;
+const DECAY: u8 = 1;
+const NOCHAIN: u8 = 2;
+/// * `DECAY0` — like `DECAY` but one step wider (`n, n/2, n/4, …`), so the first
+///   exploit step is a near-uniform draw and no breadth at all is given up.
+const DECAY0: u8 = 3;
+/// * `RESET` — variable-neighbourhood search: `n, n/2, n/4, …`, but the shrink
+///   counter resets to its widest whenever the base improves.
+const RESET: u8 = 4;
+
+/// Compare SEARCH POLICIES for the relabelled-AMD multi-start at a FIXED restart
+/// count — i.e. at identical cost.
+///
+/// The shipped policy draws every relabeling i.i.d. uniformly, which is
+/// memoryless: a relabeling AMD happens to like teaches the next restart nothing.
+/// The alternative is to spend part of the budget hill-climbing — perturb the best
+/// relabeling found so far and accept the perturbation when it lowers flops.
+/// Because both cost exactly one AMD pass per restart, the comparison is
+/// cost-neutral and the only question is which SAMPLES are worth more.
+///
+/// Each policy is `(name, num, den, div, mode)`: the first
+/// `ceil(restarts * num / den)` restarts are i.i.d.; the rest perturb per `mode`.
+///
+/// Scores here are the PURE relabel family measured against AMD — the portfolio's
+/// other candidates are not run, because they are identical across policies and
+/// would only mask the differences under a `min`. Timing is not measured: every
+/// policy performs exactly `restarts` AMD passes plus one O(n) relabeling each, so
+/// the shipped cost model is unchanged by construction. That also makes the probe
+/// cheap (~10 s for the whole corpus), so the space is worth sweeping rather than
+/// guessing.
+#[test]
+#[ignore]
+fn probe_relabel_search() {
+    const POLICIES: [(&str, usize, usize, usize, u8); 17] = [
+        ("iid (shipped)", 1, 1, 0, FIXED),
+        ("7/8 n/2", 7, 8, 2, FIXED),
+        ("3/4 n/2", 3, 4, 2, FIXED),
+        ("2/3 n/2", 2, 3, 2, FIXED),
+        ("1/2 n/2", 1, 2, 2, FIXED),
+        ("3/4 n/2 nochain", 3, 4, 2, NOCHAIN),
+        ("7/8 decay", 7, 8, 0, DECAY),
+        ("3/4 decay", 3, 4, 0, DECAY),
+        ("2/3 decay", 2, 3, 0, DECAY),
+        ("1/2 decay", 1, 2, 0, DECAY),
+        ("7/8 decay0", 7, 8, 0, DECAY0),
+        ("3/4 decay0", 3, 4, 0, DECAY0),
+        ("2/3 decay0", 2, 3, 0, DECAY0),
+        ("1/2 decay0", 1, 2, 0, DECAY0),
+        ("3/4 reset", 3, 4, 0, RESET),
+        ("2/3 reset", 2, 3, 0, RESET),
+        ("1/2 reset", 1, 2, 0, RESET),
+    ];
+
+    let corpus = crate::corpus::corpus();
+    let np = POLICIES.len();
+    let mut pol: Vec<([f64; 3], [usize; 3])> = vec![([0.0; 3], [0; 3]); np];
+    let mut better = vec![0usize; np];
+    let mut worse = vec![0usize; np];
+    // ROBUSTNESS: the same accumulators over disjoint halves of the corpus
+    // (even/odd position), so a policy's advantage can be checked for being one
+    // lucky matrix rather than a real effect.
+    let mut half: Vec<[([f64; 3], [usize; 3]); 2]> = vec![[([0.0; 3], [0; 3]); 2]; np];
+    // Per-matrix log-ratio delta vs i.i.d., to re-score with the single biggest
+    // contributor dropped.
+    let mut contrib: Vec<Vec<(f64, usize, f64, f64)>> = vec![Vec::new(); np];
+    // Per-matrix movement vs i.i.d. for the leading policy, for attribution.
+    let mut moves: Vec<(f64, String, usize, usize)> = Vec::new();
+    let mut idx = 0usize;
+    const ATTRIB: usize = 7; // index of "3/4 decay" above
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let amd_flops = flops_of(&sp, &amd);
+        let base_f = amd_flops as f64;
+        let bkt = bucket(n);
+
+        // One AMD-under-relabeling evaluation, in flops.
+        let eval = |q: &[usize]| -> Option<u64> {
+            let b = permute_pattern(&sp, q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)?;
+            let pb = feral_amd::amd_order(&bcore).ok()?;
+            let perm: Vec<usize> = pb.iter().map(|&x| q[x as usize]).collect();
+            if !is_bijection(&perm, n) {
+                return None;
+            }
+            Some(flops_of(&sp, &perm))
+        };
+
+        let restarts = relabel_restarts(RELABEL_BUDGET, RELABEL_MAX_RESTARTS, nnz);
+
+        // The i.i.d. prefix is shared by every policy, so evaluate it ONCE.
+        let mut iid: Vec<(Vec<usize>, u64)> = Vec::with_capacity(restarts);
+        for r in 0..restarts {
+            let q = relabel(n, r as u64 + 1);
+            let f = eval(&q).unwrap_or(u64::MAX);
+            iid.push((q, f));
+        }
+
+        let mut iid_only = u64::MAX;
+        for pi in 0..np {
+            let (_, num, den, div, mode) = POLICIES[pi];
+            let explore = (restarts * num).div_ceil(den).min(restarts);
+
+            // Replay the accept logic over the shared i.i.d. prefix.
+            let mut base_q: Vec<usize> = (0..n).collect();
+            let mut base_flops = amd_flops;
+            let mut best = amd_flops;
+            for r in 0..explore {
+                let (q, f) = &iid[r];
+                if *f < base_flops {
+                    base_flops = *f;
+                    base_q = q.clone();
+                }
+                best = best.min(*f);
+            }
+            let anchor_q = base_q.clone();
+            let mut since = 0usize; // exploit steps since the base last improved
+            // Spend what is left perturbing.
+            for (t, r) in (explore..restarts).enumerate() {
+                let swaps = match mode {
+                    DECAY => (n >> (t + 1).min(20)).max(1),
+                    DECAY0 => (n >> t.min(20)).max(1),
+                    RESET => (n >> since.min(20)).max(1),
+                    _ => (n / div).max(1),
+                };
+                let from: &[usize] = if mode == NOCHAIN { &anchor_q } else { &base_q };
+                let q = perturb(from, swaps, r as u64 + 1);
+                let Some(f) = eval(&q) else {
+                    since += 1;
+                    continue;
+                };
+                if mode != NOCHAIN && f < base_flops {
+                    base_flops = f;
+                    base_q = q;
+                    since = 0;
+                } else {
+                    since += 1;
+                }
+                best = best.min(f);
+            }
+
+            if pi == 0 {
+                iid_only = best;
+            } else if best < iid_only {
+                better[pi] += 1;
+            } else if best > iid_only {
+                worse[pi] += 1;
+            }
+            let lr = (best as f64 / base_f).ln();
+            pol[pi].0[bkt] += lr;
+            pol[pi].1[bkt] += 1;
+            let h = idx % 2;
+            half[pi][h].0[bkt] += lr;
+            half[pi][h].1[bkt] += 1;
+            let lr_iid = (iid_only as f64 / base_f).ln();
+            contrib[pi].push((lr - lr_iid, bkt, lr, lr_iid));
+
+            if pi == ATTRIB && best != iid_only {
+                moves.push((best as f64 / iid_only as f64 - 1.0, name.clone(), n, restarts));
+            }
+        }
+        idx += 1;
+    }
+
+    println!(
+        "\n{:>18} {:>10} {:>9} {:>8} {:>8}",
+        "policy", "score", "d_vs_iid", "better", "worse"
+    );
+    let base = aggregate(&pol[0].0, &pol[0].1);
+    for pi in 0..np {
+        let s = aggregate(&pol[pi].0, &pol[pi].1);
+        println!(
+            "{:>18} {s:>10.6} {:>+9.6} {:>8} {:>8}",
+            POLICIES[pi].0,
+            s - base,
+            better[pi],
+            worse[pi]
+        );
+    }
+    // ROBUSTNESS. `dA`/`dB` are the policy's advantage over i.i.d. measured on two
+    // disjoint halves of the corpus; `d_drop1` is the full-corpus advantage with
+    // the single largest-contributing matrix removed. A real effect shows the same
+    // sign in both halves and survives `drop1`. An advantage that is one lucky
+    // matrix collapses under `drop1` and flips sign between halves.
+    println!(
+        "\n{:>18} {:>10} {:>10} {:>10}   (robustness: same sign in both halves + survives drop1)",
+        "policy", "dA", "dB", "d_drop1"
+    );
+    let base_a = aggregate(&half[0][0].0, &half[0][0].1);
+    let base_b = aggregate(&half[0][1].0, &half[0][1].1);
+    for pi in 0..np {
+        // Re-score BOTH this policy and i.i.d. with the single matrix that moved
+        // the most (in either direction) removed from each.
+        let mut p = pol[pi];
+        let mut q = pol[0];
+        if let Some(&(d, dbkt, lr_p, lr_i)) = contrib[pi]
+            .iter()
+            .max_by(|a, b| a.0.abs().partial_cmp(&b.0.abs()).unwrap())
+        {
+            let _ = d;
+            p.0[dbkt] -= lr_p;
+            p.1[dbkt] -= 1;
+            q.0[dbkt] -= lr_i;
+            q.1[dbkt] -= 1;
+        }
+        println!(
+            "{:>18} {:>+10.6} {:>+10.6} {:>+10.6}",
+            POLICIES[pi].0,
+            aggregate(&half[pi][0].0, &half[pi][0].1) - base_a,
+            aggregate(&half[pi][1].0, &half[pi][1].1) - base_b,
+            aggregate(&p.0, &p.1) - aggregate(&q.0, &q.1)
+        );
+    }
+
+    println!("\nper-bucket:");
+    for pi in 0..np {
+        print!("{:>18} ", POLICIES[pi].0);
+        for b in 0..3 {
+            if pol[pi].1[b] > 0 {
+                print!(
+                    " {}={:.4}",
+                    BUCKET_NAMES[b],
+                    (pol[pi].0[b] / pol[pi].1[b] as f64).exp()
+                );
+            }
+        }
+        println!();
+    }
+
+    moves.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    println!("\n{} vs iid — biggest per-matrix relabel-flops moves:", POLICIES[ATTRIB].0);
+    for (d, name, n, r) in moves.iter().take(8) {
+        println!("  {name:36} n={n:<8} restarts={r:<3} {:+.2}%", d * 100.0);
+    }
+    println!("  ...");
+    for (d, name, n, r) in moves.iter().rev().take(8) {
+        println!("  {name:36} n={n:<8} restarts={r:<3} {:+.2}%", d * 100.0);
+    }
+}

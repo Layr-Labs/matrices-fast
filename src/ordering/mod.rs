@@ -317,6 +317,7 @@ const KAHIP_MAX_NNZ: usize = 50_000;
 const RELABEL_BUDGET: usize = 300_000;
 const RELABEL_MAX_RESTARTS: usize = 24;
 
+
 /// Deterministic 64-bit mixer (SplitMix64). Used only to derive relabelings from
 /// a fixed seed, so every run produces the identical sequence — the determinism
 /// gate requires the two `order()` runs to agree byte-for-byte.
@@ -337,6 +338,37 @@ fn relabel(n: usize, seed: u64) -> Vec<usize> {
         .wrapping_add(0x1234_5678_9ABC_DEF0);
     for i in (1..n).rev() {
         let j = (splitmix64(&mut s) % (i as u64 + 1)) as usize;
+        q.swap(i, j);
+    }
+    q
+}
+
+/// A relabeling derived from `base` by applying `swaps` random transpositions.
+/// Pure function of `(base, swaps, seed)` — the seed stream is independent of the
+/// one [`relabel`] uses, so the two phases never produce the same relabeling for
+/// the same `seed`. Composition of transpositions with a permutation is a
+/// permutation, so the result is always a valid relabeling of `0..n`.
+///
+/// TEST-ONLY. `order()` deliberately does NOT use this: the structured-relabeling
+/// policies it exists to build were all measured and all lose to i.i.d. uniform
+/// draws at equal cost (`probe_relabel_search`,
+/// `memory/experiments/0004-structured-relabelings.md`). It is kept in the shipped
+/// module rather than in `probe.rs` so the probe measures the same primitive a
+/// future `order()` would call if the finding is ever revisited under a different
+/// restart budget.
+#[cfg(test)]
+fn perturb(base: &[usize], swaps: usize, seed: u64) -> Vec<usize> {
+    let n = base.len();
+    let mut q = base.to_vec();
+    if n < 2 {
+        return q;
+    }
+    let mut s = seed
+        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        .wrapping_add(0xA076_1D64_78BD_642F);
+    for _ in 0..swaps {
+        let i = (splitmix64(&mut s) % n as u64) as usize;
+        let j = (splitmix64(&mut s) % n as u64) as usize;
         q.swap(i, j);
     }
     q
@@ -797,6 +829,18 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // Deterministic: `relabel` is a pure function of `(n, seed)` with seeds fixed
     // at 1..=restarts, and `restarts` is a pure function of nnz. Best-of floor →
     // zero-downside, and each candidate is bijection-checked before it can win.
+    //
+    // The relabelings are drawn i.i.d. UNIFORMLY, and that is now a measured
+    // choice rather than the obvious default it started as. Spending part of the
+    // same restart budget hill-climbing — perturbing the best relabeling found so
+    // far instead of resampling — was the top lead in `memory/open-questions.md`.
+    // It was swept across 17 explore/exploit policies (split ratio × perturbation
+    // strength × chaining) with `probe_relabel_search`, and NONE of them beats
+    // i.i.d. robustly: every policy whose full-corpus score looked better owed the
+    // entire gain to a single matrix, flipped sign between disjoint halves of the
+    // corpus, and lost to i.i.d. once that one matrix was dropped. See
+    // `memory/experiments/0004-structured-relabelings.md`. Do not re-derive this;
+    // if you want more from this family, buy more restarts, not smarter ones.
     let restarts = relabel_restarts(RELABEL_BUDGET, RELABEL_MAX_RESTARTS, nnz);
     for r in 0..restarts {
         let seed = r as u64 + 1;

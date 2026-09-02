@@ -7,15 +7,6 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Active
 
-- [ ] **Structured relabelings, not random ones (top lead).** The shipped
-      multi-start uses uniform-random `Q` (Fisher-Yates), which is the dumbest
-      possible choice — it works only because AMD's tie-breaking is numbering-
-      sensitive. A *structured* `Q` should do better at identical cost: seed the
-      relabeling from RCM, from a partitioner's block order, or from a previous
-      restart's winning permutation (a hill-climb rather than i.i.d. sampling).
-      The budget machinery in [0003](experiments/0003-relabelled-amd-multistart.md)
-      already prices candidates, so this is cheap to test — reuse
-      `probe_relabel_budget` and swap `relabel`.
 - [ ] **Does the budget want to be non-uniform across buckets?** The shipped
       `RELABEL_BUDGET` spends the same ~0.3 s everywhere, but `gt_10k` carries
       weight 0.40 over only 45 matrices (~4.4× the per-matrix leverage of
@@ -37,6 +28,15 @@ it, rather than deleting it — a resolved question is a useful signpost.
       one significant figure. Nothing in the harness output exposes grader
       timing. Until it does, the only defensible rule is comparative — stay at or
       below the worst case of a revision known to have passed.
+- [ ] **How much of the remaining headroom is even measurable on 300 matrices?**
+      [0004](experiments/0004-structured-relabelings.md) showed that one `gt_10k`
+      matrix is worth ≈0.002 of score, so any change smaller than that is
+      indistinguishable from luck on this corpus, and the hidden eval corpus is
+      refreshed per round. Nothing currently tells us the *variance* of the score
+      under corpus resampling. A bootstrap over the 300 dev matrices (resample with
+      replacement, re-aggregate) would give the confidence interval that says which
+      past "wins" in this log were real — cheap to write, and it changes how every
+      future result should be read.
 - [ ] Do any ML/RL-guided ordering ideas fit a stdlib-only, deterministic,
       2 s/matrix `order()`? Survey the literature before assuming yes/no.
 - [ ] The hand-rolled `nd_order` / `ndfm_order` use a plain **degree sort** at
@@ -47,6 +47,21 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Resolved
 
+- [x] *"Structured relabelings, not random ones (was the top lead)."* **Answered NO
+      by [0004](experiments/0004-structured-relabelings.md).** At a fixed restart
+      count, no explore/exploit policy beats uniform i.i.d. draws: 17 policies swept
+      (split ratio × perturbation strength × decay/reset/no-chain schedules), and
+      every policy whose full-corpus score looked better flipped sign between
+      disjoint corpus halves and lost to i.i.d. once one matrix
+      (`chp_shorttermplan2d`) was dropped. Chaining — the part that makes it a hill
+      climb — contributes nothing, and bigger perturbations beat smaller ones
+      monotonically, so the relabeling→flops map has **no exploitable local
+      structure**: AMD's tie-breaking is a global cascade, and the family is a pure
+      lottery. Do not retry with an RCM- or partitioner-seeded `Q`; the evidence is
+      against the mechanism, not against one perturbation. The only lever that
+      reliably improves this family is **more restarts**, which is a timing problem
+      (see the monotone budget sweep in
+      [0003](experiments/0003-relabelled-amd-multistart.md)).
 - [x] *"Where is the real headroom — is it nested dissection on the larger
       families?"* Partly answered by
       [0002](experiments/0002-measured-gates-metis-kahip.md): a 12-variant

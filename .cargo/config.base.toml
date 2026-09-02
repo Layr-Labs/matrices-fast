@@ -1,0 +1,11 @@
+# Base cargo config; prepare-build.sh appends the `cargo vendor` [source]
+# replacement stanza to produce .cargo/config.toml. This is the single source of
+# non-generated cargo config.
+#
+# No custom linker pin: the "no foreign code" guarantee rests on crates.io-only
+# sources (deny.toml) + this offline, vendored build + the no-network scored run.
+# A closed-source program cannot enter — everything compiled comes from the
+# frozen crates.io snapshot, whose source is public; nothing is fetched at build
+# or run time.
+[net]
+offline = true

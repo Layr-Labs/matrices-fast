@@ -1,0 +1,34 @@
+[package]
+name = "matrices-fast"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Fill-reducing ordering challenge for sparse symmetric indefinite factorization"
+
+[workspace]
+members = [
+    "ssi-scoring",
+    "ssi-purity",
+    "ssi-worker-protocol",
+    "candidate-worker",
+    "prototype-oracle",
+]
+default-members = ["."]
+
+# The trusted parent depends only on frozen workspace packages. Contestant
+# ordering code and dependencies live exclusively in candidate-worker; this
+# prevents their pre-main initialization from entering the parent process.
+[dependencies]
+ssi-scoring = { path = "ssi-scoring" }
+ssi-purity = { path = "ssi-purity" }
+ssi-worker-protocol = { path = "ssi-worker-protocol" }
+
+# Dev-only oracle: the original prototype Σc² scorer + synthetic pattern
+# generators. Used only by the cross-check tests in tests/; never linked into
+# the shipped harness binary (it backs the closed-form scorer cross-check).
+[dev-dependencies]
+prototype-oracle = { path = "prototype-oracle" }
+
+[profile.release]
+opt-level = 3
+debug = false

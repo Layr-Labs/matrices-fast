@@ -1,0 +1,9 @@
+[package]
+name = "ssi-worker-protocol"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Shared Pattern/permutation file protocol between the trusted parent and candidate worker"
+
+[dependencies]
+ssi-scoring = { path = "../ssi-scoring" }

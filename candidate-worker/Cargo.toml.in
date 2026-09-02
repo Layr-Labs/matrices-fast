@@ -1,0 +1,11 @@
+[package]
+name = "ssi-candidate-worker"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Untrusted candidate ordering worker"
+
+[dependencies]
+ssi-scoring = { path = "../ssi-scoring" }
+ssi-worker-protocol = { path = "../ssi-worker-protocol" }
+# === GENERATED CANDIDATE DEPS BELOW (prepare-build.sh; do not edit by hand) ===

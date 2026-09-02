@@ -1,0 +1,10 @@
+[package]
+name = "prototype-oracle"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Original prototype symbolic scorer (Σc² over the elimination tree) and synthetic pattern generators, kept as an INDEPENDENT test oracle for the feral-backed ssi-scoring crate. Never linked into the shipped harness."
+
+# Stdlib only — this is a self-contained reimplementation that must NOT share
+# code with ssi-scoring, so the cross-check test is a genuine second opinion.
+[dependencies]

@@ -1,0 +1,10 @@
+[package]
+name = "ssi-purity"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Shared Stage-A purity & license gate for the SSI ordering challenge. Both the public harness and the private grader run it in RequireDeny mode (cargo-deny mandatory) so both sides scan submissions identically. Validates declared deps in src/ordering/deps.toml; the grader scans the vendored tree for license/source/FFI."
+
+# Stdlib only. Submissions may declare permissive pure-Rust crates in deps.toml,
+# but ssi-purity itself stays stdlib-only. License checks shell out to `cargo-deny`.
+[dependencies]

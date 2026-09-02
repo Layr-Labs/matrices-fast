@@ -1,0 +1,46 @@
+# Local Stage-A license gate for the SSI ordering challenge.
+#
+# This file is the SHARED source of truth for the license policy: the local
+# harness gate (src/purity.rs) and the grader's authoritative Stage A
+# both invoke `cargo-deny` against THIS file. Keep them identical — a
+# submission that passes locally must pass on the server.
+#
+# Policy: only permissive licenses are allowed (MIT / BSD / Apache-2.0 /
+# Unlicense). GPL / AGPL / unknown are rejected. cargo-deny 0.18+ schema.
+
+[licenses]
+# Permissive allow-list. Anything not here (incl. GPL/AGPL/unknown) is denied.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Unlicense",
+    "Zlib",
+    # Unicode-3.0 is permissive (OSI-approved, BSD-style). It appears in the
+    # TRUSTED harness closure via serde_derive → proc-macro2 → unicode-ident,
+    # not in any submission. The whole feral scoring-path closure was audited
+    # and is permissive; this entry makes the allow-list match that reality.
+    "Unicode-3.0",
+]
+# Crates whose license cannot be determined are an error (no "unknown" pass).
+confidence-threshold = 0.8
+
+[bans]
+# Multiple versions are a warning, not an error — license purity is the gate.
+multiple-versions = "allow"
+
+[advisories]
+# The headline gate is purity + licenses; advisory DB checks are informational.
+yanked = "warn"
+
+[sources]
+# Every crate must come from the frozen crates.io snapshot. Git sources are the
+# escape hatch a policy filter cannot vet — deny them outright. The trusted
+# scoring wrapper (ssi-scoring) now depends on feral via exact crates.io releases
+# (feral =0.11.0, feral-* =0.2.1), so the whole tree — trusted closure and
+# contestant deps alike — resolves from the registry with no git exception.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = []

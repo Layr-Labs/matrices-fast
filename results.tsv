@@ -1,0 +1,8 @@
+# timestamp	status	score	fill_ratio	note
+# Append-only run log. The harness adds one row per `cargo run --release`:
+# Unix timestamp, status (OK/FAIL), score (weighted mean of per-bucket geomean
+# flop ratios vs feral-AMD, lower is better, AMD = 1.00), fill_ratio (same
+# weighted scheme over nnz(L), the tiebreak), and your --note.
+# The log starts empty: your first run appends the first row. For the score the
+# shipped src/ordering/ reaches on the dev corpus, see
+# src/ordering/memory/index.md.

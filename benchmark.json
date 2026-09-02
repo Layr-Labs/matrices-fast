@@ -5,6 +5,7 @@
   "category": "optimization",
   "direction": "-",
   "editablePaths": ["src/ordering"],
+  "minScoreImprovementBips": 1,
   "setupCommand": ["bash", "-lc", "command -v cargo >/dev/null 2>&1 || { echo 'Rust toolchain (cargo) not found. Install from https://rustup.rs' >&2; exit 1; }; installed_cargo_deny=\"$(cargo deny --version 2>/dev/null || true)\"; if [ \"$installed_cargo_deny\" != \"cargo-deny 0.20.2\" ]; then cargo install cargo-deny --version 0.20.2 --locked --force; fi; [ \"$(cargo deny --version 2>/dev/null)\" = \"cargo-deny 0.20.2\" ] || { echo 'cargo-deny 0.20.2 is required after setup' >&2; exit 1; }; bash scripts/prepare-build.sh && cargo build --release -p matrices-fast"],
   "benchmarkCommand": ["bash", "-lc", "bash scripts/local-candidate-build.sh && cargo run --release"],
   "scorePath": "score.json",

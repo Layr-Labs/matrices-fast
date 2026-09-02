@@ -4,11 +4,11 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.866980** (weighted geomean flop ratio vs AMD; fill tiebreak
-  0.958532), dev corpus **300** matrices, 2026-09-02
-  ([0008](experiments/0008-unified-relabel-cycled-amd.md), unified relabel
-  multi-start with cycled AMD options & expanded budgets). Previous: 0.870672 / fill 0.960505, 2026-09-02.
-- Per bucket: lt_1k 0.9061 (147) · 1k_10k 0.8957 (108) · gt_10k 0.8161 (45).
+- Best score: **0.865397** (weighted geomean flop ratio vs AMD; fill tiebreak
+  0.958052), dev corpus **300** matrices, 2026-09-02
+  ([0009](experiments/0009-envelope-expansion-scaled-budget.md), envelope
+  expansion & high-dimension budget scaling). Previous: 0.866980 / fill 0.958532, 2026-09-02.
+- Per bucket: lt_1k 0.9061 (147) · 1k_10k 0.8956 (108) · gt_10k 0.8122 (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -94,6 +94,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0006-cycled-amf-amd-multistart.md](experiments/0006-cycled-amf-amd-multistart.md) — cycled-AMF & alternating-AMD multi-start. 0.871827 → **0.871434**.
 - [0007-bucket-weighted-relabel-budget.md](experiments/0007-bucket-weighted-relabel-budget.md) — bucket-weighted relabel budget. 0.871434 → **0.870672**.
 - [0008-unified-relabel-cycled-amd.md](experiments/0008-unified-relabel-cycled-amd.md) — unified relabel multi-start with cycled AMD options & expanded budgets. 0.870672 → **0.866980**. WIN.
+- [0009-envelope-expansion-scaled-budget.md](experiments/0009-envelope-expansion-scaled-budget.md) — envelope expansion & high-dimension budget scaling. 0.866980 → **0.865397**. WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

@@ -751,7 +751,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(minfill_order(pattern))
         });
         if n < 2_000 && nnz < 10_000 {
-            for seed in 1..=6 {
+            let minfill_restarts = if n < 1_000 && nnz < 5_000 { 12 } else { 6 };
+            for seed in 1..=minfill_restarts {
                 let q = relabel(n, seed);
                 let b = permute_pattern(&scoring_pat, &q);
                 let b_pat = Pattern {
@@ -779,6 +780,26 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 consider(&|| {
                     custom_metrics::order_variant(&core, alpha, true, variant)
                 });
+            }
+        }
+
+        if nnz <= 120_000 {
+            for &variant in &[
+                custom_metrics::ScoreVariant::DegDivNvSqrtWf,
+                custom_metrics::ScoreVariant::DegDivNvWfP15,
+                custom_metrics::ScoreVariant::DegDivNvDegme,
+                custom_metrics::ScoreVariant::DegSqrt,
+                custom_metrics::ScoreVariant::DegP075,
+                custom_metrics::ScoreVariant::DegP125,
+                custom_metrics::ScoreVariant::DegPlusDegme,
+                custom_metrics::ScoreVariant::Ammf,
+                custom_metrics::ScoreVariant::AmindNorm,
+            ] {
+                for &alpha in &[1.0, 10.0] {
+                    consider(&|| {
+                        custom_metrics::order_variant(&core, alpha, true, variant)
+                    });
+                }
             }
         }
     }
@@ -975,16 +996,17 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             continue;
         };
 
+        let amd_configs = [
+            feral_amd::AmdOptions { aggressive: true, dense_alpha: 10.0 },
+            feral_amd::AmdOptions { aggressive: false, dense_alpha: 10.0 },
+            feral_amd::AmdOptions { aggressive: true, dense_alpha: -1.0 },
+            feral_amd::AmdOptions { aggressive: false, dense_alpha: -1.0 },
+            feral_amd::AmdOptions { aggressive: true, dense_alpha: 5.0 },
+            feral_amd::AmdOptions { aggressive: false, dense_alpha: 2.0 },
+        ];
+        let amd_opt = &amd_configs[r % amd_configs.len()];
         consider(&|| {
-            let pb = if r % 2 == 1 {
-                let opts = feral_amd::AmdOptions {
-                    aggressive: false,
-                    dense_alpha: 10.0,
-                };
-                feral_amd::amd_order_opts(&bcore, &opts).map(|(p, ..)| p)?
-            } else {
-                feral_amd::amd_order(&bcore)?
-            };
+            let pb = feral_amd::amd_order_opts(&bcore, amd_opt).map(|(p, ..)| p)?;
             // Compose back: `q[k]` is the original vertex that B numbers `k`.
             Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
         });
@@ -1073,7 +1095,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // elimination graph and deg(b) < deg(a). Because this directly evaluates on
     // best_perm and only accepts if strictly fewer flops are produced, it is
     // mathematically monotonic (zero downside).
-    const PAIR_DESCENT_MIN_N: usize = 1_000;
+    const PAIR_DESCENT_MIN_N: usize = 3;
     const PAIR_DESCENT_MAX_N: usize = 4_000;
     const PAIR_DESCENT_MAX_NNZ: usize = 60_000;
     const PAIR_DESCENT_SWEEPS: usize = 4;
@@ -1117,7 +1139,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // vertices across a local lookahead window. Because simplicial pivots add
     // zero fill edges, early elimination is provably safe and avoids premature
     // clique coupling. Re-scored against exact flops; strictly monotonic.
-    const SIMPLICIAL_PROMOTION_MIN_N: usize = 1_000;
+    const SIMPLICIAL_PROMOTION_MIN_N: usize = 3;
     const SIMPLICIAL_PROMOTION_MAX_N: usize = 6_000;
     const SIMPLICIAL_PROMOTION_MAX_NNZ: usize = 100_000;
     const SIMPLICIAL_PROMOTION_MAX_DENSITY: usize = 24;

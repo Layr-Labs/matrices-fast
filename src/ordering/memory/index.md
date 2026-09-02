@@ -4,11 +4,11 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.864652** (weighted geomean flop ratio vs AMD; fill tiebreak
-  0.957588), dev corpus **300** matrices, 2026-09-02
-  ([0012](experiments/0012-terminal-adjacent-pair-descent.md), terminal adjacent-pair
-  descent). Previous: 0.864899 / fill 0.957753, 2026-09-02.
-- Per bucket: lt_1k 0.9051 (147) · 1k_10k 0.8939 (108) · gt_10k 0.8124 (45).
+- Best score: **0.864527** (weighted geomean flop ratio vs AMD; fill tiebreak
+  0.957503), dev corpus **300** matrices, 2026-09-02
+  ([0013](experiments/0013-cycled-amd-options-and-small-minfill.md), 6-way cycled
+  AMD options & small-graph minfill restarts). Previous: 0.864652 / fill 0.957588, 2026-09-02.
+- Per bucket: lt_1k 0.9048 (147) · 1k_10k 0.8938 (108) · gt_10k 0.8124 (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -98,6 +98,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0010](experiments/0010-relabelled-minfill-multistart.md) — Exact deficiency multi-start on $n < 2,000, nnz < 10,000$. 0.868096 → **0.867686**. WIN.
 - [0011](experiments/0011-hub-gate-and-floors.md) — Hub-gated restart allocation (`max_deg * 50 <= n`) with mid-band/low-nnz floors + dual-pass independent AMF seeds. 0.867686 → **0.864899**. WIN.
 - [0012](experiments/0012-terminal-adjacent-pair-descent.md) — Terminal adjacent-pair descent on exact objective. 0.864899 → **0.864652**. WIN.
+- [0013](experiments/0013-cycled-amd-options-and-small-minfill.md) — 6-way cycled AMD options & small-graph minfill restarts. 0.864652 → **0.864527**. WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

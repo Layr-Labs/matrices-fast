@@ -750,7 +750,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(minfill_order(pattern))
         });
         if n < 2_000 && nnz < 10_000 {
-            for seed in 1..=6 {
+            let minfill_restarts = if n < 1_000 && nnz < 5_000 { 12 } else { 6 };
+            for seed in 1..=minfill_restarts {
                 let q = relabel(n, seed);
                 let b = permute_pattern(&scoring_pat, &q);
                 let b_pat = Pattern {
@@ -958,16 +959,17 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             continue;
         };
 
+        let amd_configs = [
+            feral_amd::AmdOptions { aggressive: true, dense_alpha: 10.0 },
+            feral_amd::AmdOptions { aggressive: false, dense_alpha: 10.0 },
+            feral_amd::AmdOptions { aggressive: true, dense_alpha: -1.0 },
+            feral_amd::AmdOptions { aggressive: false, dense_alpha: -1.0 },
+            feral_amd::AmdOptions { aggressive: true, dense_alpha: 5.0 },
+            feral_amd::AmdOptions { aggressive: false, dense_alpha: 2.0 },
+        ];
+        let amd_opt = &amd_configs[r % amd_configs.len()];
         consider(&|| {
-            let pb = if r % 2 == 1 {
-                let opts = feral_amd::AmdOptions {
-                    aggressive: false,
-                    dense_alpha: 10.0,
-                };
-                feral_amd::amd_order_opts(&bcore, &opts).map(|(p, ..)| p)?
-            } else {
-                feral_amd::amd_order(&bcore)?
-            };
+            let pb = feral_amd::amd_order_opts(&bcore, amd_opt).map(|(p, ..)| p)?;
             // Compose back: `q[k]` is the original vertex that B numbers `k`.
             Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
         });

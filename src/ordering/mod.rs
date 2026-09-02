@@ -150,9 +150,6 @@ use crate::Pattern;
 #[cfg(test)]
 mod probe;
 
-pub mod rgreedy;
-pub mod custom_metrics;
-
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
 use feral::sparse::csc::CscPattern as ScoringPattern;
@@ -249,8 +246,8 @@ const NDFM_MAX_NNZ: usize = 130_000;
 /// worst-scoring small buckets' tied-at-AMD combinatorial/network graphs
 /// (`wastewater*`, `wastepaper6`, `syn*`, `tln2`). Deterministic. Best-of floor
 /// → zero-downside.
-const MINFILL_MAX_N: usize = 3_000;
-const MINFILL_MAX_NNZ: usize = 12_000;
+const MINFILL_MAX_N: usize = 5_000;
+const MINFILL_MAX_NNZ: usize = 30_000;
 
 /// METIS runtime is structure-dependent and can explode on large/dense patterns
 /// (measured: 6.2 s at nnz≈1.38M). Bound it by nnz PRIMARILY (the cost driver),
@@ -439,32 +436,15 @@ fn relabel_budget_and_cap(n: usize) -> (usize, usize) {
     }
 }
 
+/// Restart count for the budgeted relabelled-AMD multi-start: spend at most
+/// `budget` microseconds of restarts (see [`RELABEL_BUDGET`]), never more than
+/// `cap`. A pure function of `nnz`, never wall-clock, so both required `order()`
+/// runs pick the identical candidate set.
 fn relabel_restarts(budget: usize, cap: usize, nnz: usize) -> usize {
     if nnz == 0 {
         return 0;
     }
     (budget / nnz).min(cap)
-}
-
-/// Restart count for the budgeted relabelled multi-start:
-/// Incorporates the historical hub-gatewall discriminator (`max_deg * 50 <= n`)
-/// and low-nnz / mid-band floors to eliminate seed starvation on non-hub graphs
-/// while protecting extreme hub matrices like `ringpack_30_2` from timeout.
-fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_deg: usize) -> usize {
-    if nnz == 0 {
-        return 0;
-    }
-    let base_r = (budget / nnz).min(cap);
-
-    if max_deg * 50 > n && (100_000..=150_000).contains(&nnz) {
-        base_r.min(4) // Hub guard (e.g. ringpack_30_2)
-    } else if nnz <= 20_000 {
-        (600_000 / nnz).min(48) // Low-nnz regime
-    } else if nnz <= 150_000 && max_deg * 50 <= n {
-        base_r.max(12) // Mid-band non-hub floor
-    } else {
-        base_r
-    }
 }
 
 /// Return an elimination order for `pattern` (best-of over the ordering family).
@@ -506,13 +486,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
     let nnz = pattern.nnz();
-    let mut max_deg = 0usize;
-    for j in 0..n {
-        let deg = pattern.col_ptr[j + 1] - pattern.col_ptr[j];
-        if deg > max_deg {
-            max_deg = deg;
-        }
-    }
 
     // Try a candidate produced by `f`; keep it if it is a valid bijection with
     // strictly fewer flops. `catch_unwind` guards against a candidate panicking
@@ -750,37 +723,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         consider(&|| {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(minfill_order(pattern))
         });
-        if n < 2_000 && nnz < 10_000 {
-            for seed in 1..=6 {
-                let q = relabel(n, seed);
-                let b = permute_pattern(&scoring_pat, &q);
-                let b_pat = Pattern {
-                    n,
-                    col_ptr: b.col_ptr,
-                    row_idx: b.row_idx,
-                };
-                consider(&|| {
-                    let pb = minfill_order(&b_pat);
-                    Ok(pb.into_iter().map(|x| q[x as usize] as i32).collect())
-                });
-            }
-        }
-    }
-
-    // Custom quotient-graph metrics (SqDiv / SqPure) on medium/dense networks.
-    // SqDiv evaluates deg² / (nv + 1), directly predicting each elimination's
-    // contribution to the exact sum of squared column counts Σ cⱼ².
-    if nnz <= 300_000 && nnz >= 10 * n {
-        for &variant in &[
-            custom_metrics::ScoreVariant::SqDiv,
-            custom_metrics::ScoreVariant::SqPure,
-        ] {
-            for &alpha in &[1.0, 10.0] {
-                consider(&|| {
-                    custom_metrics::order_variant(&core, alpha, true, variant)
-                });
-            }
-        }
     }
 
     // METIS nested dissection — bounded by nnz primarily (its cost driver) plus
@@ -962,7 +904,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // `memory/experiments/0004-structured-relabelings.md`. Do not re-derive this;
     // if you want more from this family, buy more restarts, not smarter ones.
     let (relabel_budget, relabel_cap) = relabel_budget_and_cap(n);
-    let restarts = relabel_restarts_tuned(relabel_budget, relabel_cap, n, nnz, max_deg);
+    let restarts = relabel_restarts(relabel_budget, relabel_cap, nnz);
     for r in 0..restarts {
         let seed = r as u64 + 1;
         let q = relabel(n, seed);
@@ -1028,117 +970,58 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
     if nnz <= RELABEL_AMF_MAX_NNZ {
         let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
-        let num_passes: usize = if nnz <= 80_000 { 2 } else { 1 };
-        for pass in 0..num_passes {
-            let seed_offset = pass as u64 * 1000;
-            for r in 0..restarts {
-                let seed = seed_offset + r as u64 + 1;
-                let da = amf_alphas[(r + pass) % amf_alphas.len()];
-                let amf_relabel_opts = feral_amf::AmfOptions {
-                    dense_alpha: da,
+        for r in 0..restarts {
+            let seed = r as u64 + 1;
+            let da = amf_alphas[r % amf_alphas.len()];
+            let amf_relabel_opts = feral_amf::AmfOptions {
+                dense_alpha: da,
+                ..Default::default()
+            };
+            let q = relabel(n, seed);
+            let b = permute_pattern(&scoring_pat, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+            })) else {
+                continue;
+            };
+
+            consider(&|| {
+                let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_relabel_opts)?;
+                // Compose back: `q[k]` is the original vertex that B numbers `k`.
+                Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+            });
+
+            if n < 5_000 && da != -1.0 {
+                let amf_nd_opts = feral_amf::AmfOptions {
+                    dense_alpha: -1.0,
                     ..Default::default()
                 };
-                let q = relabel(n, seed);
-                let b = permute_pattern(&scoring_pat, &q);
-                let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
-                let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
-                let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    feral_ordering_core::CscPattern::new(n, &bcp, &bri)
-                })) else {
-                    continue;
-                };
-
                 consider(&|| {
-                    let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_relabel_opts)?;
-                    // Compose back: `q[k]` is the original vertex that B numbers `k`.
+                    let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_nd_opts)?;
                     Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
                 });
-
-                if n < 5_000 && da != -1.0 && pass == 0 {
-                    let amf_nd_opts = feral_amf::AmfOptions {
-                        dense_alpha: -1.0,
-                        ..Default::default()
-                    };
-                    consider(&|| {
-                        let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_nd_opts)?;
-                        Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
-                    });
-                }
             }
-        }
-    }
 
-    // ── TERMINAL ADJACENT-PAIR DESCENT (local search on exact objective) ────
-    // Swaps adjacent pairs (a, b) in best_perm where (a, b) are adjacent in the
-    // elimination graph and deg(b) < deg(a). Because this directly evaluates on
-    // best_perm and only accepts if strictly fewer flops are produced, it is
-    // mathematically monotonic (zero downside).
-    const PAIR_DESCENT_MIN_N: usize = 1_000;
-    const PAIR_DESCENT_MAX_N: usize = 4_000;
-    const PAIR_DESCENT_MAX_NNZ: usize = 60_000;
-    const PAIR_DESCENT_SWEEPS: usize = 4;
-    const PAIR_DESCENT_OPS_BUDGET: i64 = 128_000_000;
-    const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
-    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
-
-    let pair_descent_ext = n > PAIR_DESCENT_MAX_N
-        && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 30_000
-        && max_deg * 50 <= n;
-    let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
-        && nnz > 0
-        && nnz <= PAIR_DESCENT_MAX_NNZ
-        && (n <= PAIR_DESCENT_MAX_N || pair_descent_ext);
-
-    if pair_descent_gate {
-        let budget = if pair_descent_ext && n > PAIR_DESCENT_MAX_N {
-            PAIR_DESCENT_EXT_OPS_BUDGET
-        } else {
-            PAIR_DESCENT_OPS_BUDGET
-        };
-        if let Some(cand) = rgreedy::adjacent_pair_descent(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &best_perm,
-            PAIR_DESCENT_SWEEPS,
-            budget,
-        ) {
-            let f = flops_of(&scoring_pat, &cand);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = cand;
-            }
-        }
-    }
-
-    // ── TERMINAL SIMPLICIAL PROMOTION (Ost, Schulz, Strash 2020) ───────────
-    // Promotes simplicial vertices (zero deficiency) ahead of non-simplicial
-    // vertices across a local lookahead window. Because simplicial pivots add
-    // zero fill edges, early elimination is provably safe and avoids premature
-    // clique coupling. Re-scored against exact flops; strictly monotonic.
-    const SIMPLICIAL_PROMOTION_MIN_N: usize = 1_000;
-    const SIMPLICIAL_PROMOTION_MAX_N: usize = 6_000;
-    const SIMPLICIAL_PROMOTION_MAX_NNZ: usize = 100_000;
-    const SIMPLICIAL_PROMOTION_MAX_DENSITY: usize = 24;
-    const SIMPLICIAL_PROMOTION_OPS_BUDGET: i64 = 64_000_000;
-
-    if (SIMPLICIAL_PROMOTION_MIN_N..=SIMPLICIAL_PROMOTION_MAX_N).contains(&n)
-        && nnz > 0
-        && nnz <= SIMPLICIAL_PROMOTION_MAX_NNZ
-        && nnz <= n.saturating_mul(SIMPLICIAL_PROMOTION_MAX_DENSITY)
-    {
-        if let Some(cand) = rgreedy::simplicial_promotion(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &best_perm,
-            SIMPLICIAL_PROMOTION_OPS_BUDGET,
-        ) {
-            let f = flops_of(&scoring_pat, &cand);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = cand;
+            // RCM and Sloan also use vertex indices for deterministic tie breaks.
+            // Four fixed relabelled restarts are cheap in the already sparse
+            // region and provide a genuinely different lottery from AMD/AMF.
+            // The seed range is disjoint from the existing restart loops.
+            if n < RCM_MAX_N && nnz < RCM_MAX_NNZ && r < 4 {
+                let rp = Pattern {
+                    n,
+                    col_ptr: b.col_ptr.clone(),
+                    row_idx: b.row_idx.clone(),
+                };
+                consider(&|| {
+                    let p = rcm_order(&rp);
+                    Ok(p.iter().map(|&x| q[x as usize] as i32).collect())
+                });
+                consider(&|| {
+                    let p = sloan_order(&rp, 2, 1);
+                    Ok(p.iter().map(|&x| q[x as usize] as i32).collect())
+                });
             }
         }
     }

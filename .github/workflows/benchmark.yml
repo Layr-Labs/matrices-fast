@@ -1,6 +1,12 @@
 name: benchmark
 
-# (Touch to register this workflow_dispatch workflow with GitHub Actions.)
+# REGISTRATION: a dispatch-only workflow becomes dispatchable only after a
+# commit that touches this file lands on the DEFAULT branch. Merely existing
+# there is not enough — in a repo whose history starts at one imported commit,
+# Actions never indexes it, `gh workflow list` omits it, and every dispatch
+# (Hilbert's included) fails with 404 Not Found. If that happens, merge any
+# commit touching this file to the default branch; no run is needed.
+#
 # Hilbert GitHub Actions execution provider: this workflow IS the grader.
 # Hilbert builds a candidate ref (validated baseline + the submission's
 # src/ordering/ only) and dispatches THIS workflow on it; the score artifact is

@@ -191,7 +191,7 @@ const SWEEP_EXTRA_MAX_NNZ: usize = 150_000;
 /// only ever runs on ultra-sparse patterns where several AMD passes are
 /// milliseconds; the worst case is therefore held byte-for-byte.
 const ROBUST_MAX_N: usize = 150_000;
-const ROBUST_MAX_NNZ: usize = 600_000;
+const ROBUST_MAX_NNZ: usize = 130_000;
 
 /// Reverse Cuthill–McKee envelope. RCM is O(nnz) pure Rust — a few-millisecond
 /// BFS even at large n — so it is bounded PRIMARILY by nnz. The `nnz < 130000`
@@ -363,7 +363,7 @@ const RELABEL_MAX_RESTARTS: usize = 24;
 ///
 /// Gate on nnz, not n: AMF's cost tracks nnz (a small dense pattern is expensive,
 /// a huge sparse one is cheap), so an `n` cutoff would bound the wrong quantity.
-const RELABEL_AMF_MAX_NNZ: usize = 200_000;
+const RELABEL_AMF_MAX_NNZ: usize = 130_000;
 
 
 /// Deterministic 64-bit mixer (SplitMix64). Used only to derive relabelings from
@@ -428,11 +428,11 @@ fn perturb(base: &[usize], swaps: usize, seed: u64) -> Vec<usize> {
 #[inline]
 fn relabel_budget_and_cap(n: usize) -> (usize, usize) {
     if n >= 10_000 {
-        (500_000, 36)
+        (700_000, 48)
     } else if n >= 1_000 {
-        (400_000, 30)
+        (500_000, 36)
     } else {
-        (300_000, 24)
+        (400_000, 32)
     }
 }
 
@@ -905,6 +905,16 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // if you want more from this family, buy more restarts, not smarter ones.
     let (relabel_budget, relabel_cap) = relabel_budget_and_cap(n);
     let restarts = relabel_restarts(relabel_budget, relabel_cap, nnz);
+    let amd_configs = [
+        feral_amd::AmdOptions { aggressive: true, dense_alpha: 10.0 },
+        feral_amd::AmdOptions { aggressive: false, dense_alpha: 10.0 },
+        feral_amd::AmdOptions { aggressive: true, dense_alpha: -1.0 },
+        feral_amd::AmdOptions { aggressive: false, dense_alpha: -1.0 },
+        feral_amd::AmdOptions { aggressive: true, dense_alpha: 5.0 },
+        feral_amd::AmdOptions { aggressive: false, dense_alpha: 2.0 },
+    ];
+    let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
+
     for r in 0..restarts {
         let seed = r as u64 + 1;
         let q = relabel(n, seed);
@@ -917,79 +927,22 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             continue;
         };
 
+        // 1. Cycled-AMD multi-start on relabelled graph:
+        let amd_opt = &amd_configs[r % amd_configs.len()];
         consider(&|| {
-            let pb = if r % 2 == 1 {
-                let opts = feral_amd::AmdOptions {
-                    aggressive: false,
-                    dense_alpha: 10.0,
-                };
-                feral_amd::amd_order_opts(&bcore, &opts).map(|(p, ..)| p)?
-            } else {
-                feral_amd::amd_order(&bcore)?
-            };
-            // Compose back: `q[k]` is the original vertex that B numbers `k`.
+            let pb = feral_amd::amd_order_opts(&bcore, amd_opt).map(|(p, ..)| p)?;
             Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
         });
-    }
 
-    // ── RELABELLED-AMF MULTI-START: the same lottery on a DIFFERENT objective ──
-    //
-    // The loop above is a randomized-restart minimum DEGREE. AMF (approximate
-    // minimum FILL) reads the vertex numbering in exactly the same way, so
-    // `AMF(Q A Qᵀ)` composed back through `Q` is a randomized-restart minimum
-    // FILL for the cost of one AMF pass — a candidate family the portfolio did
-    // not have, even though plain AMF has been in it all along.
-    //
-    // Why this is the right next move rather than more of the same: the sweep in
-    // `memory/experiments/0004-structured-relabelings.md` established that this
-    // family is a LOTTERY — the relabeling→flops map has no exploitable local
-    // structure, so no smarter sampling of the SAME distribution beats uniform
-    // i.i.d. draws, and the only lever is more tickets. Extra AMD restarts are
-    // more tickets in one lottery and hit diminishing returns fast (the budget
-    // table on `RELABEL_BUDGET`: past 300000, 0.05 s of worst case buys under
-    // 0.0002 of score). Tickets in a SECOND lottery are not the same thing: they
-    // are drawn from a different distribution, because min-fill and min-degree
-    // disagree about which vertex to eliminate. Diversity of objective, at equal
-    // spend, is what the AMD-only budget cannot buy.
-    //
-    // The prediction that follows — and it held — is that the wins land where
-    // min-degree is already at ITS ceiling: matrices at or near ratio 1.0000,
-    // where every degree-based candidate converges on the anchor and only a
-    // different objective can move them.
-    //
-    // Same seeds as the AMD loop (1..=restarts). That is deliberate, not laziness:
-    // AMF on an identical relabelled graph is a genuinely different candidate, so
-    // re-using the seeds costs nothing and keeps the family a pure function of
-    // `(n, nnz)` — required, because the harness runs `order()` twice and demands
-    // byte-identical output.
-    //
-    // Routed through `consider` like everything else, so it inherits the best-of
-    // floor: each result is bijection-checked and kept only if strictly cheaper.
-    // The score risk is therefore structurally zero — a candidate can only lower
-    // a ratio, never raise it — and TIME is the only thing at stake. See
-    // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
-    if nnz <= RELABEL_AMF_MAX_NNZ {
-        let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
-        for r in 0..restarts {
-            let seed = r as u64 + 1;
+        // 2. Cycled-AMF multi-start on the SAME relabelled graph (avoids duplicate pattern permutation):
+        if nnz <= RELABEL_AMF_MAX_NNZ {
             let da = amf_alphas[r % amf_alphas.len()];
             let amf_relabel_opts = feral_amf::AmfOptions {
                 dense_alpha: da,
                 ..Default::default()
             };
-            let q = relabel(n, seed);
-            let b = permute_pattern(&scoring_pat, &q);
-            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
-            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
-            let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                feral_ordering_core::CscPattern::new(n, &bcp, &bri)
-            })) else {
-                continue;
-            };
-
             consider(&|| {
                 let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_relabel_opts)?;
-                // Compose back: `q[k]` is the original vertex that B numbers `k`.
                 Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
             });
 

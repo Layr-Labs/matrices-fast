@@ -4,11 +4,11 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.868096** (weighted geomean flop ratio vs AMD; fill tiebreak
-  0.958983), dev corpus **300** matrices, 2026-09-02
-  ([0009](experiments/0009-robust-amd-envelope-expansion.md), robust AMD
-  envelope expansion). Previous: 0.870261 / fill 0.960309, 2026-09-02.
-- Per bucket: lt_1k 0.9064 (147) · 1k_10k 0.8963 (108) · gt_10k 0.8182 (45).
+- Best score: **0.866980** (weighted geomean flop ratio vs AMD; fill tiebreak
+  0.958532), dev corpus **300** matrices, 2026-09-02
+  ([0008](experiments/0008-unified-relabel-cycled-amd.md), unified relabel
+  multi-start with cycled AMD options & expanded budgets). Previous: 0.870672 / fill 0.960505, 2026-09-02.
+- Per bucket: lt_1k 0.9061 (147) · 1k_10k 0.8957 (108) · gt_10k 0.8161 (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -91,6 +91,9 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0003-relabelled-amd-multistart.md](experiments/0003-relabelled-amd-multistart.md) — `AMD(Q A Qᵀ)` composed back through `Q` as a randomized-restart minimum degree, on a per-matrix time budget. 0.883906 → **0.876925**. WIN, the largest single gain so far. (Its "wins land in the first handful of restarts" is corrected by [0004](experiments/0004-structured-relabelings.md): true on average, false for the tail wins that carry the score.)
 - [0004-structured-relabelings.md](experiments/0004-structured-relabelings.md) — hill-climbing / structured `Q` instead of i.i.d. `Q`, at equal cost. 17 policies swept. **NEGATIVE**: nothing beats i.i.d. robustly; every apparent win is one matrix (`chp_shorttermplan2d`) and flips sign across corpus halves. Closes the top open question. Adds `probe_relabel_search` and the robustness columns.
 - [0005-relabelled-amf-multistart.md](experiments/0005-relabelled-amf-multistart.md) — 0004's constructive corollary: relabel + **AMF** (min-fill) as a second multi-start beside relabelled AMD (min-degree). 0.876925 → **0.871827**. WIN, 36 better / **0 worse** / 264 identical, wins in all three buckets, survives both corpus halves and drop-top-5. Worst `order()` 0.384 → 0.439 s. Generalises: *any* ordering routine that reads the input numbering becomes a randomized-restart algorithm under `relabel`, for free.
+- [0006-cycled-amf-amd-multistart.md](experiments/0006-cycled-amf-amd-multistart.md) — cycled-AMF & alternating-AMD multi-start. 0.871827 → **0.871434**.
+- [0007-bucket-weighted-relabel-budget.md](experiments/0007-bucket-weighted-relabel-budget.md) — bucket-weighted relabel budget. 0.871434 → **0.870672**.
+- [0008-unified-relabel-cycled-amd.md](experiments/0008-unified-relabel-cycled-amd.md) — unified relabel multi-start with cycled AMD options & expanded budgets. 0.870672 → **0.866980**. WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

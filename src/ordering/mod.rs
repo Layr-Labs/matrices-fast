@@ -191,7 +191,7 @@ const SWEEP_EXTRA_MAX_NNZ: usize = 150_000;
 /// only ever runs on ultra-sparse patterns where several AMD passes are
 /// milliseconds; the worst case is therefore held byte-for-byte.
 const ROBUST_MAX_N: usize = 150_000;
-const ROBUST_MAX_NNZ: usize = 130_000;
+const ROBUST_MAX_NNZ: usize = 600_000;
 
 /// Reverse Cuthill–McKee envelope. RCM is O(nnz) pure Rust — a few-millisecond
 /// BFS even at large n — so it is bounded PRIMARILY by nnz. The `nnz < 130000`
@@ -363,7 +363,7 @@ const RELABEL_MAX_RESTARTS: usize = 24;
 ///
 /// Gate on nnz, not n: AMF's cost tracks nnz (a small dense pattern is expensive,
 /// a huge sparse one is cheap), so an `n` cutoff would bound the wrong quantity.
-const RELABEL_AMF_MAX_NNZ: usize = 130_000;
+const RELABEL_AMF_MAX_NNZ: usize = 200_000;
 
 
 /// Deterministic 64-bit mixer (SplitMix64). Used only to derive relabelings from

@@ -4,11 +4,11 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.863609** (weighted geomean flop ratio vs AMD; fill tiebreak
-  0.957121), dev corpus **300** matrices, 2026-09-02
-  ([0014](experiments/0014-custom-quotient-metrics.md), custom quotient-graph
-  metrics SqDiv & SqPure). Previous: 0.864462 / fill 0.957488, 2026-09-02.
-- Per bucket: lt_1k 0.9051 (147) · 1k_10k 0.8904 (108) · gt_10k 0.8124 (45).
+- Best score: **0.868096** (weighted geomean flop ratio vs AMD; fill tiebreak
+  0.958983), dev corpus **300** matrices, 2026-09-02
+  ([0009](experiments/0009-robust-amd-envelope-expansion.md), robust AMD
+  envelope expansion). Previous: 0.870261 / fill 0.960309, 2026-09-02.
+- Per bucket: lt_1k 0.9064 (147) · 1k_10k 0.8963 (108) · gt_10k 0.8182 (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -91,15 +91,6 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0003-relabelled-amd-multistart.md](experiments/0003-relabelled-amd-multistart.md) — `AMD(Q A Qᵀ)` composed back through `Q` as a randomized-restart minimum degree, on a per-matrix time budget. 0.883906 → **0.876925**. WIN, the largest single gain so far. (Its "wins land in the first handful of restarts" is corrected by [0004](experiments/0004-structured-relabelings.md): true on average, false for the tail wins that carry the score.)
 - [0004-structured-relabelings.md](experiments/0004-structured-relabelings.md) — hill-climbing / structured `Q` instead of i.i.d. `Q`, at equal cost. 17 policies swept. **NEGATIVE**: nothing beats i.i.d. robustly; every apparent win is one matrix (`chp_shorttermplan2d`) and flips sign across corpus halves. Closes the top open question. Adds `probe_relabel_search` and the robustness columns.
 - [0005-relabelled-amf-multistart.md](experiments/0005-relabelled-amf-multistart.md) — 0004's constructive corollary: relabel + **AMF** (min-fill) as a second multi-start beside relabelled AMD (min-degree). 0.876925 → **0.871827**. WIN, 36 better / **0 worse** / 264 identical, wins in all three buckets, survives both corpus halves and drop-top-5. Worst `order()` 0.384 → 0.439 s. Generalises: *any* ordering routine that reads the input numbering becomes a randomized-restart algorithm under `relabel`, for free.
-- [0006](experiments/0006-cycled-amf-amd-multistart.md) — Cycled AMF dense_alpha schedule [5.0, 2.0, -1.0, 1.0, 16.0] and alternating AMD aggressive mode. 0.871827 → **0.871434**. WIN (eval 0.889994, promoted).
-- [0007](experiments/0007-bucket-weighted-relabel-budget.md) — Dimensional budget scaling ($n \ge 10k \to 500k/36$, $n \ge 1k \to 400k/30$). 0.871434 → **0.870672**. WIN (eval 0.889138, promoted).
-- [0008](experiments/0008-relabelled-amf-ceiling-expansion.md) — Raised RELABEL_AMF_MAX_NNZ from 130k to 200k. 0.870672 → **0.870261**. WIN.
-- [0009](experiments/0009-robust-amd-envelope-expansion.md) — Raised ROBUST_MAX_NNZ from 130k to 600k for 5 non-aggressive & dense-detection disabled AMD variants. 0.870261 → **0.868096**. WIN (eval 0.888100, promoted).
-- [0010](experiments/0010-relabelled-minfill-multistart.md) — Exact deficiency multi-start on $n < 2,000, nnz < 10,000$. 0.868096 → **0.867686**. WIN.
-- [0011](experiments/0011-hub-gate-and-floors.md) — Hub-gated restart allocation (`max_deg * 50 <= n`) with mid-band/low-nnz floors + dual-pass independent AMF seeds. 0.867686 → **0.864899**. WIN.
-- [0012](experiments/0012-terminal-adjacent-pair-descent.md) — Terminal adjacent-pair descent on exact objective. 0.864899 → **0.864652**. WIN.
-- [0013](experiments/0013-terminal-simplicial-promotion.md) — Terminal simplicial promotion on exact dynamic graphs. 0.864652 → **0.864462**. WIN.
-- [0014](experiments/0014-custom-quotient-metrics.md) — Custom quotient-graph metrics (SqDiv & SqPure). 0.864462 → **0.863609**. WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

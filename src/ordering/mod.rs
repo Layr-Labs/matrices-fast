@@ -422,6 +422,20 @@ fn perturb(base: &[usize], swaps: usize, seed: u64) -> Vec<usize> {
     q
 }
 
+/// Bucket-weighted budget allocation: scale restart budget and cap by dimension `n`,
+/// investing more work in high-leverage buckets (gt_10k has weight 0.40 over only 45 matrices,
+/// while lt_1k has weight 0.30 over 147 matrices).
+#[inline]
+fn relabel_budget_and_cap(n: usize) -> (usize, usize) {
+    if n >= 10_000 {
+        (500_000, 36)
+    } else if n >= 1_000 {
+        (400_000, 30)
+    } else {
+        (300_000, 24)
+    }
+}
+
 /// Restart count for the budgeted relabelled-AMD multi-start: spend at most
 /// `budget` microseconds of restarts (see [`RELABEL_BUDGET`]), never more than
 /// `cap`. A pure function of `nnz`, never wall-clock, so both required `order()`
@@ -889,7 +903,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // corpus, and lost to i.i.d. once that one matrix was dropped. See
     // `memory/experiments/0004-structured-relabelings.md`. Do not re-derive this;
     // if you want more from this family, buy more restarts, not smarter ones.
-    let restarts = relabel_restarts(RELABEL_BUDGET, RELABEL_MAX_RESTARTS, nnz);
+    let (relabel_budget, relabel_cap) = relabel_budget_and_cap(n);
+    let restarts = relabel_restarts(relabel_budget, relabel_cap, nnz);
     for r in 0..restarts {
         let seed = r as u64 + 1;
         let q = relabel(n, seed);

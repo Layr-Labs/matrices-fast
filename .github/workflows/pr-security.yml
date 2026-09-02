@@ -8,9 +8,32 @@ permissions:
 
 jobs:
   security-regressions:
-    # This job-level guard is evaluated before a runner is assigned. Fork PRs
-    # therefore create only a skipped check and consume no runner minutes.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # This job-level guard is evaluated before a runner is assigned. Guarded
+    # PRs therefore create only a skipped check and consume no runner minutes.
+    #
+    # Fork PRs are skipped: a fork's head is untrusted code, and the run gets
+    # no secrets, so it proves nothing about this repo's merge gate.
+    #
+    # Yukon submission PRs are skipped: a Yukon app opens `submissions/<uuid>`
+    # branches inside this repo, and every Yukon app is a bypass actor
+    # (`bypass_mode: always`) on the `main protection` ruleset — as of this
+    # commit two Integration actors, app ids 3891566 (`yukon-eigen[bot]`) and
+    # 4231003. They land submissions without regard to any check on the PR, so
+    # these steps gate nothing there and only burn runner minutes per
+    # submission. Grading is the separate dispatch-only `benchmark` workflow,
+    # which has no `pull_request` trigger and is untouched by this guard.
+    #
+    # The test is on the PR author's TYPE, not a list of bot logins: the
+    # bypass list gains apps over time (it just went from one to two), and a
+    # login allowlist silently stops matching the day a new one is added,
+    # quietly resuming paid runs. Both halves are still required, because
+    # `Bot` alone would also skip Dependabot-style PRs that this job should
+    # gate. A human cannot spoof past it by naming a branch `submissions/...`
+    # — `user.type` is set by GitHub, not by the PR author.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && !(github.event.pull_request.user.type == 'Bot'
+      && startsWith(github.event.pull_request.head.ref, 'submissions/'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

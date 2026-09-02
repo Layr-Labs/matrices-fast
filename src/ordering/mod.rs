@@ -1178,6 +1178,32 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // Extra serial LNS tickets on TINY graphs only. One extra seed (`0020` local)
+    // was score-neutral; the leftover lt_1k ties need more i.i.d. tickets, not a
+    // bigger n gate. 8 × 25M ops at n<=400 is still << one 100M search at n=1000
+    // (bitsets ~6× smaller). No threads (`6dd1fe3` closed search_par on n<=1000).
+    if n <= 400 && nnz <= 3_000 {
+        for k in 1..=8 {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                25_000_000,
+                0xD1B5_4A32_D192_ED03u64.wrapping_mul(2 * k + 1) ^ (k as u64) << 17,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
+    }
+
     best_perm
 }
 

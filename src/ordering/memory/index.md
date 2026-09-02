@@ -4,11 +4,11 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.871827** (weighted geomean flop ratio vs AMD; fill tiebreak
-  0.960774), dev corpus **300** matrices, 2026-09-02
-  ([0005](experiments/0005-relabelled-amf-multistart.md), relabelled-AMF
-  multi-start). Previous: 0.876925 / fill 0.962248, 2026-07-26.
-- Per bucket: lt_1k 0.9063 (147) · 1k_10k 0.8991 (108) · gt_10k 0.8255 (45).
+- Best score: **0.871434** (weighted geomean flop ratio vs AMD; fill tiebreak
+  0.960579), dev corpus **300** matrices, 2026-09-02
+  ([0006](experiments/0006-cycled-amf-amd-multistart.md), cycled-AMF and
+  alternating-AMD multi-start). Previous: 0.871827 / fill 0.960774, 2026-09-02.
+- Per bucket: lt_1k 0.9064 (147) · 1k_10k 0.8971 (108) · gt_10k 0.8260 (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer

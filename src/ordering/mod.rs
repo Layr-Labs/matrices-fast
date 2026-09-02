@@ -892,14 +892,26 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     let restarts = relabel_restarts(RELABEL_BUDGET, RELABEL_MAX_RESTARTS, nnz);
     for r in 0..restarts {
         let seed = r as u64 + 1;
+        let q = relabel(n, seed);
+        let b = permute_pattern(&scoring_pat, &q);
+        let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+        let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+        let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+        })) else {
+            continue;
+        };
+
         consider(&|| {
-            let q = relabel(n, seed);
-            let b = permute_pattern(&scoring_pat, &q);
-            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
-            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
-            let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
-                .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
-            let pb = feral_amd::amd_order(&bcore)?;
+            let pb = if r % 2 == 1 {
+                let opts = feral_amd::AmdOptions {
+                    aggressive: false,
+                    dense_alpha: 10.0,
+                };
+                feral_amd::amd_order_opts(&bcore, &opts).map(|(p, ..)| p)?
+            } else {
+                feral_amd::amd_order(&bcore)?
+            };
             // Compose back: `q[k]` is the original vertex that B numbers `k`.
             Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
         });
@@ -942,23 +954,40 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // a ratio, never raise it — and TIME is the only thing at stake. See
     // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
     if nnz <= RELABEL_AMF_MAX_NNZ {
-        let amf_relabel_opts = feral_amf::AmfOptions {
-            dense_alpha: 5.0,
-            ..Default::default()
-        };
+        let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
         for r in 0..restarts {
             let seed = r as u64 + 1;
+            let da = amf_alphas[r % amf_alphas.len()];
+            let amf_relabel_opts = feral_amf::AmfOptions {
+                dense_alpha: da,
+                ..Default::default()
+            };
+            let q = relabel(n, seed);
+            let b = permute_pattern(&scoring_pat, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+            })) else {
+                continue;
+            };
+
             consider(&|| {
-                let q = relabel(n, seed);
-                let b = permute_pattern(&scoring_pat, &q);
-                let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
-                let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
-                let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
-                    .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
                 let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_relabel_opts)?;
                 // Compose back: `q[k]` is the original vertex that B numbers `k`.
                 Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
             });
+
+            if n < 5_000 && da != -1.0 {
+                let amf_nd_opts = feral_amf::AmfOptions {
+                    dense_alpha: -1.0,
+                    ..Default::default()
+                };
+                consider(&|| {
+                    let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_nd_opts)?;
+                    Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+                });
+            }
         }
     }
 

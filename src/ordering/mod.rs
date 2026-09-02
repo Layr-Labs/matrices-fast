@@ -151,6 +151,7 @@ use crate::Pattern;
 mod probe;
 
 pub mod rgreedy;
+pub mod custom_metrics;
 
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
@@ -766,6 +767,22 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // Custom quotient-graph metrics (SqDiv / SqPure) on medium/dense networks.
+    // SqDiv evaluates deg² / (nv + 1), directly predicting each elimination's
+    // contribution to the exact sum of squared column counts Σ cⱼ².
+    if nnz <= 300_000 && nnz >= 10 * n {
+        for &variant in &[
+            custom_metrics::ScoreVariant::SqDiv,
+            custom_metrics::ScoreVariant::SqPure,
+        ] {
+            for &alpha in &[1.0, 10.0] {
+                consider(&|| {
+                    custom_metrics::order_variant(&core, alpha, true, variant)
+                });
+            }
+        }
+    }
+
     // METIS nested dissection — bounded by nnz primarily (its cost driver) plus
     // an n cap; `seed = 1` (via default) keeps it deterministic. Gate held fixed
     // so the worst-case time does not move.
@@ -1086,6 +1103,37 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &best_perm,
             PAIR_DESCENT_SWEEPS,
             budget,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
+
+    // ── TERMINAL SIMPLICIAL PROMOTION (Ost, Schulz, Strash 2020) ───────────
+    // Promotes simplicial vertices (zero deficiency) ahead of non-simplicial
+    // vertices across a local lookahead window. Because simplicial pivots add
+    // zero fill edges, early elimination is provably safe and avoids premature
+    // clique coupling. Re-scored against exact flops; strictly monotonic.
+    const SIMPLICIAL_PROMOTION_MIN_N: usize = 1_000;
+    const SIMPLICIAL_PROMOTION_MAX_N: usize = 6_000;
+    const SIMPLICIAL_PROMOTION_MAX_NNZ: usize = 100_000;
+    const SIMPLICIAL_PROMOTION_MAX_DENSITY: usize = 24;
+    const SIMPLICIAL_PROMOTION_OPS_BUDGET: i64 = 64_000_000;
+
+    if (SIMPLICIAL_PROMOTION_MIN_N..=SIMPLICIAL_PROMOTION_MAX_N).contains(&n)
+        && nnz > 0
+        && nnz <= SIMPLICIAL_PROMOTION_MAX_NNZ
+        && nnz <= n.saturating_mul(SIMPLICIAL_PROMOTION_MAX_DENSITY)
+    {
+        if let Some(cand) = rgreedy::simplicial_promotion(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            SIMPLICIAL_PROMOTION_OPS_BUDGET,
         ) {
             let f = flops_of(&scoring_pat, &cand);
             if f < best_flops {

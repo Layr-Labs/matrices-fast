@@ -55,7 +55,29 @@
 //! The cost driver is nnz, NOT n: `qapw` (n=705, nnz=87496) costs 0.539 s, more
 //! than matrices 300× larger. Gate by nnz first, with an `n` cap as backstop.
 //!
-//! ## What this revision adds: RELABELLED-AMD MULTI-START
+//! ## What this revision adds: RELABELLED-AMF MULTI-START (a SECOND lottery)
+//!
+//! Score 0.876925 → **0.871827** on the 300-matrix dev corpus; 36 matrices
+//! better, **0 worse**, wins in all three size buckets.
+//!
+//! The relabel trick below had only ever been pointed at AMD (minimum DEGREE).
+//! AMF (approximate minimum FILL) reads the vertex numbering the same way, so
+//! `AMF(Q A Qᵀ)` composed back through `Q` is a randomized-restart minimum-FILL
+//! ordering for the cost of one AMF pass. Why that beats spending the same time on
+//! more AMD restarts: within one objective the draws are effectively i.i.d. and
+//! saturate (see the budget table on [`RELABEL_BUDGET`]), whereas min-fill and
+//! min-degree disagree about which vertex to eliminate — so AMF draws are not
+//! redundant AMD draws. The wins duly land where min-degree had already converged
+//! (`mpbp_15` 0.9951→0.8198; `pooling_haverly1pq` an exact 1.0000→0.9782 at n=31).
+//! Gated on nnz (AMF's own cost driver), routed through the best-of floor so score
+//! risk is structurally zero. See `memory/experiments/0005-*.md`.
+//!
+//! The generalisation, which is the part worth carrying forward: **any ordering
+//! routine whose output depends on the input numbering becomes a randomized-restart
+//! algorithm under `relabel`, for free.** RCM, Sloan, the ND separator choices and
+//! MinFill are all still un-relabelled.
+//!
+//! ## The revision before that: RELABELLED-AMD MULTI-START
 //!
 //! Score 0.883906 → **0.876925** on the 300-matrix dev corpus, the largest
 //! single gain measured on this problem so far (the previous revision's entire
@@ -105,12 +127,18 @@
 //! nnz)`, sized from measurement (see the timing section above for why the old
 //! "~0.35 s local ceiling" rule was unfounded).
 //!
-//! The relabelled-AMD multi-start is the exception, and deliberately so: instead
-//! of an envelope it takes a per-matrix time BUDGET, `RELABEL_BUDGET / nnz`
-//! restarts. Because per-restart cost scales with nnz, that bounds its added
-//! time at ~0.3 s on every matrix at once, and yields zero restarts wherever
-//! `nnz > RELABEL_BUDGET`. Worst combined `order()` measured at 0.978 s, still
-//! under the 1.019 s carried by the last revision that passed the grader.
+//! The two relabelled multi-starts are the exception, and deliberately so:
+//! instead of an envelope they take a per-matrix time BUDGET,
+//! `RELABEL_BUDGET / nnz` restarts. Because per-restart cost scales with nnz,
+//! that bounds their added time on every matrix at once, and yields zero restarts
+//! wherever `nnz > RELABEL_BUDGET`. The AMF arm carries a second, independent nnz
+//! ceiling ([`RELABEL_AMF_MAX_NNZ`]) because its per-pass constant is larger.
+//!
+//! Worst combined `order()` measured at 0.439 s of the 2 s cap (0.384 s before the
+//! AMF arm). NOTE: the 0.9-1.0 s figures elsewhere in this file were recorded on a
+//! box roughly 2.5x slower; timings compare only within one box, so use the
+//! comparative rule — stay at or below the worst case of a revision known to have
+//! passed the grader, measured the same way on the same machine.
 //!
 //! The candidate set is a pure function of `(n, nnz)` — never wall-clock — so
 //! the two required `order()` runs are byte-identical (determinism gate).
@@ -317,6 +345,27 @@ const KAHIP_MAX_NNZ: usize = 50_000;
 const RELABEL_BUDGET: usize = 300_000;
 const RELABEL_MAX_RESTARTS: usize = 24;
 
+/// nnz ceiling for the relabelled-**AMF** multi-start (see the loop at the end of
+/// [`order`]).
+///
+/// AMF's per-pass cost has the same shape as AMD's — linear-ish in nnz — so
+/// `RELABEL_BUDGET / nnz` already bounds the family's total spend on any matrix,
+/// exactly as it does for AMD. This ceiling is a SECOND, independent bound, and it
+/// exists because AMF's constant is larger than AMD's and its worst case is less
+/// well characterised here: a min-fill sweep does more work per elimination than a
+/// min-degree one, and the corpus that decides promotion is not this one.
+///
+/// 130_000 keeps the family inside the nnz envelope the hand-rolled ND / RCM /
+/// Sloan candidates already run in — a region whose cost is measured — and puts
+/// the whole added spend at ~2.6e-7 s/nnz × min(24, 300000/nnz) passes, i.e.
+/// ≈0.08 s whatever the matrix looks like. Measured effect on the combined worst
+/// case: 0.384 s → 0.457 s on the same box, against a 2 s cap.
+///
+/// Gate on nnz, not n: AMF's cost tracks nnz (a small dense pattern is expensive,
+/// a huge sparse one is cheap), so an `n` cutoff would bound the wrong quantity.
+const RELABEL_AMF_MAX_NNZ: usize = 130_000;
+
+
 /// Deterministic 64-bit mixer (SplitMix64). Used only to derive relabelings from
 /// a fixed seed, so every run produces the identical sequence — the determinism
 /// gate requires the two `order()` runs to agree byte-for-byte.
@@ -337,6 +386,37 @@ fn relabel(n: usize, seed: u64) -> Vec<usize> {
         .wrapping_add(0x1234_5678_9ABC_DEF0);
     for i in (1..n).rev() {
         let j = (splitmix64(&mut s) % (i as u64 + 1)) as usize;
+        q.swap(i, j);
+    }
+    q
+}
+
+/// A relabeling derived from `base` by applying `swaps` random transpositions.
+/// Pure function of `(base, swaps, seed)` — the seed stream is independent of the
+/// one [`relabel`] uses, so the two phases never produce the same relabeling for
+/// the same `seed`. Composition of transpositions with a permutation is a
+/// permutation, so the result is always a valid relabeling of `0..n`.
+///
+/// TEST-ONLY. `order()` deliberately does NOT use this: the structured-relabeling
+/// policies it exists to build were all measured and all lose to i.i.d. uniform
+/// draws at equal cost (`probe_relabel_search`,
+/// `memory/experiments/0004-structured-relabelings.md`). It is kept in the shipped
+/// module rather than in `probe.rs` so the probe measures the same primitive a
+/// future `order()` would call if the finding is ever revisited under a different
+/// restart budget.
+#[cfg(test)]
+fn perturb(base: &[usize], swaps: usize, seed: u64) -> Vec<usize> {
+    let n = base.len();
+    let mut q = base.to_vec();
+    if n < 2 {
+        return q;
+    }
+    let mut s = seed
+        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        .wrapping_add(0xA076_1D64_78BD_642F);
+    for _ in 0..swaps {
+        let i = (splitmix64(&mut s) % n as u64) as usize;
+        let j = (splitmix64(&mut s) % n as u64) as usize;
         q.swap(i, j);
     }
     q
@@ -797,6 +877,18 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // Deterministic: `relabel` is a pure function of `(n, seed)` with seeds fixed
     // at 1..=restarts, and `restarts` is a pure function of nnz. Best-of floor →
     // zero-downside, and each candidate is bijection-checked before it can win.
+    //
+    // The relabelings are drawn i.i.d. UNIFORMLY, and that is now a measured
+    // choice rather than the obvious default it started as. Spending part of the
+    // same restart budget hill-climbing — perturbing the best relabeling found so
+    // far instead of resampling — was the top lead in `memory/open-questions.md`.
+    // It was swept across 17 explore/exploit policies (split ratio × perturbation
+    // strength × chaining) with `probe_relabel_search`, and NONE of them beats
+    // i.i.d. robustly: every policy whose full-corpus score looked better owed the
+    // entire gain to a single matrix, flipped sign between disjoint halves of the
+    // corpus, and lost to i.i.d. once that one matrix was dropped. See
+    // `memory/experiments/0004-structured-relabelings.md`. Do not re-derive this;
+    // if you want more from this family, buy more restarts, not smarter ones.
     let restarts = relabel_restarts(RELABEL_BUDGET, RELABEL_MAX_RESTARTS, nnz);
     for r in 0..restarts {
         let seed = r as u64 + 1;
@@ -811,6 +903,63 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             // Compose back: `q[k]` is the original vertex that B numbers `k`.
             Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
         });
+    }
+
+    // ── RELABELLED-AMF MULTI-START: the same lottery on a DIFFERENT objective ──
+    //
+    // The loop above is a randomized-restart minimum DEGREE. AMF (approximate
+    // minimum FILL) reads the vertex numbering in exactly the same way, so
+    // `AMF(Q A Qᵀ)` composed back through `Q` is a randomized-restart minimum
+    // FILL for the cost of one AMF pass — a candidate family the portfolio did
+    // not have, even though plain AMF has been in it all along.
+    //
+    // Why this is the right next move rather than more of the same: the sweep in
+    // `memory/experiments/0004-structured-relabelings.md` established that this
+    // family is a LOTTERY — the relabeling→flops map has no exploitable local
+    // structure, so no smarter sampling of the SAME distribution beats uniform
+    // i.i.d. draws, and the only lever is more tickets. Extra AMD restarts are
+    // more tickets in one lottery and hit diminishing returns fast (the budget
+    // table on `RELABEL_BUDGET`: past 300000, 0.05 s of worst case buys under
+    // 0.0002 of score). Tickets in a SECOND lottery are not the same thing: they
+    // are drawn from a different distribution, because min-fill and min-degree
+    // disagree about which vertex to eliminate. Diversity of objective, at equal
+    // spend, is what the AMD-only budget cannot buy.
+    //
+    // The prediction that follows — and it held — is that the wins land where
+    // min-degree is already at ITS ceiling: matrices at or near ratio 1.0000,
+    // where every degree-based candidate converges on the anchor and only a
+    // different objective can move them.
+    //
+    // Same seeds as the AMD loop (1..=restarts). That is deliberate, not laziness:
+    // AMF on an identical relabelled graph is a genuinely different candidate, so
+    // re-using the seeds costs nothing and keeps the family a pure function of
+    // `(n, nnz)` — required, because the harness runs `order()` twice and demands
+    // byte-identical output.
+    //
+    // Routed through `consider` like everything else, so it inherits the best-of
+    // floor: each result is bijection-checked and kept only if strictly cheaper.
+    // The score risk is therefore structurally zero — a candidate can only lower
+    // a ratio, never raise it — and TIME is the only thing at stake. See
+    // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
+    if nnz <= RELABEL_AMF_MAX_NNZ {
+        let amf_relabel_opts = feral_amf::AmfOptions {
+            dense_alpha: 5.0,
+            ..Default::default()
+        };
+        for r in 0..restarts {
+            let seed = r as u64 + 1;
+            consider(&|| {
+                let q = relabel(n, seed);
+                let b = permute_pattern(&scoring_pat, &q);
+                let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+                let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+                let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+                    .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
+                let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_relabel_opts)?;
+                // Compose back: `q[k]` is the original vertex that B numbers `k`.
+                Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+            });
+        }
     }
 
     best_perm

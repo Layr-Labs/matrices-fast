@@ -87,8 +87,60 @@ It also changed the shape of a gate. Every other candidate here uses a hard
 the budget its own gate. That pattern is reusable for any candidate whose cost
 scales with nnz and whose quality improves with repetition.
 
+## The multi-start is a LOTTERY, so buy tickets rather than aim them
+
+A follow-up sweep tested the obvious next step — spend part of the same restart
+budget hill-climbing on the relabeling instead of resampling it uniformly — across
+17 explore/exploit policies at identical cost. **Nothing beat i.i.d. uniform
+robustly.** Bigger perturbations beat smaller ones monotonically, and removing the
+chaining (so it is no longer a hill climb at all) changed nothing: AMD's
+tie-breaking is a global cascade, so two relabelings a few transpositions apart do
+not produce two similar orderings. There is no gradient to climb. See
+[experiments/0004](../experiments/0004-structured-relabelings.md).
+
+The transferable lesson, and it generalizes past this family: when a candidate's
+quality-per-try is essentially i.i.d., the only lever is **the number of tries**, so
+its design question is a *timing* question, not a search question. Which puts it
+back where everything in this portfolio ends up — against the 2 s cap.
+
+## …but "more tickets" has two readings, and the second one is much cheaper
+
+Buying more tickets in the SAME lottery saturates: the budget table on
+`RELABEL_BUDGET` shows that past 300000, each further 0.05 s of worst case buys under
+0.0002 of score. Buying tickets in a **different** lottery does not, because the
+prizes are somewhere else. `AMF(Q A Qᵀ)` composed back through `Q` costs one AMF pass
+— exactly what one more AMD restart costs — but min-fill and min-degree *disagree
+about which vertex to eliminate*, so its draws are not redundant. That single
+observation was worth −0.0051, more than any tuning of the AMD multi-start could
+reach: [experiments/0005](../experiments/0005-relabelled-amf-multistart.md).
+
+The general form is the reusable part:
+
+> **Any ordering routine whose output depends on the input vertex numbering becomes a
+> randomized-restart algorithm under `relabel`, for free.** Run it on `Q A Qᵀ`,
+> compose the result back through `Q`, and offer it to `consider`.
+
+Cost is one pass per seed and score risk is *structurally* zero under the best-of
+floor, so the only question per family is whether its pass fits the budget. Several
+routines in this file have never been relabelled — RCM, Sloan, the ND separator
+choices, MinFill — and each is a candidate second lottery. Prefer the ones whose
+objective differs most from min-degree, since that difference is the whole mechanism.
+
+That experiment also added a discipline this corpus needs. The score is a
+size-bucketed geomean over 300 matrices with a **heavy tail** — `gt_10k` is 45
+matrices at weight 0.40, so one 20% win there is worth ≈0.002 of score on its own,
+which is larger than most changes ever measure. A 0.001 "improvement" from a single
+instance is therefore the default outcome of any sweep, not a signal.
+`probe_relabel_search` reports, alongside every score: the advantage measured on two
+**disjoint halves** of the corpus, and the advantage with the **single biggest
+contributing matrix dropped**. Anything that flips sign between halves or dies under
+drop-1 is one lucky matrix. Run those columns before believing a delta — and before
+shipping something that would be corpus-overfitting by accident.
+
 ## Links
 - [amd.md](amd.md) — the anchor, and why it is hard to beat here.
 - [nested-dissection.md](nested-dissection.md) — the separator family in the portfolio.
 - [experiments/0002](../experiments/0002-measured-gates-metis-kahip.md) — the measurements above.
 - [experiments/0003](../experiments/0003-relabelled-amd-multistart.md) — the relabelled-AMD multi-start and the budget-as-gate pattern.
+- [experiments/0004](../experiments/0004-structured-relabelings.md) — why its search policy is settled, and the two-half / drop-1 robustness columns.
+- [experiments/0005](../experiments/0005-relabelled-amf-multistart.md) — the second lottery (relabelled AMF), and the general "relabel anything numbering-sensitive" recipe.

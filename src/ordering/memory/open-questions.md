@@ -7,15 +7,26 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Active
 
-- [ ] **Structured relabelings, not random ones (top lead).** The shipped
-      multi-start uses uniform-random `Q` (Fisher-Yates), which is the dumbest
-      possible choice — it works only because AMD's tie-breaking is numbering-
-      sensitive. A *structured* `Q` should do better at identical cost: seed the
-      relabeling from RCM, from a partitioner's block order, or from a previous
-      restart's winning permutation (a hill-climb rather than i.i.d. sampling).
-      The budget machinery in [0003](experiments/0003-relabelled-amd-multistart.md)
-      already prices candidates, so this is cheap to test — reuse
-      `probe_relabel_budget` and swap `relabel`.
+- [ ] **Relabel the OTHER numbering-sensitive routines (top lead).**
+      [0005](experiments/0005-relabelled-amf-multistart.md) established the general
+      form: *any* ordering routine whose output depends on the input vertex numbering
+      becomes a randomized-restart algorithm under `relabel`, for the cost of one pass
+      and with zero score risk under the best-of floor. Two objectives are now
+      relabelled (AMD, AMF). Never relabelled: the hand-rolled RCM, Sloan, `nd_order`
+      / `ndfm_order` (their BFS-median and GGGP separator choices both read the
+      numbering), and MinFill. Prefer the ones whose objective differs MOST from
+      min-degree, since that difference is where the second lottery's prizes came
+      from. Cost per family is `RELABEL_BUDGET/nnz` passes, so price each with
+      `probe_family` before adding it.
+- [ ] **Sweep the relabelled-AMF `dense_alpha`.** Shipped at α=5.0 only (the base AMF
+      candidate's α). α ∈ {0.5, 2.0, 2.5} is the same argument one level down — a
+      different α is a different objective, hence another distinct lottery — and it is
+      cheap inside the existing gate. Mirror the base AMF α sweep in `order()`.
+- [ ] **Is `RELABEL_AMF_MAX_NNZ = 130_000` leaving anything above it?** The ceiling is
+      a cost bound, not a measured optimum. Measure the 130k–400k band's AMF per-pass
+      cost in ISOLATION (`probe_family`) before raising it; the dev corpus has few
+      matrices there, so the honest expectation is a small score gain against a real
+      cap risk. Measure first.
 - [ ] **Does the budget want to be non-uniform across buckets?** The shipped
       `RELABEL_BUDGET` spends the same ~0.3 s everywhere, but `gt_10k` carries
       weight 0.40 over only 45 matrices (~4.4× the per-matrix leverage of
@@ -37,6 +48,15 @@ it, rather than deleting it — a resolved question is a useful signpost.
       one significant figure. Nothing in the harness output exposes grader
       timing. Until it does, the only defensible rule is comparative — stay at or
       below the worst case of a revision known to have passed.
+- [ ] **How much of the remaining headroom is even measurable on 300 matrices?**
+      [0004](experiments/0004-structured-relabelings.md) showed that one `gt_10k`
+      matrix is worth ≈0.002 of score, so any change smaller than that is
+      indistinguishable from luck on this corpus, and the hidden eval corpus is
+      refreshed per round. Nothing currently tells us the *variance* of the score
+      under corpus resampling. A bootstrap over the 300 dev matrices (resample with
+      replacement, re-aggregate) would give the confidence interval that says which
+      past "wins" in this log were real — cheap to write, and it changes how every
+      future result should be read.
 - [ ] Do any ML/RL-guided ordering ideas fit a stdlib-only, deterministic,
       2 s/matrix `order()`? Survey the literature before assuming yes/no.
 - [ ] The hand-rolled `nd_order` / `ndfm_order` use a plain **degree sort** at
@@ -47,6 +67,21 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Resolved
 
+- [x] *"Structured relabelings, not random ones (was the top lead)."* **Answered NO
+      by [0004](experiments/0004-structured-relabelings.md).** At a fixed restart
+      count, no explore/exploit policy beats uniform i.i.d. draws: 17 policies swept
+      (split ratio × perturbation strength × decay/reset/no-chain schedules), and
+      every policy whose full-corpus score looked better flipped sign between
+      disjoint corpus halves and lost to i.i.d. once one matrix
+      (`chp_shorttermplan2d`) was dropped. Chaining — the part that makes it a hill
+      climb — contributes nothing, and bigger perturbations beat smaller ones
+      monotonically, so the relabeling→flops map has **no exploitable local
+      structure**: AMD's tie-breaking is a global cascade, and the family is a pure
+      lottery. Do not retry with an RCM- or partitioner-seeded `Q`; the evidence is
+      against the mechanism, not against one perturbation. The only lever that
+      reliably improves this family is **more restarts**, which is a timing problem
+      (see the monotone budget sweep in
+      [0003](experiments/0003-relabelled-amd-multistart.md)).
 - [x] *"Where is the real headroom — is it nested dissection on the larger
       families?"* Partly answered by
       [0002](experiments/0002-measured-gates-metis-kahip.md): a 12-variant

@@ -462,6 +462,8 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
         (600_000 / nnz).min(48) // Low-nnz regime
     } else if nnz <= 150_000 && max_deg * 50 <= n {
         base_r.max(12) // Mid-band non-hub floor
+    } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
+        base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
     } else {
         base_r
     }
@@ -1139,6 +1141,30 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
+            }
+        }
+    }
+
+    // ── EXACT RANDOMIZED GREEDY ELIMINATION SEARCH (Area 2 on small graphs) ──
+    // Uses the vast time headroom at n <= 1,000 to perform exact elimination game
+    // simulation on true fill graphs with zero-cost objective tracking.
+    // Explores alternative prefix and suffix elimination orderings via LNS plateau search.
+    if n <= 1_000 && nnz <= 30_000 {
+        if let Some((cand, _)) = rgreedy::search(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            best_flops,
+            100_000_000,
+            0x9E37_79B9_7F4A_7C15,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = flops_of(&scoring_pat, &cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
             }
         }
     }

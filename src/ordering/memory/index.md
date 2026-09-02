@@ -4,11 +4,11 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.863609** (weighted geomean flop ratio vs AMD; fill tiebreak
-  0.957121), dev corpus **300** matrices, 2026-09-02
-  ([0014](experiments/0014-custom-quotient-metrics.md), custom quotient-graph
-  metrics SqDiv & SqPure). Previous: 0.864462 / fill 0.957488, 2026-09-02.
-- Per bucket: lt_1k 0.9051 (147) · 1k_10k 0.8904 (108) · gt_10k 0.8124 (45).
+- Best score: **0.863368** (weighted geomean flop ratio vs AMD; fill tiebreak
+  0.957095), dev corpus **300** matrices, 2026-09-02
+  ([0016](experiments/0016-sparse-gt10k-restart-floor.md), sparse gt_10k network floor).
+  Previous: 0.863609 / fill 0.957121, 2026-09-02.
+- Per bucket: lt_1k 0.9051 (147) · 1k_10k 0.8904 (108) · gt_10k 0.8118 (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -100,6 +100,8 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0012](experiments/0012-terminal-adjacent-pair-descent.md) — Terminal adjacent-pair descent on exact objective. 0.864899 → **0.864652**. WIN.
 - [0013](experiments/0013-terminal-simplicial-promotion.md) — Terminal simplicial promotion on exact dynamic graphs. 0.864652 → **0.864462**. WIN.
 - [0014](experiments/0014-custom-quotient-metrics.md) — Custom quotient-graph metrics (SqDiv & SqPure). 0.864462 → **0.863609**. WIN.
+- [0015](experiments/0015-dense-low-alpha-arm.md) — Dense low-alpha arm for heavy dense networks. 0.863609 → **0.863575**. WIN.
+- [0016](experiments/0016-sparse-gt10k-restart-floor.md) — Sparse gt_10k network floor & restart unstarving. 0.863609 → **0.863368**. WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

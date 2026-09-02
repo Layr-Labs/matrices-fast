@@ -462,6 +462,8 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
         (600_000 / nnz).min(48) // Low-nnz regime
     } else if nnz <= 150_000 && max_deg * 50 <= n {
         base_r.max(12) // Mid-band non-hub floor
+    } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
+        base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
     } else {
         base_r
     }
@@ -615,6 +617,22 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     } else if n < AMF_SWEEP_MAX_N && nnz >= 400_000 && nnz < AMF_SWEEP_MAX_NNZ {
         let amf_nd = feral_amf::AmfOptions { dense_alpha: -1.0, ..Default::default() };
         consider(&|| feral_amf::amf_order_opts(&core, &amf_nd).map(|(p, ..)| p));
+    }
+
+    // Dense low-alpha arm for heavy dense networks (400k <= nnz < 1M, nnz > 20 * n)
+    // Deferring dense coupling rows via tight alphas (0.75, 1.25) prevents dense clique
+    // fill on saddle-point/KKT systems.
+    if (400_000..1_000_000).contains(&nnz) && nnz > 20 * n {
+        for &alpha in &[0.75f64, 1.25] {
+            let opt = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
+            consider(&|| feral_amf::amf_order_opts(&core, &opt).map(|(p, ..)| p));
+        }
+        let opt_amd = feral_amd::AmdOptions { aggressive: true, dense_alpha: 0.75 };
+        consider(&|| feral_amd::amd_order_opts(&core, &opt_amd).map(|(p, ..)| p));
+        if nnz < 50 * n {
+            let opt_2 = feral_amf::AmfOptions { dense_alpha: 2.0, ..Default::default() };
+            consider(&|| feral_amf::amf_order_opts(&core, &opt_2).map(|(p, ..)| p));
+        }
     }
 
     // NON-AGGRESSIVE AMD — a genuinely DIFFERENT elimination order from every

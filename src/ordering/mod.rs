@@ -150,6 +150,8 @@ use crate::Pattern;
 #[cfg(test)]
 mod probe;
 
+pub mod rgreedy;
+
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
 use feral::sparse::csc::CscPattern as ScoringPattern;
@@ -1045,6 +1047,50 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
                     });
                 }
+            }
+        }
+    }
+
+    // ── TERMINAL ADJACENT-PAIR DESCENT (local search on exact objective) ────
+    // Swaps adjacent pairs (a, b) in best_perm where (a, b) are adjacent in the
+    // elimination graph and deg(b) < deg(a). Because this directly evaluates on
+    // best_perm and only accepts if strictly fewer flops are produced, it is
+    // mathematically monotonic (zero downside).
+    const PAIR_DESCENT_MIN_N: usize = 1_000;
+    const PAIR_DESCENT_MAX_N: usize = 4_000;
+    const PAIR_DESCENT_MAX_NNZ: usize = 60_000;
+    const PAIR_DESCENT_SWEEPS: usize = 4;
+    const PAIR_DESCENT_OPS_BUDGET: i64 = 128_000_000;
+    const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
+    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
+
+    let pair_descent_ext = n > PAIR_DESCENT_MAX_N
+        && n <= PAIR_DESCENT_EXT_MAX_N
+        && nnz <= 30_000
+        && max_deg * 50 <= n;
+    let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
+        && nnz > 0
+        && nnz <= PAIR_DESCENT_MAX_NNZ
+        && (n <= PAIR_DESCENT_MAX_N || pair_descent_ext);
+
+    if pair_descent_gate {
+        let budget = if pair_descent_ext && n > PAIR_DESCENT_MAX_N {
+            PAIR_DESCENT_EXT_OPS_BUDGET
+        } else {
+            PAIR_DESCENT_OPS_BUDGET
+        };
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            PAIR_DESCENT_SWEEPS,
+            budget,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
             }
         }
     }

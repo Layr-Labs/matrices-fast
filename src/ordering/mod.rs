@@ -152,6 +152,7 @@ mod probe;
 
 pub mod rgreedy;
 pub mod custom_metrics;
+pub mod dm_btf;
 
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
@@ -617,6 +618,22 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         consider(&|| feral_amf::amf_order_opts(&core, &amf_nd).map(|(p, ..)| p));
     }
 
+    // Dense low-alpha arm for heavy dense networks (400k <= nnz < 1M, nnz > 20 * n)
+    // Deferring dense coupling rows via tight alphas (0.75, 1.25) prevents dense clique
+    // fill on saddle-point/KKT systems.
+    if (400_000..1_000_000).contains(&nnz) && nnz > 20 * n {
+        for &alpha in &[0.75f64, 1.25] {
+            let opt = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
+            consider(&|| feral_amf::amf_order_opts(&core, &opt).map(|(p, ..)| p));
+        }
+        let opt_amd = feral_amd::AmdOptions { aggressive: true, dense_alpha: 0.75 };
+        consider(&|| feral_amd::amd_order_opts(&core, &opt_amd).map(|(p, ..)| p));
+        if nnz < 50 * n {
+            let opt_2 = feral_amf::AmfOptions { dense_alpha: 2.0, ..Default::default() };
+            consider(&|| feral_amf::amf_order_opts(&core, &opt_2).map(|(p, ..)| p));
+        }
+    }
+
     // NON-AGGRESSIVE AMD — a genuinely DIFFERENT elimination order from every
     // aggressive variant above. It runs at baseline AMD speed at ANY n, so the
     // generous `n < 150000` cap reaches the large-but-sparse matrices that
@@ -781,6 +798,16 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 });
             }
         }
+    }
+
+    // Structural Dulmage-Mendelsohn (DM/BTF) decomposition for KKT / block-angular systems.
+    // Decomposes the bipartite primal-dual constraint graph via Hopcroft-Karp maximum matching
+    // and Tarjan strongly connected components, running AMD on the topological block relabeling.
+    if nnz <= 500_000 {
+        consider(&|| {
+            dm_btf::dm_btf_relabel_amd_order(pattern)
+                .ok_or(feral_ordering_core::OrderingError::MalformedInput)
+        });
     }
 
     // METIS nested dissection — bounded by nnz primarily (its cost driver) plus

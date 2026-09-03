@@ -163,6 +163,16 @@ doing less terminal work than that accepted source. Keep ranked selection, but
 do not add another phase when the accepted solver has no hidden time margin.
 A fast local corpus result does not prove hidden safety.
 
+## Chained terminal refinement: conditional depth on transformed trees
+
+When an initial terminal pass successfully lowers the factorization flops, the
+elimination tree topology changes. [Experiment 0035](../experiments/0035-chained-terminal-subtree-refinement.md)
+chains a secondary 4-block pass with unaliased round 6 *strictly conditioned*
+on `improved > 0 && f < incumbent_flops` and guarded by `n < 10,000 && nnz <= 100,000`.
+Because non-improving and heavy QP/KKT instances never enter the branch, the
+routine incurs zero overhead on the slowest matrices while extracting secondary
+gains from newly uncovered subtrees, lowering the official score to 0.876094.
+
 ## Links
 - [amd.md](amd.md) — the anchor, and why it is hard to beat here.
 - [nested-dissection.md](nested-dissection.md) — the separator family in the portfolio.
@@ -172,3 +182,4 @@ A fast local corpus result does not prove hidden safety.
 - [experiments/0005](../experiments/0005-relabelled-amf-multistart.md) — the second lottery (relabelled AMF), and the general "relabel anything numbering-sensitive" recipe.
 - [experiments/0020](../experiments/0020-medium-exact-search.md) — bounded exact search in the medium sparse tier.
 - [experiments/0025](../experiments/0025-adaptive-terminal-deep-subtree-search.md) — adaptive deep allocation for a terminal subtree pass.
+- [experiments/0035](../experiments/0035-chained-terminal-subtree-refinement.md) — chained terminal refinement conditioned on primary pass improvement.

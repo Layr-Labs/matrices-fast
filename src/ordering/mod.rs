@@ -1511,7 +1511,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 // that strictly improved in the first terminal pass. Uses unaliased
                 // round = 6 and a small 4M operation cap (2 blocks x 2M ops) on the
                 // newly uncovered elimination tree.
-                if n < 10_000 && nnz <= 100_000 {
+                if (n < 10_000 && nnz <= 100_000) || (n >= 10_000 && nnz <= 60_000) {
                     let permuted2 = permute_pattern(&scoring_pat, &best_perm);
                     let etree2 = EliminationTree::from_pattern(&permuted2);
                     let post2 = etree2.postorder();
@@ -1529,6 +1529,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         .collect();
                     let mut cfg2 = terminal_deep_subtree_cfg(n);
                     cfg2.round = 6;
+                    cfg2.min_s = 8;
                     cfg2.max_blocks = 4;
                     cfg2.budget = 4_000_000;
                     let improved2 = rgreedy::subtree_refine(
@@ -1544,6 +1545,46 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         let f2 = flops_of(&scoring_pat, &candidate2);
                         if f2 < f {
                             best_perm = candidate2;
+
+                            // Chained terminal round 3: runs ONLY on medium sparse matrices (n < 10_000 && nnz <= 100_000)
+                            // where BOTH terminal round 1 AND round 2 found strict improvements.
+                            // Uses unaliased round = 7, min_s = 8 (to capture small tight clusters),
+                            // and a 4-block budget on the newly uncovered elimination tree.
+                            let permuted3 = permute_pattern(&scoring_pat, &best_perm);
+                            let etree3 = EliminationTree::from_pattern(&permuted3);
+                            let post3 = etree3.postorder();
+                            let mut candidate3: Vec<usize> = post3.iter().map(|&j| best_perm[j]).collect();
+                            let post_pattern3 = permute_pattern(&scoring_pat, &candidate3);
+                            let post_etree3 = EliminationTree::from_pattern(&post_pattern3);
+                            let counts3: Vec<u32> = column_counts_gnp(&post_pattern3, &post_etree3)
+                                .into_iter()
+                                .map(|c| c as u32)
+                                .collect();
+                            let parent3: Vec<i32> = post_etree3
+                                .parent
+                                .iter()
+                                .map(|p| p.map_or(-1, |j| j as i32))
+                                .collect();
+                            let mut cfg3 = terminal_deep_subtree_cfg(n);
+                            cfg3.round = 7;
+                            cfg3.min_s = 8;
+                            cfg3.max_blocks = 4;
+                            cfg3.budget = 4_000_000;
+                            let improved3 = rgreedy::subtree_refine(
+                                n,
+                                &pattern.col_ptr,
+                                &pattern.row_idx,
+                                &mut candidate3,
+                                &counts3,
+                                &parent3,
+                                cfg3,
+                            );
+                            if improved3 > 0 && is_bijection(&candidate3, n) {
+                                let f3 = flops_of(&scoring_pat, &candidate3);
+                                if f3 < f2 {
+                                    best_perm = candidate3;
+                                }
+                            }
                         }
                     }
                 }

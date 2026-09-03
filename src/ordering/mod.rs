@@ -370,6 +370,8 @@ const RELABEL_AMF_MAX_NNZ: usize = 200_000;
 
 #[cfg(test)]
 const SUBTREE_SEARCH_WORK_LIMIT: i64 = 32_000_000;
+#[cfg(test)]
+const TERMINAL_SUBTREE_SEARCH_WORK_LIMIT: i64 = 16_000_000;
 const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
     min_s: 32,
     max_s: 384,
@@ -380,6 +382,22 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
     rank_blocks: true,
     round: 0,
 };
+
+fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
+    let mut cfg = SUBTREE_CFG;
+    cfg.min_s = 16;
+    cfg.round = 5;
+    if n < 10_000 {
+        cfg.max_blocks = 4;
+        cfg.max_s = 768;
+        cfg.budget = 4_000_000;
+    } else {
+        cfg.max_blocks = 8;
+        cfg.max_s = 1_200;
+        cfg.budget = 2_000_000;
+    }
+    cfg
+}
 
 /// Deterministic 64-bit mixer (SplitMix64). Used only to derive relabelings from
 /// a fixed seed, so every run produces the identical sequence — the determinism
@@ -1439,7 +1457,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         if improved5 > 0 && is_bijection(&candidate5, n) {
                                             let f5 = flops_of(&scoring_pat, &candidate5);
                                             if f5 < best_flops {
-                                                best_flops = f5;
                                                 best_perm = candidate5;
                                             }
                                         }
@@ -1454,50 +1471,41 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
-
-    // Independent extra subtree pass on the *incumbent*, not nested inside the
-    // improvement-chain. Rounds 2-5 only run when the previous window improved;
-    // matrices whose first window is a no-op therefore never see a later seed
-    // or a different (min_s, max_s) band. This pass always searches the final
-    // best_perm with an unaliased round=6 multiplier and a mid-size window.
-    // Gated off the heaviest (n, nnz) pairs so it cannot move the 2 s worst case.
-    // Strictly monotonic: accepted only on a valid bijection with fewer flops.
+    // Replace the frontier's 24M independent terminal pass with a deeper 16M
+    // pass. Two additive versions exceeded the hidden time cap even though the
+    // second used this narrow gate. Substitution makes total work lower than
+    // the promoted frontier while retaining the stronger search allocation.
     if (1_000..=80_000).contains(&n) && nnz <= 250_000 {
-        let permuted_x = permute_pattern(&scoring_pat, &best_perm);
-        let etree_x = EliminationTree::from_pattern(&permuted_x);
-        let post_x = etree_x.postorder();
-        let mut candidate_x: Vec<usize> = post_x.iter().map(|&j| best_perm[j]).collect();
+        let incumbent_flops = flops_of(&scoring_pat, &best_perm);
+        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
 
-        let post_pattern_x = permute_pattern(&scoring_pat, &candidate_x);
-        let post_etree_x = EliminationTree::from_pattern(&post_pattern_x);
-        let counts_x: Vec<u32> = column_counts_gnp(&post_pattern_x, &post_etree_x)
+        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
             .into_iter()
             .map(|c| c as u32)
             .collect();
-        let parent_x: Vec<i32> = post_etree_x
+        let parent: Vec<i32> = post_etree
             .parent
             .iter()
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
-        let mut cfg_x = SUBTREE_CFG;
-        cfg_x.round = 6;
-        cfg_x.max_blocks = 24;
-        cfg_x.min_s = 20;
-        cfg_x.max_s = 640;
-        let improved_x = rgreedy::subtree_refine(
+        let improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,
-            &mut candidate_x,
-            &counts_x,
-            &parent_x,
-            cfg_x,
+            &mut candidate,
+            &counts,
+            &parent,
+            terminal_deep_subtree_cfg(n),
         );
-        if improved_x > 0 && is_bijection(&candidate_x, n) {
-            let fx = flops_of(&scoring_pat, &candidate_x);
-            if fx < best_flops {
-                best_flops = fx;
-                best_perm = candidate_x;
+        if improved > 0 && is_bijection(&candidate, n) {
+            let f = flops_of(&scoring_pat, &candidate);
+            if f < incumbent_flops {
+                best_perm = candidate;
             }
         }
     }
@@ -2811,12 +2819,38 @@ mod tests {
     }
 
     #[test]
-    fn subtree_config_stays_within_matrix_work_limit() {
+    fn terminal_deep_search_improves_medium_fixture() {
+        let (_, pat) = crate::corpus::corpus()
+            .into_iter()
+            .find(|(name, _)| name == "rsyn0815m04m")
+            .expect("development fixture");
+
+        let perm = order(&pat);
+        let scoring_pat = ScoringPattern {
+            n: pat.n,
+            col_ptr: pat.col_ptr.clone(),
+            row_idx: pat.row_idx.clone(),
+        };
+        let flops = flops_of(&scoring_pat, &perm);
+
+        assert!(flops < 168_000, "expected fewer than 168000 flops, got {flops}");
+    }
+
+    #[test]
+    fn subtree_configs_stay_within_matrix_work_limit() {
         let requested_budget = SUBTREE_CFG
             .budget
             .saturating_mul(SUBTREE_CFG.max_blocks as i64)
             .saturating_mul(SUBTREE_CFG.streams.max(1) as i64);
-
         assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
+
+        for cfg in [terminal_deep_subtree_cfg(9_999), terminal_deep_subtree_cfg(10_000)] {
+            let requested_budget = cfg
+                .budget
+                .saturating_mul(cfg.max_blocks as i64)
+                .saturating_mul(cfg.streams.max(1) as i64);
+
+            assert!(requested_budget <= TERMINAL_SUBTREE_SEARCH_WORK_LIMIT);
+        }
     }
 }

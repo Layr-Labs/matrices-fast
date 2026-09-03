@@ -18,10 +18,6 @@ it, rather than deleting it — a resolved question is a useful signpost.
       min-degree, since that difference is where the second lottery's prizes came
       from. Cost per family is `RELABEL_BUDGET/nnz` passes, so price each with
       `probe_family` before adding it.
-      [0020](experiments/0020-medium-exact-search.md) tested one fixed relabeling
-      for RCM, both Sloan weights, `nd_order`, and `ndfm_order`: all five produced
-      zero wins, with 0.071 s worst combined added local time. A multi-seed test
-      remains open, but one-pass production additions are not supported.
 - [ ] **Sweep the relabelled-AMF `dense_alpha`.** Shipped at α=5.0 only (the base AMF
       candidate's α). α ∈ {0.5, 2.0, 2.5} is the same argument one level down — a
       different α is a different objective, hence another distinct lottery — and it is

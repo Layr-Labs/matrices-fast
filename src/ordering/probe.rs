@@ -1060,3 +1060,200 @@ fn probe_relabel_search() {
         println!("  {name:36} n={n:<8} restarts={r:<3} {:+.2}%", d * 100.0);
     }
 }
+
+/// Experiment: can METIS/Scotch/KaHIP break the large-sparse gt_10k ties
+/// (faclay75, gabriel10, acopf_case9241pegase_qcqp, kissing2, nuclear104)?
+/// These run NO nested-dissection candidate today (METIS gate n<130k/nnz<320k).
+/// Measures both the flops ratio and the wall time of each candidate there.
+#[test]
+#[ignore]
+fn probe_metis_large_sparse() {
+    let corpus = crate::corpus::corpus();
+    let targets = [
+        "faclay75",
+        "gabriel10",
+        "acopf_case9241pegase_qcqp",
+        "kissing2",
+        "nuclear104",
+        "nuclear10a",
+        "faclay35",
+        "popdynm200",
+    ];
+    println!("matrix\tn\tnnz\tcand\tsecs\tratio");
+    for (name, pat) in &corpus {
+        if !targets.contains(&name.as_str()) {
+            continue;
+        }
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+
+        let mut run = |label: &str, f: &dyn Fn() -> Option<Vec<i32>>| {
+            let t0 = Instant::now();
+            let out = f();
+            let secs = t0.elapsed().as_secs_f64();
+            if let Some(p) = out {
+                let perm: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                if is_bijection(&perm, n) {
+                    let fl = flops_of(&sp, &perm);
+                    println!(
+                        "{name}\t{n}\t{}\t{label}\t{secs:.4}\t{:.4}",
+                        pat.nnz(),
+                        fl as f64 / base as f64
+                    );
+                } else {
+                    println!("{name}\t{n}\t{}\t{label}\t{secs:.4}\tNOT-BIJ", pat.nnz());
+                }
+            } else {
+                println!("{name}\t{n}\t{}\t{label}\t{secs:.4}\tERR", pat.nnz());
+            }
+        };
+
+        run("metis_default", &|| {
+            feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
+                .ok()
+                .map(|(p, ..)| p)
+        });
+        run("metis_tuned_16_20", &|| {
+            let o = feral_metis::MetisOptions { niparts: 16, fm_passes: 20, ..Default::default() };
+            feral_metis::metis_order_full(&core, &o).ok().map(|(p, ..)| p)
+        });
+        run("metis_seed21", &|| {
+            let o = feral_metis::MetisOptions { seed: 21, ..Default::default() };
+            feral_metis::metis_order_full(&core, &o).ok().map(|(p, ..)| p)
+        });
+        run("scotch_default", &|| feral_scotch::scotch_order(&core).ok());
+        run("scotch_trials10", &|| {
+            let o = feral_scotch::ScotchOptions { n_sep_trials: 10, ..Default::default() };
+            feral_scotch::scotch_order_full(&core, &o).ok().map(|(p, ..)| p)
+        });
+        run("kahip_default", &|| feral_kahip::kahip_order(&core).ok());
+        run("kahip_eco", &|| {
+            let o = feral_kahip::KahipOptions { mode: feral_kahip::KahipMode::Eco, ..Default::default() };
+            feral_kahip::kahip_order_full(&core, &o).ok().map(|(p, ..)| p)
+        });
+    }
+}
+
+/// Experiment: how cheap is one AMD/AMF pass at large nnz, and does the
+/// relabel lottery still win there? For the starved large-sparse ties,
+/// measure single-pass times and the flops of N relabelled draws vs AMD.
+#[test]
+#[ignore]
+fn probe_relabel_starved_large() {
+    let corpus = crate::corpus::corpus();
+    let targets = ["faclay75", "gabriel10", "acopf_case9241pegase_qcqp", "kissing2", "nuclear104"];
+    for (name, pat) in &corpus {
+        if !targets.contains(&name.as_str()) {
+            continue;
+        }
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let t0 = Instant::now();
+        let amd = feral_amd::amd_order(&core).unwrap();
+        let amd_secs = t0.elapsed().as_secs_f64();
+        let base = flops_of(&sp, &amd.iter().map(|&x| x as usize).collect::<Vec<_>>());
+        let t0 = Instant::now();
+        let _ = feral_amf::amf_order(&core).unwrap();
+        let amf_secs = t0.elapsed().as_secs_f64();
+
+        let mut best_amd_ratio = 1.0f64;
+        let mut wins_amd = 0usize;
+        let mut best_amf_ratio = 1.0f64;
+        let mut wins_amf = 0usize;
+        for seed in 1..=8u64 {
+            let q = relabel(n, seed);
+            // relabelled pattern: new[j] = old[q[j]] ... compose as the main loop does
+            let b = permute_pattern(&sp, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let rc = feral_ordering_core::CscPattern::new(n, &bcp, &bri).unwrap();
+            if let Ok(p) = feral_amd::amd_order(&rc) {
+                // compose back: perm_original[k] = q[p[k]]
+                let perm: Vec<usize> = p.iter().map(|&x| q[x as usize]).collect();
+                if is_bijection(&perm, n) {
+                    let r = flops_of(&sp, &perm) as f64 / base as f64;
+                    if r < best_amd_ratio { best_amd_ratio = r; }
+                    if r < 0.99995 { wins_amd += 1; }
+                }
+            }
+            let o = feral_amf::AmfOptions { dense_alpha: 5.0, ..Default::default() };
+            if let Ok((p, ..)) = feral_amf::amf_order_opts(&rc, &o) {
+                let perm: Vec<usize> = p.iter().map(|&x| q[x as usize]).collect();
+                if is_bijection(&perm, n) {
+                    let r = flops_of(&sp, &perm) as f64 / base as f64;
+                    if r < best_amf_ratio { best_amf_ratio = r; }
+                    if r < 0.99995 { wins_amf += 1; }
+                }
+            }
+        }
+        println!(
+            "{name}\tn={n}\tnnz={}\tamd_pass={amd_secs:.4}s\tamf_pass={amf_secs:.4}s\tbest8_amd={best_amd_ratio:.4}({wins_amd}/8)\tbest8_amf5={best_amf_ratio:.4}({wins_amf}/8)",
+            pat.nnz()
+        );
+    }
+}
+
+/// Sweep: for every corpus matrix, run 8 i.i.d. relabelled AMD draws (α10
+/// aggressive) + 8 relabelled AMF α5 draws and compare the best against the
+/// INCUMBENT order() flops. Reports matrices where the lottery would win and
+/// how many restarts the current budget buys there.
+#[test]
+#[ignore]
+fn probe_lottery_sweep_full() {
+    let corpus = crate::corpus::corpus();
+    let mut rows: Vec<(f64, String, usize, usize, usize, f64)> = Vec::new();
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 { continue; }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let t0 = Instant::now();
+        let incumbent = order(pat);
+        let order_secs = t0.elapsed().as_secs_f64();
+        let base_fl = flops_of(&sp, &incumbent);
+
+        let nnz = pat.nnz();
+        let (budget, cap) = relabel_budget_and_cap(n);
+        let cur_restarts = relabel_restarts_tuned(budget, cap, n, nnz, 0);
+
+        let mut best = 1.0f64;
+        for seed in 1..=8u64 {
+            let q = relabel(n, seed);
+            let b = permute_pattern(&sp, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Ok(Some(rc)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+            })) else { continue; };
+            if let Ok(p) = feral_amd::amd_order(&rc) {
+                let perm: Vec<usize> = p.iter().map(|&x| q[x as usize]).collect();
+                if is_bijection(&perm, n) {
+                    let r = flops_of(&sp, &perm) as f64 / base_fl as f64;
+                    if r < best { best = r; }
+                }
+            }
+        }
+        if best < 0.99995 {
+            rows.push((best, name.clone(), n, nnz, cur_restarts, order_secs));
+        }
+    }
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    println!("\nmatrix\tn\tnnz\tcur_restarts\torder_secs\tbest_of_8_vs_incumbent");
+    for (r, name, n, nnz, cur, secs) in &rows {
+        println!("{name}\t{n}\t{nnz}\t{cur}\t{secs:.3}\t{r:.4}");
+    }
+    println!("total opportunities: {}", rows.len());
+}

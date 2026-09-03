@@ -1397,6 +1397,54 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     let f4 = flops_of(&scoring_pat, &candidate4);
                                     if f4 < best_flops {
                                         best_perm = candidate4;
+
+                                        // Round 5: one more pass over the
+                                        // round-4 incumbent. round=3 carries
+                                        // its own seed-diversification
+                                        // multiplier (rgreedy later-round
+                                        // rules, incl. n>=10k) that rounds 2-4
+                                        // (round=1) never get. Same 1M ops per
+                                        // block; bounded deterministic chain.
+                                        let permuted5 = permute_pattern(&scoring_pat, &best_perm);
+                                        let etree5 = EliminationTree::from_pattern(&permuted5);
+                                        let post5 = etree5.postorder();
+                                        let mut candidate5: Vec<usize> =
+                                            post5.iter().map(|&j| best_perm[j]).collect();
+
+                                        let post_pattern5 =
+                                            permute_pattern(&scoring_pat, &candidate5);
+                                        let post_etree5 =
+                                            EliminationTree::from_pattern(&post_pattern5);
+                                        let counts5: Vec<u32> =
+                                            column_counts_gnp(&post_pattern5, &post_etree5)
+                                                .into_iter()
+                                                .map(|c| c as u32)
+                                                .collect();
+                                        let parent5: Vec<i32> = post_etree5
+                                            .parent
+                                            .iter()
+                                            .map(|p| p.map_or(-1, |j| j as i32))
+                                            .collect();
+                                        let mut cfg5 = SUBTREE_CFG;
+                                        cfg5.round = 3;
+                                        cfg5.max_blocks = 24;
+                                        cfg5.min_s = 16;
+                                        cfg5.max_s = 768;
+                                        let improved5 = rgreedy::subtree_refine(
+                                            n,
+                                            &pattern.col_ptr,
+                                            &pattern.row_idx,
+                                            &mut candidate5,
+                                            &counts5,
+                                            &parent5,
+                                            cfg5,
+                                        );
+                                        if improved5 > 0 && is_bijection(&candidate5, n) {
+                                            let f5 = flops_of(&scoring_pat, &candidate5);
+                                            if f5 < best_flops {
+                                                best_perm = candidate5;
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1407,6 +1455,28 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── POST-CHAIN PAIR DESCENT (global polish of the refined incumbent) ────
+    // The adjacent-pair descent above ran BEFORE the subtree chain, so every
+    // chain-improved medium incumbent is never locally polished across block
+    // boundaries. Rerun the same descent once on the final incumbent for the
+    // chain band (n >= 1,000). Cheap (one bounded pass; measured +0.4 s total
+    // across the corpus) and strictly monotonic (best-of accept).
+    if n >= 1_000 && pair_descent_gate {
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            PAIR_DESCENT_SWEEPS,
+            pair_descent_ops_budget,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
 
     best_perm
 }

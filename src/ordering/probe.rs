@@ -1354,6 +1354,127 @@ fn probe_relabel_search() {
     }
 }
 
+/// Post-chain global polish probe: the subtree chain (r1-r4) runs AFTER the
+/// last adjacent-pair descent in order(), so chain-improved incumbents are
+/// never locally polished across block boundaries. This probe reruns the
+/// shipped pair-descent pass on the shipped order() output for every matrix in
+/// its eligible band (n >= 1000 so the chain actually ran), and reports the
+/// full-corpus delta. Mirrors the shipped gates exactly.
+#[test]
+#[ignore]
+fn probe_postchain_polish() {
+    const PD_MAX_NNZ: usize = 60_000;
+    const PD_MAX_N: usize = 4_000;
+    const PD_EXT_MAX_N: usize = 12_000;
+    const PD_OPS: i64 = 128_000_000;
+    const PD_EXT_OPS: i64 = 48_000_000;
+    const SWEEPS: usize = 4;
+
+    let corpus = crate::corpus::corpus();
+    let mut cur = ([0.0f64; 3], [0usize; 3]);
+    let mut pol = ([0.0f64; 3], [0usize; 3]);
+    let mut improved: Vec<(String, usize, usize, u64, u64)> = Vec::new();
+    let mut pol_time = 0.0f64;
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 || n < 1_000 {
+            let nnz = pat.nnz();
+            let sp = scoring_pattern(pat);
+            let (cp, ri) = core_of(pat);
+            let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+            let base = flops_of(
+                &sp,
+                &feral_amd::amd_order(&core)
+                    .unwrap()
+                    .into_iter()
+                    .map(|x| x as usize)
+                    .collect::<Vec<_>>(),
+            ) as f64;
+            let bkt = bucket(n);
+            let inc_f = flops_of(&sp, &order(pat)) as f64;
+            cur.0[bkt] += (inc_f / base).ln();
+            cur.1[bkt] += 1;
+            pol.0[bkt] += (inc_f / base).ln();
+            pol.1[bkt] += 1;
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let bkt = bucket(n);
+
+        let mut max_deg = 0usize;
+        for j in 0..n {
+            let d = pat.col_ptr[j + 1] - pat.col_ptr[j];
+            if d > max_deg {
+                max_deg = d;
+            }
+        }
+        let inc = order(pat);
+        let inc_f = flops_of(&sp, &inc);
+        cur.0[bkt] += (inc_f as f64 / base).ln();
+        cur.1[bkt] += 1;
+
+        let ext = n > PD_MAX_N && n <= PD_EXT_MAX_N && nnz <= 30_000 && max_deg * 50 <= n;
+        let eligible = nnz > 0 && nnz <= PD_MAX_NNZ && (n <= PD_MAX_N || ext);
+        let mut out_f = inc_f;
+        if eligible {
+            let budget = if ext { PD_EXT_OPS } else { PD_OPS };
+            let t0 = Instant::now();
+            if let Some(cand) = rgreedy::adjacent_pair_descent(
+                n,
+                &pat.col_ptr,
+                &pat.row_idx,
+                &inc,
+                SWEEPS,
+                budget,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&sp, &cand);
+                    if f < out_f {
+                        out_f = f;
+                        improved.push((name.clone(), n, nnz, inc_f, f));
+                    }
+                }
+            }
+            pol_time += t0.elapsed().as_secs_f64();
+        }
+        let r = out_f as f64 / base;
+        pol.0[bkt] += r.ln();
+        pol.1[bkt] += 1;
+    }
+
+    let cur_s = aggregate(&cur.0, &cur.1);
+    let pol_s = aggregate(&pol.0, &pol.1);
+    println!("\nshipped order(): {cur_s:.6}");
+    println!("+ post-chain pair descent: {pol_s:.6}  d {:.6}", pol_s - cur_s);
+    println!(
+        "extra descent time total: {pol_time:.1}s; improved {} matrices",
+        improved.len()
+    );
+    improved.sort_by(|a, b| {
+        (a.4 as f64 / a.3 as f64)
+            .partial_cmp(&(b.4 as f64 / b.3 as f64))
+            .unwrap()
+    });
+    for (name, n, nnz, cf, xf) in improved.iter().take(20) {
+        println!(
+            "  {name:34} n={n:<7} nnz={nnz:<8} {cf} -> {xf} ({:.4})",
+            *xf as f64 / *cf as f64
+        );
+    }
+}
+
 /// Round-3 / config-extension scan on top of the SHIPPED order() (which already
 /// runs subtree round 1 (round=0, 32 blocks) plus hybridnoise's conditional
 /// round 2 (round=1, min_s=16, 32 blocks)). Each variant is ONE extra

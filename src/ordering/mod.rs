@@ -483,11 +483,14 @@ fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
     if n < 10_000 {
         cfg.max_blocks = 4;
         cfg.max_s = 768;
-        cfg.budget = 4_000_000;
+        // 0046: these budgets predate the tiering + budget-shape story and
+        // were never swept on the tiered tree. The 0041/0043-45 monotone
+        // prior says deep passes want budget, not breadth.
+        cfg.budget = 64_000_000;
     } else {
         cfg.max_blocks = 8;
         cfg.max_s = 1_200;
-        cfg.budget = 2_000_000;
+        cfg.budget = 64_000_000;
     }
     cfg
 }
@@ -1477,6 +1480,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         cfg3.max_blocks = 32;
                         cfg3.min_s = 16;
                         cfg3.max_s = 512;
+                        // 0044 (round-3 budget sweep, probe-only): the 0041
+                        // monotone prior holds for round 3 too — 64M beats
+                        // the inherited 2M on the ge1k weighted partial, no
+                        // U-turn. Same pin as round 2, same reason: the tier
+                        // branches all set 2M, inheritance would undo it.
+                        cfg3.budget = 64_000_000;
                         let improved3 = rgreedy::subtree_refine(
                             n,
                             &pattern.col_ptr,
@@ -1521,6 +1530,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
                                 cfg4.max_s = 768;
+                                // 0044/0045: same inheritance bug as rounds
+                                // 2-3 — every tier branch pins 2M. The 0041
+                                // monotone prior held for r2 (0043) and r3
+                                // (0044); pin r4 identically.
+                                cfg4.budget = 64_000_000;
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,
@@ -1562,6 +1576,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         cfg5.max_blocks = 32;
                                         cfg5.min_s = 16;
                                         cfg5.max_s = 768;
+                                        // 0045: r5 same as r2-r4.
+                                        cfg5.budget = 64_000_000;
                                         let improved5 = rgreedy::subtree_refine(
                                             n,
                                             &pattern.col_ptr,

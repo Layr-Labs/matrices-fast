@@ -408,16 +408,22 @@ fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     if n < 1_000 {
         // Small graphs get the SAME 32M requested-work ceiling as everywhere
-        // else (blocks x budget x streams), just spent as FEWER, DEEPER blocks:
-        // a short elimination tree has few subtrees, so 32 shallow blocks mostly
-        // find nothing, while 8 deep ones actually search. `min_s` drops to 16
-        // for the same reason (the default 32 admits almost no blocks here).
+        // else (blocks x budget x streams), reallocated across 16 bounded
+        // blocks. A measured 15-point sweep found that capping small-tree
+        // blocks at 256 spreads work more effectively than letting a 512-node
+        // block consume the search allocation. `min_s` drops to 16 because the
+        // default 32 admits almost no blocks on short trees.
         // This is a REALLOCATION, not an increase - the nominal ceiling is
         // unchanged, which is what kept 0022 inside the cap after 0021 blew it.
         cfg.min_s = 16;
         cfg.max_s = 256;
         cfg.max_blocks = 16;
         cfg.budget = 2_000_000;
+    } else if n < 10_000 {
+        // The same smaller-block hypothesis helps medium trees but reverses
+        // on gt_10k. Keep the base block count and work budget here; only cap
+        // the first two chain rounds at the measured medium-tier value.
+        cfg.max_s = 256;
     }
     cfg
 }

@@ -1439,7 +1439,53 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         if improved5 > 0 && is_bijection(&candidate5, n) {
                                             let f5 = flops_of(&scoring_pat, &candidate5);
                                             if f5 < best_flops {
+                                                best_flops = f5;
                                                 best_perm = candidate5;
+
+                                                // Round 6: one more pass over the round-5
+                                                // incumbent with round = 3 seed diversification.
+                                                // Gated strictly to nnz <= 60_000 so heavy matrices
+                                                // are 100% bypassed, leaving their latency untouched.
+                                                if nnz <= 60_000 {
+                                                    let permuted6 = permute_pattern(&scoring_pat, &best_perm);
+                                                    let etree6 = EliminationTree::from_pattern(&permuted6);
+                                                    let post6 = etree6.postorder();
+                                                    let mut candidate6: Vec<usize> =
+                                                        post6.iter().map(|&j| best_perm[j]).collect();
+
+                                                    let post_pattern6 = permute_pattern(&scoring_pat, &candidate6);
+                                                    let post_etree6 = EliminationTree::from_pattern(&post_pattern6);
+                                                    let counts6: Vec<u32> =
+                                                        column_counts_gnp(&post_pattern6, &post_etree6)
+                                                            .into_iter()
+                                                            .map(|c| c as u32)
+                                                            .collect();
+                                                    let parent6: Vec<i32> = post_etree6
+                                                        .parent
+                                                        .iter()
+                                                        .map(|p| p.map_or(-1, |j| j as i32))
+                                                        .collect();
+                                                    let mut cfg6 = SUBTREE_CFG;
+                                                    cfg6.round = 3;
+                                                    cfg6.max_blocks = 32;
+                                                    cfg6.min_s = 16;
+                                                    cfg6.max_s = 768;
+                                                    let improved6 = rgreedy::subtree_refine(
+                                                        n,
+                                                        &pattern.col_ptr,
+                                                        &pattern.row_idx,
+                                                        &mut candidate6,
+                                                        &counts6,
+                                                        &parent6,
+                                                        cfg6,
+                                                    );
+                                                    if improved6 > 0 && is_bijection(&candidate6, n) {
+                                                        let f6 = flops_of(&scoring_pat, &candidate6);
+                                                        if f6 < best_flops {
+                                                            best_perm = candidate6;
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -1453,6 +1499,42 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── POST-CHAIN TERMINAL CACHE-BOUNDED POLISH ────────────────────────────
+    // Subtree refinement modifies blocks in isolation. A bounded terminal
+    // adjacent-pair descent pass (2 sweeps, 24M budget) polishes vertex ordering
+    // across block boundaries for medium matrices (1k <= n <= 4k, nnz <= 60k).
+    // A follow-up simplicial promotion pass (16M budget) advances newly emergent
+    // simplicial pivots.
+    if (1_000..=4_000).contains(&n) && nnz > 0 && nnz <= 60_000 {
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            2,
+            24_000_000,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_perm = cand;
+            }
+        }
+
+        if nnz <= n * 24 {
+            if let Some(cand) = rgreedy::simplicial_promotion(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                16_000_000,
+            ) {
+                let f = flops_of(&scoring_pat, &cand);
+                if f < best_flops {
+                    best_perm = cand;
+                }
+            }
+        }
+    }
 
     best_perm
 }

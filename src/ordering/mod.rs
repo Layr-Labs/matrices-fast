@@ -150,9 +150,6 @@ use crate::Pattern;
 #[cfg(test)]
 mod probe;
 
-pub mod rgreedy;
-pub mod custom_metrics;
-
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
 use feral::sparse::csc::CscPattern as ScoringPattern;
@@ -195,6 +192,15 @@ const SWEEP_EXTRA_MAX_NNZ: usize = 150_000;
 /// milliseconds; the worst case is therefore held byte-for-byte.
 const ROBUST_MAX_N: usize = 150_000;
 const ROBUST_MAX_NNZ: usize = 600_000;
+
+/// One cheap non-aggressive AMD pass for very large, sparse-ish graphs. The
+/// broader robust envelope is intentionally capped below this region; this
+/// narrow extension captures large sparse graphs where dense handling is the
+/// failure mode without stacking five extra passes on dense instances.
+const LARGE_ROBUST_MIN_N: usize = 150_000;
+const LARGE_ROBUST_MAX_N: usize = 350_000;
+const LARGE_ROBUST_MIN_NNZ: usize = 600_000;
+const LARGE_ROBUST_MAX_NNZ: usize = 1_250_000;
 
 /// Reverse Cuthill–McKee envelope. RCM is O(nnz) pure Rust — a few-millisecond
 /// BFS even at large n — so it is bounded PRIMARILY by nnz. The `nnz < 130000`
@@ -249,8 +255,8 @@ const NDFM_MAX_NNZ: usize = 130_000;
 /// worst-scoring small buckets' tied-at-AMD combinatorial/network graphs
 /// (`wastewater*`, `wastepaper6`, `syn*`, `tln2`). Deterministic. Best-of floor
 /// → zero-downside.
-const MINFILL_MAX_N: usize = 3_000;
-const MINFILL_MAX_NNZ: usize = 12_000;
+const MINFILL_MAX_N: usize = 5_000;
+const MINFILL_MAX_NNZ: usize = 30_000;
 
 /// METIS runtime is structure-dependent and can explode on large/dense patterns
 /// (measured: 6.2 s at nnz≈1.38M). Bound it by nnz PRIMARILY (the cost driver),
@@ -368,85 +374,6 @@ const RELABEL_MAX_RESTARTS: usize = 24;
 /// a huge sparse one is cheap), so an `n` cutoff would bound the wrong quantity.
 const RELABEL_AMF_MAX_NNZ: usize = 200_000;
 
-#[cfg(test)]
-const SUBTREE_SEARCH_WORK_LIMIT: i64 = 32_000_000;
-#[cfg(test)]
-const TERMINAL_SUBTREE_SEARCH_WORK_LIMIT: i64 = 16_000_000;
-const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
-    min_s: 32,
-    max_s: 384,
-    max_sub: 1_200,
-    max_blocks: 32,
-    budget: 1_000_000,
-    streams: 1,
-    rank_blocks: true,
-    round: 0,
-};
-
-/// Lower bound of the bounded subtree-refinement chain.
-///
-/// The chain was gated at `n >= 1_000` from the moment it was introduced
-/// (experiments 0021-0025), which left the ENTIRE `lt_1k` bucket untouched by
-/// the one technique that moved the other two: `lt_1k` sat at exactly 0.8965
-/// across 0021, 0022, 0023, 0024 and 0025 while `1k_10k` fell 0.8848 -> 0.8761
-/// and `gt_10k` fell 0.8119 -> 0.7970. Small graphs are also the CHEAPEST in
-/// the corpus (measured max 0.766 s across all 147 `lt_1k` matrices, against a
-/// 1.702 s corpus worst case), so the chain fits there with ~0.9 s to spare and
-/// cannot move the global worst case, which lives on `arki0013` (n=44909).
-///
-/// The floor is structural, not fitted: below ~64 vertices an elimination tree
-/// has too few subtrees of searchable size for a bounded block search to do
-/// useful work, and those graphs are already covered exhaustively by the MinFill
-/// multi-start and the small-graph LNS. Measured: 1_000 -> 200 was worth 2.6 bip,
-/// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
-const SUBTREE_MIN_N: usize = 64;
-
-const MID_MAX_S: usize = 128;
-const LARGE_MAX_S: usize = 384;
-const MID_BLOCKS: usize = 16;
-const MID_BUDGET: i64 = 2_000_000;
-const LARGE_BLOCKS: usize = 16;
-const LARGE_BUDGET: i64 = 2_000_000;
-
-/// Per-matrix base config for one chain round. On a short elimination tree the
-/// default `min_s = 32` admits almost no blocks, so drop the block floor to 16
-/// below `n = 1_000` — the same floor the terminal deep pass already uses.
-fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
-    let mut cfg = SUBTREE_CFG;
-    if n < 1_000 {
-        // Small graphs retain the promoted 16-by-2M allocation.
-        cfg.min_s = 16;
-        cfg.max_s = 256;
-        cfg.max_blocks = 16;
-        cfg.budget = 2_000_000;
-    } else if n >= 10_000 {
-        cfg.max_s = LARGE_MAX_S;
-        cfg.max_blocks = LARGE_BLOCKS;
-        cfg.budget = LARGE_BUDGET;
-    } else {
-        cfg.min_s = 32;
-        cfg.max_s = MID_MAX_S;
-        cfg.max_blocks = MID_BLOCKS;
-        cfg.budget = MID_BUDGET;
-    }
-    cfg
-}
-
-fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
-    let mut cfg = SUBTREE_CFG;
-    cfg.min_s = 16;
-    cfg.round = 5;
-    if n < 10_000 {
-        cfg.max_blocks = 4;
-        cfg.max_s = 768;
-        cfg.budget = 4_000_000;
-    } else {
-        cfg.max_blocks = 8;
-        cfg.max_s = 1_200;
-        cfg.budget = 2_000_000;
-    }
-    cfg
-}
 
 /// Deterministic 64-bit mixer (SplitMix64). Used only to derive relabelings from
 /// a fixed seed, so every run produces the identical sequence — the determinism
@@ -518,34 +445,15 @@ fn relabel_budget_and_cap(n: usize) -> (usize, usize) {
     }
 }
 
+/// Restart count for the budgeted relabelled-AMD multi-start: spend at most
+/// `budget` microseconds of restarts (see [`RELABEL_BUDGET`]), never more than
+/// `cap`. A pure function of `nnz`, never wall-clock, so both required `order()`
+/// runs pick the identical candidate set.
 fn relabel_restarts(budget: usize, cap: usize, nnz: usize) -> usize {
     if nnz == 0 {
         return 0;
     }
     (budget / nnz).min(cap)
-}
-
-/// Restart count for the budgeted relabelled multi-start:
-/// Incorporates the historical hub-gatewall discriminator (`max_deg * 50 <= n`)
-/// and low-nnz / mid-band floors to eliminate seed starvation on non-hub graphs
-/// while protecting extreme hub matrices like `ringpack_30_2` from timeout.
-fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_deg: usize) -> usize {
-    if nnz == 0 {
-        return 0;
-    }
-    let base_r = (budget / nnz).min(cap);
-
-    if max_deg * 50 > n && (100_000..=150_000).contains(&nnz) {
-        base_r.min(4) // Hub guard (e.g. ringpack_30_2)
-    } else if nnz <= 20_000 {
-        (600_000 / nnz).min(48) // Low-nnz regime
-    } else if nnz <= 150_000 && max_deg * 50 <= n {
-        base_r.max(12) // Mid-band non-hub floor
-    } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
-        base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
-    } else {
-        base_r
-    }
 }
 
 /// Return an elimination order for `pattern` (best-of over the ordering family).
@@ -587,13 +495,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
     let nnz = pattern.nnz();
-    let mut max_deg = 0usize;
-    for j in 0..n {
-        let deg = pattern.col_ptr[j + 1] - pattern.col_ptr[j];
-        if deg > max_deg {
-            max_deg = deg;
-        }
-    }
 
     // Try a candidate produced by `f`; keep it if it is a valid bijection with
     // strictly fewer flops. `catch_unwind` guards against a candidate panicking
@@ -748,6 +649,20 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         consider(&|| feral_amd::amd_order_opts(&core, &amd_nodense_agg).map(|(p, ..)| p));
     }
 
+    // One non-aggressive AMD pass for very large sparse-ish graphs. This is
+    // outside the medium robust envelope above: the envelope's n cap would
+    // otherwise make this branch unreachable. The structural gate avoids
+    // stacking extra passes on dense or very large graphs. Best-of AMD remains
+    // the floor, so this can only improve the predicted flop score.
+    if n >= LARGE_ROBUST_MIN_N && n < LARGE_ROBUST_MAX_N
+        && nnz >= LARGE_ROBUST_MIN_NNZ && nnz < LARGE_ROBUST_MAX_NNZ {
+        let amd_large = feral_amd::AmdOptions {
+            aggressive: false,
+            dense_alpha: 10.0,
+        };
+        consider(&|| feral_amd::amd_order_opts(&core, &amd_large).map(|(p, ..)| p));
+    }
+
     // Reverse Cuthill–McKee — a pure-Rust, O(nnz) ordering from a family
     // (bandwidth/profile reduction) that neither the minimum-degree crowd
     // (AMD/AMF) nor nested dissection (METIS/Scotch/KaHIP) covers. It sometimes
@@ -831,38 +746,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         consider(&|| {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(minfill_order(pattern))
         });
-        if n < 2_000 && nnz < 10_000 {
-            let minfill_restarts = if n < 1_000 && nnz < 5_000 { 12 } else { 6 };
-            for seed in 1..=minfill_restarts {
-                let q = relabel(n, seed);
-                let b = permute_pattern(&scoring_pat, &q);
-                let b_pat = Pattern {
-                    n,
-                    col_ptr: b.col_ptr,
-                    row_idx: b.row_idx,
-                };
-                consider(&|| {
-                    let pb = minfill_order(&b_pat);
-                    Ok(pb.into_iter().map(|x| q[x as usize] as i32).collect())
-                });
-            }
-        }
-    }
-
-    // Custom quotient-graph metrics (SqDiv / SqPure) on medium/dense networks.
-    // SqDiv evaluates deg² / (nv + 1), directly predicting each elimination's
-    // contribution to the exact sum of squared column counts Σ cⱼ².
-    if nnz <= 300_000 && nnz >= 10 * n {
-        for &variant in &[
-            custom_metrics::ScoreVariant::SqDiv,
-            custom_metrics::ScoreVariant::SqPure,
-        ] {
-            for &alpha in &[1.0, 10.0] {
-                consider(&|| {
-                    custom_metrics::order_variant(&core, alpha, true, variant)
-                });
-            }
-        }
     }
 
     // METIS nested dissection — bounded by nnz primarily (its cost driver) plus
@@ -1044,7 +927,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // `memory/experiments/0004-structured-relabelings.md`. Do not re-derive this;
     // if you want more from this family, buy more restarts, not smarter ones.
     let (relabel_budget, relabel_cap) = relabel_budget_and_cap(n);
-    let restarts = relabel_restarts_tuned(relabel_budget, relabel_cap, n, nnz, max_deg);
+    let restarts = relabel_restarts(relabel_budget, relabel_cap, nnz);
     for r in 0..restarts {
         let seed = r as u64 + 1;
         let q = relabel(n, seed);
@@ -1057,24 +940,16 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             continue;
         };
 
-        // Dense-absorption-off (alpha<0) AMD passes blow up on hub graphs (the
-        // quotient degrees grow without bound), so a hub discriminator routes
-        // hubs to the two safe configs only. max_deg*50<=n is the same test the
-        // restart logic uses for ringpack-class hubs.
-        let is_hub = max_deg * 50 > n;
-        let amd_configs = [
-            feral_amd::AmdOptions { aggressive: true, dense_alpha: 10.0 },
-            feral_amd::AmdOptions { aggressive: false, dense_alpha: 10.0 },
-            if is_hub { feral_amd::AmdOptions { aggressive: true, dense_alpha: 10.0 } }
-            else { feral_amd::AmdOptions { aggressive: true, dense_alpha: -1.0 } },
-            if is_hub { feral_amd::AmdOptions { aggressive: false, dense_alpha: 10.0 } }
-            else { feral_amd::AmdOptions { aggressive: false, dense_alpha: -1.0 } },
-            feral_amd::AmdOptions { aggressive: true, dense_alpha: 5.0 },
-            feral_amd::AmdOptions { aggressive: false, dense_alpha: 2.0 },
-        ];
-        let amd_opt = &amd_configs[r % amd_configs.len()];
         consider(&|| {
-            let pb = feral_amd::amd_order_opts(&bcore, amd_opt).map(|(p, ..)| p)?;
+            let pb = if r % 2 == 1 {
+                let opts = feral_amd::AmdOptions {
+                    aggressive: false,
+                    dense_alpha: 10.0,
+                };
+                feral_amd::amd_order_opts(&bcore, &opts).map(|(p, ..)| p)?
+            } else {
+                feral_amd::amd_order(&bcore)?
+            };
             // Compose back: `q[k]` is the original vertex that B numbers `k`.
             Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
         });
@@ -1118,588 +993,58 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
     if nnz <= RELABEL_AMF_MAX_NNZ {
         let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
-        let num_passes: usize = if nnz <= 80_000 { 2 } else { 1 };
-        for pass in 0..num_passes {
-            let seed_offset = pass as u64 * 1000;
-            for r in 0..restarts {
-                let seed = seed_offset + r as u64 + 1;
-                let da = amf_alphas[(r + pass) % amf_alphas.len()];
-                let amf_relabel_opts = feral_amf::AmfOptions {
-                    dense_alpha: da,
+        for r in 0..restarts {
+            let seed = r as u64 + 1;
+            let da = amf_alphas[r % amf_alphas.len()];
+            let amf_relabel_opts = feral_amf::AmfOptions {
+                dense_alpha: da,
+                ..Default::default()
+            };
+            let q = relabel(n, seed);
+            let b = permute_pattern(&scoring_pat, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+            })) else {
+                continue;
+            };
+
+            consider(&|| {
+                let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_relabel_opts)?;
+                // Compose back: `q[k]` is the original vertex that B numbers `k`.
+                Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+            });
+
+            if n < 5_000 && da != -1.0 {
+                let amf_nd_opts = feral_amf::AmfOptions {
+                    dense_alpha: -1.0,
                     ..Default::default()
                 };
-                let q = relabel(n, seed);
-                let b = permute_pattern(&scoring_pat, &q);
-                let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
-                let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
-                let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    feral_ordering_core::CscPattern::new(n, &bcp, &bri)
-                })) else {
-                    continue;
-                };
-
                 consider(&|| {
-                    let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_relabel_opts)?;
-                    // Compose back: `q[k]` is the original vertex that B numbers `k`.
+                    let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_nd_opts)?;
                     Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
                 });
-
-                if n < 5_000 && da != -1.0 && pass == 0 {
-                    let amf_nd_opts = feral_amf::AmfOptions {
-                        dense_alpha: -1.0,
-                        ..Default::default()
-                    };
-                    consider(&|| {
-                        let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_nd_opts)?;
-                        Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
-                    });
-                }
             }
-        }
-    }
 
-    // ── TERMINAL ADJACENT-PAIR DESCENT (local search on exact objective) ────
-    // Swaps adjacent pairs (a, b) in best_perm where (a, b) are adjacent in the
-    // elimination graph and deg(b) < deg(a). Because this directly evaluates on
-    // best_perm and only accepts if strictly fewer flops are produced, it is
-    // mathematically monotonic (zero downside).
-    const PAIR_DESCENT_MIN_N: usize = 3;
-    const PAIR_DESCENT_MAX_N: usize = 4_000;
-    const PAIR_DESCENT_MAX_NNZ: usize = 60_000;
-    const PAIR_DESCENT_SWEEPS: usize = 4;
-    const PAIR_DESCENT_OPS_BUDGET: i64 = 128_000_000;
-    const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
-    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
-
-    let pair_descent_ext = n > PAIR_DESCENT_MAX_N
-        && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 30_000
-        && max_deg * 50 <= n;
-    let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
-        && nnz > 0
-        && nnz <= PAIR_DESCENT_MAX_NNZ
-        && (n <= PAIR_DESCENT_MAX_N || pair_descent_ext);
-    let pair_descent_ops_budget = if pair_descent_ext && n > PAIR_DESCENT_MAX_N {
-        PAIR_DESCENT_EXT_OPS_BUDGET
-    } else {
-        PAIR_DESCENT_OPS_BUDGET
-    };
-    let medium_exact_gate = n > 1_000 && n <= 6_000 && nnz <= 30_000;
-
-    if pair_descent_gate {
-        if let Some(cand) = rgreedy::adjacent_pair_descent(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &best_perm,
-            PAIR_DESCENT_SWEEPS,
-            pair_descent_ops_budget,
-        ) {
-            let f = flops_of(&scoring_pat, &cand);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = cand;
-            }
-        }
-    }
-
-    // ── TERMINAL SIMPLICIAL PROMOTION (Ost, Schulz, Strash 2020) ───────────
-    // Promotes simplicial vertices (zero deficiency) ahead of non-simplicial
-    // vertices across a local lookahead window. Because simplicial pivots add
-    // zero fill edges, early elimination is provably safe and avoids premature
-    // clique coupling. Re-scored against exact flops; strictly monotonic.
-    const SIMPLICIAL_PROMOTION_MIN_N: usize = 3;
-    const SIMPLICIAL_PROMOTION_MAX_N: usize = 6_000;
-    const SIMPLICIAL_PROMOTION_MAX_NNZ: usize = 100_000;
-    const SIMPLICIAL_PROMOTION_MAX_DENSITY: usize = 24;
-    const SIMPLICIAL_PROMOTION_OPS_BUDGET: i64 = 64_000_000;
-
-    if (SIMPLICIAL_PROMOTION_MIN_N..=SIMPLICIAL_PROMOTION_MAX_N).contains(&n)
-        && nnz > 0
-        && nnz <= SIMPLICIAL_PROMOTION_MAX_NNZ
-        && nnz <= n.saturating_mul(SIMPLICIAL_PROMOTION_MAX_DENSITY)
-    {
-        if let Some(cand) = rgreedy::simplicial_promotion(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &best_perm,
-            SIMPLICIAL_PROMOTION_OPS_BUDGET,
-        ) {
-            let f = flops_of(&scoring_pat, &cand);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = cand;
-            }
-        }
-    }
-
-    // ── EXACT RANDOMIZED GREEDY ELIMINATION SEARCH (Area 2 on small graphs) ──
-    // Uses the vast time headroom at n <= 1,000 to perform exact elimination game
-    // simulation on true fill graphs with zero-cost objective tracking.
-    // Explores alternative prefix and suffix elimination orderings via LNS plateau search.
-    if n <= 1_000 && nnz <= 30_000 {
-        // TWO streams, not one. 0004 settled that this family is a pure lottery
-        // with no exploitable local structure, so the only lever that reliably
-        // pays is MORE TICKETS, not smarter ones — and a fresh `rng_seed` is a
-        // fresh ticket drawing a different plateau walk. The medium branch below
-        // already runs two budgets for exactly this reason; the small branch ran
-        // only one, despite `lt_1k` having by far the most headroom in the corpus
-        // (measured worst 0.824 s against a 1.72 s corpus worst case).
-        //
-        // The FIRST entry is byte-identical to the previously accepted single
-        // stream (same budget, same seed, same incumbent), so this strictly adds
-        // a second draw over the first one's result and can only lower flops.
-        for (budget, rng_seed) in [
-            (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
-            (50_000_000, 0xD1B5_4A32_D192_ED03),
-        ] {
-            if let Some((cand, _)) = rgreedy::search(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                best_flops,
-                budget,
-                rng_seed,
-            ) {
-                if is_bijection(&cand, n) {
-                    let f = flops_of(&scoring_pat, &cand);
-                    if f < best_flops {
-                        best_flops = f;
-                        best_perm = cand;
-                    }
-                }
-            }
-        }
-    } else if medium_exact_gate {
-
-        // The same serial exact search above its original size gate. Two fixed
-        // nominal budgets keep the added work bounded; the full-corpus run
-        // moved 0.860780 -> 0.859116 after the final pair pass. The separate
-        // branch leaves the accepted n <= 1,000 path byte-for-byte unchanged.
-        for budget in [100_000_000, 50_000_000] {
-            if let Some((cand, _)) = rgreedy::search(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                best_flops,
-                budget,
-                0xD1B5_4A32_D192_ED03,
-            ) {
-                if is_bijection(&cand, n) {
-                    let f = flops_of(&scoring_pat, &cand);
-                    if f < best_flops {
-                        best_flops = f;
-                        best_perm = cand;
-                    }
-                }
-            }
-        }
-    }
-
-    // On the medium exact-search gate, refine the new incumbent once more.
-    if pair_descent_gate && medium_exact_gate {
-        if let Some(cand) = rgreedy::adjacent_pair_descent(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &best_perm,
-            PAIR_DESCENT_SWEEPS,
-            pair_descent_ops_budget,
-        ) {
-            let f = flops_of(&scoring_pat, &cand);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = cand;
-            }
-        }
-    }
-
-    // Search bounded, disjoint blocks of the incumbent elimination tree. An
-    // etree postorder makes each subtree contiguous. The exact local search is
-    // capped at 32 blocks and one fixed 1M-operation stream per block, for a
-    // 32M matrix-wide requested-work ceiling. Whole-pattern setup and scoring
-    // stay inside the measured corpus envelope rather than running on
-    // unbounded hidden inputs.
-    if (SUBTREE_MIN_N..=350_000).contains(&n) && nnz <= 1_500_000 {
-        let permuted = permute_pattern(&scoring_pat, &best_perm);
-        let etree = EliminationTree::from_pattern(&permuted);
-        let post = etree.postorder();
-        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
-
-        let post_pattern = permute_pattern(&scoring_pat, &candidate);
-        let post_etree = EliminationTree::from_pattern(&post_pattern);
-        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
-            .into_iter()
-            .map(|c| c as u32)
-            .collect();
-        let parent: Vec<i32> = post_etree
-            .parent
-            .iter()
-            .map(|p| p.map_or(-1, |j| j as i32))
-            .collect();
-        let improved = rgreedy::subtree_refine(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &mut candidate,
-            &counts,
-            &parent,
-            subtree_cfg_for(n),
-        );
-        if improved > 0 && is_bijection(&candidate, n) {
-            let f = flops_of(&scoring_pat, &candidate);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = candidate;
-
-                // Round 2: Refine the newly improved incumbent's elimination tree.
-                // Uses round = 1 to activate diversified search seeds across blocks.
-                // Bounded at 24 blocks and 1M ops per block, strictly monotonic.
-                let permuted2 = permute_pattern(&scoring_pat, &best_perm);
-                let etree2 = EliminationTree::from_pattern(&permuted2);
-                let post2 = etree2.postorder();
-                let mut candidate2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
-
-                let post_pattern2 = permute_pattern(&scoring_pat, &candidate2);
-                let post_etree2 = EliminationTree::from_pattern(&post_pattern2);
-                let counts2: Vec<u32> = column_counts_gnp(&post_pattern2, &post_etree2)
-                    .into_iter()
-                    .map(|c| c as u32)
-                    .collect();
-                let parent2: Vec<i32> = post_etree2
-                    .parent
-                    .iter()
-                    .map(|p| p.map_or(-1, |j| j as i32))
-                    .collect();
-                let mut cfg2 = subtree_cfg_for(n);
-                cfg2.round = 1;
-                cfg2.max_blocks = 32;
-                cfg2.min_s = 16;
-                cfg2.budget = 8_000_000;
-                let improved2 = rgreedy::subtree_refine(
-
+            // RCM and Sloan also use vertex indices for deterministic tie breaks.
+            // Four fixed relabelled restarts are cheap in the already sparse
+            // region and provide a genuinely different lottery from AMD/AMF.
+            // The seed range is disjoint from the existing restart loops.
+            if n < RCM_MAX_N && nnz < RCM_MAX_NNZ && r < 4 {
+                let rp = Pattern {
                     n,
-                    &pattern.col_ptr,
-                    &pattern.row_idx,
-                    &mut candidate2,
-                    &counts2,
-                    &parent2,
-                    cfg2,
-                );
-                if improved2 > 0 && is_bijection(&candidate2, n) {
-                    let f2 = flops_of(&scoring_pat, &candidate2);
-                    if f2 < best_flops {
-                        best_perm = candidate2;
-
-                        // Round 3: one more pass over the round-2 incumbent.
-                        // Round 1 is capped at 32 blocks x 1M on the ORIGINAL
-                        // gate; round 2 re-searches (round=1, 24 blocks) only
-                        // when round 1 improved. Round 3 continues the same
-                        // chain (24 -> 32 blocks here) and widens the block
-                        // window upward (min_s 16, max_s 512) so slightly
-                        // larger subtrees of the improved tree are searched.
-                        // Same 1M ops per block, so the whole phase stays a
-                        // deterministic bounded-work chain; strictly
-                        // monotonic (accepted only on fewer flops).
-                        let permuted3 = permute_pattern(&scoring_pat, &best_perm);
-                        let etree3 = EliminationTree::from_pattern(&permuted3);
-                        let post3 = etree3.postorder();
-                        let mut candidate3: Vec<usize> =
-                            post3.iter().map(|&j| best_perm[j]).collect();
-
-                        let post_pattern3 = permute_pattern(&scoring_pat, &candidate3);
-                        let post_etree3 = EliminationTree::from_pattern(&post_pattern3);
-                        let counts3: Vec<u32> = column_counts_gnp(&post_pattern3, &post_etree3)
-                            .into_iter()
-                            .map(|c| c as u32)
-                            .collect();
-                        let parent3: Vec<i32> = post_etree3
-                            .parent
-                            .iter()
-                            .map(|p| p.map_or(-1, |j| j as i32))
-                            .collect();
-                        let mut cfg3 = subtree_cfg_for(n);
-                        cfg3.round = 1;
-                        cfg3.max_blocks = 32;
-                        cfg3.min_s = 16;
-                        cfg3.max_s = 512;
-                        cfg3.budget = 8_000_000;
-                        let improved3 = rgreedy::subtree_refine(
-                            n,
-                            &pattern.col_ptr,
-                            &pattern.row_idx,
-                            &mut candidate3,
-                            &counts3,
-                            &parent3,
-                            cfg3,
-                        );
-                        if improved3 > 0 && is_bijection(&candidate3, n) {
-                            let f3 = flops_of(&scoring_pat, &candidate3);
-                            if f3 < best_flops {
-                                best_perm = candidate3;
-
-                                // Round 4: one more pass over the round-3
-                                // incumbent. Same block count as round 3 (32)
-                                // but a wider window (max_s 768), so later
-                                // rounds of the chain keep exploring larger
-                                // subtrees of each newly refined tree. Same
-                                // 1M ops per block; bounded deterministic
-                                // chain.
-                                let permuted4 = permute_pattern(&scoring_pat, &best_perm);
-                                let etree4 = EliminationTree::from_pattern(&permuted4);
-                                let post4 = etree4.postorder();
-                                let mut candidate4: Vec<usize> =
-                                    post4.iter().map(|&j| best_perm[j]).collect();
-
-                                let post_pattern4 = permute_pattern(&scoring_pat, &candidate4);
-                                let post_etree4 = EliminationTree::from_pattern(&post_pattern4);
-                                let counts4: Vec<u32> =
-                                    column_counts_gnp(&post_pattern4, &post_etree4)
-                                        .into_iter()
-                                        .map(|c| c as u32)
-                                        .collect();
-                                let parent4: Vec<i32> = post_etree4
-                                    .parent
-                                    .iter()
-                                    .map(|p| p.map_or(-1, |j| j as i32))
-                                    .collect();
-                                let mut cfg4 = subtree_cfg_for(n);
-                                cfg4.round = 3;
-                                cfg4.max_blocks = 32;
-                                cfg4.min_s = 16;
-                                cfg4.max_s = 768;
-                                cfg4.budget = 32_000_000;
-                                let improved4 = rgreedy::subtree_refine(
-                                     n,
-                                     &pattern.col_ptr,
-                                     &pattern.row_idx,
-                                     &mut candidate4,
-                                     &counts4,
-                                     &parent4,
-                                     cfg4,
-                                );
-                                if improved4 > 0 && is_bijection(&candidate4, n) {
-                                    let f4 = flops_of(&scoring_pat, &candidate4);
-                                    if f4 < best_flops {
-                                        best_flops = f4;
-                                        best_perm = candidate4;
-
-                                        // Round 5: one more pass over the round-4
-                                        // incumbent. Same block count (32), min_s 16,
-                                        // max_s 768, round = 4 seed diversification.
-                                        let permuted5 = permute_pattern(&scoring_pat, &best_perm);
-                                        let etree5 = EliminationTree::from_pattern(&permuted5);
-                                        let post5 = etree5.postorder();
-                                        let mut candidate5: Vec<usize> =
-                                            post5.iter().map(|&j| best_perm[j]).collect();
-
-                                        let post_pattern5 = permute_pattern(&scoring_pat, &candidate5);
-                                        let post_etree5 = EliminationTree::from_pattern(&post_pattern5);
-                                        let counts5: Vec<u32> =
-                                            column_counts_gnp(&post_pattern5, &post_etree5)
-                                                .into_iter()
-                                                .map(|c| c as u32)
-                                                .collect();
-                                        let parent5: Vec<i32> = post_etree5
-                                            .parent
-                                            .iter()
-                                            .map(|p| p.map_or(-1, |j| j as i32))
-                                            .collect();
-                                        let mut cfg5 = subtree_cfg_for(n);
-                                        cfg5.round = 4;
-                                        cfg5.max_blocks = 32;
-                                        cfg5.min_s = 16;
-                                        cfg5.max_s = 768;
-                                        cfg5.budget = 16_000_000;
-                                        let improved5 = rgreedy::subtree_refine(
-                                            n,
-                                            &pattern.col_ptr,
-                                            &pattern.row_idx,
-                                            &mut candidate5,
-                                            &counts5,
-                                            &parent5,
-                                            cfg5,
-                                        );
-                                        if improved5 > 0 && is_bijection(&candidate5, n) {
-                                            let f5 = flops_of(&scoring_pat, &candidate5);
-                                            if f5 < best_flops {
-                                                best_perm = candidate5;
-                                            }
-                                        }
-                                    }
-                                }
-
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Replace the frontier's 24M independent terminal pass with a deeper 16M
-    // pass. Two additive versions exceeded the hidden time cap even though the
-    // second used this narrow gate. Substitution makes total work lower than
-    // the promoted frontier while retaining the stronger search allocation.
-    if (SUBTREE_MIN_N..=80_000).contains(&n) && nnz <= 250_000 {
-        let incumbent_flops = flops_of(&scoring_pat, &best_perm);
-        let permuted = permute_pattern(&scoring_pat, &best_perm);
-        let etree = EliminationTree::from_pattern(&permuted);
-        let post = etree.postorder();
-        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
-
-        let post_pattern = permute_pattern(&scoring_pat, &candidate);
-        let post_etree = EliminationTree::from_pattern(&post_pattern);
-        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
-            .into_iter()
-            .map(|c| c as u32)
-            .collect();
-        let parent: Vec<i32> = post_etree
-            .parent
-            .iter()
-            .map(|p| p.map_or(-1, |j| j as i32))
-            .collect();
-        let improved = rgreedy::subtree_refine(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &mut candidate,
-            &counts,
-            &parent,
-            terminal_deep_subtree_cfg(n),
-        );
-        if improved > 0 && is_bijection(&candidate, n) {
-            let f = flops_of(&scoring_pat, &candidate);
-            if f < incumbent_flops {
-                best_flops = f;
-                best_perm = candidate;
-
-                // Chained terminal pass 2: runs ONLY on medium matrices (n < 10_000)
-                // that strictly improved in the first terminal pass. Uses unaliased
-                // round = 6 and a small 4M operation cap (2 blocks x 2M ops) on the
-                // newly uncovered elimination tree.
-                if (n < 10_000 && nnz <= 100_000) || (n >= 10_000 && nnz <= 60_000) {
-                    let permuted2 = permute_pattern(&scoring_pat, &best_perm);
-                    let etree2 = EliminationTree::from_pattern(&permuted2);
-                    let post2 = etree2.postorder();
-                    let mut candidate2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
-                    let post_pattern2 = permute_pattern(&scoring_pat, &candidate2);
-                    let post_etree2 = EliminationTree::from_pattern(&post_pattern2);
-                    let counts2: Vec<u32> = column_counts_gnp(&post_pattern2, &post_etree2)
-                        .into_iter()
-                        .map(|c| c as u32)
-                        .collect();
-                    let parent2: Vec<i32> = post_etree2
-                        .parent
-                        .iter()
-                        .map(|p| p.map_or(-1, |j| j as i32))
-                        .collect();
-                    let mut cfg2 = terminal_deep_subtree_cfg(n);
-                    cfg2.round = 6;
-                    cfg2.min_s = 8;
-                    cfg2.max_blocks = 4;
-                    cfg2.budget = 4_000_000;
-                    let improved2 = rgreedy::subtree_refine(
-                        n,
-                        &pattern.col_ptr,
-                        &pattern.row_idx,
-                        &mut candidate2,
-                        &counts2,
-                        &parent2,
-                        cfg2,
-                    );
-                    if improved2 > 0 && is_bijection(&candidate2, n) {
-                        let f2 = flops_of(&scoring_pat, &candidate2);
-                        if f2 < f {
-                            best_flops = f2;
-                            best_perm = candidate2;
-
-                            // Chained terminal round 3: runs ONLY on medium sparse matrices (n < 10_000 && nnz <= 100_000)
-                            // where BOTH terminal round 1 AND round 2 found strict improvements.
-                            // Uses unaliased round = 7, min_s = 8 (to capture small tight clusters),
-                            // and a 4-block budget on the newly uncovered elimination tree.
-                            let permuted3 = permute_pattern(&scoring_pat, &best_perm);
-                            let etree3 = EliminationTree::from_pattern(&permuted3);
-                            let post3 = etree3.postorder();
-                            let mut candidate3: Vec<usize> = post3.iter().map(|&j| best_perm[j]).collect();
-                            let post_pattern3 = permute_pattern(&scoring_pat, &candidate3);
-                            let post_etree3 = EliminationTree::from_pattern(&post_pattern3);
-                            let counts3: Vec<u32> = column_counts_gnp(&post_pattern3, &post_etree3)
-                                .into_iter()
-                                .map(|c| c as u32)
-                                .collect();
-                            let parent3: Vec<i32> = post_etree3
-                                .parent
-                                .iter()
-                                .map(|p| p.map_or(-1, |j| j as i32))
-                                .collect();
-                            let mut cfg3 = terminal_deep_subtree_cfg(n);
-                            cfg3.round = 7;
-                            cfg3.min_s = 8;
-                            cfg3.max_blocks = 4;
-                            cfg3.budget = 4_000_000;
-                            let improved3 = rgreedy::subtree_refine(
-                                n,
-                                &pattern.col_ptr,
-                                &pattern.row_idx,
-                                &mut candidate3,
-                                &counts3,
-                                &parent3,
-                                cfg3,
-                            );
-                            if improved3 > 0 && is_bijection(&candidate3, n) {
-                                let f3 = flops_of(&scoring_pat, &candidate3);
-                                if f3 < f2 {
-                                    best_flops = f3;
-                                    best_perm = candidate3;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // ── POST-TERMINAL LOCAL CLEANUP ─────────────────────────────────────────
-    // Terminal subtree passes often create newly simplicial vertices or expose
-    // local inversion transpositions. Running quick monotonic passes sweeps
-    // these remaining transpositions with negligible CPU cost.
-    if (SIMPLICIAL_PROMOTION_MIN_N..=SIMPLICIAL_PROMOTION_MAX_N).contains(&n)
-        && nnz > 0
-        && nnz <= SIMPLICIAL_PROMOTION_MAX_NNZ
-        && nnz <= n.saturating_mul(SIMPLICIAL_PROMOTION_MAX_DENSITY)
-    {
-        if let Some(cand) = rgreedy::simplicial_promotion(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &best_perm,
-            SIMPLICIAL_PROMOTION_OPS_BUDGET,
-        ) {
-            let f = flops_of(&scoring_pat, &cand);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = cand;
-            }
-        }
-    }
-
-    if pair_descent_gate {
-        if let Some(cand) = rgreedy::adjacent_pair_descent(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &best_perm,
-            2,
-            pair_descent_ops_budget,
-        ) {
-            let f = flops_of(&scoring_pat, &cand);
-            if f < best_flops {
-                best_perm = cand;
+                    col_ptr: b.col_ptr.clone(),
+                    row_idx: b.row_idx.clone(),
+                };
+                consider(&|| {
+                    let p = rcm_order(&rp);
+                    Ok(p.iter().map(|&x| q[x as usize] as i32).collect())
+                });
+                consider(&|| {
+                    let p = sloan_order(&rp, 2, 1);
+                    Ok(p.iter().map(|&x| q[x as usize] as i32).collect())
+                });
             }
         }
     }
@@ -2981,70 +2326,5 @@ mod tests {
         let amd_flops = flops_of(&scoring_pat, &amd);
         let ours_flops = flops_of(&scoring_pat, &order(&pat));
         assert!(ours_flops <= amd_flops, "ours {ours_flops} > amd {amd_flops}");
-    }
-
-    #[test]
-    fn order_reduces_large_pooling_fixture() {
-        let (_, pat) = crate::corpus::corpus()
-            .into_iter()
-            .find(|(name, _)| name == "pooling_sppc1pq")
-            .expect("development fixture");
-        let n = pat.n;
-        let col_ptr_i32: Vec<i32> = pat.col_ptr.iter().map(|&x| x as i32).collect();
-        let row_idx_i32: Vec<i32> = pat.row_idx.iter().map(|&x| x as i32).collect();
-        let core =
-            feral_ordering_core::CscPattern::new(n, &col_ptr_i32, &row_idx_i32).unwrap();
-        let amd: Vec<usize> = feral_amd::amd_order(&core)
-            .unwrap()
-            .into_iter()
-            .map(|x| x as usize)
-            .collect();
-        let scoring_pat = ScoringPattern {
-            n,
-            col_ptr: pat.col_ptr.clone(),
-            row_idx: pat.row_idx.clone(),
-        };
-        let amd_flops = flops_of(&scoring_pat, &amd);
-        let ours_flops = flops_of(&scoring_pat, &order(&pat));
-        assert!(
-            (ours_flops as u128) * 4 < amd_flops as u128,
-            "expected ratio below 0.25, got {ours_flops}/{amd_flops}"
-        );
-    }
-
-    #[test]
-    fn terminal_deep_search_improves_medium_fixture() {
-        let (_, pat) = crate::corpus::corpus()
-            .into_iter()
-            .find(|(name, _)| name == "rsyn0815m04m")
-            .expect("development fixture");
-
-        let perm = order(&pat);
-        let scoring_pat = ScoringPattern {
-            n: pat.n,
-            col_ptr: pat.col_ptr.clone(),
-            row_idx: pat.row_idx.clone(),
-        };
-        let flops = flops_of(&scoring_pat, &perm);
-
-        assert!(flops < 168_000, "expected fewer than 168000 flops, got {flops}");
-    }
-
-    #[test]
-    fn subtree_configs_stay_within_matrix_work_limit() {
-        let requested_budget = SUBTREE_CFG
-            .budget
-            .saturating_mul(SUBTREE_CFG.max_blocks as i64)
-            .saturating_mul(SUBTREE_CFG.streams.max(1) as i64);
-        assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
-
-        for cfg in [terminal_deep_subtree_cfg(9_999), terminal_deep_subtree_cfg(10_000)] {
-            let requested_budget = cfg
-                .budget
-                .saturating_mul(cfg.max_blocks as i64)
-                .saturating_mul(cfg.streams.max(1) as i64);
-
-            assert!(requested_budget <= TERMINAL_SUBTREE_SEARCH_WORK_LIMIT);
-        }
     }
 }

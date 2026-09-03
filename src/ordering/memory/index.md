@@ -4,13 +4,30 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best locally verified candidate score: **0.848955** (weighted geomean flop
-  ratio vs AMD; fill **0.947530**), dev corpus **300** matrices, 2026-09-03
-  ([0041](experiments/0041-size-tiered-block-cap.md): the block-size cap tiered
-  by graph size). Base is our own promoted frontier `344a5d2`
-  (submission `26932eba`, hidden **0.874601**), which measures 0.849487 here.
-- Per bucket: lt_1k 0.893893 (147) · 1k_10k **0.873403** (108) ·
-  gt_10k 0.796916 (45).
+- Best locally verified candidate score: **0.847732** (weighted geomean flop
+  ratio vs AMD; fill **0.946484**), dev corpus **300** matrices, 2026-09-03
+  ([0042](experiments/0042-tier-block-allocation.md): the block ALLOCATION tiered
+  too). Base is our own promoted frontier `223023b`
+  (submission `0cb69525`, hidden **0.874307**), which measures 0.848955 here.
+- Per bucket: lt_1k 0.893893 (147) · 1k_10k **0.872433** (108) ·
+  gt_10k **0.794586** (45).
+- **THE SUBTREE CHAIN IS NOW TIERED ON BOTH AXES. This was the vein of 0040-0042
+  and it took 0.849801 → 0.847732 (20.7 bips) without spending one extra unit of
+  work** — every tier still has the same 32M requested-work ceiling:
+
+  | tier | max_s | blocks x budget |
+  |---|---|---|
+  | `n < 1_000` | 256 | 16 x 2M |
+  | `1_000 <= n < 10_000` | 128 | 16 x 2M |
+  | `n >= 10_000` | 384 | 16 x 2M |
+
+  Every tier wanted ~16 blocks of ~2M rather than the shipped 32 x 1M, and a
+  `max_s` matched to its size class.
+- **DEV→HIDDEN TRANSLATION DIFFERS BY BUCKET.** Measured: two `lt_1k` changes
+  translated at ~**1.3x** (4.24 bips dev → 5.6 hidden; 3.14 → 3.98) while a
+  `1k_10k` change translated at ~**0.55x** (5.3 → 2.9), matching 0023's old
+  figure. Dev appears to UNDER-weight `lt_1k` and OVER-weight `1k_10k` relative
+  to the graded corpus. No calibration point for `gt_10k` yet.
 - **`max_s` (the searched-block size cap) is the highest-yield knob found so far,
   and it is a FUNCTION OF GRAPH SIZE, not a constant.** One global value cannot
   serve every bucket: lowering the shared cap to 256 improves `1k_10k` while
@@ -150,6 +167,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0039](experiments/0039-tie-breaker-battery-negative.md) — 16 separator/min-fill candidates x 31 surviving ties, 496 measurements: **zero wins**, per-candidate minimum ratio exactly 1.0000. METIS on `faclay75` is 2.23x AMD and takes 14.7 s; Scotch returns 9519x; KaHIP 38-48 s. **NEGATIVE**, and it closes the "big tied matrices" open question — the partitioner gates protect the run rather than cost score.
 - [0040](experiments/0040-lt1k-block-size-sweep.md) — swept the `lt_1k` small-graph config inside its fixed 32M ceiling. **`max_s` (the cap on searched block size) is the dominant knob and 0038 had it 2x too high**: 512 → 256 takes the bucket 0.894939 → 0.893893, score 0.849801 → **0.849487**, AND drops the corpus worst `order()` 1.774 → 1.610 s. 224/256/288 form a plateau (all robust on disjoint halves and drop-top-3) while 320/384 fail drop-top-3. `min_s` below 16 is a no-op. WIN.
 - [0041](experiments/0041-size-tiered-block-cap.md) — the block cap must SCALE WITH GRAPH SIZE. Sweeping the shared `SUBTREE_CFG.max_s` showed 256 helps `1k_10k` (0.8752→0.8742) but HURTS `gt_10k` (0.7969→0.7991) and 512 hurts both, so no single value serves all buckets. Gave `1k_10k` its own `MID_MAX_S`; swept it to **128** (basin 96-192, all robust on halves + drop-top-3). `1k_10k` 0.875176 → **0.873403**, score 0.849487 → **0.848955**; `lt_1k` and `gt_10k` byte-identical. WIN.
+- [0042](experiments/0042-tier-block-allocation.md) — tiers the block ALLOCATION (count x per-block budget) as well as the cap. Every tier wanted **16 x 2M** over the shipped 32 x 1M at the same 32M ceiling: `1k_10k` 0.873403 → **0.872433**, `gt_10k` 0.796916 → **0.794594** (23 better / 2 worse, the cleanest robustness in the repo). Score 0.848955 → **0.847732**. Also closes two leads NEGATIVELY: `gt_10k`'s `max_s` is already optimal at 384 (unimodal curve, 288/320/352/416/448 all worse) and the later rounds' windows are already optimal at 512/768 (both directions worse). **`gt_10k` 8x4M scored better still and was REJECTED at 1.957 s = 98% of the cap.** WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

@@ -371,7 +371,7 @@ const RELABEL_AMF_MAX_NNZ: usize = 200_000;
 #[cfg(test)]
 const SUBTREE_SEARCH_WORK_LIMIT: i64 = 32_000_000;
 #[cfg(test)]
-const TERMINAL_SUBTREE_SEARCH_WORK_LIMIT: i64 = 16_000_000;
+const TERMINAL_SUBTREE_SEARCH_WORK_LIMIT: i64 = 32_000_000;
 const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
     min_s: 32,
     max_s: 384,
@@ -390,7 +390,7 @@ fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
     if n < 10_000 {
         cfg.max_blocks = 4;
         cfg.max_s = 768;
-        cfg.budget = 4_000_000;
+        cfg.budget = 8_000_000;
     } else {
         cfg.max_blocks = 8;
         cfg.max_s = 1_200;
@@ -1457,6 +1457,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         if improved5 > 0 && is_bijection(&candidate5, n) {
                                             let f5 = flops_of(&scoring_pat, &candidate5);
                                             if f5 < best_flops {
+                                                best_flops = f5;
                                                 best_perm = candidate5;
                                             }
                                         }
@@ -1476,7 +1477,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // second used this narrow gate. Substitution makes total work lower than
     // the promoted frontier while retaining the stronger search allocation.
     if (1_000..=80_000).contains(&n) && nnz <= 250_000 {
-        let incumbent_flops = flops_of(&scoring_pat, &best_perm);
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
@@ -1504,7 +1504,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
-            if f < incumbent_flops {
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
             }
         }

@@ -784,6 +784,22 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 });
             }
         }
+        // Ammf / AmindNorm are already implemented and were the next two
+        // formulas in the same sweep. Keep them off the slow dense-large
+        // matrices (gams05-class) by an n cap; each pass is one AMF-class
+        // quotient-graph walk.
+        if n < 8_000 {
+            for &variant in &[
+                custom_metrics::ScoreVariant::Ammf,
+                custom_metrics::ScoreVariant::AmindNorm,
+            ] {
+                for &alpha in &[1.0, 10.0] {
+                    consider(&|| {
+                        custom_metrics::order_variant(&core, alpha, true, variant)
+                    });
+                }
+            }
+        }
     }
 
     // METIS nested dissection — bounded by nnz primarily (its cost driver) plus
@@ -1160,12 +1176,18 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // simulation on true fill graphs with zero-cost objective tracking.
     // Explores alternative prefix and suffix elimination orderings via LNS plateau search.
     if n <= 1_000 && nnz <= 30_000 {
+        // Both searches start from the same portfolio incumbent. LNS is
+        // seed-dependent: running the extra streams from a 100M-improved
+        // incumbent can miss a better basin that the extra streams find from
+        // the original seed, and replacing the 100M stream loses its wins.
+        let search_seed = best_perm.clone();
+        let search_seed_flops = best_flops;
         if let Some((cand, _)) = rgreedy::search(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,
-            &best_perm,
-            best_flops,
+            &search_seed,
+            search_seed_flops,
             100_000_000,
             0x9E37_79B9_7F4A_7C15,
         ) {
@@ -1174,6 +1196,24 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 if f < best_flops {
                     best_flops = f;
                     best_perm = cand;
+                }
+            }
+        }
+        if n <= 800 && nnz <= 12_000 {
+            if let Some((cand, _)) = rgreedy::search_par_default_seeds(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &search_seed,
+                search_seed_flops,
+                80_000_000,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
                 }
             }
         }
@@ -1201,6 +1241,28 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
+        // A third 50M stage on the cheaper half of the medium gate. The 0020
+        // probe's full-gate third stage was left unshipped for cap risk; this
+        // n/nnz cut keeps it off the denser 4k–6k patterns.
+        if n <= 3_500 && nnz <= 20_000 {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                50_000_000,
+                0x8543_4123_4A92_BC10,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
     }
 
     // On the medium exact-search gate, refine the new incumbent once more.
@@ -1215,7 +1277,49 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         ) {
             let f = flops_of(&scoring_pat, &cand);
             if f < best_flops {
+                best_flops = f;
                 best_perm = cand;
+            }
+        }
+    }
+
+    // ── SUBTREE REFINEMENT on sparse medium / gt_10k graphs ───────────────
+    // Exact search on the WHOLE matrix is gated out here, but an elimination-
+    // tree subtree is an independently optimizable subproblem of a few hundred
+    // to a few thousand vertices. Density (`nnz <= 5 n`) and hub
+    // (`max_deg * 50 <= n`) gates keep this off the slow dense-KKT tier
+    // (crudeoil_lee4_*, gams05) whose cap slack is already spent.
+    if n >= 1_500
+        && n <= 80_000
+        && nnz <= 350_000
+        && nnz <= 5 * n
+        && max_deg.saturating_mul(50) <= n
+    {
+        if let Some((mut cand, parent, counts)) = postordered_etree(&scoring_pat, &best_perm) {
+            let cfg = rgreedy::SubCfg {
+                min_s: 24,
+                max_s: 900,
+                max_sub: 2_800,
+                max_blocks: 24,
+                budget: 16_000_000,
+                streams: 1,
+                rank_blocks: true,
+                round: 0,
+            };
+            let improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut cand,
+                &counts,
+                &parent,
+                cfg,
+            );
+            if improved > 0 && is_bijection(&cand, n) {
+                let f = flops_of(&scoring_pat, &cand);
+                if f < best_flops {
+                    best_perm = cand;
+                }
             }
         }
     }
@@ -2108,6 +2212,46 @@ fn flops_of(pat: &ScoringPattern, perm: &[usize]) -> u64 {
     let etree = EliminationTree::from_pattern(&permuted);
     let counts = column_counts_gnp(&permuted, &etree);
     counts.iter().map(|&c| (c as u64) * (c as u64)).sum()
+}
+
+/// Postorder `perm` w.r.t. its own elimination tree (flops-invariant) and
+/// return the parent / column-count arrays in that numbering, which is what
+/// [`rgreedy::subtree_refine`] needs so each subtree occupies a contiguous
+/// range of positions.
+fn postordered_etree(
+    pat: &ScoringPattern,
+    perm: &[usize],
+) -> Option<(Vec<usize>, Vec<i32>, Vec<u32>)> {
+    let n = pat.n;
+    if perm.len() != n {
+        return None;
+    }
+    let permuted = permute_pattern(pat, perm);
+    let etree = EliminationTree::from_pattern(&permuted);
+    let post = etree.postorder();
+    if post.len() != n {
+        return None;
+    }
+    let mut new_perm = vec![0usize; n];
+    for (k, &j) in post.iter().enumerate() {
+        if j >= n {
+            return None;
+        }
+        new_perm[k] = perm[j];
+    }
+    let permuted = permute_pattern(pat, &new_perm);
+    let etree = EliminationTree::from_pattern(&permuted);
+    let counts = column_counts_gnp(&permuted, &etree);
+    if counts.len() != n || etree.parent.len() != n {
+        return None;
+    }
+    let parent: Vec<i32> = etree
+        .parent
+        .iter()
+        .map(|p| p.map(|i| i as i32).unwrap_or(-1))
+        .collect();
+    let counts_u32: Vec<u32> = counts.iter().map(|&c| c as u32).collect();
+    Some((new_perm, parent, counts_u32))
 }
 
 /// Whether `perm` is a bijection of `0..n` (guards a candidate before scoring).

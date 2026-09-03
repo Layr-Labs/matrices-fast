@@ -4,12 +4,12 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.859116** (weighted geomean flop ratio vs AMD; fill tiebreak
-  **0.955319**), dev corpus **300** matrices, 2026-09-02
-  ([0020](experiments/0020-medium-exact-search.md), bounded serial exact search
-  for medium sparse graphs). Previous synced frontier: 0.860780 / fill 0.955916.
-- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.884759** (108) ·
-  gt_10k 0.811860 (45).
+- Best score: **0.855650** (weighted geomean flop ratio vs AMD; fill tiebreak
+  **0.953783**), dev corpus **300** matrices, 2026-09-03
+  ([0021](experiments/0021-subtree-refine-and-extra-search.md), etree subtree
+  refinement plus extra exact-search streams). Previous: 0.859116 / fill 0.955319.
+- Per bucket: lt_1k **0.894949** (147) · 1k_10k **0.880063** (108) ·
+  gt_10k **0.807866** (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -104,6 +104,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0014](experiments/0014-custom-quotient-metrics.md) — Custom quotient-graph metrics (SqDiv & SqPure). 0.864462 → **0.863609**. WIN.
 - [0015](experiments/0015-small-simplicial-cycled-amd-minfill.md) — Small-graph simplicial promotion, 6-way cycled AMD & scaled minfill. 0.863609 → **0.863272**. WIN.
 - [0020](experiments/0020-medium-exact-search.md) — Two bounded serial exact-search stages on `1,000 < n <= 6,000`, `nnz <= 30,000`, followed by pair descent when its existing gate allows it. Synced baseline 0.860780 → **0.859116**. WIN.
+- [0021](experiments/0021-subtree-refine-and-extra-search.md) — Wired unused `subtree_refine` on sparse medium/gt_10k graphs, Ammf/AmindNorm on dense `n<8k`, a third 50M exact-search stage on `n<=3500 && nnz<=20k`, and four extra exact-search streams on sparse `n<=800`. 0.859116 → **0.855650**. WIN. 62 better / 0 worse.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

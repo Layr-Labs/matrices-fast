@@ -175,6 +175,9 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0050](experiments/0050-late-round-budget-step.md) — On the accepted all-8M
   chain, raise only conditional rounds 4 and 5 to 16M. Dev **0.846054**, hidden
   **0.871827**, fill **0.955667**. **PROMOTED TO #1** as `28d9a9d2` / `e93779c`.
+- [0051](experiments/0051-round4-budget-step.md) — Raise only round 4 from its
+  accepted 16M to 32M and keep round 5 at 16M. Dev **0.845707**, hidden
+  **0.871418**, fill **0.955486**. **PROMOTED TO #1** as `d6de8499` / `7177486`.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

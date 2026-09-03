@@ -401,44 +401,12 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 /// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
 const SUBTREE_MIN_N: usize = 64;
 
-/// Block-size cap for the `1k_10k` tier of the subtree chain.
-///
-/// The cap on how large a searched block may be wants to SCALE WITH GRAPH SIZE,
-/// and one global value cannot serve every bucket. Sweeping the shared
-/// `SUBTREE_CFG.max_s` showed 256 helps `1k_10k` (0.8752 -> 0.8742) while
-/// HURTING `gt_10k` (0.7969 -> 0.7991), and 512 hurts both. So the large tier
-/// keeps the 384 that measured best for it, small graphs use 256
-/// ([0040]), and the middle bucket gets its own value swept here:
-/// 384 -> 0.849487, 256 -> 0.849194, 192 -> 0.849097, 160 -> 0.849117,
-/// **128 -> 0.848955**, 112 -> 0.849046, 96 -> 0.849104, 64 -> 0.849307.
-/// The 96-192 basin is robust on disjoint corpus halves and drop-top-3; 128 is
-/// its deepest point.
 const MID_MAX_S: usize = 128;
-
-/// Block-size cap for the `gt_10k` tier of the subtree chain.
-///
-/// Swept in isolation (0042) and CONFIRMED at the inherited 384. The curve is
-/// cleanly unimodal with the minimum exactly here — 288 -> 0.7987, 320 -> 0.7983,
-/// 352 -> 0.7977, **384 -> 0.7969**, 416 -> 0.7994, 448 -> 0.8004 — unlike the
-/// noisier small-graph surface. Named rather than inlined so the next session
-/// can see it was measured, not assumed, and does not re-sweep it.
 const LARGE_MAX_S: usize = 384;
-
-/// Block count and per-block budget for the `1k_10k` tier (product held at 32M).
-/// Block count and per-block budget for the `gt_10k` tier (product held at 32M).
-///
-/// 32x1M -> gt_10k 0.796916, 16x2M -> **0.794594**, 8x4M -> 0.793966.
-/// 8x4M scores better still but measured **1.957 s** on the worst matrix, i.e.
-/// 98% of the 2 s SIGKILL, so it is REJECTED on timing regardless of score --
-/// 0025 failed the hidden cap three times from exactly this kind of margin.
-/// 16x2M keeps the worst case at 1.653 s, unchanged from the 32x1M base.
-const LARGE_BLOCKS: usize = 16;
-const LARGE_BUDGET: i64 = 2_000_000;
-/// Block count and per-block budget for the `1k_10k` tier (product held at 32M).
-/// 32x1M -> 1k_10k 0.873403, 20x1.6M -> 0.8729, **16x2M -> 0.872433**,
-/// 12x2.67M -> 0.8733, 8x4M -> 0.872460, 64x0.5M -> 0.8750.
 const MID_BLOCKS: usize = 16;
 const MID_BUDGET: i64 = 2_000_000;
+const LARGE_BLOCKS: usize = 16;
+const LARGE_BUDGET: i64 = 2_000_000;
 
 /// Per-matrix base config for one chain round. On a short elimination tree the
 /// default `min_s = 32` admits almost no blocks, so drop the block floor to 16
@@ -446,29 +414,17 @@ const MID_BUDGET: i64 = 2_000_000;
 fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     if n < 1_000 {
-        // Small graphs get the SAME 32M requested-work ceiling as everywhere
-        // else (blocks x budget x streams), just spent as FEWER, DEEPER blocks:
-        // a short elimination tree has few subtrees, so 32 shallow blocks mostly
-        // find nothing, while 8 deep ones actually search. `min_s` drops to 16
-        // for the same reason (the default 32 admits almost no blocks here).
-        // This is a REALLOCATION, not an increase - the nominal ceiling is
-        // unchanged, which is what kept 0022 inside the cap after 0021 blew it.
+        // Small graphs retain the promoted 16-by-2M allocation.
         cfg.min_s = 16;
         cfg.max_s = 256;
         cfg.max_blocks = 16;
         cfg.budget = 2_000_000;
     } else if n >= 10_000 {
-        // The gt_10k tier, swept in isolation (it carries 0.40 of the weight on
-        // its own and had only ever been varied through the shared constant).
         cfg.max_s = LARGE_MAX_S;
         cfg.max_blocks = LARGE_BLOCKS;
         cfg.budget = LARGE_BUDGET;
-    } else if n < 10_000 {
-        // The block cap wants to SCALE WITH GRAPH SIZE. Sweeping the shared
-        // SUBTREE_CFG.max_s showed 256 helps 1k_10k (0.8752 -> 0.8742) but hurts
-        // gt_10k (0.7969 -> 0.7991), and 512 hurts both -- i.e. one global value
-        // cannot serve both. Give the middle bucket its own cap and leave the
-        // large tier on the 384 that measured best for it.
+    } else {
+        cfg.min_s = 32;
         cfg.max_s = MID_MAX_S;
         cfg.max_blocks = MID_BLOCKS;
         cfg.budget = MID_BUDGET;
@@ -483,9 +439,6 @@ fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
     if n < 10_000 {
         cfg.max_blocks = 4;
         cfg.max_s = 768;
-        // 0046: these budgets predate the tiering + budget-shape story and
-        // were never swept on the tiered tree. The 0041/0043-45 monotone
-        // prior says deep passes want budget, not breadth.
         cfg.budget = 4_000_000;
     } else {
         cfg.max_blocks = 8;
@@ -1425,13 +1378,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 cfg2.round = 1;
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
-                // 0043 (our chain-round-2 budget sweep on the pre-tiering tree):
-                // the round-2 budget axis is monotone with no U-turn through
-                // 128M; 64M bought -0.001473 weighted partial vs 2M with worst
-                // order() 1.139 s, robust on halves/drop-5. Round 2 on the
-                // tiered frontier inherits subtree_cfg_for(n) (2M for every
-                // tier) — pin it explicitly to 64M so the tiered n<1000 branch
-                // (which pins 2M) is overridden as intended.
                 cfg2.budget = 8_000_000;
                 let improved2 = rgreedy::subtree_refine(
 
@@ -1480,11 +1426,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         cfg3.max_blocks = 32;
                         cfg3.min_s = 16;
                         cfg3.max_s = 512;
-                        // 0044 (round-3 budget sweep, probe-only): the 0041
-                        // monotone prior holds for round 3 too — 64M beats
-                        // the inherited 2M on the ge1k weighted partial, no
-                        // U-turn. Same pin as round 2, same reason: the tier
-                        // branches all set 2M, inheritance would undo it.
                         cfg3.budget = 8_000_000;
                         let improved3 = rgreedy::subtree_refine(
                             n,
@@ -1530,11 +1471,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
                                 cfg4.max_s = 768;
-                                // 0044/0045: same inheritance bug as rounds
-                                // 2-3 — every tier branch pins 2M. The 0041
-                                // monotone prior held for r2 (0043) and r3
-                                // (0044); pin r4 identically.
-                                cfg4.budget = 8_000_000;
+                                cfg4.budget = 16_000_000;
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,
@@ -1576,8 +1513,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         cfg5.max_blocks = 32;
                                         cfg5.min_s = 16;
                                         cfg5.max_s = 768;
-                                        // 0045: r5 same as r2-r4.
-                                        cfg5.budget = 8_000_000;
+                                        cfg5.budget = 16_000_000;
                                         let improved5 = rgreedy::subtree_refine(
                                             n,
                                             &pattern.col_ptr,

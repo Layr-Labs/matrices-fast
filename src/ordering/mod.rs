@@ -1446,9 +1446,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 // but a wider window (max_s 768), so later
                                 // rounds of the chain keep exploring larger
                                 // subtrees of each newly refined tree. Spend
-                                // 64M per block only in the measured-safe
-                                // lower-medium band; retain the hidden-proven
-                                // 32M budget everywhere else.
+                                // Use tiered depth only in the medium bucket:
+                                // 128M below 6k and 64M from 6k to 10k. Keep
+                                // the hidden-proven 32M budget for every small
+                                // and large matrix.
                                 let permuted4 = permute_pattern(&scoring_pat, &best_perm);
                                 let etree4 = EliminationTree::from_pattern(&permuted4);
                                 let post4 = etree4.postorder();
@@ -1473,6 +1474,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 cfg4.min_s = 16;
                                 cfg4.max_s = 768;
                                 cfg4.budget = if (1_000..6_000).contains(&n) {
+                                    128_000_000
+                                } else if (6_000..10_000).contains(&n) {
                                     64_000_000
                                 } else {
                                     32_000_000

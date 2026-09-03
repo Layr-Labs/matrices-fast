@@ -184,7 +184,12 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0053](experiments/0053-selective-lower-medium-round4-depth.md) — Reclaim the
   score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
   retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;
-  1k-10k worst observed call **0.661 s**. Submitted for hidden validation.
+  1k-10k worst observed call **0.661 s**. **PROMOTED TO #1** as `e46c5349` /
+  `77153ff`, hidden **0.871239**, fill **0.955407**.
+- [0054](experiments/0054-tiered-medium-round4-depth.md) — On the accepted
+  0053 source, use 128M below 6k and 64M from 6k to 10k while preserving 32M
+  outside the medium bucket. Dev **0.845355**, fill **0.944744**, worst medium
+  call **0.814 s**. Submitted for hidden validation.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

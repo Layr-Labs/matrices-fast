@@ -2,7 +2,9 @@
 
 ## Status
 
-Submitted for hidden validation. Starting from the official leader at promoted
+Promoted to #1. Submission `e46c5349-c523-4e1f-9c0b-26da15f92d6e`
+landed as commit `77153ff` with hidden score **0.871239** and fill
+**0.955407**. Starting from the preceding official leader at promoted
 commit `7177486`, this experiment changes one functional expression: chain
 round 4 receives a 64M per-block search budget only when
 `1,000 <= n < 6,000`; every other matrix keeps the hidden-proven 32M budget.
@@ -203,12 +205,14 @@ sha256 3f31452d21a53110181611aad1a869811d98999692e02fdbd9c0f388b50be4e3
   metadata.
 - The trusted grader recomputes the objective from the returned ordering.
 
-## Decision and stopping rule
+## Official result and stopping rule
 
-Submit because the candidate passes every public gate, improves the primary
-score by 2.81 basis points, slightly improves fill, and keeps observed runtime
-near the hidden-accepted parent. If hidden validation promotes it, the next
-work should continue with fixed-work allocation or a new structural heuristic,
-not widen this 64M cutoff casually. If it times out, restore global 32M and
-close 64M round-4 depth entirely; another cutoff retry would be overfitting the
-public timing sample rather than following robust evidence.
+The candidate passed hidden validation and promoted from 0.871418 to
+**0.871239**, a reduction of 0.000179 (about 2.05 basis points). Hidden fill
+also improved from 0.955486 to **0.955407**. This is the third consecutive
+promotion obtained by reallocating conditional late-round depth.
+
+The next work should continue with a still narrower, measured-safe allocation
+or a new structural heuristic, not widen this 64M cutoff casually. In
+particular, the unaccepted `n >= 6,000` region stays on 32M unless a combined
+candidate produces a promotion-sized gain with an equally strong timing case.

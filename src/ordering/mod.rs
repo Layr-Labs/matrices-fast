@@ -401,20 +401,6 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 /// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
 const SUBTREE_MIN_N: usize = 64;
 
-/// Block-size cap for the `1k_10k` tier of the subtree chain.
-///
-/// The cap on how large a searched block may be wants to SCALE WITH GRAPH SIZE,
-/// and one global value cannot serve every bucket. Sweeping the shared
-/// `SUBTREE_CFG.max_s` showed 256 helps `1k_10k` (0.8752 -> 0.8742) while
-/// HURTING `gt_10k` (0.7969 -> 0.7991), and 512 hurts both. So the large tier
-/// keeps the 384 that measured best for it, small graphs use 256
-/// ([0040]), and the middle bucket gets its own value swept here:
-/// 384 -> 0.849487, 256 -> 0.849194, 192 -> 0.849097, 160 -> 0.849117,
-/// **128 -> 0.848955**, 112 -> 0.849046, 96 -> 0.849104, 64 -> 0.849307.
-/// The 96-192 basin is robust on disjoint corpus halves and drop-top-3; 128 is
-/// its deepest point.
-const MID_MAX_S: usize = 128;
-
 /// Per-matrix base config for one chain round. On a short elimination tree the
 /// default `min_s = 32` admits almost no blocks, so drop the block floor to 16
 /// below `n = 1_000` — the same floor the terminal deep pass already uses.
@@ -422,23 +408,22 @@ fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     if n < 1_000 {
         // Small graphs get the SAME 32M requested-work ceiling as everywhere
-        // else (blocks x budget x streams), just spent as FEWER, DEEPER blocks:
-        // a short elimination tree has few subtrees, so 32 shallow blocks mostly
-        // find nothing, while 8 deep ones actually search. `min_s` drops to 16
-        // for the same reason (the default 32 admits almost no blocks here).
+        // else (blocks x budget x streams), reallocated across four deeper
+        // blocks. A measured shape sweep found that short elimination trees
+        // benefit more from finishing a few high-ranked local searches than
+        // from starting many shallow ones. `min_s` drops to 16 because the
+        // default 32 admits almost no blocks on short trees.
         // This is a REALLOCATION, not an increase - the nominal ceiling is
         // unchanged, which is what kept 0022 inside the cap after 0021 blew it.
         cfg.min_s = 16;
         cfg.max_s = 256;
-        cfg.max_blocks = 16;
-        cfg.budget = 2_000_000;
+        cfg.max_blocks = 4;
+        cfg.budget = 8_000_000;
     } else if n < 10_000 {
-        // The block cap wants to SCALE WITH GRAPH SIZE. Sweeping the shared
-        // SUBTREE_CFG.max_s showed 256 helps 1k_10k (0.8752 -> 0.8742) but hurts
-        // gt_10k (0.7969 -> 0.7991), and 512 hurts both -- i.e. one global value
-        // cannot serve both. Give the middle bucket its own cap and leave the
-        // large tier on the 384 that measured best for it.
-        cfg.max_s = MID_MAX_S;
+        // The accepted mid-tier sweep has a broad 96..192 basin with its
+        // strongest public and hidden point at 128. Keep the base 32-block,
+        // 1M-operation allocation and change only the eligible block size.
+        cfg.max_s = 128;
     }
     cfg
 }

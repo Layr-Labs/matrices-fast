@@ -1422,6 +1422,14 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 cfg2.round = 1;
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
+                // 0043 (our chain-round-2 budget sweep on the pre-tiering tree):
+                // the round-2 budget axis is monotone with no U-turn through
+                // 128M; 64M bought -0.001473 weighted partial vs 2M with worst
+                // order() 1.139 s, robust on halves/drop-5. Round 2 on the
+                // tiered frontier inherits subtree_cfg_for(n) (2M for every
+                // tier) — pin it explicitly to 64M so the tiered n<1000 branch
+                // (which pins 2M) is overridden as intended.
+                cfg2.budget = 64_000_000;
                 let improved2 = rgreedy::subtree_refine(
 
                     n,

@@ -1454,6 +1454,74 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
 
+    // ── POST-CHAIN POLISH (descent + simplicial + medium-exact rerun) ──
+    // The terminal pair-descent, simplicial and medium-exact passes above ran
+    // BEFORE the subtree chain (here extended to five rounds), so chain-
+    // improved incumbents are never re-polished by them. Rerun all three once
+    // on the final chain-band incumbent (n >= 1,000), same gates/budgets,
+    // strict best-of. Band-safe: the added work is confined to n <= 12,000
+    // matrices (the 2 s cap risk lives in larger matrices these never touch).
+    if n >= 1_000 && pair_descent_gate {
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            PAIR_DESCENT_SWEEPS,
+            pair_descent_ops_budget,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
+    if n >= 1_000
+        && (SIMPLICIAL_PROMOTION_MIN_N..=SIMPLICIAL_PROMOTION_MAX_N).contains(&n)
+        && nnz > 0
+        && nnz <= SIMPLICIAL_PROMOTION_MAX_NNZ
+        && nnz <= n.saturating_mul(SIMPLICIAL_PROMOTION_MAX_DENSITY)
+    {
+        if let Some(cand) = rgreedy::simplicial_promotion(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            SIMPLICIAL_PROMOTION_OPS_BUDGET,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
+    // Medium exact search rerun (the strongest of the three polish pieces):
+    // it ran before the chain too, so rerun its two bounded stages on the
+    // final incumbent. Bounded 150M nominal ops on small/medium matrices.
+    if n > 1_000 && n <= 6_000 && nnz <= 30_000 {
+        for budget in [100_000_000i64, 50_000_000] {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                budget,
+                0xD1B5_4A32_D192_ED03,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
+    }
+
     best_perm
 }
 

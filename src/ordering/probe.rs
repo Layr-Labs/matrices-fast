@@ -185,6 +185,299 @@ fn probe_ties() {
     }
 }
 
+#[test]
+#[ignore]
+fn probe_subtree_rounds() {
+    let corpus = crate::corpus::corpus();
+    let mut base_log_sum = [0.0f64; 3];
+    let mut r1_log_sum = [0.0f64; 3];
+    let mut r2_log_sum = [[0.0f64; 3]; 3];
+    let mut counts = [0usize; 3];
+
+    for (_name, pat) in &corpus {
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let b = bucket(n);
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+
+        let inc = order(pat);
+        let inc_flops = flops_of(&sp, &inc);
+        counts[b] += 1;
+        base_log_sum[b] += (inc_flops as f64 / amd_flops as f64).ln();
+
+        if !(1_000..=350_000).contains(&n) || nnz > 1_500_000 {
+            r1_log_sum[b] += (inc_flops as f64 / amd_flops as f64).ln();
+            for i in 0..3 {
+                r2_log_sum[i][b] += (inc_flops as f64 / amd_flops as f64).ln();
+            }
+            continue;
+        }
+
+        // inc is already the result of round 1 from order().
+        // So inc_flops is already r1_flops!
+        let r1_flops = inc_flops;
+        r1_log_sum[b] += (r1_flops as f64 / amd_flops as f64).ln();
+
+        // Now test round 2 on top of inc!
+        let permuted = permute_pattern(&sp, &inc);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let candidate: Vec<usize> = post.iter().map(|&j| inc[j]).collect();
+        let post_pattern = permute_pattern(&sp, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let r_counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+
+        // Test Round 2 with max_blocks = 16, 24, 32
+        for (i, &mb) in [16, 24, 32].iter().enumerate() {
+            let mut cand = candidate.clone();
+            let mut cfg2 = SUBTREE_CFG;
+            cfg2.round = 1;
+            cfg2.max_blocks = mb;
+            let improved2 = rgreedy::subtree_refine(
+                n,
+                &pat.col_ptr,
+                &pat.row_idx,
+                &mut cand,
+                &r_counts,
+                &parent,
+                cfg2,
+            );
+            let mut f_out = r1_flops;
+            if improved2 > 0 && is_bijection(&cand, n) {
+                let f = flops_of(&sp, &cand);
+                if f < f_out {
+                    f_out = f;
+                }
+            }
+            r2_log_sum[i][b] += (f_out as f64 / amd_flops as f64).ln();
+        }
+    }
+
+    println!("\n--- SCORES ---");
+    println!("Base (Round 1): {:.6}", aggregate(&r1_log_sum, &counts));
+    for (i, &mb) in [16, 24, 32].iter().enumerate() {
+        let score = aggregate(&r2_log_sum[i], &counts);
+        println!("Round 2 max_blocks={mb:<2}: {score:.6} (diff: {:+.6})", score - aggregate(&r1_log_sum, &counts));
+    }
+}
+
+
+
+#[test]
+#[ignore]
+fn probe_medium_variations() {
+    let corpus = crate::corpus::corpus();
+    let qualifying: Vec<_> = corpus
+        .iter()
+        .filter(|(_, pat)| pat.n > 1_000 && pat.n <= 6_000 && pat.nnz() <= 30_000)
+        .collect();
+
+    println!("Found {} qualifying medium matrices", qualifying.len());
+
+    let mut scores = [0.0f64; 5];
+    let n_variants = 5;
+
+    for (name, pat) in &qualifying {
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+
+        // Run full order() pipeline up to medium search
+        // We can get the base perm by running order() with medium search temporarily bypassed
+        // or by testing the exact search stages from the current order() incumbent.
+        let incumbent = order(pat);
+        let inc_flops = flops_of(&sp, &incumbent);
+
+        // Test the variants starting from incumbent
+        for v in 0..n_variants {
+            let mut perm = incumbent.clone();
+            let mut flops = inc_flops;
+
+            let stages: Vec<(i64, u64, rgreedy::Params)> = match v {
+                0 => vec![
+                    (100_000_000, 0xD1B5_4A32_D192_ED03, rgreedy::Params::DEFAULT),
+                    (50_000_000, 0xD1B5_4A32_D192_ED03, rgreedy::Params::DEFAULT),
+                ],
+                1 => vec![
+                    (100_000_000, 0xD1B5_4A32_D192_ED03, rgreedy::Params::DEFAULT),
+                    (50_000_000, rgreedy::stream_rng(1), rgreedy::Params::DEFAULT),
+                ],
+                2 => vec![
+                    (100_000_000, 0xD1B5_4A32_D192_ED03, rgreedy::Params::DEFAULT),
+                    (50_000_000, rgreedy::stream_rng(1), rgreedy::stream_params(1)),
+                ],
+                3 => vec![
+                    (75_000_000, 0xD1B5_4A32_D192_ED03, rgreedy::Params::DEFAULT),
+                    (75_000_000, rgreedy::stream_rng(1), rgreedy::stream_params(1)),
+                ],
+                4 => vec![
+                    (100_000_000, 0xD1B5_4A32_D192_ED03, rgreedy::Params::DEFAULT),
+                    (50_000_000, rgreedy::stream_rng(2), rgreedy::stream_params(2)),
+                ],
+                _ => unreachable!(),
+            };
+
+            for (budget, seed, params) in stages {
+                let adj0 = rgreedy::Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+                if let Some((cand, _)) = rgreedy::search_with(
+                    n,
+                    &adj0,
+                    &perm,
+                    flops,
+                    budget,
+                    seed,
+                    params,
+                ) {
+                    if is_bijection(&cand, n) {
+                        let f = flops_of(&sp, &cand);
+                        if f < flops {
+                            flops = f;
+                            perm = cand;
+                        }
+                    }
+                }
+            }
+
+            let ratio = flops as f64 / amd_flops as f64;
+            scores[v] += ratio.ln();
+            if v > 0 && flops < inc_flops {
+                println!("  v{v} improved {name}: {inc_flops} -> {flops} ({:.4} -> {:.4})", inc_flops as f64 / amd_flops as f64, ratio);
+            }
+        }
+    }
+
+    println!("\n--- Variant geomean ratio on qualifying matrices ---");
+    let base_geomean = (scores[0] / qualifying.len() as f64).exp();
+    println!("v0 (current): {base_geomean:.6}");
+    for v in 1..n_variants {
+        let g = (scores[v] / qualifying.len() as f64).exp();
+        println!("v{v}: {g:.6} (diff vs v0: {:+.6})", g - base_geomean);
+    }
+}
+
+#[test]
+#[ignore]
+fn probe_small_variations() {
+    let corpus = crate::corpus::corpus();
+    let qualifying: Vec<_> = corpus
+        .iter()
+        .filter(|(_, pat)| pat.n <= 1_000 && pat.nnz() <= 30_000 && pat.n > 0)
+        .collect();
+
+    println!("Found {} qualifying small matrices", qualifying.len());
+
+    let mut scores = [0.0f64; 4];
+    let n_variants = 4;
+
+    for (name, pat) in &qualifying {
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+
+        let incumbent = order(pat);
+        let inc_flops = flops_of(&sp, &incumbent);
+
+        for v in 0..n_variants {
+            let mut perm = incumbent.clone();
+            let mut flops = inc_flops;
+
+            let stages: Vec<(i64, u64, rgreedy::Params)> = match v {
+                0 => vec![
+                    (100_000_000, 0x9E37_79B9_7F4A_7C15, rgreedy::Params::DEFAULT),
+                ],
+                1 => vec![
+                    (50_000_000, 0x9E37_79B9_7F4A_7C15, rgreedy::Params::DEFAULT),
+                    (50_000_000, rgreedy::stream_rng(1), rgreedy::Params::DEFAULT),
+                ],
+                2 => vec![
+                    (50_000_000, 0x9E37_79B9_7F4A_7C15, rgreedy::Params::DEFAULT),
+                    (50_000_000, rgreedy::stream_rng(1), rgreedy::stream_params(1)),
+                ],
+                3 => vec![
+                    (50_000_000, 0x9E37_79B9_7F4A_7C15, rgreedy::Params::DEFAULT),
+                    (50_000_000, rgreedy::stream_rng(2), rgreedy::stream_params(2)),
+                ],
+                _ => unreachable!(),
+            };
+
+            for (budget, seed, params) in stages {
+                let adj0 = rgreedy::Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+                if let Some((cand, _)) = rgreedy::search_with(
+                    n,
+                    &adj0,
+                    &perm,
+                    flops,
+                    budget,
+                    seed,
+                    params,
+                ) {
+                    if is_bijection(&cand, n) {
+                        let f = flops_of(&sp, &cand);
+                        if f < flops {
+                            flops = f;
+                            perm = cand;
+                        }
+                    }
+                }
+            }
+
+            let ratio = flops as f64 / amd_flops as f64;
+            scores[v] += ratio.ln();
+            if v > 0 && flops < inc_flops {
+                println!("  v{v} improved {name}: {inc_flops} -> {flops} ({:.4} -> {:.4})", inc_flops as f64 / amd_flops as f64, ratio);
+            }
+        }
+    }
+
+    println!("\n--- Variant geomean ratio on qualifying small matrices ---");
+    let base_geomean = (scores[0] / qualifying.len() as f64).exp();
+    println!("v0 (current): {base_geomean:.6}");
+    for v in 1..n_variants {
+        let g = (scores[v] / qualifying.len() as f64).exp();
+        println!("v{v}: {g:.6} (diff vs v0: {:+.6})", g - base_geomean);
+    }
+}
+
+
+
+
+
 // `splitmix64`, `relabel` and `relabel_restarts` now live in the shipped module
 // (`super`) and reach this file through `use super::*` — the probe must exercise
 // the exact same functions `order()` uses, or its predictions stop being valid.

@@ -1190,6 +1190,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     } else if medium_exact_gate {
+
         // The same serial exact search above its original size gate. Two fixed
         // nominal budgets keep the added work bounded; the full-corpus run
         // moved 0.860780 -> 0.859116 after the final pair pass. The separate
@@ -1268,10 +1269,50 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
             if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
+
+                // Round 2: Refine the newly improved incumbent's elimination tree.
+                // Uses round = 1 to activate diversified search seeds across blocks.
+                // Bounded at 24 blocks and 1M ops per block, strictly monotonic.
+                let permuted2 = permute_pattern(&scoring_pat, &best_perm);
+                let etree2 = EliminationTree::from_pattern(&permuted2);
+                let post2 = etree2.postorder();
+                let mut candidate2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
+
+                let post_pattern2 = permute_pattern(&scoring_pat, &candidate2);
+                let post_etree2 = EliminationTree::from_pattern(&post_pattern2);
+                let counts2: Vec<u32> = column_counts_gnp(&post_pattern2, &post_etree2)
+                    .into_iter()
+                    .map(|c| c as u32)
+                    .collect();
+                let parent2: Vec<i32> = post_etree2
+                    .parent
+                    .iter()
+                    .map(|p| p.map_or(-1, |j| j as i32))
+                    .collect();
+                let mut cfg2 = SUBTREE_CFG;
+                cfg2.round = 1;
+                cfg2.max_blocks = 24;
+                let improved2 = rgreedy::subtree_refine(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &mut candidate2,
+                    &counts2,
+                    &parent2,
+                    cfg2,
+                );
+                if improved2 > 0 && is_bijection(&candidate2, n) {
+                    let f2 = flops_of(&scoring_pat, &candidate2);
+                    if f2 < best_flops {
+                        best_perm = candidate2;
+                    }
+                }
             }
         }
     }
+
 
     best_perm
 }

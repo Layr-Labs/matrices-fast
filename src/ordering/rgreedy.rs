@@ -60,7 +60,7 @@ fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) ->
     product
 }
 
-fn rank_alpha_three_quarters_cmp(
+pub(crate) fn rank_alpha_three_quarters_cmp(
     a: &(usize, usize, u64),
     b: &(usize, usize, u64),
 ) -> std::cmp::Ordering {

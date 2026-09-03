@@ -4,12 +4,12 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.859116** (weighted geomean flop ratio vs AMD; fill tiebreak
-  **0.955319**), dev corpus **300** matrices, 2026-09-02
-  ([0020](experiments/0020-medium-exact-search.md), bounded serial exact search
-  for medium sparse graphs). Previous synced frontier: 0.860780 / fill 0.955916.
-- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.884759** (108) ·
-  gt_10k 0.811860 (45).
+- Best score: **0.860780** (weighted geomean flop ratio vs AMD; fill tiebreak
+  0.955916), dev corpus **300** matrices, 2026-09-02 — promoted eval
+  **0.881683** (`7c25e77` / `216fd62`). 0018 large-sparse floor **failed**
+  hidden 2.0s cap (do not retry n>10k restart raises). 0019 (4-stream LNS)
+  is the live candidate.
+- Per bucket: lt_1k 0.8965 (147) · 1k_10k 0.8903 (108) · gt_10k 0.8114 (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -21,19 +21,18 @@ first; keep it current whenever you add, rename, or retire a page.
 - Current `src/ordering/` approach: a **best-of portfolio** in `mod.rs` — ~30
   candidate orderings (feral AMD/AMF variants, METIS/Scotch/KaHIP, plus
   hand-rolled RCM / Sloan / ND / GGGP / MinFill) **and budgeted relabelled-AMD and
-  relabelled-AMF multi-starts**, plus bounded exact elimination-game search on
-  small and medium sparse graphs. Each is scored with feral's own `Σ cⱼ²` and the
+  relabelled-AMF multi-starts**, each scored with feral's own `Σ cⱼ²` and the
   cheapest returned, anchored on the grader's exact AMD so the ratio can never
   exceed 1.0. See [best-of-portfolio](techniques/best-of-portfolio.md).
 - **Timing headroom is the binding constraint,** but noisier than earlier pages
   claimed: repeat runs of the same probe on the same code vary **~1.6×**, so the
-  local worst case is good to one significant figure only. The final probe
-  measured **0.755 s** (`gams05`) against the 2.0 s SIGKILL; the first candidate
-  probe measured 0.843 s, and the synced parent measured 0.776 s on the same
-  box. Older timing figures were
-  recorded on different hardware — compare timings only within one box, and
-  treat earlier absolute numbers as history. The old "grader is 3-5× slower than
-  local" rule is provably false — see
+  local worst case is good to one significant figure only. Currently **0.439 s**
+  (`arki0016`) against the 2.0 s SIGKILL, up from 0.384 s before
+  [0005](experiments/0005-relabelled-amf-multistart.md). NOTE those two numbers
+  come from a box roughly 2.5× faster than the one the older 0.9–1.0 s figures on
+  this page were recorded on — compare timings only within one box, and treat the
+  earlier absolute numbers as history. The old "grader is 3-5× slower than local"
+  rule is provably false — see
   [0003](experiments/0003-relabelled-amd-multistart.md). Use the comparative rule
   instead: stay at or below the worst case of a revision known to have passed.
   Measure with `probe_timing_and_score` before adding anything.
@@ -103,7 +102,6 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0013](experiments/0013-terminal-simplicial-promotion.md) — Terminal simplicial promotion on exact dynamic graphs. 0.864652 → **0.864462**. WIN.
 - [0014](experiments/0014-custom-quotient-metrics.md) — Custom quotient-graph metrics (SqDiv & SqPure). 0.864462 → **0.863609**. WIN.
 - [0015](experiments/0015-small-simplicial-cycled-amd-minfill.md) — Small-graph simplicial promotion, 6-way cycled AMD & scaled minfill. 0.863609 → **0.863272**. WIN.
-- [0020](experiments/0020-medium-exact-search.md) — Two bounded serial exact-search stages on `1,000 < n <= 6,000`, `nnz <= 30,000`, followed by pair descent when its existing gate allows it. Synced baseline 0.860780 → **0.859116**. WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

@@ -1182,7 +1182,15 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         // nominal budgets keep the added work bounded; the full-corpus run
         // moved 0.860780 -> 0.859116 after the final pair pass. The separate
         // branch leaves the accepted n <= 1,000 path byte-for-byte unchanged.
-        for budget in [100_000_000, 50_000_000] {
+        // Stage 2 uses a DIFFERENT fixed seed at the SAME 50M budget: the two
+        // shipped stages shared one seed, so stage 2 re-walked stage 1's
+        // trajectory from a better incumbent. A second seed buys a genuinely
+        // independent trajectory at zero extra ops (cost-neutral by
+        // construction). Monotone best-of; no threads.
+        for (budget, seed) in [
+            (100_000_000, 0xD1B5_4A32_D192_ED03),
+            (50_000_000, 0x9E37_79B9_7F4A_7C15),
+        ] {
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -1190,7 +1198,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 &best_perm,
                 best_flops,
                 budget,
-                0xD1B5_4A32_D192_ED03,
+                seed,
             ) {
                 if is_bijection(&cand, n) {
                     let f = flops_of(&scoring_pat, &cand);

@@ -1616,34 +1616,27 @@ fn probe_tie_breakers() {
     }
 }
 
-/// Fast `lt_1k`-only score + timing. The whole bucket runs in ~25 s (147 small
-/// matrices) against ~145 s for the full corpus, so this is the instrument for
-/// sweeping small-graph knobs. It reports the bucket geomean, the worst
-/// `order()` call inside the bucket, and how many matrices are still tied.
-///
-/// The bucket geomean is what the score multiplies by 0.30, so a delta here
-/// converts directly: `score_delta = 0.30 * (new - old)` with the other two
-/// buckets held fixed.
+/// Fast `gt_10k`-only score and timing for sweeping large-tier parameters.
+/// Prints stable name-sorted rows so disjoint-half and drop-top robustness can
+/// be calculated without rerunning the expensive candidate portfolio.
 #[test]
 #[ignore]
-fn probe_lt1k() {
+fn probe_gt10k() {
     let corpus = crate::corpus::corpus();
     let mut log_sum = 0.0f64;
     let mut count = 0usize;
     let mut worst = 0.0f64;
     let mut worst_name = String::new();
-    let mut ties = 0usize;
     let mut total_s = 0.0f64;
     let mut rows: Vec<(String, f64)> = Vec::new();
 
     for (name, pat) in &corpus {
-        let n = pat.n;
-        if n == 0 || n >= 1_000 {
+        if pat.n < 10_000 {
             continue;
         }
         let sp = scoring_pattern(pat);
         let (cp, ri) = core_of(pat);
-        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
         let base = flops_of(
             &sp,
             &feral_amd::amd_order(&core)
@@ -1658,13 +1651,9 @@ fn probe_lt1k() {
         let secs = t0.elapsed().as_secs_f64();
         total_s += secs;
         let ratio = flops_of(&sp, &perm) as f64 / base;
-
         log_sum += ratio.ln();
         count += 1;
         rows.push((name.clone(), ratio));
-        if ratio >= 0.9999 {
-            ties += 1;
-        }
         if secs > worst {
             worst = secs;
             worst_name = name.clone();
@@ -1672,16 +1661,117 @@ fn probe_lt1k() {
     }
 
     let geo = (log_sum / count as f64).exp();
-    println!("\nLT1K_GEOMEAN = {geo:.6}  (count {count}, ties {ties})");
+    println!("\nGT10K_GEOMEAN = {geo:.6}  (count {count})");
+    println!("GT10K_WORST = {worst:.3} s on {worst_name}");
+    println!("GT10K_TOTAL = {total_s:.1} s");
+    println!("--- GT10K rows ---");
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+    for (name, ratio) in &rows {
+        println!("ROW\t{name}\t{ratio:.6}");
+    }
+}
+
+/// Fast `1k_10k` score and timing for sweeping medium-tier chain parameters.
+#[test]
+#[ignore]
+fn probe_1k10k() {
+    let corpus = crate::corpus::corpus();
+    let mut log_sum = 0.0f64;
+    let mut count = 0usize;
+    let mut worst = 0.0f64;
+    let mut worst_name = String::new();
+    let mut total_s = 0.0f64;
+    let mut rows: Vec<(String, f64)> = Vec::new();
+
+    for (name, pat) in &corpus {
+        if pat.n < 1_000 || pat.n >= 10_000 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+
+        let t0 = Instant::now();
+        let perm = order(pat);
+        let secs = t0.elapsed().as_secs_f64();
+        total_s += secs;
+        let ratio = flops_of(&sp, &perm) as f64 / base;
+        log_sum += ratio.ln();
+        count += 1;
+        rows.push((name.clone(), ratio));
+        if secs > worst {
+            worst = secs;
+            worst_name = name.clone();
+        }
+    }
+
+    let geo = (log_sum / count as f64).exp();
+    println!("\n1K10K_GEOMEAN = {geo:.6}  (count {count})");
+    println!("1K10K_WORST = {worst:.3} s on {worst_name}");
+    println!("1K10K_TOTAL = {total_s:.1} s");
+    println!("--- 1K10K rows ---");
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+    for (name, ratio) in &rows {
+        println!("ROW\t{name}\t{ratio:.6}");
+    }
+}
+
+/// Fast `lt_1k` score and timing for bounded small-tier sweeps.
+#[test]
+#[ignore]
+fn probe_lt1k() {
+    let corpus = crate::corpus::corpus();
+    let mut log_sum = 0.0f64;
+    let mut count = 0usize;
+    let mut worst = 0.0f64;
+    let mut worst_name = String::new();
+    let mut total_s = 0.0f64;
+    let mut rows: Vec<(String, f64)> = Vec::new();
+
+    for (name, pat) in &corpus {
+        if pat.n == 0 || pat.n >= 1_000 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+
+        let t0 = Instant::now();
+        let perm = order(pat);
+        let secs = t0.elapsed().as_secs_f64();
+        total_s += secs;
+        let ratio = flops_of(&sp, &perm) as f64 / base;
+        log_sum += ratio.ln();
+        count += 1;
+        rows.push((name.clone(), ratio));
+        if secs > worst {
+            worst = secs;
+            worst_name = name.clone();
+        }
+    }
+
+    let geo = (log_sum / count as f64).exp();
+    println!("\nLT1K_GEOMEAN = {geo:.6}  (count {count})");
     println!("LT1K_WORST = {worst:.3} s on {worst_name}");
     println!("LT1K_TOTAL = {total_s:.1} s");
-
-    // Per-matrix dump so robustness (corpus halves, drop-top-k) can be computed
-    // offline. 0004 established that this family is a lottery whose apparent
-    // wins often rest on ONE matrix and flip sign across disjoint halves, so a
-    // single geomean is never enough to accept a config.
-    rows.sort_by(|a, b| a.0.cmp(&b.0));
     println!("--- LT1K rows ---");
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
     for (name, ratio) in &rows {
         println!("ROW\t{name}\t{ratio:.6}");
     }

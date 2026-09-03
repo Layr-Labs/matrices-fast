@@ -1293,10 +1293,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     .collect();
                 let mut cfg2 = SUBTREE_CFG;
                 cfg2.round = 1;
-                cfg2.max_blocks = 32;
-                cfg2.min_s = 16;
+                cfg2.max_blocks = 24;
                 let improved2 = rgreedy::subtree_refine(
-
                     n,
                     &pattern.col_ptr,
                     &pattern.row_idx,
@@ -1398,53 +1396,9 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 if improved4 > 0 && is_bijection(&candidate4, n) {
                                     let f4 = flops_of(&scoring_pat, &candidate4);
                                     if f4 < best_flops {
-                                        best_flops = f4;
                                         best_perm = candidate4;
-
-                                        // Round 5: one more pass over the round-4
-                                        // incumbent. Same block count (32), min_s 16,
-                                        // max_s 768, round = 2 seed diversification.
-                                        let permuted5 = permute_pattern(&scoring_pat, &best_perm);
-                                        let etree5 = EliminationTree::from_pattern(&permuted5);
-                                        let post5 = etree5.postorder();
-                                        let mut candidate5: Vec<usize> =
-                                            post5.iter().map(|&j| best_perm[j]).collect();
-
-                                        let post_pattern5 = permute_pattern(&scoring_pat, &candidate5);
-                                        let post_etree5 = EliminationTree::from_pattern(&post_pattern5);
-                                        let counts5: Vec<u32> =
-                                            column_counts_gnp(&post_pattern5, &post_etree5)
-                                                .into_iter()
-                                                .map(|c| c as u32)
-                                                .collect();
-                                        let parent5: Vec<i32> = post_etree5
-                                            .parent
-                                            .iter()
-                                            .map(|p| p.map_or(-1, |j| j as i32))
-                                            .collect();
-                                        let mut cfg5 = SUBTREE_CFG;
-                                        cfg5.round = 2;
-                                        cfg5.max_blocks = 32;
-                                        cfg5.min_s = 16;
-                                        cfg5.max_s = 768;
-                                        let improved5 = rgreedy::subtree_refine(
-                                            n,
-                                            &pattern.col_ptr,
-                                            &pattern.row_idx,
-                                            &mut candidate5,
-                                            &counts5,
-                                            &parent5,
-                                            cfg5,
-                                        );
-                                        if improved5 > 0 && is_bijection(&candidate5, n) {
-                                            let f5 = flops_of(&scoring_pat, &candidate5);
-                                            if f5 < best_flops {
-                                                best_perm = candidate5;
-                                            }
-                                        }
                                     }
                                 }
-
                             }
                         }
                     }
@@ -1453,6 +1407,74 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── POST-CHAIN POLISH (descent + simplicial on the refined incumbent) ──
+    // The terminal pair-descent and simplicial passes above ran BEFORE the
+    // subtree chain, so every chain-improved medium incumbent is never locally
+    // polished across block boundaries. Rerun both bounded passes once on the
+    // final incumbent for the chain band (n >= 1,000). Both are strictly
+    // monotonic best-of accepts with the same gates/budgets as the originals;
+    // the extra work is confined to small/medium matrices (measured +0.4 s
+    // total for the descent rerun over the corpus).
+    if n >= 1_000 && pair_descent_gate {
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            PAIR_DESCENT_SWEEPS,
+            pair_descent_ops_budget,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
+    if n >= 1_000
+        && (SIMPLICIAL_PROMOTION_MIN_N..=SIMPLICIAL_PROMOTION_MAX_N).contains(&n)
+        && nnz > 0
+        && nnz <= SIMPLICIAL_PROMOTION_MAX_NNZ
+        && nnz <= n.saturating_mul(SIMPLICIAL_PROMOTION_MAX_DENSITY)
+    {
+        if let Some(cand) = rgreedy::simplicial_promotion(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            SIMPLICIAL_PROMOTION_OPS_BUDGET,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
+    // Same argument for the medium exact search: it ran before the chain too.
+    // Rerun its two bounded stages (same budgets/seeds) on the final incumbent
+    // of the chain band. Bounded 150M nominal ops; small/medium matrices only.
+    if n > 1_000 && n <= 6_000 && nnz <= 30_000 {
+        for budget in [100_000_000i64, 50_000_000] {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                budget,
+                0xD1B5_4A32_D192_ED03,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
+    }
 
     best_perm
 }

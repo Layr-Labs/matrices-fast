@@ -2,7 +2,7 @@
 
 ## Status
 
-Verified and selected for submission. This experiment starts from the currently
+Promoted to #1. This experiment starts from the previously
 promoted `d284c06` source and changes only the per-block budgets of chain rounds
 4 and 5 from 8M to 16M. Rounds 2 and 3, all block counts, all block-size windows,
 and the complete terminal phase remain byte-for-byte behaviorally identical to
@@ -180,3 +180,19 @@ measured `0.846054` score beats the promoted source's `0.846337` by 0.000283,
 about 3.35 basis points. If hidden rejects the candidate, do not raise late
 budgets again; return to the accepted all-8M source and switch to a score-neutral
 policy or block-selection improvement.
+
+## Official result
+
+Submission `28d9a9d2-7048-4635-a1d9-0867507a3aa2` passed hidden validation and
+was promoted as commit `e93779c`:
+
+```text
+official hidden score = 0.871827
+official hidden fill  = 0.955667
+previous leader       = 0.872207
+hidden improvement    = 0.000380 (4.36 basis points)
+```
+
+The hidden gain was 1.34 times the development gain, so the late-round signal
+generalized rather than shrinking. The exact 16M/16M late-round allocation is
+now a hidden-accepted runtime boundary and the base for any further work.

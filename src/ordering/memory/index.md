@@ -169,6 +169,12 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
   GitHub Actions failure. **0.849487 → 0.849251**, fill **0.947647**, worst direct
   call **1.079 s**; full trusted 300-matrix run passes. The 8-block and 750k
   alternatives are negative controls.
+- [0049](experiments/0049-bounded-medium-terminal-cascade.md) — A fourth bounded
+  medium-window variant still exceeded the hidden 2 s cap. **CLOSED**: do not
+  retry the smaller-window family.
+- [0050](experiments/0050-late-round-budget-step.md) — On the accepted all-8M
+  chain, raise only conditional rounds 4 and 5 to 16M. Dev **0.846054**, hidden
+  **0.871827**, fill **0.955667**. **PROMOTED TO #1** as `28d9a9d2` / `e93779c`.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

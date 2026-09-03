@@ -1471,7 +1471,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
                                 cfg4.max_s = 768;
-                                cfg4.budget = 16_000_000;
+                                cfg4.budget = 32_000_000;
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,

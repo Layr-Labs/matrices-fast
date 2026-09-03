@@ -1454,6 +1454,32 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
 
+    // ── POST-CHAIN MEDIUM-EXACT RERUN (light polish) ──
+    // The medium exact search (two bounded stages, 100M + 50M) ran before the
+    // subtree chain; rerun it once on the final chain-band incumbent so the
+    // chain's improvements get one more exact-search pass. Strict best-of.
+    if n > 1_000 && n <= 6_000 && nnz <= 30_000 {
+        for budget in [100_000_000i64, 50_000_000] {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                budget,
+                0xD1B5_4A32_D192_ED03,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
+    }
+
     best_perm
 }
 

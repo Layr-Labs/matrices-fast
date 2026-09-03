@@ -1257,6 +1257,34 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             .iter()
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
+        let mut size: Vec<u32> = vec![1; n];
+        for j in 0..n {
+            let p = parent[j];
+            if p >= 0 {
+                size[p as usize] += size[j];
+            }
+        }
+        let mut covered = vec![false; n];
+        let mut raw_blocks = 0usize;
+        for j in (0..n).rev() {
+            if covered[j] {
+                continue;
+            }
+            let sz = size[j] as usize;
+            if sz < SUBTREE_CFG.min_s || sz > SUBTREE_CFG.max_s {
+                continue;
+            }
+            let a = j + 1 - sz;
+            for c in covered.iter_mut().take(j + 1).skip(a) {
+                *c = true;
+            }
+            raw_blocks += 1;
+        }
+
+        let mut cfg1 = SUBTREE_CFG;
+        if raw_blocks <= 16 {
+            cfg1.streams = 2;
+        }
         let improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
@@ -1264,8 +1292,9 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            SUBTREE_CFG,
+            cfg1,
         );
+
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
             if f < best_flops {
@@ -1293,7 +1322,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     .collect();
                 let mut cfg2 = SUBTREE_CFG;
                 cfg2.round = 1;
-                cfg2.max_blocks = 24;
+                cfg2.max_blocks = 32;
+                cfg2.min_s = 16;
                 let improved2 = rgreedy::subtree_refine(
                     n,
                     &pattern.col_ptr,

@@ -194,6 +194,7 @@ fn probe_subtree_rounds() {
     let mut r2_log_sum = [[0.0f64; 3]; 3];
     let mut counts = [0usize; 3];
 
+
     for (_name, pat) in &corpus {
         let n = pat.n;
         let nnz = pat.nnz();
@@ -245,23 +246,49 @@ fn probe_subtree_rounds() {
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
 
-        // Test Round 2 with max_blocks = 16, 24, 32
-        for (i, &mb) in [16, 24, 32].iter().enumerate() {
+        let mut size: Vec<u32> = vec![1; n];
+        for j in 0..n {
+            let p = parent[j];
+            if p >= 0 {
+                size[p as usize] += size[j];
+            }
+        }
+        let mut covered = vec![false; n];
+        let mut num_blocks = 0usize;
+        for j in (0..n).rev() {
+            if covered[j] {
+                continue;
+            }
+            let sz = size[j] as usize;
+            if sz < SUBTREE_CFG.min_s || sz > SUBTREE_CFG.max_s {
+                continue;
+            }
+            let a = j + 1 - sz;
+            for c in covered.iter_mut().take(j + 1).skip(a) {
+                *c = true;
+            }
+            num_blocks += 1;
+        }
+
+        // Test 1 stream vs 2 streams on matrices with <= 16 blocks
+        for (i, &two_streams) in [false, true].iter().enumerate() {
             let mut cand = candidate.clone();
-            let mut cfg2 = SUBTREE_CFG;
-            cfg2.round = 1;
-            cfg2.max_blocks = mb;
-            let improved2 = rgreedy::subtree_refine(
+            let mut cfg1 = SUBTREE_CFG;
+            if two_streams && num_blocks <= 16 {
+                cfg1.streams = 2;
+            }
+            let improved1 = rgreedy::subtree_refine(
+
                 n,
                 &pat.col_ptr,
                 &pat.row_idx,
                 &mut cand,
                 &r_counts,
                 &parent,
-                cfg2,
+                cfg1,
             );
-            let mut f_out = r1_flops;
-            if improved2 > 0 && is_bijection(&cand, n) {
+            let mut f_out = inc_flops;
+            if improved1 > 0 && is_bijection(&cand, n) {
                 let f = flops_of(&sp, &cand);
                 if f < f_out {
                     f_out = f;
@@ -271,13 +298,15 @@ fn probe_subtree_rounds() {
         }
     }
 
-    println!("\n--- SCORES ---");
-    println!("Base (Round 1): {:.6}", aggregate(&r1_log_sum, &counts));
-    for (i, &mb) in [16, 24, 32].iter().enumerate() {
-        let score = aggregate(&r2_log_sum[i], &counts);
-        println!("Round 2 max_blocks={mb:<2}: {score:.6} (diff: {:+.6})", score - aggregate(&r1_log_sum, &counts));
-    }
+    println!("\n--- Dynamic Streams Evaluation ---");
+    let score0 = aggregate(&r2_log_sum[0], &counts);
+    let score1 = aggregate(&r2_log_sum[1], &counts);
+    println!("1 stream (baseline):              {score0:.6}");
+    println!("2 streams when blocks <= 16:      {score1:.6} (diff: {:+.6})", score1 - score0);
 }
+
+
+
 
 
 

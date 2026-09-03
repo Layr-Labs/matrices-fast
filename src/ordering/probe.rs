@@ -1395,66 +1395,24 @@ fn probe_round3_variants() {
         base.1[bkt] += 1;
 
         let in_gate = (1_000..=350_000).contains(&n) && nnz <= 1_500_000;
-        for vi in 0..n_variants {
-            let mut out_flops = inc_flops;
-            if in_gate {
-                // Rebuild postorder/counts/parent for the shipped incumbent, then
-                // run one extra subtree_refine with the variant config.
-                let permuted = permute_pattern(&sp, &inc);
-                let etree = EliminationTree::from_pattern(&permuted);
-                let post = etree.postorder();
-                let mut candidate: Vec<usize> = post.iter().map(|&j| inc[j]).collect();
-                let post_pattern = permute_pattern(&sp, &candidate);
-                let post_etree = EliminationTree::from_pattern(&post_pattern);
-                let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
-                    .into_iter()
-                    .map(|c| c as u32)
-                    .collect();
-                let parent: Vec<i32> = post_etree
-                    .parent
-                    .iter()
-                    .map(|p| p.map_or(-1, |j| j as i32))
-                    .collect();
-                let mut cfg = SUBTREE_CFG;
-                cfg.round = 1;
-                match vi {
-                    0 => {
-                        cfg.max_blocks = 24;
-                        cfg.min_s = 16;
-                    }
-                    1 => {
-                        cfg.max_blocks = 32;
-                        cfg.min_s = 16;
-                    }
-                    2 => {
-                        cfg.max_blocks = 32;
-                        cfg.min_s = 16;
-                        cfg.max_s = 512;
-                    }
-                    3 => {
-                        cfg.max_blocks = 24;
-                        cfg.min_s = 16;
-                        cfg.streams = 2;
-                        cfg.budget = 500_000;
-                    }
-                    _ => unreachable!(),
-                }
-                let improved3 = rgreedy::subtree_refine(
-                    n,
-                    &pat.col_ptr,
-                    &pat.row_idx,
-                    &mut candidate,
-                    &counts,
-                    &parent,
-                    cfg,
-                );
-                if improved3 > 0 && is_bijection(&candidate, n) {
-                    let f = flops_of(&sp, &candidate);
-                    if f < out_flops {
-                        out_flops = f;
-                    }
+        let mut out1 = inc_flops;
+        if (3..=6_000).contains(&n) && nnz > 0 && nnz <= 100_000 && nnz <= n * 24 && n >= 1_000 {
+            if let Some(cand) = rgreedy::simplicial_promotion(
+                n,
+                &pat.col_ptr,
+                &pat.row_idx,
+                &inc,
+                64_000_000,
+            ) {
+                let f = flops_of(&sp, &cand);
+                if f < out1 {
+                    out1 = f;
                 }
             }
+        }
+        for vi in 0..n_variants {
+            let out_flops = if vi == 0 { inc_flops } else { out1 };
+
             let r = out_flops as f64 / amd_flops as f64;
             vsum[vi].0[bkt] += r.ln();
             vsum[vi].1[bkt] += 1;

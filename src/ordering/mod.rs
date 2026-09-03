@@ -1453,9 +1453,53 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── POST-CHAIN TERMINAL ADJACENT-PAIR POLISH ────────────────────────────
+    // Subtree refinement modifies blocks in isolation. A terminal adjacent-pair
+    // descent pass polishes vertex ordering across block boundaries.
+    if pair_descent_gate && n >= 1_000 {
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            PAIR_DESCENT_SWEEPS,
+            pair_descent_ops_budget,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_perm = cand;
+            }
+        }
+    }
+
+    // ── POST-CHAIN TERMINAL SIMPLICIAL POLISH ──────────────────────────────
+    // Promotes simplicial vertices (zero deficiency) exposed by subtree and pair
+    // modifications ahead of non-simplicial vertices. Monotonic.
+    if (SIMPLICIAL_PROMOTION_MIN_N..=SIMPLICIAL_PROMOTION_MAX_N).contains(&n)
+        && nnz > 0
+        && nnz <= SIMPLICIAL_PROMOTION_MAX_NNZ
+        && nnz <= n.saturating_mul(SIMPLICIAL_PROMOTION_MAX_DENSITY)
+        && n >= 1_000
+    {
+        if let Some(cand) = rgreedy::simplicial_promotion(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            SIMPLICIAL_PROMOTION_OPS_BUDGET,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_perm = cand;
+            }
+        }
+    }
 
     best_perm
+
 }
+
+
 
 /// Minimum-FILL (minimum-deficiency) ordering (pure Rust, hard work budget).
 /// A greedy elimination heuristic ORTHOGONAL to minimum-degree: at every step it

@@ -4,13 +4,13 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best hidden-safe candidate score: **0.851347** (weighted geomean flop ratio
-  vs AMD; fill tiebreak **0.948894**), dev corpus **300** matrices, 2026-09-03
-  ([0024](experiments/0024-subtree-round-4-chain.md): subtree round-4 chain,
-  max_s 768). Parent `567d605` (our 0023 round-3 chain): 0.851642 / 0.949056;
-  current promoted hidden score: 0.877373 (our ed3b0262).
-- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.878037** (108) ·
-  gt_10k **0.797477** (45).
+- Best locally verified candidate score: **0.849622** (weighted geomean flop
+  ratio vs AMD; fill tiebreak **0.947714**), dev corpus **300** matrices,
+  2026-09-03 ([0025](experiments/0025-adaptive-terminal-deep-subtree-search.md):
+  adaptive terminal deep subtree search). Parent `9ec9816`: 0.851168 / 0.948675;
+  current promoted hidden score: 0.876991 (submission a7789688).
+- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.875268** (108) ·
+  gt_10k **0.795242** (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -113,6 +113,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0022](experiments/0022-bounded-subtree-work.md) — Cap subtree search at 32 blocks × one stream × 1M requested operations. Accepted-base 0.859116 → **0.852938** publicly; hidden submission pending.
 - [0023](experiments/0023-subtree-round-3-chain.md) — Chained subtree round 3 (round=1, 32 blocks, min_s 16, **max_s 512**) after hybridnoise's conditional round 2. Frontier base 0.852246 → **0.851642**. PROMOTED hidden 0.877373 (2026-09-03).
 - [0024](experiments/0024-subtree-round-4-chain.md) — Chained subtree round 4 (round=1, 32 blocks, min_s 16, **max_s 768**). 0.851642 → **0.851347**. SUBMITTED (2026-09-03).
+- [0025](experiments/0025-adaptive-terminal-deep-subtree-search.md) — One terminal pass allocates the same 32M requested work to fewer, deeper ranked searches: 4×8M below 10k vertices, 12×2.666M above. Frontier source 0.851168 → **0.849622**; worst `order()` 0.886 s. WIN (2026-09-03).
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

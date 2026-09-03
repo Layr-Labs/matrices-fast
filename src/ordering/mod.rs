@@ -381,6 +381,22 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
     round: 0,
 };
 
+fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
+    let mut cfg = SUBTREE_CFG;
+    cfg.min_s = 16;
+    cfg.round = 5;
+    if n < 10_000 {
+        cfg.max_blocks = 4;
+        cfg.max_s = 768;
+        cfg.budget = 8_000_000;
+    } else {
+        cfg.max_blocks = 12;
+        cfg.max_s = 1_200;
+        cfg.budget = 2_666_000;
+    }
+    cfg
+}
+
 /// Deterministic 64-bit mixer (SplitMix64). Used only to derive relabelings from
 /// a fixed seed, so every run produces the identical sequence — the determinism
 /// gate requires the two `order()` runs to agree byte-for-byte.
@@ -1449,6 +1465,43 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // Spend one final 32M-operation phase on fewer, deeper subtree searches.
+    // This pass is independent of whether an earlier subtree round improved.
+    if (1_000..=350_000).contains(&n) && nnz <= 1_500_000 {
+        let incumbent_flops = flops_of(&scoring_pat, &best_perm);
+        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let improved = rgreedy::subtree_refine(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &mut candidate,
+            &counts,
+            &parent,
+            terminal_deep_subtree_cfg(n),
+        );
+        if improved > 0 && is_bijection(&candidate, n) {
+            let f = flops_of(&scoring_pat, &candidate);
+            if f < incumbent_flops {
+                best_perm = candidate;
             }
         }
     }
@@ -2763,12 +2816,36 @@ mod tests {
     }
 
     #[test]
-    fn subtree_config_stays_within_matrix_work_limit() {
-        let requested_budget = SUBTREE_CFG
-            .budget
-            .saturating_mul(SUBTREE_CFG.max_blocks as i64)
-            .saturating_mul(SUBTREE_CFG.streams.max(1) as i64);
+    fn terminal_deep_search_improves_medium_fixture() {
+        let (_, pat) = crate::corpus::corpus()
+            .into_iter()
+            .find(|(name, _)| name == "rsyn0815m04m")
+            .expect("development fixture");
 
-        assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
+        let perm = order(&pat);
+        let scoring_pat = ScoringPattern {
+            n: pat.n,
+            col_ptr: pat.col_ptr.clone(),
+            row_idx: pat.row_idx.clone(),
+        };
+        let flops = flops_of(&scoring_pat, &perm);
+
+        assert!(flops < 168_000, "expected fewer than 168000 flops, got {flops}");
+    }
+
+    #[test]
+    fn subtree_configs_stay_within_matrix_work_limit() {
+        for cfg in [
+            SUBTREE_CFG,
+            terminal_deep_subtree_cfg(9_999),
+            terminal_deep_subtree_cfg(10_000),
+        ] {
+            let requested_budget = cfg
+                .budget
+                .saturating_mul(cfg.max_blocks as i64)
+                .saturating_mul(cfg.streams.max(1) as i64);
+
+            assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
+        }
     }
 }

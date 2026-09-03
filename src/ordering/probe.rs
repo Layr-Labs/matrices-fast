@@ -1354,18 +1354,29 @@ fn probe_relabel_search() {
     }
 }
 
-/// Round-3 / config-extension scan on top of the SHIPPED order() (which already
-/// runs subtree round 1 (round=0, 32 blocks) plus hybridnoise's conditional
-/// round 2 (round=1, min_s=16, 32 blocks)). Each variant is ONE extra
-/// `subtree_refine` call applied to the shipped incumbent — the exact
-/// production shape of a possible round 3, and a lower bound for any
-/// alternative-config replacement (which would start one round earlier).
+/// One extra bounded subtree pass on top of the complete shipped chain.
 #[test]
 #[ignore]
-fn probe_round3_variants() {
+fn probe_next_subtree_variants() {
     let corpus = crate::corpus::corpus();
     let mut base = ([0.0f64; 3], [0usize; 3]);
-    let n_variants = 4;
+    // label, round, blocks, min_s, max_s, max_sub, budget, streams, ranked
+    let variants = [
+        ("b8.x4m", 5, 8, 16, 768, 1_200, 4_000_000, 1, true),
+        ("b8.x4m.min8", 5, 8, 8, 768, 1_200, 4_000_000, 1, true),
+        ("b8.x4m.max512", 5, 8, 16, 512, 1_200, 4_000_000, 1, true),
+        ("b8.x4m.max640", 5, 8, 16, 640, 1_200, 4_000_000, 1, true),
+        ("b8.x4m.max1024", 5, 8, 16, 1_024, 1_200, 4_000_000, 1, true),
+        ("b8.x4m.max1200", 5, 8, 16, 1_200, 1_200, 4_000_000, 1, true),
+        ("b12.x2666k.max1024", 5, 12, 16, 1_024, 1_200, 2_666_000, 1, true),
+        ("b12.x2666k.max1200", 5, 12, 16, 1_200, 1_200, 2_666_000, 1, true),
+        ("b16.x2m.max1024", 5, 16, 16, 1_024, 1_200, 2_000_000, 1, true),
+        ("b16.x2m.max1200", 5, 16, 16, 1_200, 1_200, 2_000_000, 1, true),
+        ("b4.x8m", 5, 4, 16, 768, 1_200, 8_000_000, 1, true),
+        ("b6.x5333k", 5, 6, 16, 768, 1_200, 5_333_000, 1, true),
+        ("b4.2sx4m", 5, 4, 16, 768, 1_200, 4_000_000, 2, true),
+    ];
+    let n_variants = variants.len();
     let mut vsum = vec![([0.0f64; 3], [0usize; 3]); n_variants];
     let mut improved: Vec<Vec<(String, usize, usize, u64, u64)>> =
         vec![Vec::new(); n_variants];
@@ -1415,30 +1426,17 @@ fn probe_round3_variants() {
                     .iter()
                     .map(|p| p.map_or(-1, |j| j as i32))
                     .collect();
+                let (_, round, blocks, min_s, max_s, max_sub, budget, streams, ranked) =
+                    variants[vi];
                 let mut cfg = SUBTREE_CFG;
-                cfg.round = 1;
-                match vi {
-                    0 => {
-                        cfg.max_blocks = 24;
-                        cfg.min_s = 16;
-                    }
-                    1 => {
-                        cfg.max_blocks = 32;
-                        cfg.min_s = 16;
-                    }
-                    2 => {
-                        cfg.max_blocks = 32;
-                        cfg.min_s = 16;
-                        cfg.max_s = 512;
-                    }
-                    3 => {
-                        cfg.max_blocks = 24;
-                        cfg.min_s = 16;
-                        cfg.streams = 2;
-                        cfg.budget = 500_000;
-                    }
-                    _ => unreachable!(),
-                }
+                cfg.round = round;
+                cfg.max_blocks = blocks;
+                cfg.min_s = min_s;
+                cfg.max_s = max_s;
+                cfg.max_sub = max_sub;
+                cfg.budget = budget;
+                cfg.streams = streams;
+                cfg.rank_blocks = ranked;
                 let improved3 = rgreedy::subtree_refine(
                     n,
                     &pat.col_ptr,
@@ -1465,13 +1463,15 @@ fn probe_round3_variants() {
     }
 
     let base_score = aggregate(&base.0, &base.1);
-    println!("\nshipped order() (rounds 1+2): {base_score:.6}");
-    let labels = ["r3.24b.s16", "r3.32b.s16", "r3.32b.s16.ms512", "r3.24b.s16.2sx0.5"];
-    for (vi, lbl) in labels.iter().enumerate() {
+    println!("\nshipped order(): {base_score:.6}");
+    for (vi, (lbl, ..)) in variants.iter().enumerate() {
         let s = aggregate(&vsum[vi].0, &vsum[vi].1);
         println!(
-            "{lbl:>16} score {s:.6}  d {:+.6}  improved {} matrices",
+            "{lbl:>24} score {s:.6}  d {:+.6}  buckets {:.6}/{:.6}/{:.6}  improved {} matrices",
             s - base_score,
+            (vsum[vi].0[0] / vsum[vi].1[0] as f64).exp(),
+            (vsum[vi].0[1] / vsum[vi].1[1] as f64).exp(),
+            (vsum[vi].0[2] / vsum[vi].1[2] as f64).exp(),
             improved[vi].len()
         );
         let mut rows = improved[vi].clone();

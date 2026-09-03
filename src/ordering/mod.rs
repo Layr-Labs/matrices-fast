@@ -1293,7 +1293,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     .collect();
                 let mut cfg2 = SUBTREE_CFG;
                 cfg2.round = 1;
-                cfg2.max_blocks = 24;
+                cfg2.max_blocks = 32;
+                cfg2.min_s = 16;
                 let improved2 = rgreedy::subtree_refine(
                     n,
                     &pattern.col_ptr,

@@ -4,13 +4,13 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best hidden-safe candidate score: **0.851347** (weighted geomean flop ratio
-  vs AMD; fill tiebreak **0.948894**), dev corpus **300** matrices, 2026-09-03
-  ([0024](experiments/0024-subtree-round-4-chain.md): subtree round-4 chain,
-  max_s 768). Parent `567d605` (our 0023 round-3 chain): 0.851642 / 0.949056;
-  current promoted hidden score: 0.877373 (our ed3b0262).
-- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.878037** (108) ·
-  gt_10k **0.797477** (45).
+- Best locally verified candidate score: **0.850518** (weighted geomean flop
+  ratio vs AMD; fill tiebreak **0.948442**), dev corpus **300** matrices,
+  2026-09-03 ([0025](experiments/0025-adaptive-terminal-deep-subtree-search.md):
+  bounded terminal deep subtree search). Parent `dd06965`: 0.851055;
+  current promoted hidden score: 0.876877 (submission de9fa5ae).
+- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.875923** (108) ·
+  gt_10k **0.796991** (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -41,7 +41,10 @@ first; keep it current whenever you add, rename, or retire a page.
   The failed 0021 revision measured **0.801 s** locally but timed out on a hidden
   matrix because it requested up to 128M search operations. The bounded 0022
   revision requests at most 32M and measured **0.767–0.777 s** locally. Measure
-  with `probe_timing_and_score` before adding anything.
+  with `probe_timing_and_score` before adding anything. The first 0025 attempt
+  also timed out on hidden data: its extra 32M phase had a broad
+  `n<=350k/nnz<=1.5M` gate. The corrected phase requests at most 16M inside
+  `n<=80k/nnz<=250k` and measured **0.852 s** locally.
 - **The search policy of the relabel multi-start is settled: uniform i.i.d. is
   optimal at fixed cost.** 17 explore/exploit policies swept, none robustly better;
   see [0004](experiments/0004-structured-relabelings.md). Do not re-derive it.
@@ -113,6 +116,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0022](experiments/0022-bounded-subtree-work.md) — Cap subtree search at 32 blocks × one stream × 1M requested operations. Accepted-base 0.859116 → **0.852938** publicly; hidden submission pending.
 - [0023](experiments/0023-subtree-round-3-chain.md) — Chained subtree round 3 (round=1, 32 blocks, min_s 16, **max_s 512**) after hybridnoise's conditional round 2. Frontier base 0.852246 → **0.851642**. PROMOTED hidden 0.877373 (2026-09-03).
 - [0024](experiments/0024-subtree-round-4-chain.md) — Chained subtree round 4 (round=1, 32 blocks, min_s 16, **max_s 768**). 0.851642 → **0.851347**. SUBMITTED (2026-09-03).
+- [0025](experiments/0025-adaptive-terminal-deep-subtree-search.md) — A broad 32M terminal pass scored 0.849622 locally but failed the hidden 2 s cap. The bounded retry adds at most 16M inside `n<=80k/nnz<=250k`: 4×4M below 10k vertices, 8×2M above. New-frontier source 0.851055 → **0.850518**; worst local `order()` 0.852 s (2026-09-03).
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

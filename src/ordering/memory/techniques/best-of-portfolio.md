@@ -150,6 +150,18 @@ only at pivot boundaries. The useful rule is therefore to gate where a complete
 exact trajectory fits this deterministic bounded budget; a larger dimension
 limit alone does not add search depth.
 
+## Allocate late subtree work to depth
+
+After several subtree-refinement rounds, equal-work sweeps show that trajectory
+depth matters more than broad block coverage. [Experiment 0025](../experiments/0025-adaptive-terminal-deep-subtree-search.md)
+first reduced the frontier-source score from 0.851168 to 0.849622 with a 32M
+deep phase, but its broad gate failed the hidden 2 s limit. The corrected design
+uses four 4M searches for medium matrices and eight 2M searches for large
+matrices, all inside `n<=80k/nnz<=250k`. It scores 0.850518 from the newer
+0.851055 frontier source. Keep ranked selection and run the pass after the
+complete chain, but treat the matrix-wide work limit and structural gate as part
+of the algorithm. A fast local corpus result does not prove hidden safety.
+
 ## Links
 - [amd.md](amd.md) — the anchor, and why it is hard to beat here.
 - [nested-dissection.md](nested-dissection.md) — the separator family in the portfolio.
@@ -158,3 +170,4 @@ limit alone does not add search depth.
 - [experiments/0004](../experiments/0004-structured-relabelings.md) — why its search policy is settled, and the two-half / drop-1 robustness columns.
 - [experiments/0005](../experiments/0005-relabelled-amf-multistart.md) — the second lottery (relabelled AMF), and the general "relabel anything numbering-sensitive" recipe.
 - [experiments/0020](../experiments/0020-medium-exact-search.md) — bounded exact search in the medium sparse tier.
+- [experiments/0025](../experiments/0025-adaptive-terminal-deep-subtree-search.md) — adaptive deep allocation for a terminal subtree pass.

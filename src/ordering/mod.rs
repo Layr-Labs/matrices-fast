@@ -383,6 +383,45 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
     round: 0,
 };
 
+/// Lower bound of the bounded subtree-refinement chain.
+///
+/// The chain was gated at `n >= 1_000` from the moment it was introduced
+/// (experiments 0021-0025), which left the ENTIRE `lt_1k` bucket untouched by
+/// the one technique that moved the other two: `lt_1k` sat at exactly 0.8965
+/// across 0021, 0022, 0023, 0024 and 0025 while `1k_10k` fell 0.8848 -> 0.8761
+/// and `gt_10k` fell 0.8119 -> 0.7970. Small graphs are also the CHEAPEST in
+/// the corpus (measured max 0.766 s across all 147 `lt_1k` matrices, against a
+/// 1.702 s corpus worst case), so the chain fits there with ~0.9 s to spare and
+/// cannot move the global worst case, which lives on `arki0013` (n=44909).
+///
+/// The floor is structural, not fitted: below ~64 vertices an elimination tree
+/// has too few subtrees of searchable size for a bounded block search to do
+/// useful work, and those graphs are already covered exhaustively by the MinFill
+/// multi-start and the small-graph LNS. Measured: 1_000 -> 200 was worth 2.6 bip,
+/// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
+const SUBTREE_MIN_N: usize = 64;
+
+/// Per-matrix base config for one chain round. On a short elimination tree the
+/// default `min_s = 32` admits almost no blocks, so drop the block floor to 16
+/// below `n = 1_000` — the same floor the terminal deep pass already uses.
+fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
+    let mut cfg = SUBTREE_CFG;
+    if n < 1_000 {
+        // Small graphs get the SAME 32M requested-work ceiling as everywhere
+        // else (blocks x budget x streams), just spent as FEWER, DEEPER blocks:
+        // a short elimination tree has few subtrees, so 32 shallow blocks mostly
+        // find nothing, while 8 deep ones actually search. `min_s` drops to 16
+        // for the same reason (the default 32 admits almost no blocks here).
+        // This is a REALLOCATION, not an increase - the nominal ceiling is
+        // unchanged, which is what kept 0022 inside the cap after 0021 blew it.
+        cfg.min_s = 16;
+        cfg.max_s = 512;
+        cfg.max_blocks = 8;
+        cfg.budget = 4_000_000;
+    }
+    cfg
+}
+
 fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     cfg.min_s = 16;
@@ -1190,20 +1229,36 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // simulation on true fill graphs with zero-cost objective tracking.
     // Explores alternative prefix and suffix elimination orderings via LNS plateau search.
     if n <= 1_000 && nnz <= 30_000 {
-        if let Some((cand, _)) = rgreedy::search(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &best_perm,
-            best_flops,
-            100_000_000,
-            0x9E37_79B9_7F4A_7C15,
-        ) {
-            if is_bijection(&cand, n) {
-                let f = flops_of(&scoring_pat, &cand);
-                if f < best_flops {
-                    best_flops = f;
-                    best_perm = cand;
+        // TWO streams, not one. 0004 settled that this family is a pure lottery
+        // with no exploitable local structure, so the only lever that reliably
+        // pays is MORE TICKETS, not smarter ones — and a fresh `rng_seed` is a
+        // fresh ticket drawing a different plateau walk. The medium branch below
+        // already runs two budgets for exactly this reason; the small branch ran
+        // only one, despite `lt_1k` having by far the most headroom in the corpus
+        // (measured worst 0.824 s against a 1.72 s corpus worst case).
+        //
+        // The FIRST entry is byte-identical to the previously accepted single
+        // stream (same budget, same seed, same incumbent), so this strictly adds
+        // a second draw over the first one's result and can only lower flops.
+        for (budget, rng_seed) in [
+            (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
+            (50_000_000, 0xD1B5_4A32_D192_ED03),
+        ] {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                budget,
+                rng_seed,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
                 }
             }
         }
@@ -1258,7 +1313,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // 32M matrix-wide requested-work ceiling. Whole-pattern setup and scoring
     // stay inside the measured corpus envelope rather than running on
     // unbounded hidden inputs.
-    if (1_000..=350_000).contains(&n) && nnz <= 1_500_000 {
+    if (SUBTREE_MIN_N..=350_000).contains(&n) && nnz <= 1_500_000 {
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
@@ -1282,7 +1337,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            SUBTREE_CFG,
+            subtree_cfg_for(n),
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1309,7 +1364,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     .iter()
                     .map(|p| p.map_or(-1, |j| j as i32))
                     .collect();
-                let mut cfg2 = SUBTREE_CFG;
+                let mut cfg2 = subtree_cfg_for(n);
                 cfg2.round = 1;
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
@@ -1355,7 +1410,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                             .iter()
                             .map(|p| p.map_or(-1, |j| j as i32))
                             .collect();
-                        let mut cfg3 = SUBTREE_CFG;
+                        let mut cfg3 = subtree_cfg_for(n);
                         cfg3.round = 1;
                         cfg3.max_blocks = 32;
                         cfg3.min_s = 16;
@@ -1399,7 +1454,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     .iter()
                                     .map(|p| p.map_or(-1, |j| j as i32))
                                     .collect();
-                                let mut cfg4 = SUBTREE_CFG;
+                                let mut cfg4 = subtree_cfg_for(n);
                                 cfg4.round = 3;
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
@@ -1440,7 +1495,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                             .iter()
                                             .map(|p| p.map_or(-1, |j| j as i32))
                                             .collect();
-                                        let mut cfg5 = SUBTREE_CFG;
+                                        let mut cfg5 = subtree_cfg_for(n);
                                         cfg5.round = 4;
                                         cfg5.max_blocks = 32;
                                         cfg5.min_s = 16;
@@ -1475,7 +1530,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // pass. Two additive versions exceeded the hidden time cap even though the
     // second used this narrow gate. Substitution makes total work lower than
     // the promoted frontier while retaining the stronger search allocation.
-    if (1_000..=80_000).contains(&n) && nnz <= 250_000 {
+    if (SUBTREE_MIN_N..=80_000).contains(&n) && nnz <= 250_000 {
         let incumbent_flops = flops_of(&scoring_pat, &best_perm);
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);

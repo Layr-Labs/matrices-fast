@@ -11,6 +11,28 @@ first; keep it current whenever you add, rename, or retire a page.
   Current official promoted hidden score: **0.875942** (submission `e4a98396`, commit `1417f26`).
 - Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.875531** (108) ·
   gt_10k **0.796916** (45).
+- Best locally verified candidate score: **0.849801** (weighted geomean flop
+  ratio vs AMD; fill tiebreak **0.947880**), dev corpus **300** matrices, 2026-09-03
+  ([0038](experiments/0038-subtree-chain-into-lt1k.md): the bounded subtree chain
+  extended into `lt_1k`, stacked on
+  [0035](experiments/0035-chained-terminal-subtree-refinement.md)).
+  Base for 0036 is frontier `1417f26` (submission `e4a98396`, hidden
+  **0.875942**), which measures **0.850370** on this box.
+- Per bucket: lt_1k **0.895059** (147) · 1k_10k 0.875531 (108) ·
+  gt_10k 0.796916 (45). `lt_1k` had been frozen at 0.8965 across 0021-0025 and
+  0035; 0036 is the first change to move it.
+- **THIS PAGE LAGS THE CODE — RE-RUN THE BASE, DON'T READ IT.** At commit
+  `1417f26` this block still described 0035 (0.850464 / 0.875665 / 0.797049)
+  while the `mod.rs` committed beside it was already 0036's tree, which measures
+  **0.850370 / 0.875531 / 0.796916**. A stale block silently inflates or deflates
+  whatever delta the next session claims against it. The score is a
+  deterministic, hardware-independent function of (pattern, permutation), so
+  always probe the unmodified base first.
+- **TIMING CALIBRATION IS PER-BOX AND THE SPREAD IS LARGE.** The frontier tree
+  that 0025 measured at "worst 0.829 s" measures **1.702 s** on the 2026-09-03
+  box — ~2x slower. Absolute seconds on pages 0002-0035 are NOT comparable to
+  page 0036. Always re-measure the base on the current box before judging a
+  revision's timing, and compare only within one run series.
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -68,6 +90,8 @@ first; keep it current whenever you add, rename, or retire a page.
   - `probe_relabel_budget` — relabelled-AMD under a per-matrix time BUDGET;
     reports score AND true combined worst case for each `(budget, cap)`. This is
     the one that chose the shipped policy.
+  - `probe_tie_breakers` — for every surviving tie with `n >= 1000`, the cost AND
+    the achieved ratio of 16 separator/min-fill candidates. Answered 0027.
   - `probe_relabel_search` — relabelled-AMD SEARCH POLICIES at a FIXED restart
     count (i.e. at identical cost): explore/exploit split x perturbation strength
     x schedule. Scores the pure relabel family against AMD, so policy differences
@@ -119,6 +143,8 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0023](experiments/0023-subtree-round-3-chain.md) — Chained subtree round 3 (round=1, 32 blocks, min_s 16, **max_s 512**) after hybridnoise's conditional round 2. Frontier base 0.852246 → **0.851642**. PROMOTED hidden 0.877373 (2026-09-03).
 - [0024](experiments/0024-subtree-round-4-chain.md) — Chained subtree round 4 (round=1, 32 blocks, min_s 16, **max_s 768**). 0.851642 → **0.851347**. SUBMITTED (2026-09-03).
 - [0025](experiments/0025-adaptive-terminal-deep-subtree-search.md) — Both 32M and 16M additive terminal passes failed the hidden 2 s cap. The lower-work retry replaces the frontier's 24M terminal pass with at most 16M: 4×4M below 10k vertices, 8×2M above. Frontier source 0.851055 → **0.850594**; worst local `order()` 0.829 s (2026-09-03).
+- [0038](experiments/0038-subtree-chain-into-lt1k.md) — The subtree chain was gated at `n >= 1_000` from 0021 onward, so the whole `lt_1k` bucket never saw the technique that moved the other two. `SUBTREE_MIN_N = 64`, a reallocated small-graph config (8 deep blocks x 4M = the same 32M ceiling), and a second stream on the `n <= 1_000` exact search. 0.850594 → **0.850167**; 17 better / 0 worse / 283 identical; `lt_1k` 0.8965 → 0.8951 with the other buckets unchanged. WIN.
+- [0039](experiments/0039-tie-breaker-battery-negative.md) — 16 separator/min-fill candidates x 31 surviving ties, 496 measurements: **zero wins**, per-candidate minimum ratio exactly 1.0000. METIS on `faclay75` is 2.23x AMD and takes 14.7 s; Scotch returns 9519x; KaHIP 38-48 s. **NEGATIVE**, and it closes the "big tied matrices" open question — the partitioner gates protect the run rather than cost score.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

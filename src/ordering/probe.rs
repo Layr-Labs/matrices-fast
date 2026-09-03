@@ -1482,3 +1482,136 @@ fn probe_next_subtree_variants() {
         }
     }
 }
+
+/// Cost AND benefit of tie-breaking candidates on the matrices still tied at the
+/// AMD baseline in the two leverage-rich buckets (`1k_10k`, `gt_10k`).
+///
+/// Every tie is pure upside under the best-of floor, so the only question a new
+/// candidate raises is whether its wall-clock fits the budget. This prints, per
+/// (tied matrix, candidate), the seconds it costs and the ratio it would reach,
+/// which is exactly the pair needed to choose a gate from data instead of
+/// guessing. Ties are detected by running the shipped `order()` first, so the
+/// `cur_s` column also says how much headroom that matrix still has.
+#[test]
+#[ignore]
+fn probe_tie_breakers() {
+    let corpus = crate::corpus::corpus();
+    println!("\nmatrix\tn\tnnz\tcur_s\tcand\tcand_s\tcand_r");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n < 1_000 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+
+        let t0 = Instant::now();
+        let cur = flops_of(&sp, &order(pat)) as f64 / base;
+        let cur_s = t0.elapsed().as_secs_f64();
+        // Only the ties: where AMD still beats the whole shipped portfolio.
+        if cur < 0.9999 {
+            continue;
+        }
+
+        let run = |label: &str,
+                   f: &dyn Fn() -> Result<Vec<i32>, feral_ordering_core::OrderingError>| {
+            let t = Instant::now();
+            let r = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+                Ok(Ok(p)) => {
+                    let p: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                    if is_bijection(&p, n) {
+                        flops_of(&sp, &p) as f64 / base
+                    } else {
+                        f64::NAN
+                    }
+                }
+                _ => f64::NAN,
+            };
+            let s = t.elapsed().as_secs_f64();
+            println!("{name}\t{n}\t{nnz}\t{cur_s:.3}\t{label}\t{s:.3}\t{r:.4}");
+        };
+
+        // METIS: more WORK (trials / refinement).
+        let m_tuned = feral_metis::MetisOptions {
+            niparts: 16,
+            fm_passes: 20,
+            ..Default::default()
+        };
+        run("metis_tuned", &|| {
+            feral_metis::metis_order_full(&core, &m_tuned).map(|(p, _, _)| p)
+        });
+        let m_hi = feral_metis::MetisOptions {
+            niparts: 32,
+            fm_passes: 30,
+            ..Default::default()
+        };
+        run("metis_hi", &|| {
+            feral_metis::metis_order_full(&core, &m_hi).map(|(p, _, _)| p)
+        });
+        // METIS: different SHAPE (seed / crossover / imbalance).
+        for sd in [7u64, 21] {
+            let o = feral_metis::MetisOptions {
+                seed: sd,
+                ..Default::default()
+            };
+            run(&format!("metis_seed{sd}"), &|| {
+                feral_metis::metis_order_full(&core, &o).map(|(p, _, _)| p)
+            });
+        }
+        for sw in [100u32, 400, 1000] {
+            let o = feral_metis::MetisOptions {
+                nd_to_amd_switch: sw,
+                ..Default::default()
+            };
+            run(&format!("metis_sw{sw}"), &|| {
+                feral_metis::metis_order_full(&core, &o).map(|(p, _, _)| p)
+            });
+        }
+        for imb in [0.05f64, 0.30] {
+            let o = feral_metis::MetisOptions {
+                max_imbalance: imb,
+                ..Default::default()
+            };
+            run(&format!("metis_imb{imb}"), &|| {
+                feral_metis::metis_order_full(&core, &o).map(|(p, _, _)| p)
+            });
+        }
+        // Scotch / KaHIP — distinct separator engines.
+        run("scotch", &|| feral_scotch::scotch_order(&core));
+        let sc_tuned = feral_scotch::ScotchOptions {
+            n_sep_trials: 10,
+            ..Default::default()
+        };
+        run("scotch_tuned", &|| {
+            feral_scotch::scotch_order_full(&core, &sc_tuned).map(|(p, _, _)| p)
+        });
+        run("kahip", &|| feral_kahip::kahip_order(&core));
+        let kh_eco = feral_kahip::KahipOptions {
+            mode: feral_kahip::KahipMode::Eco,
+            ..Default::default()
+        };
+        run("kahip_eco", &|| {
+            feral_kahip::kahip_order_full(&core, &kh_eco).map(|(p, _, _)| p)
+        });
+        // AMF at other dense_alpha — a different objective, not just more work.
+        for da in [2.0f64, -1.0, 16.0] {
+            let o = feral_amf::AmfOptions {
+                dense_alpha: da,
+                ..Default::default()
+            };
+            run(&format!("amf_a{da}"), &|| {
+                feral_amf::amf_order_opts(&core, &o).map(|(p, ..)| p)
+            });
+        }
+    }
+}

@@ -4,12 +4,13 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best score: **0.859116** (weighted geomean flop ratio vs AMD; fill tiebreak
-  **0.955319**), dev corpus **300** matrices, 2026-09-02
-  ([0020](experiments/0020-medium-exact-search.md), bounded serial exact search
-  for medium sparse graphs). Previous synced frontier: 0.860780 / fill 0.955916.
-- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.884759** (108) ·
-  gt_10k 0.811860 (45).
+- Best score: **0.851513** (weighted geomean flop ratio vs AMD; fill tiebreak
+  **0.949215**), dev corpus **300** matrices, 2026-09-02
+  ([0021](experiments/0021-exact-subtree-refinement.md), bounded exact search
+  over disjoint elimination-tree subtrees). Previous local best: 0.859116 / fill
+  0.955319; previous promoted hidden score: 0.880467.
+- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.877695** (108) ·
+  gt_10k **0.798150** (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -22,7 +23,8 @@ first; keep it current whenever you add, rename, or retire a page.
   candidate orderings (feral AMD/AMF variants, METIS/Scotch/KaHIP, plus
   hand-rolled RCM / Sloan / ND / GGGP / MinFill) **and budgeted relabelled-AMD and
   relabelled-AMF multi-starts**, plus bounded exact elimination-game search on
-  small and medium sparse graphs. Each is scored with feral's own `Σ cⱼ²` and the
+  small and medium sparse graphs and on ranked elimination-tree subtrees. Each
+  is scored with feral's own `Σ cⱼ²` and the
   cheapest returned, anchored on the grader's exact AMD so the ratio can never
   exceed 1.0. See [best-of-portfolio](techniques/best-of-portfolio.md).
 - **Timing headroom is the binding constraint,** but noisier than earlier pages
@@ -36,6 +38,7 @@ first; keep it current whenever you add, rename, or retire a page.
   local" rule is provably false — see
   [0003](experiments/0003-relabelled-amd-multistart.md). Use the comparative rule
   instead: stay at or below the worst case of a revision known to have passed.
+  The 0021 final probe measured **0.801 s**, still inside that accepted range.
   Measure with `probe_timing_and_score` before adding anything.
 - **The search policy of the relabel multi-start is settled: uniform i.i.d. is
   optimal at fixed cost.** 17 explore/exploit policies swept, none robustly better;
@@ -104,6 +107,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0014](experiments/0014-custom-quotient-metrics.md) — Custom quotient-graph metrics (SqDiv & SqPure). 0.864462 → **0.863609**. WIN.
 - [0015](experiments/0015-small-simplicial-cycled-amd-minfill.md) — Small-graph simplicial promotion, 6-way cycled AMD & scaled minfill. 0.863609 → **0.863272**. WIN.
 - [0020](experiments/0020-medium-exact-search.md) — Two bounded serial exact-search stages on `1,000 < n <= 6,000`, `nnz <= 30,000`, followed by pair descent when its existing gate allows it. Synced baseline 0.860780 → **0.859116**. WIN.
+- [0021](experiments/0021-exact-subtree-refinement.md) — Exact search over at most 32 ranked, disjoint elimination-tree subtrees with two fixed streams. 0.859116 → **0.851513**. WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

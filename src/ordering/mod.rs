@@ -800,13 +800,19 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
-    // Custom quotient-graph metrics (SqDiv / SqPure) on medium/dense networks.
-    // SqDiv evaluates deg² / (nv + 1), directly predicting each elimination's
-    // contribution to the exact sum of squared column counts Σ cⱼ².
+    // Custom quotient-graph metrics (SqDiv / SqPure + T1 subset) on medium/dense
+    // networks. SqDiv evaluates deg² / (nv + 1), directly predicting each
+    // elimination's contribution to the exact sum of squared column counts Σ cⱼ².
+    // T1 adds two already-implemented variants under the SAME gate (no new
+    // envelope): DegP125 (superlinear degree, hub-emphasising, orthogonal to
+    // SqDiv's nv normalisation) and Ammf (fill-per-neighbour, the most different
+    // objective of the AMF-style pair). Each is one AMF-class pass.
     if nnz <= 300_000 && nnz >= 10 * n {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,
+            custom_metrics::ScoreVariant::DegP125,
+            custom_metrics::ScoreVariant::Ammf,
         ] {
             for &alpha in &[1.0, 10.0] {
                 consider(&|| {
@@ -1326,6 +1332,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 if improved2 > 0 && is_bijection(&candidate2, n) {
                     let f2 = flops_of(&scoring_pat, &candidate2);
                     if f2 < best_flops {
+                        best_flops = f2;
                         best_perm = candidate2;
 
                         // Round 3: one more pass over the round-2 incumbent.
@@ -1372,6 +1379,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         if improved3 > 0 && is_bijection(&candidate3, n) {
                             let f3 = flops_of(&scoring_pat, &candidate3);
                             if f3 < best_flops {
+                                best_flops = f3;
                                 best_perm = candidate3;
 
                                 // Round 4: one more pass over the round-3
@@ -1457,6 +1465,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         if improved5 > 0 && is_bijection(&candidate5, n) {
                                             let f5 = flops_of(&scoring_pat, &candidate5);
                                             if f5 < best_flops {
+                                                best_flops = f5;
                                                 best_perm = candidate5;
                                             }
                                         }
@@ -1640,6 +1649,59 @@ fn minfill_order(pattern: &Pattern) -> Vec<i32> {
     order.into_iter().map(|x| x as i32).collect()
 }
 
+/// AMD ordering of a small induced subgraph (ND-leaf hybrid, T1).
+/// Builds the CSC of the subset-induced subgraph and runs feral AMD with default
+/// options, mapping the local elimination order back to global indices.
+/// Returns `None` on any failure so the caller falls back to degree sort —
+/// leaf code runs outside `consider`, so it must never panic or fail the run.
+/// Deterministic: the subset is sorted ascending before indexing, so local
+/// indices follow a canonical order and feral AMD itself is deterministic.
+/// Cost is trivial (leaves are ≤200 nodes; one tiny AMD per leaf).
+fn amd_leaf_order(subset: &[usize], adj: &[Vec<usize>]) -> Option<Vec<usize>> {
+    let m = subset.len();
+    if m == 0 {
+        return Some(Vec::new());
+    }
+    if m == 1 {
+        return Some(vec![subset[0]]);
+    }
+    // Canonical ascending order for deterministic local indexing.
+    let mut sorted: Vec<usize> = subset.to_vec();
+    sorted.sort_unstable();
+    let mut col_ptr: Vec<i32> = Vec::with_capacity(m + 1);
+    let mut row_idx: Vec<i32> = Vec::new();
+    col_ptr.push(0);
+    for &g in &sorted {
+        // adj[g] is sorted ascending (deduped at build); since `sorted` is
+        // ascending, pushing in adj order yields ascending local indices.
+        for &w in &adj[g] {
+            if let Ok(li) = sorted.binary_search(&w) {
+                row_idx.push(li as i32);
+            }
+        }
+        col_ptr.push(row_idx.len() as i32);
+    }
+    let perm_local: Vec<i32> =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let core = feral_ordering_core::CscPattern::new(m, &col_ptr, &row_idx)?;
+            feral_amd::amd_order(&core).ok()
+        })) {
+            Ok(Some(p)) => p,
+            _ => return None,
+        };
+    if perm_local.len() != m {
+        return None;
+    }
+    let mut out = Vec::with_capacity(m);
+    for li in perm_local {
+        if li < 0 || (li as usize) >= m {
+            return None;
+        }
+        out.push(sorted[li as usize]);
+    }
+    Some(out)
+}
+
 /// Internal-connectivity gain of vertex `v` toward part `A` within the current
 /// subset: `2·|neighbors of v in A| − |neighbors of v in subset|`. Maximizing
 /// this greedily grows a well-connected (low edge-cut) region. Monotone
@@ -1715,9 +1777,18 @@ fn ndfm_order(pattern: &Pattern) -> Vec<i32> {
     // Hard work budget: caps total per-subset scanning at O(n log n).
     let mut budget: i64 = 96 * n as i64 + 8192;
 
-    // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
-    // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, mut v: Vec<usize>| {
+    // Leaf ordering: AMD on the induced subgraph, falling back to ascending
+    // degree on any failure. T1 hybrid — the textbook ND hands leaves to minimum
+    // degree instead of degree sort; leaves are ≤100 nodes so one tiny AMD each
+    // is microseconds and cannot move the worst case. Deterministic.
+    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
+        if let Some(amd_v) = amd_leaf_order(&v, &adj) {
+            for (t, u) in amd_v.into_iter().enumerate() {
+                order[lo + t] = u;
+            }
+            return;
+        }
+        let mut v = v;
         v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
         for (t, u) in v.into_iter().enumerate() {
             order[lo + t] = u;
@@ -1953,9 +2024,18 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
     // (e.g. highly disconnected) input can drive quadratic blow-up.
     let mut budget: i64 = 64 * n as i64 + 4096;
 
-    // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
-    // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, mut v: Vec<usize>| {
+    // Leaf ordering: AMD on the induced subgraph, falling back to ascending
+    // degree on any failure. T1 hybrid — the textbook ND hands leaves to minimum
+    // degree instead of degree sort; leaves are ≤200 nodes so one tiny AMD each
+    // is microseconds and cannot move the worst case. Deterministic.
+    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
+        if let Some(amd_v) = amd_leaf_order(&v, &adj) {
+            for (t, u) in amd_v.into_iter().enumerate() {
+                order[lo + t] = u;
+            }
+            return;
+        }
+        let mut v = v;
         v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
         for (t, u) in v.into_iter().enumerate() {
             order[lo + t] = u;

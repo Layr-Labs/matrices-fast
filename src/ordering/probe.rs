@@ -737,6 +737,106 @@ fn family_perm(idx: usize, core: &feral_ordering_core::CscPattern<'_>) -> Option
     }
 }
 
+/// One-off attribution for the unwired `custom_metrics` variants (0026 fix).
+/// For every matrix inside the custom-metrics gate, scores each candidate
+/// variant × α{1,10} against the CURRENT `order()` incumbent: under best-of, a
+/// variant only matters if it beats the whole portfolio, not AMD alone.
+/// Reports per-variant independent win counts, max per-pass seconds (for
+/// pricing against the 2 s cap), and the greedy upper-bound score of adding
+/// all of them. DegP125/Ammf are excluded: two full `yukon run`s with and
+/// without them scored byte-identical 0.850546, so they win nothing on dev.
+#[test]
+#[ignore]
+fn probe_metric_variants() {
+    use custom_metrics::ScoreVariant;
+    const VARIANTS: &[ScoreVariant] = &[
+        ScoreVariant::AmindNorm,
+        ScoreVariant::DegSqrt,
+        ScoreVariant::DegP075,
+        ScoreVariant::DegDivNvSqrtWf,
+        ScoreVariant::DegDivNvWfP15,
+        ScoreVariant::DegPlusDegme,
+        ScoreVariant::DegDivNvDegme,
+    ];
+    const ALPHAS: &[f64] = &[1.0, 10.0];
+    let corpus = crate::corpus::corpus();
+    let mut wins = vec![0usize; VARIANTS.len() * ALPHAS.len()];
+    let mut max_secs = vec![0.0f64; VARIANTS.len() * ALPHAS.len()];
+    let mut log_sums = [0.0f64; 3];
+    let mut counts = [0usize; 3];
+    let mut gated = 0usize;
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let inc = flops_of(&sp, &order(pat));
+        let b = bucket(n);
+        let mut best = inc;
+        if nnz <= 300_000 && nnz >= 10 * n {
+            gated += 1;
+            for (vi, &v) in VARIANTS.iter().enumerate() {
+                for (ai, &a) in ALPHAS.iter().enumerate() {
+                    let idx = vi * ALPHAS.len() + ai;
+                    let t0 = Instant::now();
+                    let r = custom_metrics::order_variant(&core, a, true, v);
+                    let secs = t0.elapsed().as_secs_f64();
+                    if secs > max_secs[idx] {
+                        max_secs[idx] = secs;
+                    }
+                    match r {
+                        Ok(p) => {
+                            let p: Vec<usize> =
+                                p.into_iter().map(|x| x as usize).collect();
+                            if !is_bijection(&p, n) {
+                                println!("{name}\t{v:?}/{a}\tNON-BIJECTION");
+                                continue;
+                            }
+                            let f = flops_of(&sp, &p);
+                            if f < inc {
+                                wins[idx] += 1;
+                            }
+                            if f < best {
+                                best = f;
+                                println!(
+                                    "{name}\tn={n}\tnnz={nnz}\t{v:?}/{a}\t{secs:.3}s\t{inc}->{f} ({:.4})",
+                                    f as f64 / base
+                                );
+                            }
+                        }
+                        Err(e) => println!("{name}\t{v:?}/{a}\tERR {e:?}"),
+                    }
+                }
+            }
+        }
+        log_sums[b] += (best as f64 / base).ln();
+        counts[b] += 1;
+    }
+    println!("gated matrices: {gated}/{}", corpus.len());
+    for (vi, &v) in VARIANTS.iter().enumerate() {
+        for (ai, &a) in ALPHAS.iter().enumerate() {
+            let idx = vi * ALPHAS.len() + ai;
+            println!("{v:?}/{a}\twins={}\tmax_s={:.3}", wins[idx], max_secs[idx]);
+        }
+    }
+    println!(
+        "upper-bound score if ALL variants added: {:.6}",
+        aggregate(&log_sums, &counts)
+    );
+}
+
 /// The LARGE end of the corpus is where the `n` caps in `order()` shut every
 /// candidate off — `acopf_case9241pegase_qcqp` (n=313k) gets nothing but the AMD
 /// baseline. But the cost driver is nnz, not n, so some of those matrices may

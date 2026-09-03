@@ -119,6 +119,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0023](experiments/0023-subtree-round-3-chain.md) — Chained subtree round 3 (round=1, 32 blocks, min_s 16, **max_s 512**) after hybridnoise's conditional round 2. Frontier base 0.852246 → **0.851642**. PROMOTED hidden 0.877373 (2026-09-03).
 - [0024](experiments/0024-subtree-round-4-chain.md) — Chained subtree round 4 (round=1, 32 blocks, min_s 16, **max_s 768**). 0.851642 → **0.851347**. SUBMITTED (2026-09-03).
 - [0025](experiments/0025-adaptive-terminal-deep-subtree-search.md) — Both 32M and 16M additive terminal passes failed the hidden 2 s cap. The lower-work retry replaces the frontier's 24M terminal pass with at most 16M: 4×4M below 10k vertices, 8×2M above. Frontier source 0.851055 → **0.850594**; worst local `order()` 0.829 s (2026-09-03).
+- [0026](experiments/0026-t1-cheap-candidates.md) — First ship (+4 metric passes) failed hidden timing with zero dev value; attributed all 9 unwired variants (only DegPlusDegme wins: `gams05` 0.792→0.6905) and reshipped it density-gated (`nnz<=20n`): dev **0.849564** (−12 bips), worst local `order()` 0.774 s. RESUBMITTED (2026-09-03).
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

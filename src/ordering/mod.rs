@@ -1234,6 +1234,70 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── SMALL-SPARSE MICRO-SUBTREE REFINEMENT (50 <= n < 1,000) ─────────────
+    // Dedicated micro-subtree refinement for small sparse matrices.
+    // Strictly gated to sparse graphs with bounded degree (nnz <= 16*n and
+    // max_deg <= 96) to completely eliminate dense KKT/hub overhead.
+    // Micro-subtrees (min_s = 8, max_s = 64, max_sub = 128, max_blocks = 8,
+    // budget = 50,000) cap total requested search work to 400,000 operations
+    // (< 0.5 ms), completely insulated from any timeout or memory risk.
+    if (50..1_000).contains(&n) && nnz <= 16 * n && max_deg <= 96 {
+        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let mut cfg = SUBTREE_CFG;
+        cfg.min_s = 8;
+        cfg.max_s = 64;
+        cfg.max_sub = 128;
+        cfg.max_blocks = 8;
+        cfg.budget = 50_000;
+        let improved = rgreedy::subtree_refine(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &mut candidate,
+            &counts,
+            &parent,
+            cfg,
+        );
+        if improved > 0 && is_bijection(&candidate, n) {
+            let f = flops_of(&scoring_pat, &candidate);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = candidate;
+            }
+        }
+
+        // Bounded 1-sweep local descent on the refined sparse incumbent
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            1,
+            4_000_000,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
+
     // Search bounded, disjoint blocks of the incumbent elimination tree. An
     // etree postorder makes each subtree contiguous. The exact local search is
     // capped at 32 blocks and one fixed 1M-operation stream per block, for a

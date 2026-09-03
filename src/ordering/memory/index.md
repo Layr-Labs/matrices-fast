@@ -4,13 +4,13 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best locally verified candidate score: **0.850464** (weighted geomean flop
-  ratio vs AMD; fill tiebreak **0.948439**), dev corpus **300** matrices,
-  2026-09-03 ([0035](experiments/0035-chained-terminal-subtree-refinement.md):
-  chained terminal subtree refinement with unaliased diversification).
-  Current official promoted hidden score: **0.876094** (submission `db5ad145`, commit `f04da6e`).
-- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.875665** (108) ·
-  gt_10k **0.797049** (45).
+- Best locally verified candidate score: **0.850370** (weighted geomean flop
+  ratio vs AMD; fill tiebreak **0.948420**), dev corpus **300** matrices,
+  2026-09-03 ([0036](experiments/0036-multiround-cascading-terminal-subtree-refinement.md):
+  multi-round cascading terminal subtree refinement with sparsity-gated large tier).
+  Current official promoted hidden score: **0.875942** (submission `e4a98396`, commit `1417f26`).
+- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.875531** (108) ·
+  gt_10k **0.796916** (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer

@@ -1505,6 +1505,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
             if f < incumbent_flops {
+                best_flops = f;
                 best_perm = candidate;
 
                 // Chained terminal pass 2: runs ONLY on medium matrices (n < 10_000)
@@ -1544,6 +1545,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     if improved2 > 0 && is_bijection(&candidate2, n) {
                         let f2 = flops_of(&scoring_pat, &candidate2);
                         if f2 < f {
+                            best_flops = f2;
                             best_perm = candidate2;
 
                             // Chained terminal round 3: runs ONLY on medium sparse matrices (n < 10_000 && nnz <= 100_000)
@@ -1582,12 +1584,53 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                             if improved3 > 0 && is_bijection(&candidate3, n) {
                                 let f3 = flops_of(&scoring_pat, &candidate3);
                                 if f3 < f2 {
+                                    best_flops = f3;
                                     best_perm = candidate3;
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // ── POST-TERMINAL LOCAL CLEANUP ─────────────────────────────────────────
+    // Terminal subtree passes often create newly simplicial vertices or expose
+    // local inversion transpositions. Running quick monotonic passes sweeps
+    // these remaining transpositions with negligible CPU cost.
+    if (SIMPLICIAL_PROMOTION_MIN_N..=SIMPLICIAL_PROMOTION_MAX_N).contains(&n)
+        && nnz > 0
+        && nnz <= SIMPLICIAL_PROMOTION_MAX_NNZ
+        && nnz <= n.saturating_mul(SIMPLICIAL_PROMOTION_MAX_DENSITY)
+    {
+        if let Some(cand) = rgreedy::simplicial_promotion(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            SIMPLICIAL_PROMOTION_OPS_BUDGET,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
+
+    if pair_descent_gate {
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            2,
+            pair_descent_ops_budget,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_perm = cand;
             }
         }
     }

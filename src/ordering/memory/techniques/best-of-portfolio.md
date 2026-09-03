@@ -167,11 +167,14 @@ A fast local corpus result does not prove hidden safety.
 
 When an initial terminal pass successfully lowers the factorization flops, the
 elimination tree topology changes. [Experiment 0035](../experiments/0035-chained-terminal-subtree-refinement.md)
-chains a secondary 4-block pass with unaliased round 6 *strictly conditioned*
-on `improved > 0 && f < incumbent_flops` and guarded by `n < 10,000 && nnz <= 100,000`.
-Because non-improving and heavy QP/KKT instances never enter the branch, the
-routine incurs zero overhead on the slowest matrices while extracting secondary
-gains from newly uncovered subtrees, lowering the official score to 0.876094.
+and [Experiment 0036](../experiments/0036-multiround-cascading-terminal-subtree-refinement.md)
+cascade secondary (round 6) and tertiary (round 7, min_s 8) 4-block passes
+*strictly conditioned* on successive strict improvements ($f_3 < f_2 < f_1$) and
+guarded by `(n < 10,000 && nnz <= 100,000) || (n >= 10,000 && nnz <= 60,000)`.
+Because non-improving and heavy QP/KKT instances never enter the branches, the
+cascading funnel incurs zero overhead on the slowest matrices while safely
+extending deep local search to ultra-sparse large matrices, breaking the 0.8760
+leaderboard barrier to reach 0.875942.
 
 ## Links
 - [amd.md](amd.md) — the anchor, and why it is hard to beat here.
@@ -183,3 +186,4 @@ gains from newly uncovered subtrees, lowering the official score to 0.876094.
 - [experiments/0020](../experiments/0020-medium-exact-search.md) — bounded exact search in the medium sparse tier.
 - [experiments/0025](../experiments/0025-adaptive-terminal-deep-subtree-search.md) — adaptive deep allocation for a terminal subtree pass.
 - [experiments/0035](../experiments/0035-chained-terminal-subtree-refinement.md) — chained terminal refinement conditioned on primary pass improvement.
+- [experiments/0036](../experiments/0036-multiround-cascading-terminal-subtree-refinement.md) — multi-round cascading terminal subtree refinement with sparsity-gated large tier.

@@ -4,35 +4,31 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best locally verified candidate score: **0.850370** (weighted geomean flop
-  ratio vs AMD; fill tiebreak **0.948420**), dev corpus **300** matrices,
-  2026-09-03 ([0036](experiments/0036-multiround-cascading-terminal-subtree-refinement.md):
-  multi-round cascading terminal subtree refinement with sparsity-gated large tier).
-  Current official promoted hidden score: **0.875942** (submission `e4a98396`, commit `1417f26`).
-- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.875531** (108) ·
-  gt_10k **0.796916** (45).
-- Best locally verified candidate score: **0.849801** (weighted geomean flop
-  ratio vs AMD; fill tiebreak **0.947880**), dev corpus **300** matrices, 2026-09-03
-  ([0038](experiments/0038-subtree-chain-into-lt1k.md): the bounded subtree chain
-  extended into `lt_1k`, stacked on
-  [0035](experiments/0035-chained-terminal-subtree-refinement.md)).
-  Base for 0036 is frontier `1417f26` (submission `e4a98396`, hidden
-  **0.875942**), which measures **0.850370** on this box.
-- Per bucket: lt_1k **0.895059** (147) · 1k_10k 0.875531 (108) ·
-  gt_10k 0.796916 (45). `lt_1k` had been frozen at 0.8965 across 0021-0025 and
-  0035; 0036 is the first change to move it.
+- Best locally verified candidate score: **0.849487** (weighted geomean flop
+  ratio vs AMD), dev corpus **300** matrices, 2026-09-03
+  ([0040](experiments/0040-lt1k-block-size-sweep.md): the `lt_1k` block-size cap
+  swept from 512 to 256). Base is our own promoted frontier `1deddca`
+  (submission `a43ed612`, hidden **0.874999**), which measures 0.849801 here.
+- Per bucket: lt_1k **0.893893** (147) · 1k_10k 0.875176 (108) ·
+  gt_10k 0.796916 (45).
+- **`lt_1k` TRANSLATES TO THE HIDDEN CORPUS BETTER THAN DEV SUGGESTS.**
+  [0038](experiments/0038-subtree-chain-into-lt1k.md) moved dev by 4.24 bips and
+  the hidden score by **5.6 bips** — a ~1.32x translation, where the only prior
+  calibration point (0023, a `1k_10k`/`gt_10k` change) gave ~0.53x. Dev appears
+  to UNDER-weight `lt_1k` relative to the graded corpus, which makes it a better
+  place to spend effort than its dev numbers alone imply. Two points, not a law.
+- **CHECK ROBUSTNESS BEFORE ACCEPTING ANY SEARCH-CONFIG WIN.** In 0040 the two
+  configs nearest the incumbent looked like wins on the full bucket but FLIPPED
+  SIGN once their three biggest movers were dropped. Use disjoint halves +
+  drop-top-3, per [0004](experiments/0004-structured-relabelings.md). A config
+  whose neighbours agree (a plateau) is trustworthy; an isolated spike is not.
 - **THIS PAGE LAGS THE CODE — RE-RUN THE BASE, DON'T READ IT.** At commit
-  `1417f26` this block still described 0035 (0.850464 / 0.875665 / 0.797049)
-  while the `mod.rs` committed beside it was already 0036's tree, which measures
-  **0.850370 / 0.875531 / 0.796916**. A stale block silently inflates or deflates
-  whatever delta the next session claims against it. The score is a
-  deterministic, hardware-independent function of (pattern, permutation), so
-  always probe the unmodified base first.
-- **TIMING CALIBRATION IS PER-BOX AND THE SPREAD IS LARGE.** The frontier tree
+  `1417f26` this block still described 0035 (0.850464) while the `mod.rs`
+  committed beside it measured 0.850370. Always probe the unmodified base first.
+- **TIMING CALIBRATION IS PER-BOX AND THE SPREAD IS LARGE.** The `971649b` tree
   that 0025 measured at "worst 0.829 s" measures **1.702 s** on the 2026-09-03
-  box — ~2x slower. Absolute seconds on pages 0002-0035 are NOT comparable to
-  page 0036. Always re-measure the base on the current box before judging a
-  revision's timing, and compare only within one run series.
+  box — ~2x slower. Absolute seconds on pages 0002-0036 are NOT comparable to
+  pages 0038+. Compare only within one run series.
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -145,6 +141,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0025](experiments/0025-adaptive-terminal-deep-subtree-search.md) — Both 32M and 16M additive terminal passes failed the hidden 2 s cap. The lower-work retry replaces the frontier's 24M terminal pass with at most 16M: 4×4M below 10k vertices, 8×2M above. Frontier source 0.851055 → **0.850594**; worst local `order()` 0.829 s (2026-09-03).
 - [0038](experiments/0038-subtree-chain-into-lt1k.md) — The subtree chain was gated at `n >= 1_000` from 0021 onward, so the whole `lt_1k` bucket never saw the technique that moved the other two. `SUBTREE_MIN_N = 64`, a reallocated small-graph config (8 deep blocks x 4M = the same 32M ceiling), and a second stream on the `n <= 1_000` exact search. 0.850594 → **0.850167**; 17 better / 0 worse / 283 identical; `lt_1k` 0.8965 → 0.8951 with the other buckets unchanged. WIN.
 - [0039](experiments/0039-tie-breaker-battery-negative.md) — 16 separator/min-fill candidates x 31 surviving ties, 496 measurements: **zero wins**, per-candidate minimum ratio exactly 1.0000. METIS on `faclay75` is 2.23x AMD and takes 14.7 s; Scotch returns 9519x; KaHIP 38-48 s. **NEGATIVE**, and it closes the "big tied matrices" open question — the partitioner gates protect the run rather than cost score.
+- [0040](experiments/0040-lt1k-block-size-sweep.md) — swept the `lt_1k` small-graph config inside its fixed 32M ceiling. **`max_s` (the cap on searched block size) is the dominant knob and 0038 had it 2x too high**: 512 → 256 takes the bucket 0.894939 → 0.893893, score 0.849801 → **0.849487**, AND drops the corpus worst `order()` 1.774 → 1.610 s. 224/256/288 form a plateau (all robust on disjoint halves and drop-top-3) while 320/384 fail drop-top-3. `min_s` below 16 is a no-op. WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

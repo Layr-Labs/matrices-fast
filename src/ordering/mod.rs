@@ -415,9 +415,9 @@ fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
         // This is a REALLOCATION, not an increase - the nominal ceiling is
         // unchanged, which is what kept 0022 inside the cap after 0021 blew it.
         cfg.min_s = 16;
-        cfg.max_s = 512;
-        cfg.max_blocks = 8;
-        cfg.budget = 4_000_000;
+        cfg.max_s = 256;
+        cfg.max_blocks = 16;
+        cfg.budget = 2_000_000;
     }
     cfg
 }

@@ -73,3 +73,13 @@ subtrees of an already-refined tree contain structure that small-block
 searches never see. Next candidate: sweep max_s upward (512/640/768) on round
 3, and test whether round 2 itself wants the wider window (it may make round
 3 unnecessary on many matrices).
+
+## Follow-up measurements (same session)
+
+- round-3 max_s 640 (round 2 unchanged at ms384): 0.851642 → **0.851568**
+  (1k_10k 0.878657→0.878437). Small but consistent.
+- **round-2 max_s 640 + round-3 max_s 640: 0.851660 — WORSE than ms640 on
+  round 3 alone.** Widening round 2 changes the round-2 incumbent and the
+  round-3 search lands on a different local optimum that is worse overall.
+  Chain order matters: keep round 2 at its shipped ms384 window and tune round
+  3 only. Do not reopen the "widen round 2" arm.

@@ -175,6 +175,16 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0050](experiments/0050-late-round-budget-step.md) — On the accepted all-8M
   chain, raise only conditional rounds 4 and 5 to 16M. Dev **0.846054**, hidden
   **0.871827**, fill **0.955667**. **PROMOTED TO #1** as `28d9a9d2` / `e93779c`.
+- [0051](experiments/0051-round4-budget-step.md) — Raise only round 4 from its
+  accepted 16M to 32M and keep round 5 at 16M. Dev **0.845707**, hidden
+  **0.871418**, fill **0.955486**. **PROMOTED TO #1** as `d6de8499` / `7177486`.
+- [0052](experiments/0052-round4-64m-boundary.md) — Raising round 4 globally
+  from 32M to 64M improved dev to **0.845411**, but submission `de541fe9`
+  exceeded the hidden 2-second matrix cap. Global 64M is closed.
+- [0053](experiments/0053-selective-lower-medium-round4-depth.md) — Reclaim the
+  score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
+  retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;
+  1k-10k worst observed call **0.661 s**. Submitted for hidden validation.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

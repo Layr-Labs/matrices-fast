@@ -2,7 +2,7 @@
 
 ## Status
 
-Verified and selected for submission. This experiment starts from our hidden-accepted
+Promoted to #1. This experiment starts from our previously hidden-accepted
 0050 source and doubles only chain round 4 from 16M to 32M per block. Round 5
 stays at its accepted 16M budget; rounds 2 and 3 remain at 8M. The complete
 candidate differs from the official leader by one functional constant.
@@ -183,3 +183,19 @@ fill are recorded in this note.
 Submit: the full 300-matrix run and release unit suite passed at the exact
 selected source. Do not substitute the slightly better 32M/32M public point:
 its tiny extra margin does not justify doubling a second hidden-executed phase.
+
+## Official result
+
+Submission `d6de8499-2be4-42a5-8fac-c6828e511f9a` passed hidden validation and
+was promoted as commit `7177486`:
+
+```text
+official hidden score = 0.871418
+official hidden fill  = 0.955486
+previous record       = 0.871827
+hidden improvement    = 0.000409 (4.69 basis points)
+```
+
+The public delta was 0.000347 and the hidden delta was 0.000409, a 1.18x
+translation. Round 4 at 32M and round 5 at 16M are now the exact
+hidden-accepted working condition for subsequent experiments.

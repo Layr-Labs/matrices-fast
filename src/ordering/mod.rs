@@ -1445,9 +1445,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 // incumbent. Same block count as round 3 (32)
                                 // but a wider window (max_s 768), so later
                                 // rounds of the chain keep exploring larger
-                                // subtrees of each newly refined tree. Same
-                                // 1M ops per block; bounded deterministic
-                                // chain.
+                                // subtrees of each newly refined tree. Spend
+                                // 64M per block only in the measured-safe
+                                // lower-medium band; retain the hidden-proven
+                                // 32M budget everywhere else.
                                 let permuted4 = permute_pattern(&scoring_pat, &best_perm);
                                 let etree4 = EliminationTree::from_pattern(&permuted4);
                                 let post4 = etree4.postorder();
@@ -1471,7 +1472,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
                                 cfg4.max_s = 768;
-                                cfg4.budget = 32_000_000;
+                                cfg4.budget = if (1_000..6_000).contains(&n) {
+                                    64_000_000
+                                } else {
+                                    32_000_000
+                                };
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,

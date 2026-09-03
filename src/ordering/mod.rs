@@ -1506,6 +1506,47 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             let f = flops_of(&scoring_pat, &candidate);
             if f < incumbent_flops {
                 best_perm = candidate;
+
+                // Chained terminal pass 2: runs ONLY on medium matrices (n < 10_000)
+                // that strictly improved in the first terminal pass. Uses unaliased
+                // round = 6 and a small 4M operation cap (2 blocks x 2M ops) on the
+                // newly uncovered elimination tree.
+                if n < 10_000 && nnz <= 100_000 {
+                    let permuted2 = permute_pattern(&scoring_pat, &best_perm);
+                    let etree2 = EliminationTree::from_pattern(&permuted2);
+                    let post2 = etree2.postorder();
+                    let mut candidate2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
+                    let post_pattern2 = permute_pattern(&scoring_pat, &candidate2);
+                    let post_etree2 = EliminationTree::from_pattern(&post_pattern2);
+                    let counts2: Vec<u32> = column_counts_gnp(&post_pattern2, &post_etree2)
+                        .into_iter()
+                        .map(|c| c as u32)
+                        .collect();
+                    let parent2: Vec<i32> = post_etree2
+                        .parent
+                        .iter()
+                        .map(|p| p.map_or(-1, |j| j as i32))
+                        .collect();
+                    let mut cfg2 = terminal_deep_subtree_cfg(n);
+                    cfg2.round = 6;
+                    cfg2.max_blocks = 4;
+                    cfg2.budget = 4_000_000;
+                    let improved2 = rgreedy::subtree_refine(
+                        n,
+                        &pattern.col_ptr,
+                        &pattern.row_idx,
+                        &mut candidate2,
+                        &counts2,
+                        &parent2,
+                        cfg2,
+                    );
+                    if improved2 > 0 && is_bijection(&candidate2, n) {
+                        let f2 = flops_of(&scoring_pat, &candidate2);
+                        if f2 < f {
+                            best_perm = candidate2;
+                        }
+                    }
+                }
             }
         }
     }

@@ -1686,3 +1686,71 @@ fn probe_lt1k() {
         println!("ROW\t{name}\t{ratio:.6}");
     }
 }
+
+/// Bucket-scoped probe for the two LARGE buckets (`1k_10k` + `gt_10k`, the
+/// 0.30 + 0.40 = 0.70 of score weight that 0040's lt_1k sweep did not touch).
+/// Mirrors `probe_lt1k`: per-bucket geomeans, worst order() time restricted to
+/// the probed matrices, and a per-matrix ROW dump so disjoint-halves /
+/// drop-top-k robustness can be computed offline.
+#[test]
+#[ignore]
+fn probe_ge1k() {
+    let corpus = crate::corpus::corpus();
+    let mut log_sums = [0.0f64; 2];
+    let mut counts = [0usize; 2];
+    let mut worst = 0.0f64;
+    let mut worst_name = String::new();
+    let mut ties = [0usize; 2];
+    let mut rows: Vec<(String, usize, f64)> = Vec::new();
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n < 1_000 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+
+        let t0 = Instant::now();
+        let perm = order(pat);
+        let secs = t0.elapsed().as_secs_f64();
+        let ratio = flops_of(&sp, &perm) as f64 / base;
+
+        // 0 => 1k_10k, 1 => gt_10k
+        let b = if n < 10_000 { 0 } else { 1 };
+        log_sums[b] += ratio.ln();
+        counts[b] += 1;
+        if ratio >= 0.9999 {
+            ties[b] += 1;
+        }
+        rows.push((name.clone(), b, ratio));
+        if secs > worst {
+            worst = secs;
+            worst_name = name.clone();
+        }
+    }
+
+    let mid = (log_sums[0] / counts[0] as f64).exp();
+    let big = (log_sums[1] / counts[1] as f64).exp();
+    println!("\nMID_GEOMEAN = {mid:.6}  (count {}, ties {})", counts[0], ties[0]);
+    println!("BIG_GEOMEAN = {big:.6}  (count {}, ties {})", counts[1], ties[1]);
+    // lt_1k is untouched by an n>=1000-only edit, so 0.30*mid + 0.40*big moves
+    // by exactly the score delta.
+    println!("PARTIAL_WEIGHTED = {:.6}", 0.30 * mid + 0.40 * big);
+    println!("GE1K_WORST = {worst:.3} s on {worst_name}");
+
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+    println!("--- GE1K rows ---");
+    for (name, b, ratio) in &rows {
+        println!("ROW\t{name}\t{b}\t{ratio:.6}");
+    }
+}

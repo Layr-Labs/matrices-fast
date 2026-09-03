@@ -376,12 +376,17 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
     min_s: 32,
     max_s: 384,
     max_sub: 1_200,
-    max_blocks: 32,
-    budget: 1_000_000,
+    max_blocks: 4,
+    budget: 8_000_000,
     streams: 1,
     rank_blocks: true,
     round: 0,
 };
+// 0040 found max_s 384 too high for the lt_1k subtree chain (256 optimal
+// there). A dedicated `1k_10k`+`gt_10k` probe (probe_ge1k) measured the
+// opposite sign for the large buckets: max_s 256 WORSENS the weighted
+// partial (0.30*mid + 0.40*big) 0.581319 -> 0.581889 — bucket0 0.875176 ->
+// 0.874198 but bucket1 0.796916 -> 0.799074 — so 384 stays.
 
 /// Lower bound of the bounded subtree-refinement chain.
 ///
@@ -401,20 +406,6 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 /// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
 const SUBTREE_MIN_N: usize = 64;
 
-/// Block-size cap for the `1k_10k` tier of the subtree chain.
-///
-/// The cap on how large a searched block may be wants to SCALE WITH GRAPH SIZE,
-/// and one global value cannot serve every bucket. Sweeping the shared
-/// `SUBTREE_CFG.max_s` showed 256 helps `1k_10k` (0.8752 -> 0.8742) while
-/// HURTING `gt_10k` (0.7969 -> 0.7991), and 512 hurts both. So the large tier
-/// keeps the 384 that measured best for it, small graphs use 256
-/// ([0040]), and the middle bucket gets its own value swept here:
-/// 384 -> 0.849487, 256 -> 0.849194, 192 -> 0.849097, 160 -> 0.849117,
-/// **128 -> 0.848955**, 112 -> 0.849046, 96 -> 0.849104, 64 -> 0.849307.
-/// The 96-192 basin is robust on disjoint corpus halves and drop-top-3; 128 is
-/// its deepest point.
-const MID_MAX_S: usize = 128;
-
 /// Per-matrix base config for one chain round. On a short elimination tree the
 /// default `min_s = 32` admits almost no blocks, so drop the block floor to 16
 /// below `n = 1_000` — the same floor the terminal deep pass already uses.
@@ -432,13 +423,6 @@ fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
         cfg.max_s = 256;
         cfg.max_blocks = 16;
         cfg.budget = 2_000_000;
-    } else if n < 10_000 {
-        // The block cap wants to SCALE WITH GRAPH SIZE. Sweeping the shared
-        // SUBTREE_CFG.max_s showed 256 helps 1k_10k (0.8752 -> 0.8742) but hurts
-        // gt_10k (0.7969 -> 0.7991), and 512 hurts both -- i.e. one global value
-        // cannot serve both. Give the middle bucket its own cap and leave the
-        // large tier on the 384 that measured best for it.
-        cfg.max_s = MID_MAX_S;
     }
     cfg
 }
@@ -1389,6 +1373,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 cfg2.round = 1;
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
+                cfg2.budget = 2_000_000;
                 let improved2 = rgreedy::subtree_refine(
 
                     n,
@@ -1435,6 +1420,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         cfg3.round = 1;
                         cfg3.max_blocks = 32;
                         cfg3.min_s = 16;
+                        cfg3.budget = 2_000_000;
                         cfg3.max_s = 512;
                         let improved3 = rgreedy::subtree_refine(
                             n,
@@ -1479,6 +1465,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 cfg4.round = 3;
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
+                                cfg4.budget = 2_000_000;
                                 cfg4.max_s = 768;
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
@@ -1520,6 +1507,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         cfg5.round = 4;
                                         cfg5.max_blocks = 32;
                                         cfg5.min_s = 16;
+                                        cfg5.budget = 2_000_000;
                                         cfg5.max_s = 768;
                                         let improved5 = rgreedy::subtree_refine(
                                             n,

@@ -4,20 +4,13 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best locally verified candidate score: **0.848955** (weighted geomean flop
-  ratio vs AMD; fill **0.947530**), dev corpus **300** matrices, 2026-09-03
-  ([0041](experiments/0041-size-tiered-block-cap.md): the block-size cap tiered
-  by graph size). Base is our own promoted frontier `344a5d2`
-  (submission `26932eba`, hidden **0.874601**), which measures 0.849487 here.
-- Per bucket: lt_1k 0.893893 (147) · 1k_10k **0.873403** (108) ·
+- Best locally verified candidate score: **0.849487** (weighted geomean flop
+  ratio vs AMD), dev corpus **300** matrices, 2026-09-03
+  ([0040](experiments/0040-lt1k-block-size-sweep.md): the `lt_1k` block-size cap
+  swept from 512 to 256). Base is our own promoted frontier `1deddca`
+  (submission `a43ed612`, hidden **0.874999**), which measures 0.849801 here.
+- Per bucket: lt_1k **0.893893** (147) · 1k_10k 0.875176 (108) ·
   gt_10k 0.796916 (45).
-- **`max_s` (the searched-block size cap) is the highest-yield knob found so far,
-  and it is a FUNCTION OF GRAPH SIZE, not a constant.** One global value cannot
-  serve every bucket: lowering the shared cap to 256 improves `1k_10k` while
-  HURTING `gt_10k`. Current tiers — `n < 1k` → 256, `1k-10k` → 128, `>= 10k` →
-  384. Two sweeps (0040, 0041) took the score 0.849801 → 0.848955 on this knob
-  alone, and both were also timing-NEUTRAL-or-better, because a smaller cap does
-  less work per block.
 - **`lt_1k` TRANSLATES TO THE HIDDEN CORPUS BETTER THAN DEV SUGGESTS.**
   [0038](experiments/0038-subtree-chain-into-lt1k.md) moved dev by 4.24 bips and
   the hidden score by **5.6 bips** — a ~1.32x translation, where the only prior
@@ -149,7 +142,6 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0038](experiments/0038-subtree-chain-into-lt1k.md) — The subtree chain was gated at `n >= 1_000` from 0021 onward, so the whole `lt_1k` bucket never saw the technique that moved the other two. `SUBTREE_MIN_N = 64`, a reallocated small-graph config (8 deep blocks x 4M = the same 32M ceiling), and a second stream on the `n <= 1_000` exact search. 0.850594 → **0.850167**; 17 better / 0 worse / 283 identical; `lt_1k` 0.8965 → 0.8951 with the other buckets unchanged. WIN.
 - [0039](experiments/0039-tie-breaker-battery-negative.md) — 16 separator/min-fill candidates x 31 surviving ties, 496 measurements: **zero wins**, per-candidate minimum ratio exactly 1.0000. METIS on `faclay75` is 2.23x AMD and takes 14.7 s; Scotch returns 9519x; KaHIP 38-48 s. **NEGATIVE**, and it closes the "big tied matrices" open question — the partitioner gates protect the run rather than cost score.
 - [0040](experiments/0040-lt1k-block-size-sweep.md) — swept the `lt_1k` small-graph config inside its fixed 32M ceiling. **`max_s` (the cap on searched block size) is the dominant knob and 0038 had it 2x too high**: 512 → 256 takes the bucket 0.894939 → 0.893893, score 0.849801 → **0.849487**, AND drops the corpus worst `order()` 1.774 → 1.610 s. 224/256/288 form a plateau (all robust on disjoint halves and drop-top-3) while 320/384 fail drop-top-3. `min_s` below 16 is a no-op. WIN.
-- [0041](experiments/0041-size-tiered-block-cap.md) — the block cap must SCALE WITH GRAPH SIZE. Sweeping the shared `SUBTREE_CFG.max_s` showed 256 helps `1k_10k` (0.8752→0.8742) but HURTS `gt_10k` (0.7969→0.7991) and 512 hurts both, so no single value serves all buckets. Gave `1k_10k` its own `MID_MAX_S`; swept it to **128** (basin 96-192, all robust on halves + drop-top-3). `1k_10k` 0.875176 → **0.873403**, score 0.849487 → **0.848955**; `lt_1k` and `gt_10k` byte-identical. WIN.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

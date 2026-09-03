@@ -123,3 +123,17 @@ it, rather than deleting it — a resolved question is a useful signpost.
       Every absolute second in `memory/` is box-relative. A revision judged safe on
       a fast box can be at 85% of the cap on a slow one — which is the most likely
       mechanism behind the three hidden-cap failures in 0025.
+
+- [x] **RESOLVED — sweep the small-graph reallocation.** Done across
+      [0040](experiments/0040-lt1k-block-size-sweep.md)-[0042](experiments/0042-tier-block-allocation.md).
+      Both axes (`max_s`, and blocks x budget) are now tiered by size class and
+      swept. 0.849801 → 0.847732 with the 32M ceiling untouched. Treat this vein
+      as exhausted unless a new tier boundary is introduced.
+- [ ] **`min_s` for the two upper tiers.** Still 32 for `n >= 1000`, never swept
+      there. Below `n = 1000` it is 16 and 0040 measured 8 as a byte-for-byte
+      no-op, so the sensitivity may be low — but it is untested above 1000.
+- [ ] **`max_sub` (1_200) has never been touched at any size.**
+- [ ] **A `gt_10k` dev→hidden calibration point.** `lt_1k` translates at ~1.3x
+      and `1k_10k` at ~0.55x (see index). `gt_10k` carries 0.40 of the weight and
+      has no measured translation at all, so its dev deltas cannot be converted
+      into expected graded deltas yet.

@@ -368,6 +368,18 @@ const RELABEL_MAX_RESTARTS: usize = 24;
 /// a huge sparse one is cheap), so an `n` cutoff would bound the wrong quantity.
 const RELABEL_AMF_MAX_NNZ: usize = 200_000;
 
+#[cfg(test)]
+const SUBTREE_SEARCH_WORK_LIMIT: i64 = 32_000_000;
+const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
+    min_s: 32,
+    max_s: 384,
+    max_sub: 1_200,
+    max_blocks: 32,
+    budget: 1_000_000,
+    streams: 1,
+    rank_blocks: true,
+    round: 0,
+};
 
 /// Deterministic 64-bit mixer (SplitMix64). Used only to derive relabelings from
 /// a fixed seed, so every run produces the identical sequence — the determinism
@@ -1215,7 +1227,48 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         ) {
             let f = flops_of(&scoring_pat, &cand);
             if f < best_flops {
+                best_flops = f;
                 best_perm = cand;
+            }
+        }
+    }
+
+    // Search bounded, disjoint blocks of the incumbent elimination tree. An
+    // etree postorder makes each subtree contiguous. The exact local search is
+    // capped at 32 blocks and one fixed 1M-operation stream per block, for a
+    // 32M matrix-wide requested-work ceiling. Whole-pattern setup and scoring
+    // stay inside the measured corpus envelope rather than running on
+    // unbounded hidden inputs.
+    if (1_000..=350_000).contains(&n) && nnz <= 1_500_000 {
+        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let improved = rgreedy::subtree_refine(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &mut candidate,
+            &counts,
+            &parent,
+            SUBTREE_CFG,
+        );
+        if improved > 0 && is_bijection(&candidate, n) {
+            let f = flops_of(&scoring_pat, &candidate);
+            if f < best_flops {
+                best_perm = candidate;
             }
         }
     }
@@ -2497,5 +2550,44 @@ mod tests {
         let amd_flops = flops_of(&scoring_pat, &amd);
         let ours_flops = flops_of(&scoring_pat, &order(&pat));
         assert!(ours_flops <= amd_flops, "ours {ours_flops} > amd {amd_flops}");
+    }
+
+    #[test]
+    fn order_reduces_large_pooling_fixture() {
+        let (_, pat) = crate::corpus::corpus()
+            .into_iter()
+            .find(|(name, _)| name == "pooling_sppc1pq")
+            .expect("development fixture");
+        let n = pat.n;
+        let col_ptr_i32: Vec<i32> = pat.col_ptr.iter().map(|&x| x as i32).collect();
+        let row_idx_i32: Vec<i32> = pat.row_idx.iter().map(|&x| x as i32).collect();
+        let core =
+            feral_ordering_core::CscPattern::new(n, &col_ptr_i32, &row_idx_i32).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let scoring_pat = ScoringPattern {
+            n,
+            col_ptr: pat.col_ptr.clone(),
+            row_idx: pat.row_idx.clone(),
+        };
+        let amd_flops = flops_of(&scoring_pat, &amd);
+        let ours_flops = flops_of(&scoring_pat, &order(&pat));
+        assert!(
+            (ours_flops as u128) * 4 < amd_flops as u128,
+            "expected ratio below 0.25, got {ours_flops}/{amd_flops}"
+        );
+    }
+
+    #[test]
+    fn subtree_config_stays_within_matrix_work_limit() {
+        let requested_budget = SUBTREE_CFG
+            .budget
+            .saturating_mul(SUBTREE_CFG.max_blocks as i64)
+            .saturating_mul(SUBTREE_CFG.streams.max(1) as i64);
+
+        assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
     }
 }

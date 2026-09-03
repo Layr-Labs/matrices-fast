@@ -4,6 +4,13 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
+- Best locally verified candidate score: **0.849309** (fill **0.947617**) on all
+  300 dev matrices, 2026-09-03. The fixed-work small-subtree configuration is
+  reallocated to `max_s=256`, 16 blocks x 2M operations, then a terminal
+  deterministic exact-search cascade runs only for `n <= 1000 && nnz <= 30000`.
+  Per bucket: **0.893298 / 0.875176 / 0.796916**; the two larger buckets are
+  exactly unchanged from `1deddca`. See
+  [0040](experiments/0040-terminal-small-exact-cascade.md).
 - Best locally verified candidate score: **0.850370** (weighted geomean flop
   ratio vs AMD; fill tiebreak **0.948420**), dev corpus **300** matrices,
   2026-09-03 ([0036](experiments/0036-multiround-cascading-terminal-subtree-refinement.md):
@@ -145,6 +152,11 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0025](experiments/0025-adaptive-terminal-deep-subtree-search.md) — Both 32M and 16M additive terminal passes failed the hidden 2 s cap. The lower-work retry replaces the frontier's 24M terminal pass with at most 16M: 4×4M below 10k vertices, 8×2M above. Frontier source 0.851055 → **0.850594**; worst local `order()` 0.829 s (2026-09-03).
 - [0038](experiments/0038-subtree-chain-into-lt1k.md) — The subtree chain was gated at `n >= 1_000` from 0021 onward, so the whole `lt_1k` bucket never saw the technique that moved the other two. `SUBTREE_MIN_N = 64`, a reallocated small-graph config (8 deep blocks x 4M = the same 32M ceiling), and a second stream on the `n <= 1_000` exact search. 0.850594 → **0.850167**; 17 better / 0 worse / 283 identical; `lt_1k` 0.8965 → 0.8951 with the other buckets unchanged. WIN.
 - [0039](experiments/0039-tie-breaker-battery-negative.md) — 16 separator/min-fill candidates x 31 surviving ties, 496 measurements: **zero wins**, per-candidate minimum ratio exactly 1.0000. METIS on `faclay75` is 2.23x AMD and takes 14.7 s; Scotch returns 9519x; KaHIP 38-48 s. **NEGATIVE**, and it closes the "big tied matrices" open question — the partitioner gates protect the run rather than cost score.
+- [0040](experiments/0040-terminal-small-exact-cascade.md) — Reallocate the
+  small subtree budget to `max_s=256`, 16 blocks x 2M, then run deterministic
+  whole-graph exact search after the complete promoted pipeline, with a second
+  salted parallel round conditioned on a strict first-round win. **0.849801 →
+  0.849309**, entirely in `lt_1k`; full trusted 300-matrix run passes.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

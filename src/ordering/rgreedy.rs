@@ -905,9 +905,8 @@ pub(crate) fn search_par(
     budget: i64,
     rng_seed: u64,
 ) -> Option<(Vec<usize>, u64)> {
-    let _ = rng_seed;
     let specs: [(u64, Params, i64); 4] =
-        std::array::from_fn(|k| (stream_rng(k), stream_params(k), budget));
+        std::array::from_fn(|k| (stream_rng(k) ^ rng_seed, stream_params(k), budget));
     search_par_specs(n, col_ptr, row_idx, seed, seed_flops, specs)
 }
 

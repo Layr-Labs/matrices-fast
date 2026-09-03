@@ -408,16 +408,17 @@ fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     if n < 1_000 {
         // Small graphs get the SAME 32M requested-work ceiling as everywhere
-        // else (blocks x budget x streams), just spent as FEWER, DEEPER blocks:
-        // a short elimination tree has few subtrees, so 32 shallow blocks mostly
-        // find nothing, while 8 deep ones actually search. `min_s` drops to 16
-        // for the same reason (the default 32 admits almost no blocks here).
+        // else (blocks x budget x streams), reallocated across 16 bounded
+        // blocks. A measured 15-point sweep found that capping small-tree
+        // blocks at 256 spreads work more effectively than letting a 512-node
+        // block consume the search allocation. `min_s` drops to 16 because the
+        // default 32 admits almost no blocks on short trees.
         // This is a REALLOCATION, not an increase - the nominal ceiling is
         // unchanged, which is what kept 0022 inside the cap after 0021 blew it.
         cfg.min_s = 16;
-        cfg.max_s = 512;
-        cfg.max_blocks = 8;
-        cfg.budget = 4_000_000;
+        cfg.max_s = 256;
+        cfg.max_blocks = 16;
+        cfg.budget = 2_000_000;
     }
     cfg
 }
@@ -1686,6 +1687,74 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             let f = flops_of(&scoring_pat, &cand);
             if f < best_flops {
                 best_perm = cand;
+            }
+        }
+    }
+
+    // Final small-graph exact search. Keeping these trajectories after every
+    // shipped refinement preserves the complete frontier pipeline as the
+    // incumbent, rather than letting an early improvement steer later subtree
+    // passes into a different basin. The serial draw is followed by four
+    // deterministic trajectories in parallel; all are pattern-only and
+    // operation-bounded, and final acceptance is by exact flops.
+    if n <= 1_000 && nnz <= 30_000 {
+        if let Some((cand, _)) = rgreedy::search(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            best_flops,
+            50_000_000,
+            0x8543_4123_4A92_BC10,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = flops_of(&scoring_pat, &cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
+            }
+        }
+
+        let mut parallel_improved = false;
+        if let Some((cand, _)) = rgreedy::search_par(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            best_flops,
+            100_000_000,
+            0,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = flops_of(&scoring_pat, &cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                    parallel_improved = true;
+                }
+            }
+        }
+
+        // A strict first-round win is evidence that this incumbent still has
+        // useful nearby basins. Search it once more with independent fixed
+        // streams; matrices where round one stalls pay none of this work.
+        if parallel_improved {
+            if let Some((cand, _)) = rgreedy::search_par(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                100_000_000,
+                0xA076_1D64_78BD_642F,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_perm = cand;
+                    }
+                }
             }
         }
     }

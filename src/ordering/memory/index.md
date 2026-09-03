@@ -4,14 +4,14 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best hidden-safe candidate score: **0.852938** (weighted geomean flop ratio
-  vs AMD; fill tiebreak **0.950102**), dev corpus **300** matrices, 2026-09-02
-  ([0022](experiments/0022-bounded-subtree-work.md), 32M matrix-wide requested
-  search work). Accepted local base: 0.859116 / fill 0.955319; current promoted
-  hidden score: 0.880467. The lower public score 0.851513 from 0021 is invalid
-  because its hidden run exceeded the 2 s cap.
-- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.8803** (108) ·
-  gt_10k **0.7997** (45).
+- Best hidden-safe candidate score: **0.851642** (weighted geomean flop ratio
+  vs AMD; fill tiebreak **0.949056**), dev corpus **300** matrices, 2026-09-03
+  ([0023](experiments/0023-subtree-round-3-chain.md): subtree round-3 chain on
+  the hybridnoise round-2 base, widened block window max_s 512).
+  Parent (promoted frontier `6fb4842`): 0.852246 / 0.950344; current promoted
+  hidden score: 0.877695.
+- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.878657** (108) ·
+  gt_10k **0.7977** (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -112,6 +112,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0020](experiments/0020-medium-exact-search.md) — Two bounded serial exact-search stages on `1,000 < n <= 6,000`, `nnz <= 30,000`, followed by pair descent when its existing gate allows it. Synced baseline 0.860780 → **0.859116**. WIN.
 - [0021](experiments/0021-exact-subtree-refinement.md) — Exact search over at most 32 ranked, disjoint elimination-tree subtrees with two fixed streams. 0.859116 → **0.851513** publicly, but the hidden run exceeded the 2 s matrix cap. FAILED.
 - [0022](experiments/0022-bounded-subtree-work.md) — Cap subtree search at 32 blocks × one stream × 1M requested operations. Accepted-base 0.859116 → **0.852938** publicly; hidden submission pending.
+- [0023](experiments/0023-subtree-round-3-chain.md) — Chained subtree round 3 (round=1, 32 blocks, min_s 16, **max_s 512**) after hybridnoise's conditional round 2. Frontier base 0.852246 → **0.851642**. SUBMITTED (2026-09-03).
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

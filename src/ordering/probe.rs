@@ -1353,3 +1353,138 @@ fn probe_relabel_search() {
         println!("  {name:36} n={n:<8} restarts={r:<3} {:+.2}%", d * 100.0);
     }
 }
+
+/// Round-3 / config-extension scan on top of the SHIPPED order() (which already
+/// runs subtree round 1 (round=0, 32 blocks) plus hybridnoise's conditional
+/// round 2 (round=1, min_s=16, 32 blocks)). Each variant is ONE extra
+/// `subtree_refine` call applied to the shipped incumbent — the exact
+/// production shape of a possible round 3, and a lower bound for any
+/// alternative-config replacement (which would start one round earlier).
+#[test]
+#[ignore]
+fn probe_round3_variants() {
+    let corpus = crate::corpus::corpus();
+    let mut base = ([0.0f64; 3], [0usize; 3]);
+    let n_variants = 4;
+    let mut vsum = vec![([0.0f64; 3], [0usize; 3]); n_variants];
+    let mut improved: Vec<Vec<(String, usize, usize, u64, u64)>> =
+        vec![Vec::new(); n_variants];
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let bkt = bucket(n);
+
+        let inc = order(pat);
+        let inc_flops = flops_of(&sp, &inc);
+        base.0[bkt] += (inc_flops as f64 / amd_flops as f64).ln();
+        base.1[bkt] += 1;
+
+        let in_gate = (1_000..=350_000).contains(&n) && nnz <= 1_500_000;
+        for vi in 0..n_variants {
+            let mut out_flops = inc_flops;
+            if in_gate {
+                // Rebuild postorder/counts/parent for the shipped incumbent, then
+                // run one extra subtree_refine with the variant config.
+                let permuted = permute_pattern(&sp, &inc);
+                let etree = EliminationTree::from_pattern(&permuted);
+                let post = etree.postorder();
+                let mut candidate: Vec<usize> = post.iter().map(|&j| inc[j]).collect();
+                let post_pattern = permute_pattern(&sp, &candidate);
+                let post_etree = EliminationTree::from_pattern(&post_pattern);
+                let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+                    .into_iter()
+                    .map(|c| c as u32)
+                    .collect();
+                let parent: Vec<i32> = post_etree
+                    .parent
+                    .iter()
+                    .map(|p| p.map_or(-1, |j| j as i32))
+                    .collect();
+                let mut cfg = SUBTREE_CFG;
+                cfg.round = 1;
+                match vi {
+                    0 => {
+                        cfg.max_blocks = 24;
+                        cfg.min_s = 16;
+                    }
+                    1 => {
+                        cfg.max_blocks = 32;
+                        cfg.min_s = 16;
+                    }
+                    2 => {
+                        cfg.max_blocks = 32;
+                        cfg.min_s = 16;
+                        cfg.max_s = 512;
+                    }
+                    3 => {
+                        cfg.max_blocks = 24;
+                        cfg.min_s = 16;
+                        cfg.streams = 2;
+                        cfg.budget = 500_000;
+                    }
+                    _ => unreachable!(),
+                }
+                let improved3 = rgreedy::subtree_refine(
+                    n,
+                    &pat.col_ptr,
+                    &pat.row_idx,
+                    &mut candidate,
+                    &counts,
+                    &parent,
+                    cfg,
+                );
+                if improved3 > 0 && is_bijection(&candidate, n) {
+                    let f = flops_of(&sp, &candidate);
+                    if f < out_flops {
+                        out_flops = f;
+                    }
+                }
+            }
+            let r = out_flops as f64 / amd_flops as f64;
+            vsum[vi].0[bkt] += r.ln();
+            vsum[vi].1[bkt] += 1;
+            if out_flops < inc_flops {
+                improved[vi].push((name.clone(), n, nnz, inc_flops, out_flops));
+            }
+        }
+    }
+
+    let base_score = aggregate(&base.0, &base.1);
+    println!("\nshipped order() (rounds 1+2): {base_score:.6}");
+    let labels = ["r3.24b.s16", "r3.32b.s16", "r3.32b.s16.ms512", "r3.24b.s16.2sx0.5"];
+    for (vi, lbl) in labels.iter().enumerate() {
+        let s = aggregate(&vsum[vi].0, &vsum[vi].1);
+        println!(
+            "{lbl:>16} score {s:.6}  d {:+.6}  improved {} matrices",
+            s - base_score,
+            improved[vi].len()
+        );
+        let mut rows = improved[vi].clone();
+        rows.sort_by(|a, b| {
+            (a.4 as f64 / a.3 as f64)
+                .partial_cmp(&(b.4 as f64 / b.3 as f64))
+                .unwrap()
+        });
+        for (name, n, nnz, cf, xf) in rows.iter().take(14) {
+            println!(
+                "    {name:34} n={n:<7} nnz={nnz:<8} {cf} -> {xf} ({:.4})",
+                *xf as f64 / *cf as f64
+            );
+        }
+    }
+}

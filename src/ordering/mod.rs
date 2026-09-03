@@ -1307,6 +1307,54 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     let f2 = flops_of(&scoring_pat, &candidate2);
                     if f2 < best_flops {
                         best_perm = candidate2;
+
+                        // Round 3: one more pass over the round-2 incumbent.
+                        // Round 1 is capped at 32 blocks x 1M on the ORIGINAL
+                        // gate; round 2 re-searches (round=1, 24 blocks) only
+                        // when round 1 improved. Round 3 continues the same
+                        // chain (24 -> 32 blocks here) and widens the block
+                        // window upward (min_s 16, max_s 512) so slightly
+                        // larger subtrees of the improved tree are searched.
+                        // Same 1M ops per block, so the whole phase stays a
+                        // deterministic bounded-work chain; strictly
+                        // monotonic (accepted only on fewer flops).
+                        let permuted3 = permute_pattern(&scoring_pat, &best_perm);
+                        let etree3 = EliminationTree::from_pattern(&permuted3);
+                        let post3 = etree3.postorder();
+                        let mut candidate3: Vec<usize> =
+                            post3.iter().map(|&j| best_perm[j]).collect();
+
+                        let post_pattern3 = permute_pattern(&scoring_pat, &candidate3);
+                        let post_etree3 = EliminationTree::from_pattern(&post_pattern3);
+                        let counts3: Vec<u32> = column_counts_gnp(&post_pattern3, &post_etree3)
+                            .into_iter()
+                            .map(|c| c as u32)
+                            .collect();
+                        let parent3: Vec<i32> = post_etree3
+                            .parent
+                            .iter()
+                            .map(|p| p.map_or(-1, |j| j as i32))
+                            .collect();
+                        let mut cfg3 = SUBTREE_CFG;
+                        cfg3.round = 1;
+                        cfg3.max_blocks = 32;
+                        cfg3.min_s = 16;
+                        cfg3.max_s = 512;
+                        let improved3 = rgreedy::subtree_refine(
+                            n,
+                            &pattern.col_ptr,
+                            &pattern.row_idx,
+                            &mut candidate3,
+                            &counts3,
+                            &parent3,
+                            cfg3,
+                        );
+                        if improved3 > 0 && is_bijection(&candidate3, n) {
+                            let f3 = flops_of(&scoring_pat, &candidate3);
+                            if f3 < best_flops {
+                                best_perm = candidate3;
+                            }
+                        }
                     }
                 }
             }

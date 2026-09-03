@@ -1453,9 +1453,47 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── POST-CHAIN TERMINAL CACHE-BOUNDED POLISH ────────────────────────────
+    // Subtree refinement modifies blocks in isolation. A bounded terminal
+    // adjacent-pair descent pass (2 sweeps, 24M budget) polishes vertex ordering
+    // across block boundaries for medium matrices (1k <= n <= 4k).
+    // A follow-up simplicial promotion pass (16M budget) advances newly emergent
+    // simplicial pivots. Bounded strictly to n <= 4,000 to fit entirely inside
+    // CPU cache and guarantee deterministic, sub-millisecond execution.
+    if (1_000..=4_000).contains(&n) && nnz > 0 && nnz <= 60_000 {
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            2,
+            24_000_000,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_perm = cand;
+            }
+        }
+
+        if nnz <= n * 24 {
+            if let Some(cand) = rgreedy::simplicial_promotion(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                16_000_000,
+            ) {
+                let f = flops_of(&scoring_pat, &cand);
+                if f < best_flops {
+                    best_perm = cand;
+                }
+            }
+        }
+    }
 
     best_perm
 }
+
 
 /// Minimum-FILL (minimum-deficiency) ordering (pure Rust, hard work budget).
 /// A greedy elimination heuristic ORTHOGONAL to minimum-degree: at every step it

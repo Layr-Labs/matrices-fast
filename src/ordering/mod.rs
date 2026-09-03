@@ -1382,18 +1382,18 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     .map(|p| p.map_or(-1, |j| j as i32))
                                     .collect();
                                 let mut cfg4 = SUBTREE_CFG;
-                                cfg4.round = 1;
+                                cfg4.round = 3;
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
                                 cfg4.max_s = 768;
                                 let improved4 = rgreedy::subtree_refine(
-                                    n,
-                                    &pattern.col_ptr,
-                                    &pattern.row_idx,
-                                    &mut candidate4,
-                                    &counts4,
-                                    &parent4,
-                                    cfg4,
+                                     n,
+                                     &pattern.col_ptr,
+                                     &pattern.row_idx,
+                                     &mut candidate4,
+                                     &counts4,
+                                     &parent4,
+                                     cfg4,
                                 );
                                 if improved4 > 0 && is_bijection(&candidate4, n) {
                                     let f4 = flops_of(&scoring_pat, &candidate4);
@@ -1403,7 +1403,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
 
                                         // Round 5: one more pass over the round-4
                                         // incumbent. Same block count (32), min_s 16,
-                                        // max_s 768, round = 2 seed diversification.
+                                        // max_s 768, round = 4 seed diversification.
                                         let permuted5 = permute_pattern(&scoring_pat, &best_perm);
                                         let etree5 = EliminationTree::from_pattern(&permuted5);
                                         let post5 = etree5.postorder();
@@ -1423,7 +1423,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                             .map(|p| p.map_or(-1, |j| j as i32))
                                             .collect();
                                         let mut cfg5 = SUBTREE_CFG;
-                                        cfg5.round = 2;
+                                        cfg5.round = 4;
                                         cfg5.max_blocks = 32;
                                         cfg5.min_s = 16;
                                         cfg5.max_s = 768;

@@ -1439,6 +1439,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         if improved5 > 0 && is_bijection(&candidate5, n) {
                                             let f5 = flops_of(&scoring_pat, &candidate5);
                                             if f5 < best_flops {
+                                                best_flops = f5;
                                                 best_perm = candidate5;
                                             }
                                         }
@@ -1453,6 +1454,53 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+
+    // Independent extra subtree pass on the *incumbent*, not nested inside the
+    // improvement-chain. Rounds 2-5 only run when the previous window improved;
+    // matrices whose first window is a no-op therefore never see a later seed
+    // or a different (min_s, max_s) band. This pass always searches the final
+    // best_perm with an unaliased round=6 multiplier and a mid-size window.
+    // Gated off the heaviest (n, nnz) pairs so it cannot move the 2 s worst case.
+    // Strictly monotonic: accepted only on a valid bijection with fewer flops.
+    if (1_000..=80_000).contains(&n) && nnz <= 250_000 {
+        let permuted_x = permute_pattern(&scoring_pat, &best_perm);
+        let etree_x = EliminationTree::from_pattern(&permuted_x);
+        let post_x = etree_x.postorder();
+        let mut candidate_x: Vec<usize> = post_x.iter().map(|&j| best_perm[j]).collect();
+
+        let post_pattern_x = permute_pattern(&scoring_pat, &candidate_x);
+        let post_etree_x = EliminationTree::from_pattern(&post_pattern_x);
+        let counts_x: Vec<u32> = column_counts_gnp(&post_pattern_x, &post_etree_x)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent_x: Vec<i32> = post_etree_x
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let mut cfg_x = SUBTREE_CFG;
+        cfg_x.round = 6;
+        cfg_x.max_blocks = 24;
+        cfg_x.min_s = 20;
+        cfg_x.max_s = 640;
+        let improved_x = rgreedy::subtree_refine(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &mut candidate_x,
+            &counts_x,
+            &parent_x,
+            cfg_x,
+        );
+        if improved_x > 0 && is_bijection(&candidate_x, n) {
+            let fx = flops_of(&scoring_pat, &candidate_x);
+            if fx < best_flops {
+                best_flops = fx;
+                best_perm = candidate_x;
+            }
+        }
+    }
 
     best_perm
 }

@@ -1100,20 +1100,21 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         && nnz > 0
         && nnz <= PAIR_DESCENT_MAX_NNZ
         && (n <= PAIR_DESCENT_MAX_N || pair_descent_ext);
+    let pair_descent_ops_budget = if pair_descent_ext && n > PAIR_DESCENT_MAX_N {
+        PAIR_DESCENT_EXT_OPS_BUDGET
+    } else {
+        PAIR_DESCENT_OPS_BUDGET
+    };
+    let medium_exact_gate = n > 1_000 && n <= 6_000 && nnz <= 30_000;
 
     if pair_descent_gate {
-        let budget = if pair_descent_ext && n > PAIR_DESCENT_MAX_N {
-            PAIR_DESCENT_EXT_OPS_BUDGET
-        } else {
-            PAIR_DESCENT_OPS_BUDGET
-        };
         if let Some(cand) = rgreedy::adjacent_pair_descent(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,
             &best_perm,
             PAIR_DESCENT_SWEEPS,
-            budget,
+            pair_descent_ops_budget,
         ) {
             let f = flops_of(&scoring_pat, &cand);
             if f < best_flops {
@@ -1174,6 +1175,47 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     best_flops = f;
                     best_perm = cand;
                 }
+            }
+        }
+    } else if medium_exact_gate {
+        // The same serial exact search above its original size gate. Two fixed
+        // nominal budgets keep the added work bounded; the full-corpus run
+        // moved 0.860780 -> 0.859116 after the final pair pass. The separate
+        // branch leaves the accepted n <= 1,000 path byte-for-byte unchanged.
+        for budget in [100_000_000, 50_000_000] {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                budget,
+                0xD1B5_4A32_D192_ED03,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
+    }
+
+    // On the medium exact-search gate, refine the new incumbent once more.
+    if pair_descent_gate && medium_exact_gate {
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            PAIR_DESCENT_SWEEPS,
+            pair_descent_ops_budget,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_perm = cand;
             }
         }
     }

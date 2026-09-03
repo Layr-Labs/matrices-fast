@@ -137,6 +137,19 @@ contributing matrix dropped**. Anything that flips sign between halves or dies u
 drop-1 is one lucky matrix. Run those columns before believing a delta — and before
 shipping something that would be corpus-overfitting by accident.
 
+## Exact search above the small tier
+
+The exact elimination-game search is also useful above its original `n <= 1,000`
+gate when work is limited by an operation count rather than elapsed time.
+[Experiment 0020](../experiments/0020-medium-exact-search.md) uses two serial
+stages with nominal budgets of 100M then 50M word operations on
+`1,000 < n <= 6,000 && nnz <= 30,000`. It lowered the synced 300-matrix score
+from 0.860780 to 0.859116, entirely in `1k_10k`. A 10,000-vertex extension
+added cost but no wins. The inherited guard permits 25% extra work and checks
+only at pivot boundaries. The useful rule is therefore to gate where a complete
+exact trajectory fits this deterministic bounded budget; a larger dimension
+limit alone does not add search depth.
+
 ## Links
 - [amd.md](amd.md) — the anchor, and why it is hard to beat here.
 - [nested-dissection.md](nested-dissection.md) — the separator family in the portfolio.
@@ -144,3 +157,4 @@ shipping something that would be corpus-overfitting by accident.
 - [experiments/0003](../experiments/0003-relabelled-amd-multistart.md) — the relabelled-AMD multi-start and the budget-as-gate pattern.
 - [experiments/0004](../experiments/0004-structured-relabelings.md) — why its search policy is settled, and the two-half / drop-1 robustness columns.
 - [experiments/0005](../experiments/0005-relabelled-amf-multistart.md) — the second lottery (relabelled AMF), and the general "relabel anything numbering-sensitive" recipe.
+- [experiments/0020](../experiments/0020-medium-exact-search.md) — bounded exact search in the medium sparse tier.

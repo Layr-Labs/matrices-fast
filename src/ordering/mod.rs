@@ -1253,6 +1253,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         for (budget, rng_seed) in [
             (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
             (50_000_000, 0xD1B5_4A32_D192_ED03),
+            (50_000_000, 0x27BB_2EE6_87B0_B0FD),
+            (50_000_000, 0x45A1_89C3_F208_7314),
         ] {
             if let Some((cand, _)) = rgreedy::search(
                 n,

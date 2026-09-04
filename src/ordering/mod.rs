@@ -414,7 +414,9 @@ const LARGE_BUDGET: i64 = 2_000_000;
 /// below `n = 1_000` — the same floor the terminal deep pass already uses.
 fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
-    if n < 64 {
+    // Tip opened n<64 after SUBTREE_MIN_N dropped to 24. One notch wider
+    // (n<80) keeps the same cheap 8×32×1M envelope on the extra tiny trees.
+    if n < 80 {
         cfg.min_s = 8;
         cfg.max_s = 32;
         cfg.max_blocks = 8;
@@ -1849,12 +1851,52 @@ fn minfill_order(pattern: &Pattern) -> Vec<i32> {
     }
 
     if fell_back {
-        // Budget exhausted: append remaining live vertices in ascending
-        // current-degree order (ties by index) → still a valid bijection.
-        let mut rest: Vec<usize> = (0..n).filter(|&v| !eliminated[v]).collect();
-        rest.sort_by(|&a, &b| adj[a].len().cmp(&adj[b].len()).then_with(|| a.cmp(&b)));
-        for v in rest {
-            order.push(v);
+        // Budget exhausted: the leftover live vertices are an induced
+        // subgraph. The promoted tip already replaced ND/NDFM degree-sort
+        // leaves with AMD on that subgraph; do the same here instead of
+        // appending by current degree. Degree-sort remains the fallback.
+        let rest: Vec<usize> = (0..n).filter(|&v| !eliminated[v]).collect();
+        let sz = rest.len();
+        let mut filled = false;
+        if (2..=80_000).contains(&sz) {
+            let mut local = vec![usize::MAX; n];
+            for (i, &u) in rest.iter().enumerate() {
+                local[u] = i;
+            }
+            let mut col_ptr: Vec<i32> = Vec::with_capacity(sz + 1);
+            let mut row_idx: Vec<i32> = Vec::new();
+            col_ptr.push(0);
+            for &u in &rest {
+                let start = row_idx.len();
+                for &w in &adj[u] {
+                    if eliminated[w] {
+                        continue;
+                    }
+                    let lw = local[w];
+                    if lw != usize::MAX && lw != local[u] {
+                        row_idx.push(lw as i32);
+                    }
+                }
+                row_idx[start..].sort_unstable();
+                col_ptr.push(row_idx.len() as i32);
+            }
+            if let Some(csub) = feral_ordering_core::CscPattern::new(sz, &col_ptr, &row_idx) {
+                if let Ok(sub) = feral_amd::amd_order(&csub) {
+                    if sub.len() == sz {
+                        for &li in &sub {
+                            order.push(rest[li as usize]);
+                        }
+                        filled = true;
+                    }
+                }
+            }
+        }
+        if !filled {
+            let mut rest = rest;
+            rest.sort_by(|&a, &b| adj[a].len().cmp(&adj[b].len()).then_with(|| a.cmp(&b)));
+            for v in rest {
+                order.push(v);
+            }
         }
     }
 

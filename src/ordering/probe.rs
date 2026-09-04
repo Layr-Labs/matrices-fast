@@ -1776,3 +1776,116 @@ fn probe_lt1k() {
         println!("ROW\t{name}\t{ratio:.6}");
     }
 }
+
+/// Bootstrap confidence intervals for the dev score (methodology probe).
+///
+/// Runs the shipped `order()` once per matrix, records per-matrix ln(ratio)
+/// by bucket, then resamples WITHIN buckets (fixed counts, deterministic
+/// xorshift stream) and re-aggregates with the harness-exact `aggregate`.
+/// Answers: how wide is the noise band around any dev score, and how much of
+/// it rides on the top few matrices (drop-top-k)? A candidate delta smaller
+/// than the CI half-width is indistinguishable from corpus luck.
+#[test]
+#[ignore]
+fn probe_bootstrap() {
+    // Deterministic xorshift64* (fixed seed — same output every run).
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x >> 12;
+            x ^= x << 25;
+            x ^= x >> 27;
+            self.0 = x;
+            x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+        }
+        fn below(&mut self, m: usize) -> usize {
+            ((self.next() >> 11) as usize * m) >> 53
+        }
+    }
+
+    let corpus = crate::corpus::corpus();
+    // per bucket: (name, ln ratio)
+    let mut rows: [Vec<(String, f64)>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let r = flops_of(&sp, &order(pat)) as f64 / base;
+        rows[bucket(n)].push((name.clone(), r.ln()));
+    }
+    let counts = [rows[0].len(), rows[1].len(), rows[2].len()];
+    println!("\nbucket counts: {counts:?}");
+    let sums = [
+        rows[0].iter().map(|(_, l)| l).sum(),
+        rows[1].iter().map(|(_, l)| l).sum(),
+        rows[2].iter().map(|(_, l)| l).sum(),
+    ];
+    let observed = aggregate(&sums, &counts);
+    println!("OBSERVED score = {observed:.6}");
+
+    // Drop-top-k: remove the k most negative ln ratios corpus-wide, recompute.
+    let mut all: Vec<(f64, usize)> = Vec::new();
+    for b in 0..3 {
+        for (_, l) in &rows[b] {
+            all.push((*l, b));
+        }
+    }
+    all.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    for k in [1usize, 3] {
+        let mut s = sums;
+        let mut c = counts;
+        for i in 0..k.min(all.len()) {
+            s[all[i].1] -= all[i].0;
+            c[all[i].1] -= 1;
+        }
+        println!("drop-top-{k} score = {:.6}", aggregate(&s, &c));
+    }
+    // Biggest single-matrix contributors (most negative ln ratio).
+    println!("--- top wins (name, bucket, ratio) ---");
+    for (l, b) in all.iter().take(8) {
+        let nm = rows[*b]
+            .iter()
+            .find(|(_, x)| *x == *l)
+            .map(|(n, _)| n.clone())
+            .unwrap_or_default();
+        println!("TOP\t{nm}\t{}\t{:.4}", BUCKET_NAMES[*b], l.exp());
+    }
+
+    // Bootstrap: resample within buckets, B replicates.
+    const B: usize = 2000;
+    let mut rng = Rng(0x1234_5678_9ABC_DEF0);
+    let mut dist = Vec::with_capacity(B);
+    for _ in 0..B {
+        let mut s = [0.0f64; 3];
+        for b in 0..3 {
+            for _ in 0..counts[b] {
+                s[b] += rows[b][rng.below(counts[b])].1;
+            }
+        }
+        dist.push(aggregate(&s, &counts));
+    }
+    dist.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let mean: f64 = dist.iter().sum::<f64>() / B as f64;
+    let lo = dist[(0.025 * B as f64) as usize];
+    let hi = dist[(0.975 * B as f64) as usize];
+    println!("BOOTSTRAP B={B} mean = {mean:.6}  95% CI = [{lo:.6}, {hi:.6}]");
+    println!(
+        "CI half-width = {:.6} ({:.2} bips); 1 bip = {:.6}",
+        (hi - lo) / 2.0,
+        (hi - lo) / 2.0 / observed * 10000.0,
+        observed * 0.0001
+    );
+}

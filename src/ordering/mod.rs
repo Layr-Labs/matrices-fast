@@ -584,6 +584,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     let amd = feral_amd::amd_order(&core).expect("feral AMD ordering failed");
     let mut best_perm: Vec<usize> = amd.into_iter().map(|x| x as usize).collect();
     let mut best_flops: u64 = flops_of(&scoring_pat, &best_perm);
+    let amd_flops = best_flops;
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
     let nnz = pattern.nnz();
@@ -854,7 +855,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // contribution to the exact sum of squared column counts Σ cⱼ².
     // Extend coverage to sparse small/medium structures (n<5000, density>=3)
     // excluded by the 10x gate; same 4 calls, same 300k nnz ceiling.
-    if nnz <= 300_000 && (nnz >= 10 * n || (n < 5_000 && nnz >= 3 * n)) {
+    if nnz <= 300_000 && (nnz >= 10 * n || (n < 5_000 && nnz >= 2 * n)) {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,
@@ -1497,6 +1498,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         // Round 5: one more pass over the round-4
                                         // incumbent. Same block count (32), min_s 16,
                                         // max_s 768, round = 4 seed diversification.
+                                        // Timing-fixed bundle: 32M only for
+                                        // 1k<=n<4k (half the stack's exposure);
+                                        // skip iff n>=100k AND still tied at AMD.
+                                        if n < 100_000 || best_flops != amd_flops {
                                         let permuted5 = permute_pattern(&scoring_pat, &best_perm);
                                         let etree5 = EliminationTree::from_pattern(&permuted5);
                                         let post5 = etree5.postorder();
@@ -1520,7 +1525,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         cfg5.max_blocks = 32;
                                         cfg5.min_s = 16;
                                         cfg5.max_s = 768;
-                                        cfg5.budget = 16_000_000;
+                                        cfg5.budget = if (1_000..4_000).contains(&n) {
+                                            32_000_000
+                                        } else {
+                                            16_000_000
+                                        };
                                         let improved5 = rgreedy::subtree_refine(
                                             n,
                                             &pattern.col_ptr,
@@ -1535,6 +1544,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                             if f5 < best_flops {
                                                 best_perm = candidate5;
                                             }
+                                        }
                                         }
                                     }
                                 }
@@ -1916,12 +1926,50 @@ fn ndfm_order(pattern: &Pattern) -> Vec<i32> {
     // Hard work budget: caps total per-subset scanning at O(n log n).
     let mut budget: i64 = 96 * n as i64 + 8192;
 
-    // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
-    // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, mut v: Vec<usize>| {
-        v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
-        for (t, u) in v.into_iter().enumerate() {
-            order[lo + t] = u;
+    // Fill `order[lo..lo+v.len()]` with `v` ordered by exact AMD on the leaf
+    // induced subgraph (textbook ND base case); separators and recursion are
+    // untouched. Falls back to ascending-degree on any construction failure.
+    // Leaves hold at most a few hundred vertices: microseconds per call.
+    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
+        let sz = v.len();
+        let mut local = vec![usize::MAX; n];
+        for (i, &u) in v.iter().enumerate() {
+            local[u] = i;
+        }
+        let mut col_ptr: Vec<i32> = Vec::with_capacity(sz + 1);
+        let mut row_idx: Vec<i32> = Vec::new();
+        col_ptr.push(0);
+        for &u in &v {
+            let start = row_idx.len();
+            for &w in &adj[u] {
+                let lw = local[w];
+                if lw != usize::MAX && lw != local[u] {
+                    row_idx.push(lw as i32);
+                }
+            }
+            row_idx[start..].sort_unstable();
+            col_ptr.push(row_idx.len() as i32);
+        }
+        for &u in &v {
+            local[u] = usize::MAX;
+        }
+        let mut done = false;
+        if let Some(csub) = feral_ordering_core::CscPattern::new(sz, &col_ptr, &row_idx) {
+            if let Ok(sub) = feral_amd::amd_order(&csub) {
+                if sub.len() == sz {
+                    for (t, &li) in sub.iter().enumerate() {
+                        order[lo + t] = v[li as usize];
+                    }
+                    done = true;
+                }
+            }
+        }
+        if !done {
+            let mut v = v;
+            v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
+            for (t, u) in v.into_iter().enumerate() {
+                order[lo + t] = u;
+            }
         }
     };
 
@@ -2154,12 +2202,50 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
     // (e.g. highly disconnected) input can drive quadratic blow-up.
     let mut budget: i64 = 64 * n as i64 + 4096;
 
-    // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
-    // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, mut v: Vec<usize>| {
-        v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
-        for (t, u) in v.into_iter().enumerate() {
-            order[lo + t] = u;
+    // Fill `order[lo..lo+v.len()]` with `v` ordered by exact AMD on the leaf
+    // induced subgraph (textbook ND base case); separators and recursion are
+    // untouched. Falls back to ascending-degree on any construction failure.
+    // Leaves hold at most a few hundred vertices: microseconds per call.
+    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
+        let sz = v.len();
+        let mut local = vec![usize::MAX; n];
+        for (i, &u) in v.iter().enumerate() {
+            local[u] = i;
+        }
+        let mut col_ptr: Vec<i32> = Vec::with_capacity(sz + 1);
+        let mut row_idx: Vec<i32> = Vec::new();
+        col_ptr.push(0);
+        for &u in &v {
+            let start = row_idx.len();
+            for &w in &adj[u] {
+                let lw = local[w];
+                if lw != usize::MAX && lw != local[u] {
+                    row_idx.push(lw as i32);
+                }
+            }
+            row_idx[start..].sort_unstable();
+            col_ptr.push(row_idx.len() as i32);
+        }
+        for &u in &v {
+            local[u] = usize::MAX;
+        }
+        let mut done = false;
+        if let Some(csub) = feral_ordering_core::CscPattern::new(sz, &col_ptr, &row_idx) {
+            if let Ok(sub) = feral_amd::amd_order(&csub) {
+                if sub.len() == sz {
+                    for (t, &li) in sub.iter().enumerate() {
+                        order[lo + t] = v[li as usize];
+                    }
+                    done = true;
+                }
+            }
+        }
+        if !done {
+            let mut v = v;
+            v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
+            for (t, u) in v.into_iter().enumerate() {
+                order[lo + t] = u;
+            }
         }
     };
 

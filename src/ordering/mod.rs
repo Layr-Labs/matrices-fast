@@ -375,7 +375,13 @@ const TERMINAL_SUBTREE_SEARCH_WORK_LIMIT: i64 = 16_000_000;
 const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
     min_s: 32,
     max_s: 384,
-    max_sub: 1_200,
+    // Ceiling on the size of a subtree the bounded exact search will accept.
+    // NEVER swept before 0054 despite being present since the chain was
+    // introduced: 600 -> 0.849836, 1_200 -> 0.845469, **2_400 -> 0.845004**,
+    // 3_600 and 4_800 -> 0.845004 (identical). The gain saturates at 2_400,
+    // i.e. that value admits every subtree the dev corpus has to offer and
+    // larger ceilings find nothing more.
+    max_sub: 2_400,
     max_blocks: 32,
     budget: 1_000_000,
     streams: 1,

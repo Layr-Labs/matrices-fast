@@ -41,6 +41,21 @@ first; keep it current whenever you add, rename, or retire a page.
   box — ~2x slower. Absolute seconds on pages 0002-0035 are NOT comparable to
   page 0036. Always re-measure the base on the current box before judging a
   revision's timing, and compare only within one run series.
+- **DEV→HIDDEN TRANSLATION DIFFERS BY BUCKET — AND IT INVERTS WHERE TO SPEND
+  EFFORT.** All four 2026-09-03 submissions promoted, giving one calibration
+  point per bucket:
+
+  | bucket | dev weight | dev→hidden | evidence |
+  |---|---|---|---|
+  | `lt_1k` | 0.30 | **~1.3x** | 0038: 4.24 bips dev → 5.6 hidden; 0040: 3.14 → 3.98 |
+  | `1k_10k` | 0.30 | ~0.55x | 0041: 5.3 → 2.9 (matches 0023's old 0.53x) |
+  | `gt_10k` | 0.40 | ~0.49x | 0042: 12.2 → 6.0 (mostly gt_10k) |
+
+  Dev substantially UNDER-weights `lt_1k` relative to the graded corpus: one
+  `lt_1k` bip is worth ~2.6x a `gt_10k` bip once graded, even though `gt_10k`
+  carries more dev weight. **Rank leads by `dev_delta x bucket_translation`, not
+  by dev delta.** Four points, one per bucket except `lt_1k`'s two — treat as a
+  strong hint, not a constant.
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -182,6 +197,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
   from 32M to 64M improved dev to **0.845411**, but submission `de541fe9`
   exceeded the hidden 2-second matrix cap. Global 64M is closed.
 - [0053](experiments/0053-selective-lower-medium-round4-depth.md) — Reclaim the
+- [0054](experiments/0054-max-sub-ceiling.md) — **`max_sub`, the subtree-size ceiling, had never been swept at any size in any experiment.** 600 → 0.849836, 1_200 → 0.845469, **2_400 → 0.845004**, and 3_600/4_800 reproduce 2_400 exactly (the gain saturates). Score 0.845469 → **0.845004**, all `gt_10k`. **Robustness is THIN: 2 movers, drop-top-3 = +0.000000** — shipped because the mechanism is a structural size threshold with no downside risk, but treat 4.65 bips as an upper bound. Also closes `min_s` as a DEAD KNOB at every size (16/32/64 byte-identical on `gt_10k`).
   score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
   retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;
   1k-10k worst observed call **0.661 s**. Submitted for hidden validation.

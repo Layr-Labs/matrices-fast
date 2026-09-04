@@ -59,3 +59,5 @@ round, so note the round if you know it.
 
 2026-09-05 | follow-up to 0056 | **OFFICIAL TIMEOUT:** submission `d17b89c8` passed remote setup/purity/sandbox checks but one hidden matrix exceeded 2 s; no hidden score or instance exposed.
 2026-09-05 | fbd1e62 dev 0.844594 -> **0.844195**, fill 0.944255 -> **0.944012** | exact four-pivot final replacement under the existing shared 128M/48M allowance plus atomic prechecks on the existing randomized-search cap | **FULL LOCAL PASS, official pending.** 300 matrices; 36 active tests; 62 better / 13 worse / 225 same vs base; worst0.987 s. A 25%-fewer-later-blocks control regressed and is excluded. See [0057](experiments/0057-exact-four-pivot-cleanup.md).
+
+2026-09-04 | 649c230 dev0.8441954058177199→0.8441955206763234 | exact sparse words, paired incumbent costs/cached scorer, immediate proven pair retention | FULL LOCAL PASS300; one10-flop regression,299 unchanged;39 tests. Prepared for transparent official assessment; no hidden prediction. See [0058](experiments/0058-exact-sparse-and-pair-retention.md).

@@ -147,6 +147,7 @@ pub(crate) struct Game<'a> {
     /// better (-0.000285 vs -0.000216).
     use_buckets: bool,
     nlist: Vec<u32>,
+    active_words: Vec<usize>,
     cand: Vec<u32>,
     tmp: Vec<u64>,
     /// Deterministic work counter, in word-operations. The ONLY budget signal —
@@ -239,6 +240,7 @@ impl<'a> Game<'a> {
             nlive: 0,
             nelim: n,
             nlist: Vec::with_capacity(n),
+            active_words: Vec::with_capacity(w),
             cand: Vec::with_capacity(n),
             tmp: vec![0u64; w],
             ops: 0,
@@ -316,8 +318,12 @@ impl<'a> Game<'a> {
         self.tmp.copy_from_slice(&self.adj[v * w..v * w + w]);
         // Materialize N(v).
         self.nlist.clear();
+        self.active_words.clear();
         for k in 0..w {
             let mut word = self.tmp[k];
+            if word != 0 {
+                self.active_words.push(k);
+            }
             while word != 0 {
                 let b = word.trailing_zeros() as usize;
                 word &= word - 1;
@@ -333,11 +339,23 @@ impl<'a> Game<'a> {
         for i in 0..self.nlist.len() {
             let u = self.nlist[i] as usize;
             let base = u * w;
-            let mut d = 0u32;
-            for k in 0..w {
-                let nv = self.adj[base + k] | self.tmp[k];
-                self.adj[base + k] = nv;
-                d += nv.count_ones();
+            let mut d;
+            if self.active_words.len() * 2 < w {
+                // Zero pivot words cannot add fill. Start with the exact old
+                // degree and count only bits newly inserted into this row.
+                d = self.deg[u];
+                for &k in &self.active_words {
+                    let old = self.adj[base + k];
+                    let added = self.tmp[k] & !old;
+                    self.adj[base + k] = old | self.tmp[k];
+                    d += added.count_ones();
+                }
+            } else {
+                d = 0;
+                for (row, &pivot) in self.adj[base..base + w].iter_mut().zip(&self.tmp) {
+                    *row |= pivot;
+                    d += row.count_ones();
+                }
             }
             // `tmp` contains u (u ∈ N(v)) and `adj[u]` contained v; both are
             // now set and both must go — hence the `-2`.
@@ -1047,60 +1065,56 @@ pub(crate) fn adjacent_pair_descent(
     let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
     let mut game = Game::new(n, &adj0)?;
     let mut cur = seed.to_vec();
-    let mut next = Vec::with_capacity(n);
     let mut changed_any = false;
 
     for sweep in 0..sweeps {
         game.reset();
         if game.ops > budget {
-            return None;
+            return changed_any.then_some(cur);
         }
-        next.clear();
 
         let mut k = 0usize;
         if sweep & 1 == 1 {
             let v = cur[0];
-            next.push(v);
             game.eliminate(v);
             if game.ops > budget {
-                return None;
+                return changed_any.then_some(cur);
             }
             k = 1;
         }
 
-        let mut changed = false;
         while k + 1 < n {
             let a = cur[k];
             let b = cur[k + 1];
             let adjacent = game.adj[a * game.w + (b >> 6)] & (1u64 << (b & 63)) != 0;
             let swap = adjacent && game.deg[b] < game.deg[a];
             let (first, second) = if swap { (b, a) } else { (a, b) };
-            changed |= swap;
-            next.push(first);
-            next.push(second);
+            if swap {
+                // Either pair orientation leaves the same residual graph after
+                // both pivots; the lower-degree-first choice strictly reduces
+                // this pair's cost. Commit the complete permutation immediately,
+                // so a budget exit can retain it even during the first sweep.
+                cur.swap(k, k + 1);
+                changed_any = true;
+            }
             game.eliminate(first);
             if game.ops > budget {
-                return None;
+                return changed_any.then_some(cur);
             }
             game.eliminate(second);
             if game.ops > budget {
-                return None;
+                return changed_any.then_some(cur);
             }
             k += 2;
         }
         if k < n {
             let v = cur[k];
-            next.push(v);
             game.eliminate(v);
             if game.ops > budget {
-                return None;
+                return changed_any.then_some(cur);
             }
         }
 
-        if changed {
-            changed_any = true;
-            std::mem::swap(&mut cur, &mut next);
-        }
     }
 
     changed_any.then_some(cur)
@@ -2467,5 +2481,236 @@ mod four_window_tests {
         }
         assert!(improvements > 0);
         println!("FOUR_CANONICAL improving_cases={improvements}");
+    }
+}
+
+#[cfg(test)]
+mod sparse_word_update_tests {
+    use super::Game;
+
+    #[test]
+    fn elimination_matches_explicit_fill_graph() {
+        for n in [1usize, 2, 63, 64, 65, 129, 257] {
+            for mode in 0..3 {
+                let w = n.div_ceil(64);
+                let mut adj = vec![0u64; n * w];
+                let mut reference = vec![vec![false; n]; n];
+                for a in 0..n {
+                    for b in a + 1..n {
+                        let edge = match mode {
+                            0 => b == a + 1,
+                            1 => (a * 17 + b * 31 + a * b) % 43 == 0,
+                            _ => (a + b) % 3 != 0,
+                        };
+                        if edge {
+                            reference[a][b] = true;
+                            reference[b][a] = true;
+                            adj[a * w + b / 64] |= 1 << (b % 64);
+                            adj[b * w + a / 64] |= 1 << (a % 64);
+                        }
+                    }
+                }
+                let mut game = Game::new(n, &adj).unwrap();
+                game.reset();
+                let mut live = vec![true; n];
+                // Alternating ends covers both low and high word positions.
+                for step in 0..n {
+                    let v = if step % 2 == 0 { step / 2 } else { n - 1 - step / 2 };
+                    let neighbors: Vec<_> = (0..n).filter(|&u| reference[v][u]).collect();
+                    let old_ops = game.ops;
+                    assert_eq!(game.eliminate(v), neighbors.len() as u64 + 1);
+                    assert_eq!(game.ops - old_ops,
+                        ((neighbors.len() + 1) * (3 * w + 6) + 24) as i64);
+                    for &a in &neighbors {
+                        for &b in &neighbors {
+                            if a != b { reference[a][b] = true; }
+                        }
+                        reference[a][v] = false;
+                    }
+                    reference[v].fill(false);
+                    live[v] = false;
+                    for a in 0..n {
+                        if live[a] {
+                            assert_eq!(game.deg[a] as usize,
+                                reference[a].iter().filter(|&&x| x).count());
+                        }
+                        for b in 0..n {
+                            assert_eq!(game.adj[a * w + b / 64] >> (b % 64) & 1 != 0,
+                                reference[a][b], "n={n} mode={mode} step={step} a={a} b={b}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bucketed_and_partial_games_match_sparse_reference() {
+        use std::collections::BTreeSet;
+        let n = 1537usize;
+        let w = n.div_ceil(64);
+        for nelim in [n, 65] {
+            let mut reference = vec![BTreeSet::new(); n];
+            for a in 0..n - 1 {
+                reference[a].insert(a + 1);
+                reference[a + 1].insert(a);
+            }
+            // Cross-word boundary neighbors receive fill but never become pivots
+            // in the partial game. Keep the graph sparse to bound test work.
+            for a in 0..65 {
+                for b in [128 + a, 768 + a, 1408 + a] {
+                    reference[a].insert(b);
+                    reference[b].insert(a);
+                }
+            }
+            let mut adj = vec![0u64; n * w];
+            for (a, neighbors) in reference.iter().enumerate() {
+                for &b in neighbors {
+                    adj[a * w + b / 64] |= 1 << (b % 64);
+                }
+            }
+            let mut game = Game::new_partial(n, &adj, nelim).unwrap();
+            assert!(game.use_buckets);
+            game.reset();
+            let mut live = vec![true; n];
+            for _ in 0..nelim.min(80) {
+                game.advance_mind();
+                let v = game.bhead[game.mind] as usize;
+                assert!(v < nelim && live[v]);
+                assert_eq!(game.mind, (0..nelim).filter(|&a| live[a])
+                    .map(|a| reference[a].len()).min().unwrap());
+                let neighbors: Vec<_> = reference[v].iter().copied().collect();
+                let old_ops = game.ops;
+                assert_eq!(game.eliminate(v), neighbors.len() as u64 + 1);
+                assert_eq!(game.ops - old_ops,
+                    ((neighbors.len() + 1) * (3 * w + 6) + 24) as i64);
+                for &a in &neighbors {
+                    for &b in &neighbors {
+                        if a != b { reference[a].insert(b); }
+                    }
+                    reference[a].remove(&v);
+                }
+                reference[v].clear();
+                live[v] = false;
+                for a in 0..n {
+                    assert_eq!(game.deg[a] as usize, reference[a].len());
+                    let mut observed = BTreeSet::new();
+                    for k in 0..w {
+                        let mut word = game.adj[a * w + k];
+                        while word != 0 {
+                            observed.insert(k * 64 + word.trailing_zeros() as usize);
+                            word &= word - 1;
+                        }
+                    }
+                    assert_eq!(observed, reference[a]);
+                }
+                let mut bucketed = vec![false; n];
+                for d in 0..game.bhead.len() {
+                    let mut at = game.bhead[d];
+                    let mut prev = -1;
+                    while at >= 0 {
+                        let a = at as usize;
+                        assert!(a < nelim && live[a] && !bucketed[a]);
+                        assert_eq!(game.deg[a] as usize, d);
+                        assert_eq!(game.bprev[a], prev);
+                        bucketed[a] = true;
+                        prev = at;
+                        at = game.bnext[a];
+                    }
+                }
+                assert_eq!(bucketed.iter().filter(|&&x| x).count(), game.nlive);
+                for a in 0..n {
+                    assert_eq!(bucketed[a], a < nelim && live[a]);
+                }
+            }
+            // Reset must restore both exact degrees and pivot eligibility.
+            game.reset();
+            assert_eq!(game.adj, adj);
+            assert_eq!(game.deg, game.deg0);
+            assert_eq!(game.nlive, nelim);
+        }
+    }
+
+
+    #[test]
+    fn pair_descent_preserves_proven_swaps_at_every_budget_cutpoint() {
+        fn eliminate(graph: &mut [Vec<bool>], v: usize) -> u64 {
+            let neighbors: Vec<_> = (0..graph.len()).filter(|&u| graph[v][u]).collect();
+            for &a in &neighbors {
+                for &b in &neighbors {
+                    if a != b { graph[a][b] = true; }
+                }
+                graph[a][v] = false;
+            }
+            graph[v].fill(false);
+            neighbors.len() as u64 + 1
+        }
+        fn score(graph: &[Vec<bool>], order: &[usize]) -> u64 {
+            let mut graph = graph.to_vec();
+            order.iter().map(|&v| {
+                let c = eliminate(&mut graph, v);
+                c * c
+            }).sum()
+        }
+        let n = 4;
+        // All 64 simple undirected four-vertex graphs, two pivot orders,
+        // and every integer budget spanning all three sweeps (<=678 ops).
+        for mask in 0..64 {
+            let mut original = vec![vec![false; n]; n];
+            let mut edge = 0;
+            for a in 0..n {
+                for b in a + 1..n {
+                    original[a][b] = mask & (1 << edge) != 0;
+                    original[b][a] = original[a][b];
+                    edge += 1;
+                }
+            }
+            let mut ptr = vec![0];
+            let mut rows = Vec::new();
+            for neighbors in &original {
+                rows.extend((0..n).filter(|&u| neighbors[u]));
+                ptr.push(rows.len());
+            }
+            for seed in [vec![0, 1, 2, 3], vec![3, 2, 1, 0]] {
+                let initial_score = score(&original, &seed);
+                // Independent full-sweep permutation reference using a bool graph.
+                let mut full = seed.clone();
+                for sweep in 0..3 {
+                    let mut graph = original.clone();
+                    if sweep % 2 == 1 { eliminate(&mut graph, full[0]); }
+                    let mut k = sweep % 2;
+                    while k + 1 < n {
+                        let a = full[k];
+                        let b = full[k + 1];
+                        if graph[a][b] && graph[b].iter().filter(|&&x| x).count()
+                            < graph[a].iter().filter(|&&x| x).count() {
+                            full.swap(k, k + 1);
+                        }
+                        eliminate(&mut graph, full[k]);
+                        eliminate(&mut graph, full[k + 1]);
+                        k += 2;
+                    }
+                }
+                let expected_full = (full != seed).then_some(full);
+                let mut previous_score = initial_score;
+                for budget in 0..=700 {
+                    let result = super::adjacent_pair_descent(n, &ptr, &rows,
+                        &seed, 3, budget);
+                    let cost = if let Some(order) = &result {
+                        let mut sorted = order.clone();
+                        sorted.sort_unstable();
+                        assert_eq!(sorted, vec![0, 1, 2, 3]);
+                        let cost = score(&original, order);
+                        assert!(cost < initial_score, "mask={mask} budget={budget}");
+                        cost
+                    } else { initial_score };
+                    assert!(cost <= previous_score, "mask={mask} budget={budget}");
+                    previous_score = cost;
+                    if budget == 700 { assert_eq!(result, expected_full); }
+                }
+            }
+        }
+        assert_eq!(super::adjacent_pair_descent(4, &[0,0,0,0,0], &[],
+            &[0,0,2,3], 3, 700), None);
     }
 }

@@ -1408,6 +1408,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 if improved2 > 0 && is_bijection(&candidate2, n) {
                     let f2 = flops_of(&scoring_pat, &candidate2);
                     if f2 < best_flops {
+                        best_flops = f2;
                         best_perm = candidate2;
 
                         // Round 3: one more pass over the round-2 incumbent.
@@ -1455,6 +1456,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         if improved3 > 0 && is_bijection(&candidate3, n) {
                             let f3 = flops_of(&scoring_pat, &candidate3);
                             if f3 < best_flops {
+                                best_flops = f3;
                                 best_perm = candidate3;
 
                                 // Round 4: one more pass over the round-3
@@ -1572,7 +1574,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // second used this narrow gate. Substitution makes total work lower than
     // the promoted frontier while retaining the stronger search allocation.
     if (SUBTREE_MIN_N..=80_000).contains(&n) && nnz <= 250_000 {
-        let incumbent_flops = flops_of(&scoring_pat, &best_perm);
+        let incumbent_flops = best_flops;
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();

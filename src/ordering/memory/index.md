@@ -204,3 +204,5 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.
+
+- [0058: Exact sparse updates and pair retention](experiments/0058-exact-sparse-and-pair-retention.md) — 649c230-based full300 pass; displayed0.844195→0.844196, exact delta+1.148586e-7;39 active tests. Prepared for official assessment without hidden-score prediction.

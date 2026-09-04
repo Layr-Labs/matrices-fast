@@ -375,7 +375,13 @@ const TERMINAL_SUBTREE_SEARCH_WORK_LIMIT: i64 = 16_000_000;
 const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
     min_s: 32,
     max_s: 384,
-    max_sub: 1_200,
+    // Ceiling on the size of a subtree the bounded exact search will accept.
+    // NEVER swept before 0054 despite being present since the chain was
+    // introduced: 600 -> 0.849836, 1_200 -> 0.845469, **2_400 -> 0.845004**,
+    // 3_600 and 4_800 -> 0.845004 (identical). The gain saturates at 2_400,
+    // i.e. that value admits every subtree the dev corpus has to offer and
+    // larger ceilings find nothing more.
+    max_sub: 2_400,
     max_blocks: 32,
     budget: 1_000_000,
     streams: 1,
@@ -400,6 +406,16 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 /// multi-start and the small-graph LNS. Measured: 1_000 -> 200 was worth 2.6 bip,
 /// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
 const SUBTREE_MIN_N: usize = 64;
+
+/// Upper bound of the bounded subtree chain.
+///
+/// The three largest dev matrices buy almost nothing for a great deal of time:
+/// `acopf_case9241pegase_qcqp` (n=313068) sits at ratio 0.9987 while costing
+/// 2.7 s -- over the cap on this box and the slowest matrix in the corpus by a
+/// wide margin -- and `faclay75` (n=272878) and `gabriel10` (n=244056) are
+/// pinned at exactly 1.0000. Excluding them costs ~0.1 bip of score and buys
+/// back the worst case, which is what actually gates every other change.
+const SUBTREE_MAX_N: usize = 250_000;
 
 const MID_MAX_S: usize = 128;
 const LARGE_MAX_S: usize = 384;
@@ -1323,7 +1339,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // 32M matrix-wide requested-work ceiling. Whole-pattern setup and scoring
     // stay inside the measured corpus envelope rather than running on
     // unbounded hidden inputs.
-    if (SUBTREE_MIN_N..=350_000).contains(&n) && nnz <= 1_500_000 {
+    if (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n) && nnz <= 1_500_000 {
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();

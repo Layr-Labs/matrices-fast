@@ -548,6 +548,10 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
 
     if max_deg * 50 > n && (100_000..=150_000).contains(&nnz) {
         base_r.min(4) // Hub guard (e.g. ringpack_30_2)
+    } else if n <= 1_000 && nnz <= 4_000 {
+        (1_200_000 / nnz).min(96) // Low-nnz tiny regime
+    } else if n <= 1_000 && nnz <= 5_000 {
+        (800_000 / nnz).min(64) // Low-nnz small regime
     } else if nnz <= 20_000 {
         (600_000 / nnz).min(48) // Low-nnz regime
     } else if nnz <= 150_000 && max_deg * 50 <= n {
@@ -1284,6 +1288,32 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     if f < best_flops {
                         best_flops = f;
                         best_perm = cand;
+                    }
+                }
+            }
+        }
+        if n <= 400 && nnz <= 8_000 {
+            for (budget, rng_seed) in [
+                (50_000_000i64, 0x8543_4123_4A5B_6C7Du64),
+                (50_000_000, 0x1B87_3593_2C4D_5E6F),
+                (50_000_000, 0x3E91_B742_95A8_C3D1),
+                (50_000_000, 0x6A09_E667_F3BC_C908),
+            ] {
+                if let Some((cand, _)) = rgreedy::search(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    best_flops,
+                    budget,
+                    rng_seed,
+                ) {
+                    if is_bijection(&cand, n) {
+                        let f = flops_of(&scoring_pat, &cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
+                        }
                     }
                 }
             }

@@ -3,6 +3,22 @@
 The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
+## Verified 2026-09-05 checkpoint
+
+- Public source `fbd1e62`: dev **0.844594**, fill **0.944255**.
+- Combined exact four-pivot terminal cleanup and atomic search-budget guards:
+  dev **0.844195**, fill **0.944012**; all 300 trusted cases and 36 active tests pass.
+  Isolated worst direct call **0.987 s**, versus **0.962 s** on the original baseline.
+- The earlier triple submission `d17b89c8` exceeded the hidden 2 s cap; no score.
+  The new guards enforce the existing Game counter, not total wall time.
+- [0057: exact four-pivot cleanup](experiments/0057-exact-four-pivot-cleanup.md)
+  records the new formula, fixed-work replacement, budget tests and exclusions.
+- [0056: exact triple cleanup](experiments/0056-exact-triple-cleanup.md) preserves
+  the preceding local experiment. Its subsequent official timeout is recorded above.
+- Official promoted frontier remains **0.870755** on a different hidden corpus;
+  this combined candidate's official result is pending submission/validation.
+  Older current-best entries below are historical and may lag their source.
+
 ## Current best
 - Best shippable locally verified candidate score: **0.849251** (fill
   **0.947647**) on all 300 dev matrices, 2026-09-03. On top of promoted

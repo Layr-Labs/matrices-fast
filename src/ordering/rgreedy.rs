@@ -424,6 +424,20 @@ struct Policy {
 }
 
 impl Game<'_> {
+    /// Check before an atomic primitive whose own counter charges afterward.
+    #[inline]
+    fn fits_ops(&self, cost: usize, cap: i64) -> bool {
+        i64::try_from(cost)
+            .ok()
+            .and_then(|cost| self.ops.checked_add(cost))
+            .is_some_and(|total| total <= cap)
+    }
+
+    #[inline]
+    fn elimination_ops(&self, v: usize) -> usize {
+        (self.deg[v] as usize + 1) * (3 * self.w + 6) + 24
+    }
+
     /// One randomized greedy run. `fixed` is a prefix of pivots replayed
     /// verbatim before randomization starts (the LNS operator); pass an empty
     /// slice for a from-scratch run. Returns `None` as soon as the partial
@@ -438,10 +452,16 @@ impl Game<'_> {
         hard_cap: i64,
         out: &mut Vec<usize>,
     ) -> Option<u64> {
-        self.reset();
         out.clear();
+        if !self.fits_ops(2 * self.n * self.w + 8 * self.n, hard_cap) {
+            return None;
+        }
+        self.reset();
         let mut f: u64 = 0;
         for &v in fixed {
+            if !self.fits_ops(self.elimination_ops(v), hard_cap) {
+                return None;
+            }
             let c = self.eliminate(v);
             f += c * c;
             out.push(v);
@@ -456,10 +476,15 @@ impl Game<'_> {
             // matrix a single run can cost several times what the last one did.
             // That is exactly how a locally-fine ordering phase blows a wall
             // clock cap on a hidden corpus, so the run is abandoned outright
-            // once total ops pass the cap. Abandoning costs only this run's
+            // before an atomic primitive exceeds the cap. Abandoning costs
+            // only this run's
             // work — the incumbent is untouched, and the phase as a whole is
             // still strictly-improving.
-            if self.ops > hard_cap {
+            // Degree lookup and candidate collection together charge at most
+            // 4*n word operations (scan path) or 3*n+6 (bucket path). Reserve
+            // a conservative bound before either traversal, then retain the
+            // existing exact charges so completed trajectories stay identical.
+            if !self.fits_ops(4 * self.n + 8, hard_cap) {
                 return None;
             }
             let dmin;
@@ -536,6 +561,10 @@ impl Game<'_> {
                     let mut cnt = 0u32;
                     let mut sel = cands[0];
                     for &v in &cands {
+                        let cost = (self.deg[v as usize] as usize + 1) * (2 * self.w + 4);
+                        if !self.fits_ops(cost, hard_cap) {
+                            return None;
+                        }
                         let d = self.deficiency(v as usize);
                         if d < bestdef {
                             bestdef = d;
@@ -554,6 +583,9 @@ impl Game<'_> {
                     let k = below(rng, self.cand.len() as u32) as usize;
                     pick = self.cand[k] as usize;
                 }
+            }
+            if !self.fits_ops(self.elimination_ops(pick), hard_cap) {
+                return None;
             }
             let c = self.eliminate(pick);
             f += c * c;
@@ -733,6 +765,9 @@ pub(crate) fn search_with_nelim(
             }
         }
         last_run = last_run.max(g.ops - before);
+        if g.ops == before {
+            break; // the next reset cannot fit; do not retry without progress
+        }
     }
 
     // ── Phase B: iterated local search around the incumbent ────────────────
@@ -789,6 +824,9 @@ pub(crate) fn search_with_nelim(
         let r = g.run(&taken[..p.min(taken.len())], pol, &mut rng, bound, hard_cap, &mut out);
         cur[wi] = taken;
         last_run = last_run.max(g.ops - before);
+        if g.ops == before {
+            break; // the next reset cannot fit; do not retry without progress
+        }
         match r {
             Some(f) => {
                 if f < best {
@@ -1068,6 +1106,499 @@ pub(crate) fn adjacent_pair_descent(
     changed_any.then_some(cur)
 }
 
+const TRIPLE_ORDERS: [[usize; 3]; 6] = [
+    [0, 1, 2],
+    [0, 2, 1],
+    [1, 0, 2],
+    [1, 2, 0],
+    [2, 0, 1],
+    [2, 1, 0],
+];
+
+/// Exact costs for all six orders of three live vertices. Only four union
+/// popcounts are needed: one for each pair and one for all three rows.
+fn triple_costs(game: &Game<'_>, verts: [usize; 3]) -> [u64; 6] {
+    let w = game.w;
+    let [a, b, c] = verts;
+    let rows = [
+        &game.adj[a * w..(a + 1) * w],
+        &game.adj[b * w..(b + 1) * w],
+        &game.adj[c * w..(c + 1) * w],
+    ];
+    let edge = |i: usize, j: usize| rows[i][verts[j] >> 6] & (1u64 << (verts[j] & 63)) != 0;
+    let (ab, ac, bc) = (edge(0, 1), edge(0, 2), edge(1, 2));
+    let adjacent = [[false, ab, ac], [ab, false, bc], [ac, bc, false]];
+    let degrees = verts.map(|v| game.deg[v] as u64);
+    let mut unions = [0u64; 4];
+    for k in 0..w {
+        let (x, y, z) = (rows[0][k], rows[1][k], rows[2][k]);
+        unions[0] += (x | y).count_ones() as u64;
+        unions[1] += (x | z).count_ones() as u64;
+        unions[2] += (y | z).count_ones() as u64;
+        unions[3] += (x | y | z).count_ones() as u64;
+    }
+    let pair_union = [
+        [0, unions[0], unions[1]],
+        [unions[0], 0, unions[2]],
+        [unions[1], unions[2], 0],
+    ];
+
+    // The last pivot absorbs exactly the rows in its connected component of
+    // the triple. A connected triple contributes all three rows, while a
+    // single edge contributes only its two endpoint rows. Remove those live
+    // triple vertices from the union; isolated vertices retain their degree.
+    let last_degree = if usize::from(ab) + usize::from(ac) + usize::from(bc) >= 2 {
+        [unions[3] - 3; 3]
+    } else if ab {
+        [unions[0] - 2, unions[0] - 2, degrees[2]]
+    } else if ac {
+        [unions[1] - 2, degrees[1], unions[1] - 2]
+    } else if bc {
+        [degrees[0], unions[2] - 2, unions[2] - 2]
+    } else {
+        degrees
+    };
+
+    TRIPLE_ORDERS.map(|[first, second, last]| {
+        let d2 = if adjacent[first][second] {
+            pair_union[first][second] - 2
+        } else {
+            degrees[second]
+        };
+        let counts = [degrees[first] + 1, d2 + 1, last_degree[last] + 1];
+        counts.into_iter().map(|c| c * c).sum()
+    })
+}
+
+struct TripleWork {
+    remaining: i64,
+}
+
+#[cfg(test)]
+mod atomic_budget_tests {
+    use super::super::{flops_of, Pattern, ScoringPattern};
+    use super::*;
+
+    fn fixture(n: usize) -> Pattern {
+        let mut edges = Vec::new();
+        for v in 0..n {
+            for offset in [1, 3, 7] {
+                if v + offset < n {
+                    edges.push((v, v + offset));
+                }
+            }
+        }
+        Pattern::from_edges(n, &edges)
+    }
+
+    #[test]
+    fn primitive_budget_stops_before_reset_prefix_and_candidate_work() {
+        for n in [8usize, 65, 257, 1603] {
+            let pat = fixture(n);
+            let adj = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+            let reset = (2 * n * n.div_ceil(64) + 8 * n) as i64;
+            for prefix in [0, n / 2, n] {
+                let fixed: Vec<_> = (0..prefix).collect();
+                for fill_tb in [false, true] {
+                    for cap in [0, reset - 1, reset, reset + 100, reset + 5000, 200_000] {
+                        let mut game = Game::new(n, &adj).unwrap();
+                        let mut rng = 31;
+                        let mut out = Vec::new();
+                        let score = game.run(
+                            &fixed,
+                            Policy { slack: 1, fill_tb },
+                            &mut rng,
+                            u64::MAX,
+                            cap,
+                            &mut out,
+                        );
+                        assert!(game.ops <= cap, "n={n} prefix={prefix} cap={cap} ops={}", game.ops);
+                        if cap < reset {
+                            assert_eq!(game.ops, 0);
+                        }
+                        if let Some(score) = score {
+                            let mut sorted = out.clone();
+                            sorted.sort_unstable();
+                            assert_eq!(sorted, (0..n).collect::<Vec<_>>());
+                            let scoring = ScoringPattern {
+                                n,
+                                col_ptr: pat.col_ptr.clone(),
+                                row_idx: pat.row_idx.clone(),
+                            };
+                            assert_eq!(score, flops_of(&scoring, &out));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fixed_prefix_respects_nonzero_cap() {
+        let n = 8;
+        let pat = fixture(n);
+        let adj = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+        let mut game = Game::new(n, &adj).unwrap();
+        let reset = (2 * n * n.div_ceil(64) + 8 * n) as i64;
+        let first = ((game.deg0[0] as usize + 1) * (3 * game.w + 6) + 24) as i64;
+        let cap = reset + first;
+        let mut rng = 31;
+        let mut out = Vec::new();
+        assert!(game.run(
+            &[0, 1, 2, 3],
+            Policy { slack: 1, fill_tb: true },
+            &mut rng,
+            u64::MAX,
+            cap,
+            &mut out,
+        ).is_none());
+        assert_eq!(out, [0]);
+        assert_eq!(game.ops, cap);
+    }
+
+    #[test]
+    fn search_returns_when_reset_cannot_fit() {
+        let n = 8;
+        let pat = fixture(n);
+        let seed: Vec<_> = (0..n).collect();
+        for budget in [0, 1, 32] {
+            assert!(search(n, &pat.col_ptr, &pat.row_idx, &seed, u64::MAX, budget, 7).is_none());
+        }
+    }
+}
+
+impl TripleWork {
+    fn charge(&mut self, cost: usize) -> bool {
+        let Ok(cost) = i64::try_from(cost) else {
+            return false;
+        };
+        if cost > self.remaining {
+            return false;
+        }
+        self.remaining -= cost;
+        true
+    }
+
+    fn eliminate(&mut self, game: &mut Game<'_>, v: usize) -> bool {
+        let cost = (game.deg[v] as usize + 1)
+            .saturating_mul(3usize.saturating_mul(game.w).saturating_add(6))
+            .saturating_add(24);
+        if !self.charge(cost) {
+            return false;
+        }
+        game.eliminate(v);
+        true
+    }
+}
+
+/// Exact local descent over disjoint triples, with offset shifted each sweep.
+/// Every ordering of a triple leaves the same residual fill graph. Therefore
+/// minimizing its three squared column counts is also a global improvement.
+/// All large work is precharged. Completed improving triples are retained on
+/// exhaustion, with the rest of the current permutation left unchanged.
+pub(crate) fn adjacent_triple_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    sweeps: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    if n < 3 || n > MAX_N || budget <= 0 || sweeps == 0 || seed.len() != n || col_ptr.len() != n + 1
+    {
+        return None;
+    }
+    let mut work = TripleWork { remaining: budget };
+    let validation = (n + 1).saturating_add(row_idx.len()).saturating_add(2 * n);
+    if !work.charge(validation)
+        || col_ptr.first().copied() != Some(0)
+        || col_ptr.last().copied() != Some(row_idx.len())
+        || col_ptr
+            .windows(2)
+            .any(|p| p[0] > p[1] || p[1] > row_idx.len())
+        || row_idx.iter().any(|&v| v >= n)
+    {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    let w = n.div_ceil(64);
+    let build = n
+        .saturating_mul(w)
+        .saturating_add(2usize.saturating_mul(row_idx.len()))
+        .saturating_add(n);
+    if !work.charge(build) {
+        return None;
+    }
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    // Game::new scans initial degrees, copies adjacency, and allocates work
+    // arrays. Include the returned permutation copy in this setup charge.
+    let setup = 2usize
+        .saturating_mul(n)
+        .saturating_mul(w)
+        .saturating_add(13usize.saturating_mul(n))
+        .saturating_add(w);
+    if !work.charge(setup) {
+        return None;
+    }
+    let mut game = Game::new(n, &adj0)?;
+    let mut cur = seed.to_vec();
+    let mut changed = false;
+    let reset = 2usize
+        .saturating_mul(n)
+        .saturating_mul(w)
+        .saturating_add(8usize.saturating_mul(n));
+    let evaluation = 20usize.saturating_mul(w).saturating_add(192);
+
+    for sweep in 0..sweeps {
+        if !work.charge(reset) {
+            return changed.then_some(cur);
+        }
+        game.reset();
+        let offset = sweep % 3;
+        for &v in cur.iter().take(offset) {
+            if !work.eliminate(&mut game, v) {
+                return changed.then_some(cur);
+            }
+        }
+        let mut k = offset;
+        while k + 2 < n {
+            if !work.charge(evaluation) {
+                return changed.then_some(cur);
+            }
+            let triple = [cur[k], cur[k + 1], cur[k + 2]];
+            let costs = triple_costs(&game, triple);
+            let mut best = 0;
+            for choice in 1..TRIPLE_ORDERS.len() {
+                if costs[choice] < costs[best] {
+                    best = choice;
+                }
+            }
+            if best != 0 {
+                let chosen = TRIPLE_ORDERS[best].map(|i| triple[i]);
+                cur[k..k + 3].copy_from_slice(&chosen);
+                changed = true;
+            }
+            k += 3;
+            // No replay is needed after this sweep's last evaluated triple.
+            // Any subsequent sweep resets from the original graph.
+            if k + 2 < n {
+                for &v in &cur[k - 3..k] {
+                    if !work.eliminate(&mut game, v) {
+                        return changed.then_some(cur);
+                    }
+                }
+            }
+        }
+    }
+    changed.then_some(cur)
+}
+
+/// Exact widths after any subset of a fixed four-pivot window is eliminated.
+/// External union counts exclude all four window vertices. Internal adjacency
+/// stays in four-bit masks, so live outside vertices never merge components.
+struct FourWindow {
+    internal_union: [u8; 16],
+    external_count: [u32; 16],
+}
+
+impl FourWindow {
+    fn new(game: &Game<'_>, verts: [usize; 4]) -> Self {
+        let rows = verts.map(|v| &game.adj[v * game.w..(v + 1) * game.w]);
+        let mut inside = [0u8; 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                if rows[i][verts[j] >> 6] & (1u64 << (verts[j] & 63)) != 0 {
+                    inside[i] |= 1 << j;
+                }
+            }
+        }
+        let mut internal_union = [0u8; 16];
+        for mask in 1usize..16 {
+            let rest = mask & (mask - 1);
+            internal_union[mask] = internal_union[rest] | inside[mask.trailing_zeros() as usize];
+        }
+        let mut external_count = [0u32; 16];
+        let mut unions = [0u64; 16];
+        for word in 0..game.w {
+            let mut window_bits = 0;
+            for v in verts {
+                if v >> 6 == word {
+                    window_bits |= 1u64 << (v & 63);
+                }
+            }
+            let outside = rows.map(|row| row[word] & !window_bits);
+            for mask in 1usize..16 {
+                let rest = mask & (mask - 1);
+                unions[mask] = unions[rest] | outside[mask.trailing_zeros() as usize];
+                external_count[mask] += unions[mask].count_ones();
+            }
+        }
+        Self {
+            internal_union,
+            external_count,
+        }
+    }
+
+    fn width(&self, eliminated: u8, pivot: usize) -> u64 {
+        let bit = 1u8 << pivot;
+        let mut component = bit;
+        loop {
+            let expanded = component | (self.internal_union[component as usize] & eliminated);
+            if expanded == component {
+                break;
+            }
+            component = expanded;
+        }
+        let live_inside = self.internal_union[component as usize] & !(eliminated | bit);
+        1 + self.external_count[component as usize] as u64 + live_inside.count_ones() as u64
+    }
+
+    /// A subset determines the residual graph. Among equal improving paths,
+    /// the base-four positional path code supplies a deterministic lexicographic
+    /// tie-break; an optimum tied with the incumbent retains the incumbent.
+    fn solve(&self) -> ([usize; 4], u64, u64) {
+        let mut best = [u64::MAX; 16];
+        let mut path = [u8::MAX; 16];
+        best[0] = 0;
+        path[0] = 0;
+        for mask in 0usize..15 {
+            for pivot in 0..4 {
+                let bit = 1usize << pivot;
+                if mask & bit != 0 {
+                    continue;
+                }
+                let width = self.width(mask as u8, pivot);
+                let cost = best[mask] + width * width;
+                let code = (path[mask] << 2) | pivot as u8;
+                let next = mask | bit;
+                if cost < best[next] || (cost == best[next] && code < path[next]) {
+                    best[next] = cost;
+                    path[next] = code;
+                }
+            }
+        }
+        let incumbent = (0..4)
+            .map(|pivot| {
+                let width = self.width((1 << pivot) - 1, pivot);
+                width * width
+            })
+            .sum();
+        let order = if best[15] < incumbent {
+            [6, 4, 2, 0].map(|shift| ((path[15] >> shift) & 3) as usize)
+        } else {
+            [0, 1, 2, 3]
+        };
+        (order, best[15], incumbent)
+    }
+}
+
+// Each word reads four rows, excludes four window bits, performs 15 subset
+// union updates/popcounts/accumulations, and handles their indexing. The fixed
+// part covers mask setup, 32 DP transitions plus four incumbent widths, each
+// with at most four component-closure iterations, and path reconstruction.
+fn four_window_work(words: usize) -> usize {
+    256usize.saturating_mul(words).saturating_add(4096)
+}
+
+/// One complete offset cycle of exact four-pivot descent, replacing the final
+/// triple cycle. A fixed eliminated set leaves an order-independent residual,
+/// so completed strict window gains survive budget exhaustion during replay.
+pub(crate) fn adjacent_four_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    budget: i64,
+) -> Option<Vec<usize>> {
+    if n < 4 || n > MAX_N || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
+        return None;
+    }
+    let mut work = TripleWork { remaining: budget };
+    let validation = (n + 1).saturating_add(row_idx.len()).saturating_add(2 * n);
+    if !work.charge(validation)
+        || col_ptr.first().copied() != Some(0)
+        || col_ptr.last().copied() != Some(row_idx.len())
+        || col_ptr
+            .windows(2)
+            .any(|p| p[0] > p[1] || p[1] > row_idx.len())
+        || row_idx.iter().any(|&v| v >= n)
+    {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    let words = n.div_ceil(64);
+    let build = n
+        .saturating_mul(words)
+        .saturating_add(2usize.saturating_mul(row_idx.len()))
+        .saturating_add(n);
+    if !work.charge(build) {
+        return None;
+    }
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    let setup = 2usize
+        .saturating_mul(n)
+        .saturating_mul(words)
+        .saturating_add(13usize.saturating_mul(n))
+        .saturating_add(words);
+    if !work.charge(setup) {
+        return None;
+    }
+    let mut game = Game::new(n, &adj0)?;
+    let mut cur = seed.to_vec();
+    let mut changed = false;
+    let reset = 2usize
+        .saturating_mul(n)
+        .saturating_mul(words)
+        .saturating_add(8usize.saturating_mul(n));
+    for offset in 0..4 {
+        if offset + 4 > n {
+            break;
+        }
+        if !work.charge(reset) {
+            return changed.then_some(cur);
+        }
+        game.reset();
+        for &v in cur.iter().take(offset) {
+            if !work.eliminate(&mut game, v) {
+                return changed.then_some(cur);
+            }
+        }
+        let mut k = offset;
+        while k + 3 < n {
+            if !work.charge(four_window_work(words)) {
+                return changed.then_some(cur);
+            }
+            let window = [cur[k], cur[k + 1], cur[k + 2], cur[k + 3]];
+            let (order, best, incumbent) = FourWindow::new(&game, window).solve();
+            if best < incumbent {
+                cur[k..k + 4].copy_from_slice(&order.map(|i| window[i]));
+                changed = true;
+            }
+            k += 4;
+            if k + 3 < n {
+                for &v in &cur[k - 4..k] {
+                    if !work.eliminate(&mut game, v) {
+                        return changed.then_some(cur);
+                    }
+                }
+            }
+        }
+    }
+    changed.then_some(cur)
+}
+
 /// Promote currently simplicial vertices across a short non-adjacent window.
 ///
 /// Ost, Schulz, and Strash (arXiv:2004.11315) prove that a simplicial vertex is
@@ -1279,44 +1810,6 @@ pub(crate) fn subtree_refine(
     parent: &[i32],
     cfg: SubCfg,
 ) -> usize {
-    let nnz = col_ptr.last().copied().unwrap_or(0);
-    let max_deg = col_ptr.windows(2).map(|p| p[1] - p[0]).max().unwrap_or(0);
-    let ratio_ge = |num: usize, den: usize| {
-        nnz.saturating_mul(den) >= n.saturating_mul(num)
-    };
-    let ratio_lt = |num: usize, den: usize| {
-        nnz.saturating_mul(den) < n.saturating_mul(num)
-    };
-    let cap_risk_cell = (10_000..10_300).contains(&n)
-        && (42_000..45_000).contains(&nnz)
-        && max_deg < 40;
-    // Exact-corpus safe cells for replacing repeated later-round trajectories.
-    // These gates use only matrix structure and preserve stream/task counts.
-    let diversify_later_rounds = ((6_000..15_000).contains(&n)
-        && ratio_ge(13, 4)
-        && ratio_lt(11, 2)
-        && max_deg < 200)
-        || ((1_500..4_000).contains(&n) && ratio_ge(6, 1))
-        || ((2_200..15_000).contains(&n)
-            && ratio_ge(17, 4)
-            && ratio_lt(13, 2)
-            && (50..75).contains(&max_deg))
-        || ((5_000..10_000).contains(&n) && (100..1_000).contains(&max_deg))
-        || ((500..10_000).contains(&n)
-            && ratio_ge(29, 10)
-            && ratio_lt(13, 4)
-            && max_deg < 50)
-        || ((2_200..4_000).contains(&n)
-            && ratio_ge(27, 10)
-            && ratio_lt(9, 2)
-            && max_deg < 50)
-        || ((1_500..3_000).contains(&n)
-            && ratio_ge(4, 1)
-            && ratio_lt(11, 2)
-            && max_deg < 75)
-        || ((6_000..9_000).contains(&n) && max_deg < 40);
-    let diversify_later_rounds = diversify_later_rounds && !cap_risk_cell;
-
     // Spend the ranked large-matrix budget on more D1 basins without adding
     // trajectories: 32 blocks get both streams and the next 64 get D1 only.
     let split_ranked_streams =
@@ -1494,16 +1987,6 @@ pub(crate) fn subtree_refine(
                             {
                                 rng_seed ^= 0xE703_7ED1_A0B4_28DB;
                             }
-                            // Diversify later outer rounds without adding a
-                            // trajectory, block, operation, or task.
-                            if diversify_later_rounds && n < 10_000 && cfg.round >= 1 {
-                                rng_seed ^= 0x2545_F491_4F6C_DD1Du64
-                                    .wrapping_mul(cfg.round as u64 * 2 + 1);
-                            }
-                            if diversify_later_rounds && n >= 10_000 && cfg.round >= 2 {
-                                rng_seed ^= 0x3C6E_F372_FE94_F82Bu64
-                                    .wrapping_mul(cfg.round as u64 * 2 + 1);
-                            }
                             let r = search_with_nelim(
                                 m,
                                 &adj0,
@@ -1568,4 +2051,421 @@ pub(crate) struct SubCfg {
     pub(crate) rank_blocks: bool,
     /// Zero-based outer RGSUB round, used only to diversify an equal-work seed.
     pub(crate) round: usize,
+}
+
+#[cfg(test)]
+mod triple_tests {
+    use super::super::{flops_of, is_bijection, Pattern, ScoringPattern};
+    use super::*;
+
+    fn check_costs(n: usize, edges: &[(usize, usize)], seed: &[usize], prefix: usize) {
+        let pat = Pattern::from_edges(n, edges);
+        let adj0 = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+        let mut game = Game::new(n, &adj0).unwrap();
+        game.reset();
+        for &v in &seed[..prefix] {
+            game.eliminate(v);
+        }
+        let triple = [seed[prefix], seed[prefix + 1], seed[prefix + 2]];
+        let costs = triple_costs(&game, triple);
+        let mut residual = None;
+        for (choice, indices) in TRIPLE_ORDERS.into_iter().enumerate() {
+            game.reset();
+            for &v in &seed[..prefix] {
+                game.eliminate(v);
+            }
+            let mut replay = 0;
+            for i in indices {
+                let c = game.eliminate(triple[i]);
+                replay += c * c;
+            }
+            assert_eq!(
+                costs[choice], replay,
+                "n={n} prefix={prefix} triple={triple:?} choice={choice}"
+            );
+            if let Some(ref previous) = residual {
+                assert_eq!(&game.adj, previous, "residual depends on triple order");
+            } else {
+                residual = Some(game.adj.clone());
+            }
+        }
+    }
+
+    #[test]
+    fn triple_costs_match_replay_on_filled_prefixes() {
+        // Exhaust all possible induced triple graphs, including independent
+        // vertices, a single edge, both path orientations, and a triangle.
+        for mask in 0..8 {
+            let edges: Vec<_> = [(0, 1), (0, 2), (1, 2)]
+                .into_iter()
+                .enumerate()
+                .filter_map(|(i, edge)| (mask & (1 << i) != 0).then_some(edge))
+                .collect();
+            check_costs(3, &edges, &[0, 1, 2], 0);
+        }
+        let mut rng = 0x9D27_5813_EB60_A4C7;
+        let mut states = 8;
+        for n in [7, 17, 31, 65, 97, 129] {
+            for instance in 0..10 {
+                let threshold = [1, 4, 9, 15][instance % 4];
+                let mut edges = Vec::new();
+                for a in 0..n {
+                    for b in a + 1..n {
+                        if xs64(&mut rng) % 20 < threshold {
+                            edges.push((a, b));
+                        }
+                    }
+                }
+                let mut seed: Vec<_> = (0..n).collect();
+                for i in 1..n {
+                    seed.swap(i, xs64(&mut rng) as usize % (i + 1));
+                }
+                for prefix in [0, n / 4, n / 2, n - 3] {
+                    check_costs(n, &edges, &seed, prefix);
+                    states += 1;
+                }
+            }
+        }
+        // Cross Game's bucket threshold with a sparse filled-prefix state.
+        let n = 1603;
+        let mut edges = Vec::new();
+        for v in 0..n {
+            edges.push((v, (v + 1) % n));
+            edges.push((v, (v + 37) % n));
+        }
+        let seed: Vec<_> = (0..n).collect();
+        check_costs(n, &edges, &seed, 37);
+        states += 1;
+        println!("TRIPLE_FORMULA states={states} orders={}", states * 6);
+    }
+
+    fn canonical(pat: &Pattern, order: &[usize]) -> u64 {
+        let sp = ScoringPattern {
+            n: pat.n,
+            col_ptr: pat.col_ptr.clone(),
+            row_idx: pat.row_idx.clone(),
+        };
+        flops_of(&sp, order)
+    }
+
+    #[test]
+    fn triple_descent_preserves_completed_changes_on_budget_exhaustion() {
+        let pat = Pattern::from_edges(6, &[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)]);
+        let seed: Vec<_> = (0..6).collect();
+        let got = adjacent_triple_descent(6, &pat.col_ptr, &pat.row_idx, &seed, 2, 500)
+            .expect("first improving triple fits even though replay exhausts the budget");
+        assert_ne!(&got[..3], &seed[..3]);
+        assert_eq!(&got[3..], &seed[3..]);
+        assert!(is_bijection(&got, 6));
+        assert!(canonical(&pat, &got) < canonical(&pat, &seed));
+    }
+
+    #[test]
+    fn triple_descent_is_canonically_monotone_and_deterministic() {
+        let mut rng = 0xEC1B_7492_D805_36AF;
+        let mut improvements = 0;
+        for n in [13, 67, 181, 1603] {
+            let mut edges = Vec::new();
+            for v in 0..n {
+                edges.push((v, (v + 1) % n));
+                for _ in 0..3 {
+                    let u = xs64(&mut rng) as usize % n;
+                    if u != v {
+                        edges.push((v, u));
+                    }
+                }
+            }
+            let pat = Pattern::from_edges(n, &edges);
+            let mut seed: Vec<_> = (0..n).collect();
+            for i in 1..n {
+                seed.swap(i, xs64(&mut rng) as usize % (i + 1));
+            }
+            let before = canonical(&pat, &seed);
+            for sweeps in [2, 3] {
+                for budget in [0, 1, 32, 256, 2048, 10_000, 50_000, 200_000, 2_000_000] {
+                    let first = adjacent_triple_descent(
+                        n,
+                        &pat.col_ptr,
+                        &pat.row_idx,
+                        &seed,
+                        sweeps,
+                        budget,
+                    );
+                    let second = adjacent_triple_descent(
+                        n,
+                        &pat.col_ptr,
+                        &pat.row_idx,
+                        &seed,
+                        sweeps,
+                        budget,
+                    );
+                    assert_eq!(first, second, "n={n} budget={budget} sweeps={sweeps}");
+                    if let Some(got) = first {
+                        assert!(is_bijection(&got, n));
+                        assert!(
+                            canonical(&pat, &got) < before,
+                            "n={n} budget={budget} sweeps={sweeps}"
+                        );
+                        improvements += 1;
+                    }
+                }
+            }
+        }
+        assert!(improvements > 0);
+        println!("TRIPLE_CANONICAL improving_cases={improvements}");
+    }
+}
+
+#[cfg(test)]
+mod four_window_tests {
+    use super::super::{flops_of, is_bijection, Pattern, ScoringPattern};
+    use super::*;
+
+    // Independent oracle: explicit pairwise clique insertion in a Boolean
+    // adjacency matrix. It uses no subset, component or union formula.
+    fn oracle_eliminate(graph: &mut [Vec<bool>], vertex: usize) -> u64 {
+        let neighbors: Vec<_> = graph[vertex]
+            .iter()
+            .enumerate()
+            .filter_map(|(v, &edge)| edge.then_some(v))
+            .collect();
+        for &u in &neighbors {
+            graph[u][vertex] = false;
+            for &v in &neighbors {
+                if u != v {
+                    graph[u][v] = true;
+                }
+            }
+        }
+        graph[vertex].fill(false);
+        neighbors.len() as u64 + 1
+    }
+
+    fn permutations() -> Vec<[usize; 4]> {
+        let mut out = Vec::new();
+        for a in 0..4 {
+            for b in 0..4 {
+                for c in 0..4 {
+                    for d in 0..4 {
+                        if a != b && a != c && a != d && b != c && b != d && c != d {
+                            out.push([a, b, c, d]);
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn verify_window(n: usize, edges: &[(usize, usize)], prefix: &[usize], window: [usize; 4]) {
+        let pat = Pattern::from_edges(n, edges);
+        let adj0 = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+        let mut game = Game::new(n, &adj0).unwrap();
+        game.reset();
+        let mut graph = vec![vec![false; n]; n];
+        for &(u, v) in edges {
+            graph[u][v] = true;
+            graph[v][u] = true;
+        }
+        for &v in prefix {
+            game.eliminate(v);
+            oracle_eliminate(&mut graph, v);
+        }
+        let kernel = FourWindow::new(&game, window);
+        for mask in 0usize..16 {
+            let mut residual = graph.clone();
+            for pivot in 0..4 {
+                if mask & (1 << pivot) != 0 {
+                    oracle_eliminate(&mut residual, window[pivot]);
+                }
+            }
+            for pivot in 0..4 {
+                if mask & (1 << pivot) == 0 {
+                    let width =
+                        residual[window[pivot]].iter().filter(|&&edge| edge).count() as u64 + 1;
+                    assert_eq!(
+                        kernel.width(mask as u8, pivot),
+                        width,
+                        "n={n} prefix={prefix:?} window={window:?} mask={mask} pivot={pivot}"
+                    );
+                }
+            }
+        }
+        let mut optimum = u64::MAX;
+        let mut best_order = [0, 1, 2, 3];
+        let mut incumbent = 0;
+        let mut reference_residual = None;
+        for order in permutations() {
+            let mut residual = graph.clone();
+            let mut cost = 0;
+            for pivot in order {
+                let width = oracle_eliminate(&mut residual, window[pivot]);
+                cost += width * width;
+            }
+            if order == [0, 1, 2, 3] {
+                incumbent = cost;
+            }
+            if cost < optimum {
+                optimum = cost;
+                best_order = order;
+            }
+            if let Some(ref reference) = reference_residual {
+                assert_eq!(&residual, reference);
+            } else {
+                reference_residual = Some(residual);
+            }
+        }
+        let (selected, found, original) = kernel.solve();
+        assert_eq!(found, optimum);
+        assert_eq!(original, incumbent);
+        assert_eq!(
+            selected,
+            if optimum == incumbent {
+                [0, 1, 2, 3]
+            } else {
+                best_order
+            }
+        );
+    }
+
+    #[test]
+    fn four_window_dp_matches_independent_oracle() {
+        let pairs: Vec<_> = (0..5)
+            .flat_map(|u| (u + 1..5).map(move |v| (u, v)))
+            .collect();
+        let mut windows = 0;
+        for mask in 0usize..1 << pairs.len() {
+            let edges: Vec<_> = pairs
+                .iter()
+                .copied()
+                .enumerate()
+                .filter_map(|(i, edge)| (mask & (1 << i) != 0).then_some(edge))
+                .collect();
+            verify_window(5, &edges, &[], [0, 1, 2, 3]);
+            windows += 1;
+        }
+        let mut rng = 0xD247_C168_590B_AE3F;
+        for n in [8, 17, 65] {
+            for threshold in [1, 3, 8, 12] {
+                let mut edges = Vec::new();
+                for u in 0..n {
+                    for v in u + 1..n {
+                        if xs64(&mut rng) % 16 < threshold {
+                            edges.push((u, v));
+                        }
+                    }
+                }
+                let mut seed: Vec<_> = (0..n).collect();
+                for i in 1..n {
+                    seed.swap(i, xs64(&mut rng) as usize % (i + 1));
+                }
+                for end in [0, n / 3, n - 4] {
+                    let first = [seed[end], seed[end + 1], seed[end + 2], seed[end + 3]];
+                    verify_window(n, &edges, &seed[..end], first);
+                    windows += 1;
+                    if end + 4 < n {
+                        let last = [seed[n - 4], seed[n - 3], seed[n - 2], seed[n - 1]];
+                        verify_window(n, &edges, &seed[..end], last);
+                        windows += 1;
+                    }
+                }
+            }
+        }
+        println!(
+            "FOUR_ORACLE windows={windows} transitions={} permutations={}",
+            windows * 32,
+            windows * 24
+        );
+    }
+
+    fn canonical(pat: &Pattern, perm: &[usize]) -> u64 {
+        flops_of(
+            &ScoringPattern {
+                n: pat.n,
+                col_ptr: pat.col_ptr.clone(),
+                row_idx: pat.row_idx.clone(),
+            },
+            perm,
+        )
+    }
+
+    #[test]
+    fn four_window_escapes_triple_local_minimum() {
+        let edges = [
+            (0, 1),
+            (0, 2),
+            (0, 5),
+            (0, 6),
+            (2, 5),
+            (2, 6),
+            (3, 4),
+            (3, 5),
+            (3, 6),
+            (5, 6),
+        ];
+        let pat = Pattern::from_edges(7, &edges);
+        let seed = [2, 0, 5, 4, 6, 1, 3];
+        assert_eq!(canonical(&pat, &seed), 66);
+        assert!(
+            adjacent_triple_descent(7, &pat.col_ptr, &pat.row_idx, &seed, 3, 1_000_000).is_none()
+        );
+        let candidate =
+            adjacent_four_descent(7, &pat.col_ptr, &pat.row_idx, &seed, 1_000_000).unwrap();
+        assert!(is_bijection(&candidate, 7));
+        assert!(canonical(&pat, &candidate) <= 59);
+    }
+
+    #[test]
+    fn four_window_budget_preserves_completed_gain_and_suffix() {
+        let edges: Vec<_> = (1..8).map(|v| (0, v)).collect();
+        let pat = Pattern::from_edges(8, &edges);
+        let seed: Vec<_> = (0..8).collect();
+        assert!(adjacent_four_descent(8, &pat.col_ptr, &pat.row_idx, &seed, 4352).is_none());
+        let candidate = adjacent_four_descent(8, &pat.col_ptr, &pat.row_idx, &seed, 4700)
+            .expect("completed first-window gain remains when its replay exhausts budget");
+        assert_ne!(&candidate[..4], &seed[..4]);
+        assert_eq!(&candidate[4..], &seed[4..]);
+        assert!(is_bijection(&candidate, 8));
+        assert!(canonical(&pat, &candidate) < canonical(&pat, &seed));
+        assert!(adjacent_four_descent(8, &[0], &[], &seed, i64::MAX).is_none());
+        assert!(adjacent_four_descent(MAX_N + 1, &[], &[], &[], i64::MAX).is_none());
+    }
+
+    #[test]
+    fn four_window_descent_is_monotone_and_deterministic() {
+        let mut rng = 0x7264_90EB_1CD5_A83F;
+        let mut improvements = 0;
+        for n in [13, 67, 1603] {
+            let mut edges = Vec::new();
+            for v in 0..n {
+                edges.push((v, (v + 1) % n));
+                for _ in 0..2 {
+                    let u = xs64(&mut rng) as usize % n;
+                    if u != v {
+                        edges.push((v, u));
+                    }
+                }
+            }
+            let pat = Pattern::from_edges(n, &edges);
+            let mut seed: Vec<_> = (0..n).collect();
+            for i in 1..n {
+                seed.swap(i, xs64(&mut rng) as usize % (i + 1));
+            }
+            let before = canonical(&pat, &seed);
+            for budget in [0, 1, 1000, 5000, 20_000, 100_000, 1_000_000] {
+                let first = adjacent_four_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget);
+                assert_eq!(
+                    first,
+                    adjacent_four_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget)
+                );
+                if let Some(candidate) = first {
+                    assert!(is_bijection(&candidate, n));
+                    assert!(canonical(&pat, &candidate) < before);
+                    improvements += 1;
+                }
+            }
+        }
+        assert!(improvements > 0);
+        println!("FOUR_CANONICAL improving_cases={improvements}");
+    }
 }

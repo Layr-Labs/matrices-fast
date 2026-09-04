@@ -1716,12 +1716,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if pair_descent_gate {
-        if let Some(cand) = rgreedy::adjacent_pair_descent(
+        if let Some(cand) = rgreedy::adjacent_four_descent(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,
             &best_perm,
-            2,
             pair_descent_ops_budget,
         ) {
             let f = flops_of(&scoring_pat, &cand);
@@ -1936,11 +1935,12 @@ fn ndfm_order(pattern: &Pattern) -> Vec<i32> {
     // Hard work budget: caps total per-subset scanning at O(n log n).
     let mut budget: i64 = 96 * n as i64 + 8192;
 
-    // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
-    // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
+    // Fill each subset with induced-subgraph AMD, falling back to degree order.
+    // Reuse the local-index map across calls; touched entries are reset before
+    // invoking AMD, so both its success and fallback paths leave the map clear.
+    let mut local = vec![usize::MAX; n];
+    let mut deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
         let sz = v.len();
-        let mut local = vec![usize::MAX; n];
         for (i, &u) in v.iter().enumerate() {
             local[u] = i;
         }
@@ -2210,11 +2210,12 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
     // (e.g. highly disconnected) input can drive quadratic blow-up.
     let mut budget: i64 = 64 * n as i64 + 4096;
 
-    // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
-    // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
+    // Fill each subset with induced-subgraph AMD, falling back to degree order.
+    // Reuse the local-index map across calls; touched entries are reset before
+    // invoking AMD, so both its success and fallback paths leave the map clear.
+    let mut local = vec![usize::MAX; n];
+    let mut deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
         let sz = v.len();
-        let mut local = vec![usize::MAX; n];
         for (i, &u) in v.iter().enumerate() {
             local[u] = i;
         }
@@ -2711,6 +2712,75 @@ fn is_bijection(perm: &[usize], n: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nd_leaf_scratch_preserves_reference_permutations() {
+        let mut fixtures = vec![
+            ("empty", Pattern::from_edges(0, &[])),
+            ("singleton", Pattern::from_edges(1, &[])),
+            ("isolated", Pattern::from_edges(512, &[])),
+        ];
+        // Connected splits leave adjacent separator vertices outside each leaf.
+        let band: Vec<_> = (0..768)
+            .flat_map(|u| [1, 24].map(move |step| (u, u + step)))
+            .filter(|&(_, v)| v < 768)
+            .collect();
+        fixtures.push(("band", Pattern::from_edges(768, &band)));
+
+        // Many small components exhaust the unmodified recursion budgets and
+        // leave pending leaf tasks to process after the large fallback subset.
+        let paths: Vec<_> = (0..256)
+            .flat_map(|component| {
+                (0..4).map(move |offset| (component * 5 + offset, component * 5 + offset + 1))
+            })
+            .collect();
+        fixtures.push(("many_paths", Pattern::from_edges(1280, &paths)));
+        let disconnected: Vec<_> = band
+            .iter()
+            .copied()
+            .filter(|&(u, v)| u / 256 == v / 256)
+            .collect();
+        fixtures.push(("disconnected", Pattern::from_edges(1024, &disconnected)));
+        let hub: Vec<_> = (1..385)
+            .map(|u| (0, u))
+            .chain((1..384).map(|u| (u, u + 1)))
+            .collect();
+        fixtures.push(("hub", Pattern::from_edges(385, &hub)));
+
+        // Reference fingerprints captured before scratch reuse, on synthetic
+        // graphs only. The complete permutations were also compared directly.
+        let expected = [
+            [0xcbf29ce484222325, 0xcbf29ce484222325],
+            [0x4d25767f9dce13f5, 0x4d25767f9dce13f5],
+            [0x2c47e4ac3159feb5, 0xf1a76199f5a84e25],
+            [0xd68d24ce7d8152b1, 0x1fac00f9e69b10c5],
+            [0xa07fcd6d31ec8a41, 0xba903f1c73b73bb1],
+            [0x444e800988441771, 0x5fc33a868fad6969],
+            [0x1bf6f7931ae8cb4a, 0xf69fc779d3e5692e],
+        ];
+        for ((name, pattern), expected) in fixtures.into_iter().zip(expected) {
+            for ((variant, run), expected) in [
+                ("nd", nd_order as fn(&Pattern) -> Vec<i32>),
+                ("ndfm", ndfm_order as fn(&Pattern) -> Vec<i32>),
+            ]
+            .into_iter()
+            .zip(expected)
+            {
+                let result = run(&pattern);
+                assert_bijection(
+                    &result.iter().map(|&v| v as usize).collect::<Vec<_>>(),
+                    pattern.n,
+                );
+                assert_eq!(result, run(&pattern), "{name}: {variant} determinism");
+                let fingerprint = result.iter().fold(0xcbf29ce484222325u64, |hash, v| {
+                    v.to_le_bytes().iter().fold(hash, |hash, &byte| {
+                        (hash ^ byte as u64).wrapping_mul(0x100000001b3)
+                    })
+                });
+                assert_eq!(fingerprint, expected, "{name}: {variant} reference permutation");
+            }
+        }
+    }
 
     fn assert_bijection(perm: &[usize], n: usize) {
         assert_eq!(perm.len(), n, "permutation length");

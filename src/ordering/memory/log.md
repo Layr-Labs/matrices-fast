@@ -59,3 +59,7 @@ round, so note the round if you know it.
 
 2026-09-05 | follow-up to 0056 | **OFFICIAL TIMEOUT:** submission `d17b89c8` passed remote setup/purity/sandbox checks but one hidden matrix exceeded 2 s; no hidden score or instance exposed.
 2026-09-05 | fbd1e62 dev 0.844594 -> **0.844195**, fill 0.944255 -> **0.944012** | exact four-pivot final replacement under the existing shared 128M/48M allowance plus atomic prechecks on the existing randomized-search cap | **FULL LOCAL PASS, official pending.** 300 matrices; 36 active tests; 62 better / 13 worse / 225 same vs base; worst0.987 s. A 25%-fewer-later-blocks control regressed and is excluded. See [0057](experiments/0057-exact-four-pivot-cleanup.md).
+
+2026-09-04 | isolated649c230 five-pivot replacement | dev0.8441954058 -> 0.8441459762 (+0.5855relativebps), fill0.944012 -> 0.943974; same128M/48M work/gates, full300 and40active tests pass;30better17worse253same, no official result. See [0058](experiments/0058-exact-five-pivot-cleanup.md).
+
+2026-09-04 | isolated five-pivot independent-window shortcut | dev0.8441459762 -> 0.8441439855;5better0worse295same versus frozenfive; full300 and43active tests pass. Probe512 splits, never increases, existing totalcharge. +0.6091relative publicbps versus649c230; no official result. See [0059](experiments/0059-independent-window-shortcut.md).

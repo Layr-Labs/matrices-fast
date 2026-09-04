@@ -3,6 +3,17 @@
 The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
+## Isolated five-pivot experiment, 2026-09-04
+
+- [0059: independent-window shortcut](experiments/0059-independent-window-shortcut.md):
+  dev 0.8441439855, fill 0.943972; all 300 trusted cases and 43 active tests
+  pass. Five better / zero worse versus plain-five; same total allowance.
+  Public gain versus pristine649c230 is 0.6091 basis points; no official result.
+- [0058: exact five-pivot cleanup](experiments/0058-exact-five-pivot-cleanup.md):
+  source `649c230` dev 0.8441954058 -> 0.8441459762; all 300 trusted cases
+  and 40 active tests pass. Same gate and 128M/48M allowance; 30 better,
+  17 worse, 253 equal. Public gain 0.5855 basis points; no official result.
+
 ## Verified 2026-09-05 checkpoint
 
 - Public source `fbd1e62`: dev **0.844594**, fill **0.944255**.

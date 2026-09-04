@@ -1716,7 +1716,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if pair_descent_gate {
-        if let Some(cand) = rgreedy::adjacent_four_descent(
+        if let Some(cand) = rgreedy::adjacent_five_descent(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,

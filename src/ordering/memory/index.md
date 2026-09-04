@@ -185,6 +185,18 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
   score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
   retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;
   1k-10k worst observed call **0.661 s**. Submitted for hidden validation.
+- [0055](experiments/0055-autoresearch-loop.md) — Running Karpathy-style
+  autoresearch log from SOTA `77153ff`: every trial, measurement, and revert
+  since. Produced H2 (custom metrics for `n<5000`, density≥3 — dev **0.845281**,
+  **PROMOTED** as `8cf28f4`/`4245c79` at hidden **0.871032**) and the pending
+  stack trial (`96b612df`).
+- [0056](experiments/0056-challenge-compendium.md) — Full compendium: challenge
+  rules and scoring, pipeline architecture with gates, everything implemented
+  with receipts, four constraining lessons, and ranked future improvements.
+- [0057](experiments/0057-bootstrap-variance.md) — Bootstrap noise floor:
+  dev 95% CI ±404 bips, drop-top-1 +103 bips (`pooling_sppc1pq`); breadth +
+  drop-top rules adopted for sub-2-bip deltas. Methodology only, no
+  production change.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

@@ -818,8 +818,12 @@ pub(crate) fn search_with_nelim(
         let pol = pols[it % pols.len()];
         let wi = it % nwalk;
         it += 1;
-        let thresh = best + best / par.accept_den * par.accept_num;
-        let bound = if thresh > cur_f[wi] { thresh } else { cur_f[wi] } + 1;
+        let thresh = if best == u64::MAX {
+            u64::MAX
+        } else {
+            best.saturating_add((best / par.accept_den).saturating_mul(par.accept_num))
+        };
+        let bound = (if thresh > cur_f[wi] { thresh } else { cur_f[wi] }).saturating_add(1);
         let taken = std::mem::take(&mut cur[wi]);
         let r = g.run(&taken[..p.min(taken.len())], pol, &mut rng, bound, hard_cap, &mut out);
         cur[wi] = taken;

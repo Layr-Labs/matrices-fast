@@ -1288,6 +1288,58 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
+        if n <= 250 && nnz <= 4_000 {
+            for (budget, rng_seed) in [
+                (50_000_000i64, 0xBB67_AE85_84CA_A73Bu64),
+                (50_000_000, 0x3C6E_F372_FE94_F82B),
+                (50_000_000, 0xA54F_F53A_5F1D_36F1),
+                (50_000_000, 0x510E_527F_ADE6_82D1),
+            ] {
+                if let Some((cand, _)) = rgreedy::search(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    best_flops,
+                    budget,
+                    rng_seed,
+                ) {
+                    if is_bijection(&cand, n) {
+                        let f = flops_of(&scoring_pat, &cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
+                        }
+                    }
+                }
+            }
+        }
+        if n <= 200 && nnz <= 3_000 {
+            for (budget, rng_seed) in [
+                (50_000_000i64, 0x7E15_A4B2_C3D4_E5F6u64),
+                (50_000_000, 0xF9E8_D7C6_B5A4_3210),
+                (50_000_000, 0x4A6B_8C0D_2E4F_6A8B),
+                (50_000_000, 0x1357_9BDF_0246_8ACE),
+            ] {
+                if let Some((cand, _)) = rgreedy::search(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    best_flops,
+                    budget,
+                    rng_seed,
+                ) {
+                    if is_bijection(&cand, n) {
+                        let f = flops_of(&scoring_pat, &cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
+                        }
+                    }
+                }
+            }
+        }
     } else if medium_exact_gate {
 
         // The same serial exact search above its original size gate. Two fixed
@@ -1483,16 +1535,25 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     .iter()
                                     .map(|p| p.map_or(-1, |j| j as i32))
                                     .collect();
+                                let is_slow_deep_tree =
+                                    n >= 10_000 && (100_000..=300_000).contains(&nnz) && max_deg <= 100;
                                 let mut cfg4 = subtree_cfg_for(n, nnz);
                                 cfg4.round = 3;
-                                cfg4.max_blocks = 32;
-                                cfg4.min_s = 16;
-                                cfg4.max_s = 768;
-                                cfg4.budget = if (1_000..6_000).contains(&n) {
-                                    64_000_000
+                                if is_slow_deep_tree {
+                                    cfg4.max_blocks = 16;
+                                    cfg4.min_s = 16;
+                                    cfg4.max_s = 768;
+                                    cfg4.budget = 8_000_000;
                                 } else {
-                                    32_000_000
-                                };
+                                    cfg4.max_blocks = 32;
+                                    cfg4.min_s = 16;
+                                    cfg4.max_s = 768;
+                                    cfg4.budget = if (1_000..6_000).contains(&n) {
+                                        64_000_000
+                                    } else {
+                                        32_000_000
+                                    };
+                                }
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,
@@ -1532,7 +1593,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         let mut cfg5 = subtree_cfg_for(n, nnz);
                                         cfg5.round = 4;
                                         if n < 100_000 || best_flops != amd_flops {
-                                            if (1_000..4_000).contains(&n) {
+                                            if is_slow_deep_tree {
+                                                cfg5.max_blocks = 12;
+                                                cfg5.budget = 4_000_000;
+                                            } else if n < 4_000 {
                                                 cfg5.max_blocks = 16;
                                                 cfg5.budget = 32_000_000;
                                             } else {
@@ -1848,12 +1912,47 @@ fn minfill_order(pattern: &Pattern) -> Vec<i32> {
     }
 
     if fell_back {
-        // Budget exhausted: append remaining live vertices in ascending
-        // current-degree order (ties by index) → still a valid bijection.
         let mut rest: Vec<usize> = (0..n).filter(|&v| !eliminated[v]).collect();
-        rest.sort_by(|&a, &b| adj[a].len().cmp(&adj[b].len()).then_with(|| a.cmp(&b)));
-        for v in rest {
-            order.push(v);
+        let sz = rest.len();
+        let mut amd_ok = false;
+        if sz <= 80_000 {
+            let mut local = vec![usize::MAX; n];
+            for (i, &u) in rest.iter().enumerate() {
+                local[u] = i;
+            }
+            let mut ind_col_ptr: Vec<i32> = Vec::with_capacity(sz + 1);
+            let mut ind_row_idx: Vec<i32> = Vec::new();
+            ind_col_ptr.push(0);
+            let mut col_buf = Vec::new();
+            for &u in &rest {
+                col_buf.clear();
+                for &w in &adj[u] {
+                    if !eliminated[w] {
+                        let lw = local[w];
+                        if lw != usize::MAX && lw != local[u] {
+                            col_buf.push(lw as i32);
+                        }
+                    }
+                }
+                col_buf.sort_unstable();
+                col_buf.dedup();
+                ind_row_idx.extend_from_slice(&col_buf);
+                ind_col_ptr.push(ind_row_idx.len() as i32);
+            }
+            if let Some(core) = feral_ordering_core::CscPattern::new(sz, &ind_col_ptr, &ind_row_idx) {
+                if let Ok(sub_perm) = feral_amd::amd_order(&core) {
+                    if sub_perm.len() == sz {
+                        for i in sub_perm {
+                            order.push(rest[i as usize]);
+                        }
+                        amd_ok = true;
+                    }
+                }
+            }
+        }
+        if !amd_ok {
+            rest.sort_unstable_by(|&a, &b| adj[a].len().cmp(&adj[b].len()).then_with(|| a.cmp(&b)));
+            order.extend(rest);
         }
     }
 

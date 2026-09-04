@@ -1520,7 +1520,15 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         cfg5.max_blocks = 32;
                                         cfg5.min_s = 16;
                                         cfg5.max_s = 768;
-                                        cfg5.budget = 16_000_000;
+                                        // Tiered R5: 32M only in the R4-proven
+                                        // lower-medium band (1k<=n<6k); keep
+                                        // hidden-accepted 16M everywhere else so
+                                        // large-matrix worst-case does not rise.
+                                        cfg5.budget = if (1_000..6_000).contains(&n) {
+                                            32_000_000
+                                        } else {
+                                            16_000_000
+                                        };
                                         let improved5 = rgreedy::subtree_refine(
                                             n,
                                             &pattern.col_ptr,

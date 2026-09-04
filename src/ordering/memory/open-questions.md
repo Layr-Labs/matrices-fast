@@ -18,10 +18,6 @@ it, rather than deleting it — a resolved question is a useful signpost.
       min-degree, since that difference is where the second lottery's prizes came
       from. Cost per family is `RELABEL_BUDGET/nnz` passes, so price each with
       `probe_family` before adding it.
-      [0020](experiments/0020-medium-exact-search.md) tested one fixed relabeling
-      for RCM, both Sloan weights, `nd_order`, and `ndfm_order`: all five produced
-      zero wins, with 0.071 s worst combined added local time. A multi-seed test
-      remains open, but one-pass production additions are not supported.
 - [ ] **Sweep the relabelled-AMF `dense_alpha`.** Shipped at α=5.0 only (the base AMF
       candidate's α). α ∈ {0.5, 2.0, 2.5} is the same argument one level down — a
       different α is a different objective, hence another distinct lottery — and it is
@@ -37,14 +33,7 @@ it, rather than deleting it — a resolved question is a useful signpost.
       `lt_1k`). A bucket-weighted budget — more restarts where a win is worth
       more — was never tested. Note `n` is known inside `order()`, so this stays
       a pure function of `(n, nnz)`.
-- [x] **RESOLVED (negative) — The big tied matrices are gated out of everything.**
-      Answered by [0039](experiments/0039-tie-breaker-battery-negative.md): they are
-      gated out for good reason. Nested dissection on these KKT graphs is 2.2x-4.5x
-      WORSE than AMD, not merely unaffordable (`faclay75` METIS ratio 2.2273 at
-      14.7 s; `gabriel10` 4.4925; Scotch on `faclay75` returns 9519x; KaHIP 38-48 s).
-      `probe_large` measured all of them. Do not widen the partitioner gates.
-      Original text follows.
-- [ ] ~~**The big tied matrices are gated out of everything.**~~ `faclay75`
+- [ ] **The big tied matrices are gated out of everything.** `faclay75`
       (n=272878), `acopf_case9241pegase_qcqp` (n=313068), `gabriel10` (n=244056),
       `unitcommit_200_100_1_mod_8` (n=146830) all tie at 1.000 and receive only
       AMD plus at most one AMF pass, because the candidate gates are capped on
@@ -108,18 +97,3 @@ it, rather than deleting it — a resolved question is a useful signpost.
       MD."* Obsolete as written: the portfolio now calls library METIS/Scotch/
       KaHIP, all of which already do multilevel ND with an AMD base case, and
       none breach the cap under their gates.
-
-- [ ] **Is the `lt_1k` subtree chain exhausted?** [0038](experiments/0038-subtree-chain-into-lt1k.md)
-      opened the bucket and took it 0.8965 → 0.8952 with 17 movers, but **55 ties
-      remain** there and only ONE reallocation was tested (`max_blocks 8` x
-      `budget 4M`). Sweep `max_blocks`/`budget`/`max_s` inside the fixed 32M
-      ceiling, and try a third stream on the `n <= 1_000` exact search. `lt_1k`
-      worst is 0.824 s against a 1.72 s corpus worst, so the headroom is real.
-- [ ] **Does `SUBTREE_MIN_N` want to go below 64?** 70 dev matrices have `n < 100`.
-      200 → 64 was worth only 0.7 bip, so the curve is flattening, but it was never
-      pushed to 16 or 32. Cheap to test; bound the setup cost, not just the search.
-- [ ] **Re-measure the base on every new box before trusting any timing page.**
-      The same frontier tree measures 0.829 s (0025's box) and 1.702 s (0026's box).
-      Every absolute second in `memory/` is box-relative. A revision judged safe on
-      a fast box can be at 85% of the cap on a slow one — which is the most likely
-      mechanism behind the three hidden-cap failures in 0025.

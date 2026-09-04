@@ -4,43 +4,11 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
-- Best shippable locally verified candidate score: **0.849251** (fill
-  **0.947647**) on all 300 dev matrices, 2026-09-03. On top of promoted
-  submission `26932eb`, cap the first two medium-tier subtree rounds at
-  `max_s=256` and cap only the first round at 12 blocks. Per bucket:
-  **0.893893 / 0.874387 / 0.796916**; the small and large buckets are exact
-  frontier controls. The direct worst call is 1.079 s versus 1.081 s for the
-  promoted source on this machine. See
-  [0042](experiments/0042-medium-first-round-block-cap.md).
-- Best locally verified candidate score: **0.850370** (weighted geomean flop
-  ratio vs AMD; fill tiebreak **0.948420**), dev corpus **300** matrices,
-  2026-09-03 ([0036](experiments/0036-multiround-cascading-terminal-subtree-refinement.md):
-  multi-round cascading terminal subtree refinement with sparsity-gated large tier).
-  Current official promoted hidden score: **0.875942** (submission `e4a98396`, commit `1417f26`).
-- Per bucket: lt_1k 0.896482 (147) · 1k_10k **0.875531** (108) ·
-  gt_10k **0.796916** (45).
-- Best locally verified candidate score: **0.849801** (weighted geomean flop
-  ratio vs AMD; fill tiebreak **0.947880**), dev corpus **300** matrices, 2026-09-03
-  ([0038](experiments/0038-subtree-chain-into-lt1k.md): the bounded subtree chain
-  extended into `lt_1k`, stacked on
-  [0035](experiments/0035-chained-terminal-subtree-refinement.md)).
-  Base for 0036 is frontier `1417f26` (submission `e4a98396`, hidden
-  **0.875942**), which measures **0.850370** on this box.
-- Per bucket: lt_1k **0.895059** (147) · 1k_10k 0.875531 (108) ·
-  gt_10k 0.796916 (45). `lt_1k` had been frozen at 0.8965 across 0021-0025 and
-  0035; 0036 is the first change to move it.
-- **THIS PAGE LAGS THE CODE — RE-RUN THE BASE, DON'T READ IT.** At commit
-  `1417f26` this block still described 0035 (0.850464 / 0.875665 / 0.797049)
-  while the `mod.rs` committed beside it was already 0036's tree, which measures
-  **0.850370 / 0.875531 / 0.796916**. A stale block silently inflates or deflates
-  whatever delta the next session claims against it. The score is a
-  deterministic, hardware-independent function of (pattern, permutation), so
-  always probe the unmodified base first.
-- **TIMING CALIBRATION IS PER-BOX AND THE SPREAD IS LARGE.** The frontier tree
-  that 0025 measured at "worst 0.829 s" measures **1.702 s** on the 2026-09-03
-  box — ~2x slower. Absolute seconds on pages 0002-0035 are NOT comparable to
-  page 0036. Always re-measure the base on the current box before judging a
-  revision's timing, and compare only within one run series.
+- Best score: **0.868096** (weighted geomean flop ratio vs AMD; fill tiebreak
+  0.958983), dev corpus **300** matrices, 2026-09-02
+  ([0009](experiments/0009-robust-amd-envelope-expansion.md), robust AMD
+  envelope expansion). Previous: 0.870261 / fill 0.960309, 2026-09-02.
+- Per bucket: lt_1k 0.9064 (147) · 1k_10k 0.8963 (108) · gt_10k 0.8182 (45).
 - **The graded corpus is NOT this corpus.** The same tree that scores 0.876925 on
   dev graded **0.898117** on the hidden eval corpus. Both numbers are real; they are
   different corpora. Never quote a dev score as a graded prediction, and prefer
@@ -52,31 +20,21 @@ first; keep it current whenever you add, rename, or retire a page.
 - Current `src/ordering/` approach: a **best-of portfolio** in `mod.rs` — ~30
   candidate orderings (feral AMD/AMF variants, METIS/Scotch/KaHIP, plus
   hand-rolled RCM / Sloan / ND / GGGP / MinFill) **and budgeted relabelled-AMD and
-  relabelled-AMF multi-starts**, plus bounded exact elimination-game search on
-  small and medium sparse graphs and on ranked elimination-tree subtrees. Each
-  is scored with feral's own `Σ cⱼ²` and the
+  relabelled-AMF multi-starts**, each scored with feral's own `Σ cⱼ²` and the
   cheapest returned, anchored on the grader's exact AMD so the ratio can never
   exceed 1.0. See [best-of-portfolio](techniques/best-of-portfolio.md).
 - **Timing headroom is the binding constraint,** but noisier than earlier pages
   claimed: repeat runs of the same probe on the same code vary **~1.6×**, so the
-  local worst case is good to one significant figure only. The final probe
-  measured **0.755 s** (`gams05`) against the 2.0 s SIGKILL; the first candidate
-  probe measured 0.843 s, and the synced parent measured 0.776 s on the same
-  box. Older timing figures were
-  recorded on different hardware — compare timings only within one box, and
-  treat earlier absolute numbers as history. The old "grader is 3-5× slower than
-  local" rule is provably false — see
+  local worst case is good to one significant figure only. Currently **0.439 s**
+  (`arki0016`) against the 2.0 s SIGKILL, up from 0.384 s before
+  [0005](experiments/0005-relabelled-amf-multistart.md). NOTE those two numbers
+  come from a box roughly 2.5× faster than the one the older 0.9–1.0 s figures on
+  this page were recorded on — compare timings only within one box, and treat the
+  earlier absolute numbers as history. The old "grader is 3-5× slower than local"
+  rule is provably false — see
   [0003](experiments/0003-relabelled-amd-multistart.md). Use the comparative rule
   instead: stay at or below the worst case of a revision known to have passed.
-  The failed 0021 revision measured **0.801 s** locally but timed out on a hidden
-  matrix because it requested up to 128M search operations. The bounded 0022
-  revision requests at most 32M and measured **0.767–0.777 s** locally. Measure
-  with `probe_timing_and_score` before adding anything. The first 0025 attempt
-  also timed out on hidden data: its extra 32M phase had a broad
-  `n<=350k/nnz<=1.5M` gate. A 16M additive retry inside
-  `n<=80k/nnz<=250k` failed with the same timeout. The replacement design
-  removes the frontier's 24M terminal pass, substitutes the 16M allocation,
-  and measures **0.829 s** locally.
+  Measure with `probe_timing_and_score` before adding anything.
 - **The search policy of the relabel multi-start is settled: uniform i.i.d. is
   optimal at fixed cost.** 17 explore/exploit policies swept, none robustly better;
   see [0004](experiments/0004-structured-relabelings.md). Do not re-derive it.
@@ -98,8 +56,6 @@ first; keep it current whenever you add, rename, or retire a page.
   - `probe_relabel_budget` — relabelled-AMD under a per-matrix time BUDGET;
     reports score AND true combined worst case for each `(budget, cap)`. This is
     the one that chose the shipped policy.
-  - `probe_tie_breakers` — for every surviving tie with `n >= 1000`, the cost AND
-    the achieved ratio of 16 separator/min-fill candidates. Answered 0027.
   - `probe_relabel_search` — relabelled-AMD SEARCH POLICIES at a FIXED restart
     count (i.e. at identical cost): explore/exploit split x perturbation strength
     x schedule. Scores the pure relabel family against AMD, so policy differences
@@ -135,56 +91,6 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0003-relabelled-amd-multistart.md](experiments/0003-relabelled-amd-multistart.md) — `AMD(Q A Qᵀ)` composed back through `Q` as a randomized-restart minimum degree, on a per-matrix time budget. 0.883906 → **0.876925**. WIN, the largest single gain so far. (Its "wins land in the first handful of restarts" is corrected by [0004](experiments/0004-structured-relabelings.md): true on average, false for the tail wins that carry the score.)
 - [0004-structured-relabelings.md](experiments/0004-structured-relabelings.md) — hill-climbing / structured `Q` instead of i.i.d. `Q`, at equal cost. 17 policies swept. **NEGATIVE**: nothing beats i.i.d. robustly; every apparent win is one matrix (`chp_shorttermplan2d`) and flips sign across corpus halves. Closes the top open question. Adds `probe_relabel_search` and the robustness columns.
 - [0005-relabelled-amf-multistart.md](experiments/0005-relabelled-amf-multistart.md) — 0004's constructive corollary: relabel + **AMF** (min-fill) as a second multi-start beside relabelled AMD (min-degree). 0.876925 → **0.871827**. WIN, 36 better / **0 worse** / 264 identical, wins in all three buckets, survives both corpus halves and drop-top-5. Worst `order()` 0.384 → 0.439 s. Generalises: *any* ordering routine that reads the input numbering becomes a randomized-restart algorithm under `relabel`, for free.
-- [0006](experiments/0006-cycled-amf-amd-multistart.md) — Cycled AMF dense_alpha schedule [5.0, 2.0, -1.0, 1.0, 16.0] and alternating AMD aggressive mode. 0.871827 → **0.871434**. WIN (eval 0.889994, promoted).
-- [0007](experiments/0007-bucket-weighted-relabel-budget.md) — Dimensional budget scaling ($n \ge 10k \to 500k/36$, $n \ge 1k \to 400k/30$). 0.871434 → **0.870672**. WIN (eval 0.889138, promoted).
-- [0008](experiments/0008-relabelled-amf-ceiling-expansion.md) — Raised RELABEL_AMF_MAX_NNZ from 130k to 200k. 0.870672 → **0.870261**. WIN.
-- [0009](experiments/0009-robust-amd-envelope-expansion.md) — Raised ROBUST_MAX_NNZ from 130k to 600k for 5 non-aggressive & dense-detection disabled AMD variants. 0.870261 → **0.868096**. WIN (eval 0.888100, promoted).
-- [0010](experiments/0010-relabelled-minfill-multistart.md) — Exact deficiency multi-start on $n < 2,000, nnz < 10,000$. 0.868096 → **0.867686**. WIN.
-- [0011](experiments/0011-hub-gate-and-floors.md) — Hub-gated restart allocation (`max_deg * 50 <= n`) with mid-band/low-nnz floors + dual-pass independent AMF seeds. 0.867686 → **0.864899**. WIN.
-- [0012](experiments/0012-terminal-adjacent-pair-descent.md) — Terminal adjacent-pair descent on exact objective. 0.864899 → **0.864652**. WIN.
-- [0013](experiments/0013-terminal-simplicial-promotion.md) — Terminal simplicial promotion on exact dynamic graphs. 0.864652 → **0.864462**. WIN.
-- [0014](experiments/0014-custom-quotient-metrics.md) — Custom quotient-graph metrics (SqDiv & SqPure). 0.864462 → **0.863609**. WIN.
-- [0015](experiments/0015-small-simplicial-cycled-amd-minfill.md) — Small-graph simplicial promotion, 6-way cycled AMD & scaled minfill. 0.863609 → **0.863272**. WIN.
-- [0020](experiments/0020-medium-exact-search.md) — Two bounded serial exact-search stages on `1,000 < n <= 6,000`, `nnz <= 30,000`, followed by pair descent when its existing gate allows it. Synced baseline 0.860780 → **0.859116**. WIN.
-- [0021](experiments/0021-exact-subtree-refinement.md) — Exact search over at most 32 ranked, disjoint elimination-tree subtrees with two fixed streams. 0.859116 → **0.851513** publicly, but the hidden run exceeded the 2 s matrix cap. FAILED.
-- [0022](experiments/0022-bounded-subtree-work.md) — Cap subtree search at 32 blocks × one stream × 1M requested operations. Accepted-base 0.859116 → **0.852938** publicly; hidden submission pending.
-- [0023](experiments/0023-subtree-round-3-chain.md) — Chained subtree round 3 (round=1, 32 blocks, min_s 16, **max_s 512**) after hybridnoise's conditional round 2. Frontier base 0.852246 → **0.851642**. PROMOTED hidden 0.877373 (2026-09-03).
-- [0024](experiments/0024-subtree-round-4-chain.md) — Chained subtree round 4 (round=1, 32 blocks, min_s 16, **max_s 768**). 0.851642 → **0.851347**. SUBMITTED (2026-09-03).
-- [0025](experiments/0025-adaptive-terminal-deep-subtree-search.md) — Both 32M and 16M additive terminal passes failed the hidden 2 s cap. The lower-work retry replaces the frontier's 24M terminal pass with at most 16M: 4×4M below 10k vertices, 8×2M above. Frontier source 0.851055 → **0.850594**; worst local `order()` 0.829 s (2026-09-03).
-- [0038](experiments/0038-subtree-chain-into-lt1k.md) — The subtree chain was gated at `n >= 1_000` from 0021 onward, so the whole `lt_1k` bucket never saw the technique that moved the other two. `SUBTREE_MIN_N = 64`, a reallocated small-graph config (8 deep blocks x 4M = the same 32M ceiling), and a second stream on the `n <= 1_000` exact search. 0.850594 → **0.850167**; 17 better / 0 worse / 283 identical; `lt_1k` 0.8965 → 0.8951 with the other buckets unchanged. WIN.
-- [0039](experiments/0039-tie-breaker-battery-negative.md) — 16 separator/min-fill candidates x 31 surviving ties, 496 measurements: **zero wins**, per-candidate minimum ratio exactly 1.0000. METIS on `faclay75` is 2.23x AMD and takes 14.7 s; Scotch returns 9519x; KaHIP 38-48 s. **NEGATIVE**, and it closes the "big tied matrices" open question — the partitioner gates protect the run rather than cost score.
-- [0040](experiments/0040-terminal-small-exact-cascade.md) — Reallocate the
-  small subtree budget to `max_s=256`, 16 blocks x 2M, then run deterministic
-  whole-graph exact search after the complete promoted pipeline, with a second
-  salted parallel round conditioned on a strict first-round win. **0.849801 →
-  0.849309** locally, but submission `1fbb1a08` **FAILED private validation**.
-  The additive terminal work was removed and must not be retried.
-- [0041](experiments/0041-medium-subtree-block-cap.md) — Isolate `max_s=256` to
-  `1000 <= n < 10000`. A global cap helps medium but hurts large; the bucket
-  gate preserves the public gain. **0.849487 → 0.849194**, with small and large
-  buckets unchanged, but submission `fd357537` **FAILED hidden timing**. Direct
-  worst-case runtime rose from 1.081 s to 1.606 s.
-- [0042](experiments/0042-medium-first-round-block-cap.md) — Retain medium
-  `max_s=256` but cap its first round at 12 blocks after diagnosing 0041's exact
-  GitHub Actions failure. **0.849487 → 0.849251**, fill **0.947647**, worst direct
-  call **1.079 s**; full trusted 300-matrix run passes. The 8-block and 750k
-  alternatives are negative controls.
-- [0049](experiments/0049-bounded-medium-terminal-cascade.md) — A fourth bounded
-  medium-window variant still exceeded the hidden 2 s cap. **CLOSED**: do not
-  retry the smaller-window family.
-- [0050](experiments/0050-late-round-budget-step.md) — On the accepted all-8M
-  chain, raise only conditional rounds 4 and 5 to 16M. Dev **0.846054**, hidden
-  **0.871827**, fill **0.955667**. **PROMOTED TO #1** as `28d9a9d2` / `e93779c`.
-- [0051](experiments/0051-round4-budget-step.md) — Raise only round 4 from its
-  accepted 16M to 32M and keep round 5 at 16M. Dev **0.845707**, hidden
-  **0.871418**, fill **0.955486**. **PROMOTED TO #1** as `d6de8499` / `7177486`.
-- [0052](experiments/0052-round4-64m-boundary.md) — Raising round 4 globally
-  from 32M to 64M improved dev to **0.845411**, but submission `de541fe9`
-  exceeded the hidden 2-second matrix cap. Global 64M is closed.
-- [0053](experiments/0053-selective-lower-medium-round4-depth.md) — Reclaim the
-  score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
-  retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;
-  1k-10k worst observed call **0.661 s**. Submitted for hidden validation.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

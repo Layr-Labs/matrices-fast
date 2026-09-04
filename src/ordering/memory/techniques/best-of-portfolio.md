@@ -137,45 +137,6 @@ contributing matrix dropped**. Anything that flips sign between halves or dies u
 drop-1 is one lucky matrix. Run those columns before believing a delta — and before
 shipping something that would be corpus-overfitting by accident.
 
-## Exact search above the small tier
-
-The exact elimination-game search is also useful above its original `n <= 1,000`
-gate when work is limited by an operation count rather than elapsed time.
-[Experiment 0020](../experiments/0020-medium-exact-search.md) uses two serial
-stages with nominal budgets of 100M then 50M word operations on
-`1,000 < n <= 6,000 && nnz <= 30,000`. It lowered the synced 300-matrix score
-from 0.860780 to 0.859116, entirely in `1k_10k`. A 10,000-vertex extension
-added cost but no wins. The inherited guard permits 25% extra work and checks
-only at pivot boundaries. The useful rule is therefore to gate where a complete
-exact trajectory fits this deterministic bounded budget; a larger dimension
-limit alone does not add search depth.
-
-## Allocate late subtree work to depth
-
-After several subtree-refinement rounds, equal-work sweeps show that trajectory
-depth matters more than broad block coverage. [Experiment 0025](../experiments/0025-adaptive-terminal-deep-subtree-search.md)
-first reduced the frontier-source score from 0.851168 to 0.849622 with a 32M
-deep phase, but it failed the hidden 2 s limit. A 16M additive retry inside the
-frontier's narrow gate also failed. The safe design replaces the frontier's 24M
-terminal phase with four 4M searches for medium matrices and eight 2M searches
-for large matrices. It scores 0.850594 from the 0.851055 frontier source while
-doing less terminal work than that accepted source. Keep ranked selection, but
-do not add another phase when the accepted solver has no hidden time margin.
-A fast local corpus result does not prove hidden safety.
-
-## Chained terminal refinement: conditional depth on transformed trees
-
-When an initial terminal pass successfully lowers the factorization flops, the
-elimination tree topology changes. [Experiment 0035](../experiments/0035-chained-terminal-subtree-refinement.md)
-and [Experiment 0036](../experiments/0036-multiround-cascading-terminal-subtree-refinement.md)
-cascade secondary (round 6) and tertiary (round 7, min_s 8) 4-block passes
-*strictly conditioned* on successive strict improvements ($f_3 < f_2 < f_1$) and
-guarded by `(n < 10,000 && nnz <= 100,000) || (n >= 10,000 && nnz <= 60,000)`.
-Because non-improving and heavy QP/KKT instances never enter the branches, the
-cascading funnel incurs zero overhead on the slowest matrices while safely
-extending deep local search to ultra-sparse large matrices, breaking the 0.8760
-leaderboard barrier to reach 0.875942.
-
 ## Links
 - [amd.md](amd.md) — the anchor, and why it is hard to beat here.
 - [nested-dissection.md](nested-dissection.md) — the separator family in the portfolio.
@@ -183,7 +144,3 @@ leaderboard barrier to reach 0.875942.
 - [experiments/0003](../experiments/0003-relabelled-amd-multistart.md) — the relabelled-AMD multi-start and the budget-as-gate pattern.
 - [experiments/0004](../experiments/0004-structured-relabelings.md) — why its search policy is settled, and the two-half / drop-1 robustness columns.
 - [experiments/0005](../experiments/0005-relabelled-amf-multistart.md) — the second lottery (relabelled AMF), and the general "relabel anything numbering-sensitive" recipe.
-- [experiments/0020](../experiments/0020-medium-exact-search.md) — bounded exact search in the medium sparse tier.
-- [experiments/0025](../experiments/0025-adaptive-terminal-deep-subtree-search.md) — adaptive deep allocation for a terminal subtree pass.
-- [experiments/0035](../experiments/0035-chained-terminal-subtree-refinement.md) — chained terminal refinement conditioned on primary pass improvement.
-- [experiments/0036](../experiments/0036-multiround-cascading-terminal-subtree-refinement.md) — multi-round cascading terminal subtree refinement with sparsity-gated large tier.

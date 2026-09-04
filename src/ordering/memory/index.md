@@ -4,6 +4,11 @@ The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
 ## Current best
+- Best locally verified candidate score: **0.844778** (fill **0.944243**), dev
+  corpus 300 matrices, 2026-09-04 ([0055](experiments/0055-subtree-max-n-and-max-sub.md):
+  cap subtree chain at n<=250k and expand max_sub to 1800).
+- Per bucket: lt_1k **0.891820** (147) · 1k_10k **0.868912** (108) ·
+  gt_10k **0.791395** (45).
 - Best shippable locally verified candidate score: **0.849251** (fill
   **0.947647**) on all 300 dev matrices, 2026-09-03. On top of promoted
   submission `26932eb`, cap the first two medium-tier subtree rounds at
@@ -185,6 +190,17 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
   score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
   retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;
   1k-10k worst observed call **0.661 s**. Submitted for hidden validation.
+- [0054](experiments/0054-lt1k-four-stream-exact-search.md) — Expand small-graph
+  (`n <= 1,000 && nnz <= 30,000`) exact elimination search from 2 to 4 streams
+  with independent seeds. Dev **0.845048**, fill **0.944611** (−0.000421; −4.98
+  basis points). `lt_1k` drops 0.893893→**0.891820**; other buckets exact controls.
+- [0055](experiments/0055-subtree-max-n-and-max-sub.md) — Cap subtree chain at
+  `n <= 250k` to exclude acopf (cutting 0.82s latency) and expand `max_sub` from
+  1,200 to 1,800 to unlock large gt_10k subtrees. Dev **0.844778**, fill
+  **0.944243** (−0.000270; −3.20 basis points). `gt_10k` drops
+  0.792071→**0.791395**; `lt_1k` and `1k_10k` are exact controls.
+
+
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

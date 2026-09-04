@@ -375,7 +375,7 @@ const TERMINAL_SUBTREE_SEARCH_WORK_LIMIT: i64 = 16_000_000;
 const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
     min_s: 32,
     max_s: 384,
-    max_sub: 1_200,
+    max_sub: 1_800,
     max_blocks: 32,
     budget: 1_000_000,
     streams: 1,
@@ -400,6 +400,7 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 /// multi-start and the small-graph LNS. Measured: 1_000 -> 200 was worth 2.6 bip,
 /// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
 const SUBTREE_MIN_N: usize = 64;
+const SUBTREE_MAX_N: usize = 250_000;
 
 const MID_MAX_S: usize = 128;
 const LARGE_MAX_S: usize = 384;
@@ -1253,6 +1254,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         for (budget, rng_seed) in [
             (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
             (50_000_000, 0xD1B5_4A32_D192_ED03),
+            (50_000_000, 0x27BB_2EE6_87B0_B0FD),
+            (50_000_000, 0x45A1_89C3_F208_7314),
         ] {
             if let Some((cand, _)) = rgreedy::search(
                 n,
@@ -1323,7 +1326,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // 32M matrix-wide requested-work ceiling. Whole-pattern setup and scoring
     // stay inside the measured corpus envelope rather than running on
     // unbounded hidden inputs.
-    if (SUBTREE_MIN_N..=350_000).contains(&n) && nnz <= 1_500_000 {
+    if (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n) && nnz <= 1_500_000 {
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();

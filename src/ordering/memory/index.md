@@ -5,21 +5,14 @@ first; keep it current whenever you add, rename, or retire a page.
 
 ## Verified 2026-09-05 checkpoint
 
-- Public source `fbd1e62`: dev **0.844594**, fill **0.944255**.
-- Combined exact four-pivot terminal cleanup and atomic search-budget guards:
-  dev **0.844195**, fill **0.944012**; all 300 trusted cases and 36 active tests pass.
-  Isolated worst direct call **0.987 s**, versus **0.962 s** on the original baseline.
-- The earlier triple submission `d17b89c8` exceeded the hidden 2 s cap; no score.
-  The new guards enforce the existing Game counter, not total wall time.
-- [0057: exact four-pivot cleanup](experiments/0057-exact-four-pivot-cleanup.md)
-  records the new formula, fixed-work replacement, budget tests and exclusions.
-- [0056: exact triple cleanup](experiments/0056-exact-triple-cleanup.md) preserves
-  the preceding local experiment. Its subsequent official timeout is recorded above.
-- Official promoted frontier remains **0.870755** on a different hidden corpus;
-  this combined candidate's official result is pending submission/validation.
-  Older current-best entries below are historical and may lag their source.
+- Preceding four-pivot/atomic winner: dev **0.84419540581772**, hidden **0.870307**, officially promoted as `da03dc2c` / source `649c230`.
+- New component-factored five-pivot cleanup with cache and boundary repairs: dev **0.8440714862418132**, fill **0.943946**; all **300 trusted cases and 44 active tests pass**. Exact counts agree with the isolated probe. **42 better / 2 worse / 256 unchanged** versus the preceding winner; both corpus halves and drop-five sensitivity improve. Official follow-up result pending submission/validation.
+- [0059: component five-pivot cleanup](experiments/0059-component-five-pivot-cleanup.md) records the exact formula, native implementation, work ledger, negative controls and source audits.
+- [0057: exact four-pivot cleanup](experiments/0057-exact-four-pivot-cleanup.md) preserves the prior winner. [0056: exact triple cleanup](experiments/0056-exact-triple-cleanup.md) preserves its predecessor and the subsequent hidden timeout.
+- Logical work caps do not prove total wall time. Observed isolated k5 worst **0.970 s**, preceding winner **0.987 s**; timing varies with machine load.
+- Development and hidden scores measure different corpora. Older current-best entries below are historical and may lag their source.
 
-## Current best
+## Historical current-best entries
 - Best shippable locally verified candidate score: **0.849251** (fill
   **0.947647**) on all 300 dev matrices, 2026-09-03. On top of promoted
   submission `26932eb`, cap the first two medium-tier subtree rounds at

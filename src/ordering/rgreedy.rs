@@ -1400,11 +1400,13 @@ pub(crate) fn adjacent_triple_descent(
 }
 
 /// Exact widths after any subset of a fixed four-pivot window is eliminated.
-/// External union counts exclude all four window vertices. Internal adjacency
-/// stays in four-bit masks, so live outside vertices never merge components.
+/// For the pivot's connected component C in H[S + pivot], a nonsingleton C
+/// has width |union N_H(C)| - |C| + 1. Every vertex of C is in that union,
+/// and no eliminated vertex outside C can neighbor C. A singleton instead
+/// has its cached degree plus one. Live outside vertices never merge C.
 struct FourWindow {
     internal_union: [u8; 16],
-    external_count: [u32; 16],
+    component_width: [u32; 16],
 }
 
 impl FourWindow {
@@ -1423,31 +1425,101 @@ impl FourWindow {
             let rest = mask & (mask - 1);
             internal_union[mask] = internal_union[rest] | inside[mask.trailing_zeros() as usize];
         }
-        let mut external_count = [0u32; 16];
-        let mut unions = [0u64; 16];
-        for word in 0..game.w {
-            let mut window_bits = 0;
-            for v in verts {
-                if v >> 6 == word {
-                    window_bits |= 1u64 << (v & 63);
-                }
-            }
-            let outside = rows.map(|row| row[word] & !window_bits);
-            for mask in 1usize..16 {
-                let rest = mask & (mask - 1);
-                unions[mask] = unions[rest] | outside[mask.trailing_zeros() as usize];
-                external_count[mask] += unions[mask].count_ones();
-            }
+        // Connectivity concerns only the four still-live window vertices.
+        // A triple is connected exactly when at least two of its edges exist.
+        // A connected four-set has a spanning-tree leaf whose removal leaves
+        // a connected triple; the omitted vertex must attach to that triple.
+        let mut connected = [false; 16];
+        connected[3] = inside[0] & 2 != 0;
+        connected[5] = inside[0] & 4 != 0;
+        connected[9] = inside[0] & 8 != 0;
+        connected[6] = inside[1] & 4 != 0;
+        connected[10] = inside[1] & 8 != 0;
+        connected[12] = inside[2] & 8 != 0;
+        connected[7] =
+            (connected[3] && (connected[5] || connected[6])) || (connected[5] && connected[6]);
+        connected[11] =
+            (connected[3] && (connected[9] || connected[10])) || (connected[9] && connected[10]);
+        connected[13] =
+            (connected[5] && (connected[9] || connected[12])) || (connected[9] && connected[12]);
+        connected[14] =
+            (connected[6] && (connected[10] || connected[12])) || (connected[10] && connected[12]);
+        connected[15] = (connected[7] && inside[3] != 0)
+            || (connected[11] && inside[2] != 0)
+            || (connected[13] && inside[1] != 0)
+            || (connected[14] && inside[0] != 0);
+
+        // Each connected subset gets a contiguous reduction of a fixed
+        // number of rows. Connectivity branches stay outside the word loops,
+        // with no dynamic subset-plan indexing or per-word scratch traffic.
+        // The fixed arities also expose OR/popcount reductions to vectorization.
+        #[inline]
+        fn union2(a: &[u64], b: &[u64]) -> u32 {
+            a.iter().zip(b).map(|(&a, &b)| (a | b).count_ones()).sum()
+        }
+        #[inline]
+        fn union3(a: &[u64], b: &[u64], c: &[u64]) -> u32 {
+            a.iter()
+                .zip(b)
+                .zip(c)
+                .map(|((&a, &b), &c)| (a | b | c).count_ones())
+                .sum()
+        }
+        #[inline]
+        fn union4(a: &[u64], b: &[u64], c: &[u64], d: &[u64]) -> u32 {
+            a.iter()
+                .zip(b)
+                .zip(c)
+                .zip(d)
+                .map(|(((&a, &b), &c), &d)| (a | b | c | d).count_ones())
+                .sum()
+        }
+        let mut component_width = [0u32; 16];
+        component_width[1] = game.deg[verts[0]] + 1;
+        component_width[2] = game.deg[verts[1]] + 1;
+        component_width[4] = game.deg[verts[2]] + 1;
+        component_width[8] = game.deg[verts[3]] + 1;
+        if connected[3] {
+            component_width[3] = union2(rows[0], rows[1]) - 1;
+        }
+        if connected[5] {
+            component_width[5] = union2(rows[0], rows[2]) - 1;
+        }
+        if connected[9] {
+            component_width[9] = union2(rows[0], rows[3]) - 1;
+        }
+        if connected[6] {
+            component_width[6] = union2(rows[1], rows[2]) - 1;
+        }
+        if connected[10] {
+            component_width[10] = union2(rows[1], rows[3]) - 1;
+        }
+        if connected[12] {
+            component_width[12] = union2(rows[2], rows[3]) - 1;
+        }
+        if connected[7] {
+            component_width[7] = union3(rows[0], rows[1], rows[2]) - 2;
+        }
+        if connected[11] {
+            component_width[11] = union3(rows[0], rows[1], rows[3]) - 2;
+        }
+        if connected[13] {
+            component_width[13] = union3(rows[0], rows[2], rows[3]) - 2;
+        }
+        if connected[14] {
+            component_width[14] = union3(rows[1], rows[2], rows[3]) - 2;
+        }
+        if connected[15] {
+            component_width[15] = union4(rows[0], rows[1], rows[2], rows[3]) - 3;
         }
         Self {
             internal_union,
-            external_count,
+            component_width,
         }
     }
 
     fn width(&self, eliminated: u8, pivot: usize) -> u64 {
-        let bit = 1u8 << pivot;
-        let mut component = bit;
+        let mut component = 1u8 << pivot;
         loop {
             let expanded = component | (self.internal_union[component as usize] & eliminated);
             if expanded == component {
@@ -1455,8 +1527,7 @@ impl FourWindow {
             }
             component = expanded;
         }
-        let live_inside = self.internal_union[component as usize] & !(eliminated | bit);
-        1 + self.external_count[component as usize] as u64 + live_inside.count_ones() as u64
+        self.component_width[component as usize] as u64
     }
 
     /// A subset determines the residual graph. Among equal improving paths,
@@ -1498,12 +1569,13 @@ impl FourWindow {
     }
 }
 
-// Each word reads four rows, excludes four window bits, performs 15 subset
-// union updates/popcounts/accumulations, and handles their indexing. The fixed
-// part covers mask setup, 32 DP transitions plus four incumbent widths, each
-// with at most four component-closure iterations, and path reconstruction.
+// At most 11 connected nonsingleton subsets stream fixed two-, three-, or
+// four-row unions. Reserve 16 units per subset-word for loads, ORs, popcount,
+// accumulation and loop/index work, plus 16 word-level overhead: 192 total.
+// The unchanged fixed allowance covers connectivity, internal masks, 32 DP
+// transitions, four incumbent widths, component closures and reconstruction.
 fn four_window_work(words: usize) -> usize {
-    256usize.saturating_mul(words).saturating_add(4096)
+    192usize.saturating_mul(words).saturating_add(4096)
 }
 
 /// One complete offset cycle of exact four-pivot descent, replacing the final
@@ -1589,6 +1661,334 @@ pub(crate) fn adjacent_four_descent(
             k += 4;
             if k + 3 < n {
                 for &v in &cur[k - 4..k] {
+                    if !work.eliminate(&mut game, v) {
+                        return changed.then_some(cur);
+                    }
+                }
+            }
+        }
+    }
+    changed.then_some(cur)
+}
+
+/// Exact component widths for a fixed five-pivot window. Only connected
+/// nonsingletons stream graph rows; singleton widths use cached live degrees.
+/// The topology and all scalar DP work are charged before metadata setup, and
+/// the topology-dependent word charge is paid before any row reduction.
+struct FiveWindow {
+    internal_union: [u8; 32],
+    component_width: [u32; 32],
+}
+
+// Logical work, not a CPU-instruction or wall-time bound: 8192 covers the
+// 25 inside-edge tests, 31 internal unions/connectivity closures, 80 DP
+// transitions and five incumbent widths (at most five closure iterations
+// each), reduction setup, initialization and reconstruction. A reduction over
+// s <= 5 rows uses at most 3*s+3 <= 18 units per word including iterators;
+// round up to 20 per connected nonsingleton plus 16 word-overhead units.
+const FIVE_WINDOW_SCALAR_WORK: usize = 8192;
+
+fn five_window_scan_work(words: usize, connected_nonsingletons: usize) -> usize {
+    20usize
+        .saturating_mul(connected_nonsingletons)
+        .saturating_add(16)
+        .saturating_mul(words)
+}
+
+impl FiveWindow {
+    fn new(game: &Game<'_>, verts: [usize; 5], work: &mut TripleWork) -> Option<Self> {
+        if !work.charge(FIVE_WINDOW_SCALAR_WORK) {
+            return None;
+        }
+        let rows = verts.map(|v| &game.adj[v * game.w..(v + 1) * game.w]);
+        let mut inside = [0u8; 5];
+        for i in 0..5 {
+            for j in 0..5 {
+                if rows[i][verts[j] >> 6] & (1u64 << (verts[j] & 63)) != 0 {
+                    inside[i] |= 1 << j;
+                }
+            }
+        }
+        let mut internal_union = [0u8; 32];
+        for mask in 1usize..32 {
+            let rest = mask & (mask - 1);
+            internal_union[mask] = internal_union[rest] | inside[mask.trailing_zeros() as usize];
+        }
+        let mut connected = [false; 32];
+        let mut q = 0;
+        for mask in 1usize..32 {
+            let mut component = 1u8 << mask.trailing_zeros();
+            loop {
+                let expanded = component | (internal_union[component as usize] & mask as u8);
+                if expanded == component {
+                    break;
+                }
+                component = expanded;
+            }
+            connected[mask] = component as usize == mask;
+            if connected[mask] && mask.count_ones() > 1 {
+                q += 1;
+            }
+        }
+        if !work.charge(five_window_scan_work(game.w, q)) {
+            return None;
+        }
+        // Each topology branch is outside its fixed-arity contiguous word
+        // reduction. There is no dynamic per-word subset plan or scratch union.
+        #[inline]
+        fn union2(a: &[u64], b: &[u64]) -> u32 {
+            a.iter().zip(b).map(|(&a, &b)| (a | b).count_ones()).sum()
+        }
+        #[inline]
+        fn union3(a: &[u64], b: &[u64], c: &[u64]) -> u32 {
+            a.iter()
+                .zip(b)
+                .zip(c)
+                .map(|((&a, &b), &c)| (a | b | c).count_ones())
+                .sum()
+        }
+        #[inline]
+        fn union4(a: &[u64], b: &[u64], c: &[u64], d: &[u64]) -> u32 {
+            a.iter()
+                .zip(b)
+                .zip(c)
+                .zip(d)
+                .map(|(((&a, &b), &c), &d)| (a | b | c | d).count_ones())
+                .sum()
+        }
+        #[inline]
+        fn union5(a: &[u64], b: &[u64], c: &[u64], d: &[u64], e: &[u64]) -> u32 {
+            a.iter()
+                .zip(b)
+                .zip(c)
+                .zip(d)
+                .zip(e)
+                .map(|((((&a, &b), &c), &d), &e)| (a | b | c | d | e).count_ones())
+                .sum()
+        }
+        let mut component_width = [0u32; 32];
+        for i in 0..5 {
+            component_width[1 << i] = game.deg[verts[i]] + 1;
+        }
+        if connected[3] {
+            component_width[3] = union2(rows[0], rows[1]) - 1;
+        }
+        if connected[5] {
+            component_width[5] = union2(rows[0], rows[2]) - 1;
+        }
+        if connected[6] {
+            component_width[6] = union2(rows[1], rows[2]) - 1;
+        }
+        if connected[7] {
+            component_width[7] = union3(rows[0], rows[1], rows[2]) - 2;
+        }
+        if connected[9] {
+            component_width[9] = union2(rows[0], rows[3]) - 1;
+        }
+        if connected[10] {
+            component_width[10] = union2(rows[1], rows[3]) - 1;
+        }
+        if connected[11] {
+            component_width[11] = union3(rows[0], rows[1], rows[3]) - 2;
+        }
+        if connected[12] {
+            component_width[12] = union2(rows[2], rows[3]) - 1;
+        }
+        if connected[13] {
+            component_width[13] = union3(rows[0], rows[2], rows[3]) - 2;
+        }
+        if connected[14] {
+            component_width[14] = union3(rows[1], rows[2], rows[3]) - 2;
+        }
+        if connected[15] {
+            component_width[15] = union4(rows[0], rows[1], rows[2], rows[3]) - 3;
+        }
+        if connected[17] {
+            component_width[17] = union2(rows[0], rows[4]) - 1;
+        }
+        if connected[18] {
+            component_width[18] = union2(rows[1], rows[4]) - 1;
+        }
+        if connected[19] {
+            component_width[19] = union3(rows[0], rows[1], rows[4]) - 2;
+        }
+        if connected[20] {
+            component_width[20] = union2(rows[2], rows[4]) - 1;
+        }
+        if connected[21] {
+            component_width[21] = union3(rows[0], rows[2], rows[4]) - 2;
+        }
+        if connected[22] {
+            component_width[22] = union3(rows[1], rows[2], rows[4]) - 2;
+        }
+        if connected[23] {
+            component_width[23] = union4(rows[0], rows[1], rows[2], rows[4]) - 3;
+        }
+        if connected[24] {
+            component_width[24] = union2(rows[3], rows[4]) - 1;
+        }
+        if connected[25] {
+            component_width[25] = union3(rows[0], rows[3], rows[4]) - 2;
+        }
+        if connected[26] {
+            component_width[26] = union3(rows[1], rows[3], rows[4]) - 2;
+        }
+        if connected[27] {
+            component_width[27] = union4(rows[0], rows[1], rows[3], rows[4]) - 3;
+        }
+        if connected[28] {
+            component_width[28] = union3(rows[2], rows[3], rows[4]) - 2;
+        }
+        if connected[29] {
+            component_width[29] = union4(rows[0], rows[2], rows[3], rows[4]) - 3;
+        }
+        if connected[30] {
+            component_width[30] = union4(rows[1], rows[2], rows[3], rows[4]) - 3;
+        }
+        if connected[31] {
+            component_width[31] = union5(rows[0], rows[1], rows[2], rows[3], rows[4]) - 4;
+        }
+        Some(Self {
+            internal_union,
+            component_width,
+        })
+    }
+
+    fn width(&self, eliminated: u8, pivot: usize) -> u64 {
+        let mut component = 1u8 << pivot;
+        loop {
+            let expanded = component | (self.internal_union[component as usize] & eliminated);
+            if expanded == component {
+                break;
+            }
+            component = expanded;
+        }
+        self.component_width[component as usize] as u64
+    }
+
+    // All paths to a subset have equal length. Five base-eight position digits
+    // fit in u16, whose numeric order therefore gives global lexicographic ties.
+    // An optimum tied with the incumbent always keeps the original order.
+    fn solve(&self) -> ([usize; 5], u64, u64) {
+        let mut best = [u64::MAX; 32];
+        let mut path = [u16::MAX; 32];
+        best[0] = 0;
+        path[0] = 0;
+        for mask in 0usize..31 {
+            for pivot in 0..5 {
+                let bit = 1usize << pivot;
+                if mask & bit != 0 {
+                    continue;
+                }
+                let width = self.width(mask as u8, pivot);
+                let cost = best[mask] + width * width;
+                let code = (path[mask] << 3) | pivot as u16;
+                let next = mask | bit;
+                if cost < best[next] || (cost == best[next] && code < path[next]) {
+                    best[next] = cost;
+                    path[next] = code;
+                }
+            }
+        }
+        let incumbent = (0..5)
+            .map(|pivot| {
+                let width = self.width((1 << pivot) - 1, pivot);
+                width * width
+            })
+            .sum();
+        let order = if best[31] < incumbent {
+            [12, 9, 6, 3, 0].map(|shift| ((path[31] >> shift) & 7) as usize)
+        } else {
+            [0, 1, 2, 3, 4]
+        };
+        (order, best[31], incumbent)
+    }
+}
+
+/// One complete five-offset, stride-five terminal cycle under the inherited
+/// single cleanup allowance. Finished strict gains and untouched suffixes
+/// survive either metadata/scan refusal or replay exhaustion. Windows shorter
+/// than five, including n=4 previously handled by the four-pivot pass, do nothing.
+pub(crate) fn adjacent_five_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    budget: i64,
+) -> Option<Vec<usize>> {
+    if n < 5 || n > MAX_N || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
+        return None;
+    }
+    let mut work = TripleWork { remaining: budget };
+    let validation = (n + 1).saturating_add(row_idx.len()).saturating_add(2 * n);
+    if !work.charge(validation)
+        || col_ptr.first().copied() != Some(0)
+        || col_ptr.last().copied() != Some(row_idx.len())
+        || col_ptr
+            .windows(2)
+            .any(|p| p[0] > p[1] || p[1] > row_idx.len())
+        || row_idx.iter().any(|&v| v >= n)
+    {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    let words = n.div_ceil(64);
+    let build = n
+        .saturating_mul(words)
+        .saturating_add(2usize.saturating_mul(row_idx.len()))
+        .saturating_add(n);
+    if !work.charge(build) {
+        return None;
+    }
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    let setup = 2usize
+        .saturating_mul(n)
+        .saturating_mul(words)
+        .saturating_add(13usize.saturating_mul(n))
+        .saturating_add(words);
+    if !work.charge(setup) {
+        return None;
+    }
+    let mut game = Game::new(n, &adj0)?;
+    let mut cur = seed.to_vec();
+    let mut changed = false;
+    let reset = 2usize
+        .saturating_mul(n)
+        .saturating_mul(words)
+        .saturating_add(8usize.saturating_mul(n));
+    for offset in 0..5 {
+        if offset + 5 > n {
+            break;
+        }
+        if !work.charge(reset) {
+            return changed.then_some(cur);
+        }
+        game.reset();
+        for &v in cur.iter().take(offset) {
+            if !work.eliminate(&mut game, v) {
+                return changed.then_some(cur);
+            }
+        }
+        let mut k = offset;
+        while k + 4 < n {
+            let window = [cur[k], cur[k + 1], cur[k + 2], cur[k + 3], cur[k + 4]];
+            let Some(kernel) = FiveWindow::new(&game, window, &mut work) else {
+                return changed.then_some(cur);
+            };
+            let (order, best, incumbent) = kernel.solve();
+            if best < incumbent {
+                cur[k..k + 5].copy_from_slice(&order.map(|i| window[i]));
+                changed = true;
+            }
+            k += 5;
+            if k + 4 < n {
+                for &v in &cur[k - 5..k] {
                     if !work.eliminate(&mut game, v) {
                         return changed.then_some(cur);
                     }
@@ -1769,6 +2169,50 @@ pub(crate) fn simplicial_promotion(
 // at a time.
 // ════════════════════════════════════════════════════════════════════════════
 
+// Reuse the thread's local-id map, clearing every entry touched by the previous
+// block even if its boundary was rejected early. Accepted blocks retain the
+// incumbent S order followed by first-seen original-graph boundary vertices.
+fn collect_subtree_vertices(
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    block: &[usize],
+    max_sub: usize,
+    local: &mut [u32],
+    touched: &mut Vec<usize>,
+    verts: &mut Vec<usize>,
+) -> bool {
+    verts.clear();
+    for &v in touched.iter() {
+        local[v] = u32::MAX;
+    }
+    touched.clear();
+    let limit = max_sub.min(MAX_N);
+    if block.len() > limit {
+        return false;
+    }
+    // S first: local id i is position a + i, so its seed is the identity.
+    for &v in block {
+        local[v] = verts.len() as u32;
+        touched.push(v);
+        verts.push(v);
+    }
+    for &v in block {
+        for &u in &row_idx[col_ptr[v]..col_ptr[v + 1]] {
+            if u < local.len() && local[u] == u32::MAX {
+                // The next distinct boundary vertex makes this block ineligible.
+                // Leave the partial map in touched for the next call to clear.
+                if verts.len() == limit {
+                    return false;
+                }
+                local[u] = verts.len() as u32;
+                touched.push(u);
+                verts.push(u);
+            }
+        }
+    }
+    true
+}
+
 /// Re-order the inside of elimination-tree SUBTREES of a postordered incumbent.
 ///
 /// ## Why a subtree is an exactly-separable subproblem
@@ -1905,33 +2349,18 @@ pub(crate) fn subtree_refine(
                         let (a, b) = blocks_ro[bi];
                         bi += nthreads;
                         let ssz = b + 1 - a;
-                        verts.clear();
-                        for &c in touched.iter() {
-                            local[c] = u32::MAX;
-                        }
-                        touched.clear();
-                        // S first, in incumbent block order: the seed order is
-                        // then the identity, and local id i is position a + i.
-                        for &v in &perm_ro[a..=b] {
-                            local[v] = verts.len() as u32;
-                            touched.push(v);
-                            verts.push(v);
-                        }
-                        // Boundary: original-graph neighbours of S outside S.
-                        for i in 0..ssz {
-                            let v = verts[i];
-                            for &u in &row_idx[col_ptr[v]..col_ptr[v + 1]] {
-                                if u < n && local[u] == u32::MAX {
-                                    local[u] = verts.len() as u32;
-                                    touched.push(u);
-                                    verts.push(u);
-                                }
-                            }
-                        }
-                        let m = verts.len();
-                        if m > cfg.max_sub || m > MAX_N {
+                        if !collect_subtree_vertices(
+                            col_ptr,
+                            row_idx,
+                            &perm_ro[a..=b],
+                            cfg.max_sub,
+                            &mut local,
+                            &mut touched,
+                            &mut verts,
+                        ) {
                             continue;
                         }
+                        let m = verts.len();
 
                         // Induced adjacency over S u boundary, as bitsets.
                         let w = m.div_ceil(64);
@@ -2051,6 +2480,107 @@ pub(crate) struct SubCfg {
     pub(crate) rank_blocks: bool,
     /// Zero-based outer RGSUB round, used only to diversify an equal-work seed.
     pub(crate) round: usize,
+}
+
+#[cfg(test)]
+mod subtree_preparation_tests {
+    use super::super::Pattern;
+    use super::*;
+
+    #[test]
+    fn rejected_hub_boundary_is_capped_and_next_block_clears_partial_map() {
+        let n = MAX_N + 8;
+        let edges: Vec<_> = (1..n).map(|v| (0, v)).collect();
+        let pat = Pattern::from_edges(n, &edges);
+        let mut local = vec![u32::MAX; n];
+        let mut touched = Vec::new();
+        let mut verts = Vec::new();
+        for max_sub in [4, usize::MAX] {
+            let limit = max_sub.min(MAX_N);
+            assert!(!collect_subtree_vertices(
+                &pat.col_ptr,
+                &pat.row_idx,
+                &[0, 1],
+                max_sub,
+                &mut local,
+                &mut touched,
+                &mut verts,
+            ));
+            assert_eq!(verts.len(), limit);
+            assert_eq!(touched, verts);
+            assert_eq!(local.iter().filter(|&&v| v != u32::MAX).count(), limit);
+            assert_eq!(local[limit], u32::MAX);
+
+            // Both leaves connect to the old block's hub. Its stale local id
+            // must be erased before it becomes boundary id 2 for this block.
+            assert!(collect_subtree_vertices(
+                &pat.col_ptr,
+                &pat.row_idx,
+                &[n - 2, n - 1],
+                3,
+                &mut local,
+                &mut touched,
+                &mut verts,
+            ));
+            assert_eq!(verts, [n - 2, n - 1, 0]);
+            assert_eq!(touched, verts);
+            assert_eq!(local[0], 2);
+            assert_eq!(local[n - 2], 0);
+            assert_eq!(local[n - 1], 1);
+            assert!(local[1..n - 2].iter().all(|&v| v == u32::MAX));
+        }
+    }
+
+    #[test]
+    fn accepted_subtree_vertices_match_uncapped_reference_order() {
+        let n = 7;
+        let edges: Vec<_> = (0..n)
+            .flat_map(|u| ((u + 1)..n).map(move |v| (u, v)))
+            .filter(|&(u, v)| (u + v) % 3 != 0)
+            .collect();
+        let pat = Pattern::from_edges(n, &edges);
+        let mut local = vec![u32::MAX; n];
+        let mut touched = Vec::new();
+        let mut verts = Vec::new();
+        for mask in 1usize..(1 << n) {
+            let block: Vec<_> = (0..n).rev().filter(|&v| mask & (1 << v) != 0).collect();
+            // A simple uncapped list reference has neither a local-id map nor
+            // an early exit; it enumerates the full boundary in legacy order.
+            let mut expected = block.clone();
+            for &v in &block {
+                for &u in &pat.row_idx[pat.col_ptr[v]..pat.col_ptr[v + 1]] {
+                    if !expected.contains(&u) {
+                        expected.push(u);
+                    }
+                }
+            }
+            for limit in 0..=n + 1 {
+                let accepted = collect_subtree_vertices(
+                    &pat.col_ptr,
+                    &pat.row_idx,
+                    &block,
+                    limit,
+                    &mut local,
+                    &mut touched,
+                    &mut verts,
+                );
+                assert_eq!(accepted, expected.len() <= limit);
+                assert!(verts.len() <= limit);
+                if accepted {
+                    assert_eq!(verts, expected);
+                    for v in 0..n {
+                        assert_eq!(
+                            local[v],
+                            expected
+                                .iter()
+                                .position(|&u| u == v)
+                                .map_or(u32::MAX, |i| i as u32)
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2221,6 +2751,108 @@ mod four_window_tests {
     use super::super::{flops_of, is_bijection, Pattern, ScoringPattern};
     use super::*;
 
+    // Frozen winning kernel, test-only: compare exact widths, costs, and ties
+    // independently of the optimized connected-subset representation.
+    /// Exact widths after any subset of a fixed four-pivot window is eliminated.
+    /// External union counts exclude all four window vertices. Internal adjacency
+    /// stays in four-bit masks, so live outside vertices never merge components.
+    struct LegacyFourWindow {
+        internal_union: [u8; 16],
+        external_count: [u32; 16],
+    }
+
+    impl LegacyFourWindow {
+        fn new(game: &Game<'_>, verts: [usize; 4]) -> Self {
+            let rows = verts.map(|v| &game.adj[v * game.w..(v + 1) * game.w]);
+            let mut inside = [0u8; 4];
+            for i in 0..4 {
+                for j in 0..4 {
+                    if rows[i][verts[j] >> 6] & (1u64 << (verts[j] & 63)) != 0 {
+                        inside[i] |= 1 << j;
+                    }
+                }
+            }
+            let mut internal_union = [0u8; 16];
+            for mask in 1usize..16 {
+                let rest = mask & (mask - 1);
+                internal_union[mask] =
+                    internal_union[rest] | inside[mask.trailing_zeros() as usize];
+            }
+            let mut external_count = [0u32; 16];
+            let mut unions = [0u64; 16];
+            for word in 0..game.w {
+                let mut window_bits = 0;
+                for v in verts {
+                    if v >> 6 == word {
+                        window_bits |= 1u64 << (v & 63);
+                    }
+                }
+                let outside = rows.map(|row| row[word] & !window_bits);
+                for mask in 1usize..16 {
+                    let rest = mask & (mask - 1);
+                    unions[mask] = unions[rest] | outside[mask.trailing_zeros() as usize];
+                    external_count[mask] += unions[mask].count_ones();
+                }
+            }
+            Self {
+                internal_union,
+                external_count,
+            }
+        }
+
+        fn width(&self, eliminated: u8, pivot: usize) -> u64 {
+            let bit = 1u8 << pivot;
+            let mut component = bit;
+            loop {
+                let expanded = component | (self.internal_union[component as usize] & eliminated);
+                if expanded == component {
+                    break;
+                }
+                component = expanded;
+            }
+            let live_inside = self.internal_union[component as usize] & !(eliminated | bit);
+            1 + self.external_count[component as usize] as u64 + live_inside.count_ones() as u64
+        }
+
+        /// A subset determines the residual graph. Among equal improving paths,
+        /// the base-four positional path code supplies a deterministic lexicographic
+        /// tie-break; an optimum tied with the incumbent retains the incumbent.
+        fn solve(&self) -> ([usize; 4], u64, u64) {
+            let mut best = [u64::MAX; 16];
+            let mut path = [u8::MAX; 16];
+            best[0] = 0;
+            path[0] = 0;
+            for mask in 0usize..15 {
+                for pivot in 0..4 {
+                    let bit = 1usize << pivot;
+                    if mask & bit != 0 {
+                        continue;
+                    }
+                    let width = self.width(mask as u8, pivot);
+                    let cost = best[mask] + width * width;
+                    let code = (path[mask] << 2) | pivot as u8;
+                    let next = mask | bit;
+                    if cost < best[next] || (cost == best[next] && code < path[next]) {
+                        best[next] = cost;
+                        path[next] = code;
+                    }
+                }
+            }
+            let incumbent = (0..4)
+                .map(|pivot| {
+                    let width = self.width((1 << pivot) - 1, pivot);
+                    width * width
+                })
+                .sum();
+            let order = if best[15] < incumbent {
+                [6, 4, 2, 0].map(|shift| ((path[15] >> shift) & 3) as usize)
+            } else {
+                [0, 1, 2, 3]
+            };
+            (order, best[15], incumbent)
+        }
+    }
+
     // Independent oracle: explicit pairwise clique insertion in a Boolean
     // adjacency matrix. It uses no subset, component or union formula.
     fn oracle_eliminate(graph: &mut [Vec<bool>], vertex: usize) -> u64 {
@@ -2272,6 +2904,8 @@ mod four_window_tests {
             oracle_eliminate(&mut graph, v);
         }
         let kernel = FourWindow::new(&game, window);
+        let legacy = LegacyFourWindow::new(&game, window);
+        assert_eq!(kernel.solve(), legacy.solve(), "legacy tie choices changed");
         for mask in 0usize..16 {
             let mut residual = graph.clone();
             for pivot in 0..4 {
@@ -2283,6 +2917,10 @@ mod four_window_tests {
                 if mask & (1 << pivot) == 0 {
                     let width =
                         residual[window[pivot]].iter().filter(|&&edge| edge).count() as u64 + 1;
+                    assert_eq!(
+                        kernel.width(mask as u8, pivot),
+                        legacy.width(mask as u8, pivot)
+                    );
                     assert_eq!(
                         kernel.width(mask as u8, pivot),
                         width,
@@ -2341,8 +2979,11 @@ mod four_window_tests {
                 .enumerate()
                 .filter_map(|(i, edge)| (mask & (1 << i) != 0).then_some(edge))
                 .collect();
-            verify_window(5, &edges, &[], [0, 1, 2, 3]);
-            windows += 1;
+            for omitted in 0..5 {
+                let window: Vec<_> = (0..5).filter(|&v| v != omitted).collect();
+                verify_window(5, &edges, &[], window.try_into().unwrap());
+                windows += 1;
+            }
         }
         let mut rng = 0xD247_C168_590B_AE3F;
         for n in [8, 17, 65] {
@@ -2376,6 +3017,135 @@ mod four_window_tests {
             windows * 32,
             windows * 24
         );
+    }
+
+    #[test]
+    fn four_components_keep_shared_outside_vertices_live() {
+        let edges = [
+            (0, 1),
+            (2, 3),
+            (0, 4),
+            (1, 4),
+            (2, 4),
+            (3, 4),
+            (0, 5),
+            (2, 5),
+            (1, 6),
+            (3, 6),
+        ];
+        // The two internal components share outside neighbors; these live
+        // vertices must not join their component-width calculations.
+        for order in permutations() {
+            verify_window(7, &edges, &[], order);
+        }
+        // Eliminated prefixes create the two internal edges, including one
+        // across a bitset-word boundary. Several shared outsiders stay live.
+        let edges = [
+            (0, 2),
+            (2, 63),
+            (64, 3),
+            (3, 129),
+            (0, 1),
+            (63, 1),
+            (64, 1),
+            (129, 1),
+            (0, 65),
+            (64, 65),
+            (63, 128),
+            (129, 128),
+        ];
+        let window = [0, 63, 64, 129];
+        for prefix in [&[][..], &[2][..], &[2, 3][..]] {
+            for order in [[0, 1, 2, 3], [3, 1, 0, 2], [2, 0, 3, 1]] {
+                verify_window(130, &edges, prefix, order.map(|i| window[i]));
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "bounded paired synthetic-kernel timing; run separately from corpus timing"]
+    fn four_component_kernel_microbenchmark() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        fn checksum(result: ([usize; 4], u64, u64)) -> u64 {
+            let (order, best, incumbent) = result;
+            let path = order.iter().fold(0u64, |code, &v| (code << 2) | v as u64);
+            best.wrapping_add(incumbent).wrapping_add(path)
+        }
+
+        let mut rng = 0x762E_4CA1_9DB3_805F;
+        for n in [65, 257, 1025, 4000] {
+            let window = [0, n / 3, 2 * n / 3, n - 1];
+            for shape in ["empty", "pair", "path", "clique"] {
+                let mut edges = Vec::new();
+                for &v in &window {
+                    for outside in 0..n {
+                        if !window.contains(&outside) && xs64(&mut rng) % 8 == 0 {
+                            edges.push((v, outside));
+                        }
+                    }
+                }
+                for i in 0..4 {
+                    for j in i + 1..4 {
+                        if shape == "clique"
+                            || (shape == "path" && j == i + 1)
+                            || (shape == "pair" && i == 0 && j == 1)
+                        {
+                            edges.push((window[i], window[j]));
+                        }
+                    }
+                }
+                let pat = Pattern::from_edges(n, &edges);
+                let adj = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+                let mut game = Game::new(n, &adj).unwrap();
+                game.reset();
+                assert_eq!(
+                    FourWindow::new(&game, window).solve(),
+                    LegacyFourWindow::new(&game, window).solve()
+                );
+                for _ in 0..128 {
+                    black_box(FourWindow::new(black_box(&game), black_box(window)).solve());
+                    black_box(LegacyFourWindow::new(black_box(&game), black_box(window)).solve());
+                }
+                let run = |legacy: bool| {
+                    let start = Instant::now();
+                    let mut sum = 0u64;
+                    if legacy {
+                        for _ in 0..2000 {
+                            sum = sum.wrapping_add(checksum(black_box(
+                                LegacyFourWindow::new(black_box(&game), black_box(window)).solve(),
+                            )));
+                        }
+                    } else {
+                        for _ in 0..2000 {
+                            sum = sum.wrapping_add(checksum(black_box(
+                                FourWindow::new(black_box(&game), black_box(window)).solve(),
+                            )));
+                        }
+                    }
+                    (start.elapsed().as_nanos(), black_box(sum))
+                };
+                let mut legacy_ns = 0;
+                let mut component_ns = 0;
+                for round in 0..4 {
+                    let first = run(round % 2 == 0);
+                    let second = run(round % 2 != 0);
+                    assert_eq!(first.1, second.1);
+                    let (old, new) = if round % 2 == 0 {
+                        (first, second)
+                    } else {
+                        (second, first)
+                    };
+                    legacy_ns += old.0;
+                    component_ns += new.0;
+                }
+                println!(
+                    "FOUR_COMPONENT_BENCH n={n} shape={shape} iterations=8000 legacy_ns={legacy_ns} component_ns={component_ns} ratio={:.4}",
+                    component_ns as f64 / legacy_ns as f64
+                );
+            }
+        }
     }
 
     fn canonical(pat: &Pattern, perm: &[usize]) -> u64 {
@@ -2467,5 +3237,316 @@ mod four_window_tests {
         }
         assert!(improvements > 0);
         println!("FOUR_CANONICAL improving_cases={improvements}");
+    }
+}
+
+#[cfg(test)]
+mod five_window_tests {
+    use super::super::{flops_of, is_bijection, Pattern, ScoringPattern};
+    use super::*;
+
+    // Independent Boolean clique elimination: no component or bitset formula.
+    fn oracle_eliminate(graph: &mut [Vec<bool>], vertex: usize) -> u64 {
+        let neighbors: Vec<_> = graph[vertex]
+            .iter()
+            .enumerate()
+            .filter_map(|(v, &edge)| edge.then_some(v))
+            .collect();
+        for &u in &neighbors {
+            graph[u][vertex] = false;
+            for &v in &neighbors {
+                if u != v {
+                    graph[u][v] = true;
+                }
+            }
+        }
+        graph[vertex].fill(false);
+        neighbors.len() as u64 + 1
+    }
+
+    fn permutations() -> Vec<[usize; 5]> {
+        fn visit(order: &mut [usize; 5], depth: usize, used: u8, out: &mut Vec<[usize; 5]>) {
+            if depth == 5 {
+                out.push(*order);
+                return;
+            }
+            for v in 0..5 {
+                if used & (1 << v) == 0 {
+                    order[depth] = v;
+                    visit(order, depth + 1, used | (1 << v), out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        visit(&mut [0; 5], 0, 0, &mut out);
+        out
+    }
+
+    fn canonical(pat: &Pattern, perm: &[usize]) -> u64 {
+        flops_of(
+            &ScoringPattern {
+                n: pat.n,
+                col_ptr: pat.col_ptr.clone(),
+                row_idx: pat.row_idx.clone(),
+            },
+            perm,
+        )
+    }
+
+    fn verify_window(n: usize, edges: &[(usize, usize)], prefix: &[usize], window: [usize; 5]) {
+        let pat = Pattern::from_edges(n, edges);
+        let adj = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+        let mut game = Game::new(n, &adj).unwrap();
+        game.reset();
+        let mut graph = vec![vec![false; n]; n];
+        for &(u, v) in edges {
+            graph[u][v] = true;
+            graph[v][u] = true;
+        }
+        for &v in prefix {
+            game.eliminate(v);
+            oracle_eliminate(&mut graph, v);
+        }
+        let mut work = TripleWork {
+            remaining: 1_000_000,
+        };
+        let kernel = FiveWindow::new(&game, window, &mut work).unwrap();
+        for mask in 0usize..32 {
+            let mut residual = graph.clone();
+            for pivot in 0..5 {
+                if mask & (1 << pivot) != 0 {
+                    oracle_eliminate(&mut residual, window[pivot]);
+                }
+            }
+            for pivot in 0..5 {
+                if mask & (1 << pivot) == 0 {
+                    let width =
+                        residual[window[pivot]].iter().filter(|&&edge| edge).count() as u64 + 1;
+                    assert_eq!(
+                        kernel.width(mask as u8, pivot),
+                        width,
+                        "n={n} prefix={prefix:?} window={window:?} mask={mask} pivot={pivot}"
+                    );
+                }
+            }
+        }
+        let mut optimum = u64::MAX;
+        let mut best_order = [0, 1, 2, 3, 4];
+        let mut incumbent = 0;
+        let mut reference_residual = None;
+        for order in permutations() {
+            let mut residual = graph.clone();
+            let mut cost = 0;
+            let mut eliminated = 0;
+            for pivot in order {
+                let width = oracle_eliminate(&mut residual, window[pivot]);
+                assert_eq!(kernel.width(eliminated, pivot), width);
+                eliminated |= 1 << pivot;
+                cost += width * width;
+            }
+            if order == [0, 1, 2, 3, 4] {
+                incumbent = cost;
+            }
+            if cost < optimum {
+                optimum = cost;
+                best_order = order;
+            }
+            if let Some(reference) = &reference_residual {
+                assert_eq!(
+                    &residual, reference,
+                    "full-window residual depends on order"
+                );
+            } else {
+                reference_residual = Some(residual);
+            }
+        }
+        if optimum == incumbent {
+            best_order = [0, 1, 2, 3, 4];
+        }
+        assert_eq!(kernel.solve(), (best_order, optimum, incumbent));
+        let mut original = prefix.to_vec();
+        original.extend(window);
+        original.extend((0..n).filter(|v| !prefix.contains(v) && !window.contains(v)));
+        let mut chosen = original.clone();
+        chosen[prefix.len()..prefix.len() + 5].copy_from_slice(&best_order.map(|i| window[i]));
+        assert!(is_bijection(&chosen, n));
+        assert_eq!(
+            canonical(&pat, &original) - canonical(&pat, &chosen),
+            incumbent - optimum
+        );
+    }
+
+    #[test]
+    fn five_window_dp_matches_independent_oracle() {
+        let pairs: Vec<_> = (0..5)
+            .flat_map(|u| (u + 1..5).map(move |v| (u, v)))
+            .collect();
+        for bits in 0usize..1 << pairs.len() {
+            let mut edges: Vec<_> = pairs
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &edge)| (bits & (1 << i) != 0).then_some(edge))
+                .collect();
+            verify_window(5, &edges, &[], [0, 1, 2, 3, 4]);
+            // Shared live outside vertices must not connect otherwise separate
+            // window components, including the edgeless and pair-only cases.
+            edges.extend([(0, 5), (2, 5), (1, 6), (4, 6), (5, 6)]);
+            verify_window(7, &edges, &[], [0, 1, 2, 3, 4]);
+        }
+        println!("FIVE_EXHAUSTIVE windows=2048 transitions=163840 permutations=245760 permutation_widths=1228800");
+    }
+
+    #[test]
+    fn five_windows_handle_filled_prefixes_and_cross_word_labels() {
+        let edges = [
+            (1, 0),
+            (1, 63),
+            (1, 64),
+            (2, 63),
+            (2, 128),
+            (2, 129),
+            (0, 3),
+            (63, 3),
+            (64, 3),
+            (128, 3),
+            (129, 3),
+            (3, 4),
+            (0, 64),
+            (128, 129),
+            (64, 127),
+            (129, 127),
+        ];
+        let window = [0, 63, 64, 128, 129];
+        for prefix in [&[][..], &[1][..], &[1, 2][..]] {
+            for order in [[0, 1, 2, 3, 4], [4, 3, 2, 1, 0], [2, 0, 4, 1, 3]] {
+                verify_window(130, &edges, prefix, order.map(|i| window[i]));
+            }
+        }
+        let mut rng = 0x53F0_A7C2_944D_180B;
+        for n in [9, 67] {
+            for _ in 0..4 {
+                let mut edges = Vec::new();
+                for u in 0..n {
+                    for v in u + 1..n {
+                        if xs64(&mut rng) % 11 == 0 {
+                            edges.push((u, v));
+                        }
+                    }
+                }
+                verify_window(n, &edges, &[0, 1], [n - 1, 2, n - 2, 3, 4]);
+            }
+        }
+    }
+
+    #[test]
+    fn five_window_charges_scalar_then_connected_scans() {
+        for clique in [false, true] {
+            let edges: Vec<_> = if clique {
+                (0..5)
+                    .flat_map(|u| (u + 1..5).map(move |v| (u, v)))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let pat = Pattern::from_edges(130, &edges);
+            let adj = Game::build_adj(130, &pat.col_ptr, &pat.row_idx).unwrap();
+            let mut game = Game::new(130, &adj).unwrap();
+            game.reset();
+            let q = if clique { 26 } else { 0 };
+            let scalar = FIVE_WINDOW_SCALAR_WORK as i64;
+            let scan = five_window_scan_work(game.w, q) as i64;
+            for allowance in [scalar - 1, scalar + scan - 1, scalar + scan] {
+                let mut work = TripleWork {
+                    remaining: allowance,
+                };
+                let result = FiveWindow::new(&game, [0, 1, 2, 3, 4], &mut work);
+                assert_eq!(result.is_some(), allowance == scalar + scan);
+                let charged = if allowance < scalar {
+                    0
+                } else if allowance < scalar + scan {
+                    scalar
+                } else {
+                    scalar + scan
+                };
+                assert_eq!(work.remaining, allowance - charged);
+                assert!(work.remaining >= 0);
+            }
+        }
+    }
+
+    #[test]
+    fn five_window_budget_preserves_completed_gain_and_suffix() {
+        let n = 10;
+        let edges: Vec<_> = (1..n).map(|v| (0, v)).collect();
+        let pat = Pattern::from_edges(n, &edges);
+        let seed: Vec<_> = (0..n).collect();
+        let w = n.div_ceil(64);
+        let setup = (n + 1 + pat.row_idx.len() + 2 * n)
+            + (n * w + 2 * pat.row_idx.len() + n)
+            + (2 * n * w + 13 * n + w)
+            + (2 * n * w + 8 * n);
+        // A five-window star has exactly 15 connected nonsingleton subsets.
+        let first_window = setup + FIVE_WINDOW_SCALAR_WORK + five_window_scan_work(w, 15);
+        for budget in [0, 1, setup + FIVE_WINDOW_SCALAR_WORK - 1, first_window - 1] {
+            assert!(
+                adjacent_five_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget as i64)
+                    .is_none()
+            );
+        }
+        // The exact admission budget completes one strict window gain but
+        // cannot replay a pivot; 42 extra units replay precisely one leaf.
+        for budget in [first_window, first_window + 42] {
+            let candidate =
+                adjacent_five_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget as i64)
+                    .expect("retain completed gain on replay refusal");
+            assert_eq!(&candidate[..5], &[1, 2, 3, 4, 0]);
+            assert_eq!(&candidate[5..], &seed[5..]);
+            assert!(is_bijection(&candidate, n));
+            assert!(canonical(&pat, &candidate) < canonical(&pat, &seed));
+        }
+        assert!(adjacent_five_descent(n, &[0], &[], &seed, i64::MAX).is_none());
+        assert!(adjacent_five_descent(MAX_N + 1, &[], &[], &[], i64::MAX).is_none());
+        let mut duplicate = seed.clone();
+        duplicate[1] = 0;
+        assert!(
+            adjacent_five_descent(n, &pat.col_ptr, &pat.row_idx, &duplicate, i64::MAX).is_none()
+        );
+        let small = Pattern::from_edges(4, &[(0, 1), (0, 2), (0, 3)]);
+        assert!(
+            adjacent_five_descent(4, &small.col_ptr, &small.row_idx, &[0, 1, 2, 3], i64::MAX)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn five_window_descent_is_monotone_and_deterministic() {
+        let mut rng = 0x72E4_135C_8810_F97B;
+        for n in [13, 67, 1603] {
+            let mut edges = Vec::new();
+            for v in 0..n {
+                edges.push((v, (v + 1) % n));
+                let u = xs64(&mut rng) as usize % n;
+                if u != v {
+                    edges.push((v, u));
+                }
+            }
+            let pat = Pattern::from_edges(n, &edges);
+            let mut seed: Vec<_> = (0..n).collect();
+            for i in 1..n {
+                seed.swap(i, xs64(&mut rng) as usize % (i + 1));
+            }
+            let before = canonical(&pat, &seed);
+            for budget in [0, 1, 8192, 20_000, 100_000, 1_000_000] {
+                let first = adjacent_five_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget);
+                assert_eq!(
+                    first,
+                    adjacent_five_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget)
+                );
+                if let Some(candidate) = first {
+                    assert!(is_bijection(&candidate, n));
+                    assert!(canonical(&pat, &candidate) < before);
+                }
+            }
+        }
     }
 }

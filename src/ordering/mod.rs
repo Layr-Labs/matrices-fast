@@ -1408,6 +1408,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 if improved2 > 0 && is_bijection(&candidate2, n) {
                     let f2 = flops_of(&scoring_pat, &candidate2);
                     if f2 < best_flops {
+                        best_flops = f2;
                         best_perm = candidate2;
 
                         // Round 3: one more pass over the round-2 incumbent.
@@ -1455,6 +1456,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         if improved3 > 0 && is_bijection(&candidate3, n) {
                             let f3 = flops_of(&scoring_pat, &candidate3);
                             if f3 < best_flops {
+                                best_flops = f3;
                                 best_perm = candidate3;
 
                                 // Round 4: one more pass over the round-3
@@ -1716,7 +1718,13 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if pair_descent_gate {
-        if let Some(cand) = rgreedy::adjacent_four_descent(
+        // Preserve the four-pivot cleanup when a five-pivot window cannot fit.
+        let cleanup = if n < 5 {
+            rgreedy::adjacent_four_descent
+        } else {
+            rgreedy::adjacent_five_descent
+        };
+        if let Some(cand) = cleanup(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,

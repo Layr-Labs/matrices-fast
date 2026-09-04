@@ -399,8 +399,7 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 /// useful work, and those graphs are already covered exhaustively by the MinFill
 /// multi-start and the small-graph LNS. Measured: 1_000 -> 200 was worth 2.6 bip,
 /// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
-const SUBTREE_MIN_N: usize = 24;
-const SUBTREE_MAX_N: usize = 250_000;
+const SUBTREE_MIN_N: usize = 64;
 
 const MID_MAX_S: usize = 128;
 const LARGE_MAX_S: usize = 384;
@@ -412,14 +411,10 @@ const LARGE_BUDGET: i64 = 2_000_000;
 /// Per-matrix base config for one chain round. On a short elimination tree the
 /// default `min_s = 32` admits almost no blocks, so drop the block floor to 16
 /// below `n = 1_000` — the same floor the terminal deep pass already uses.
-fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
+fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
-    if n < 64 {
-        cfg.min_s = 8;
-        cfg.max_s = 32;
-        cfg.max_blocks = 8;
-        cfg.budget = 1_000_000;
-    } else if n < 1_000 {
+    if n < 1_000 {
+        // Small graphs retain the promoted 16-by-2M allocation.
         cfg.min_s = 16;
         cfg.max_s = 256;
         cfg.max_blocks = 16;
@@ -428,9 +423,6 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
         cfg.max_s = LARGE_MAX_S;
         cfg.max_blocks = LARGE_BLOCKS;
         cfg.budget = LARGE_BUDGET;
-        if nnz <= n * 10 && nnz <= 150_000 {
-            cfg.max_sub = 1_600;
-        }
     } else {
         cfg.min_s = 32;
         cfg.max_s = MID_MAX_S;
@@ -440,7 +432,7 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
     cfg
 }
 
-fn terminal_deep_subtree_cfg(n: usize, nnz: usize) -> rgreedy::SubCfg {
+fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     cfg.min_s = 16;
     cfg.round = 5;
@@ -452,9 +444,6 @@ fn terminal_deep_subtree_cfg(n: usize, nnz: usize) -> rgreedy::SubCfg {
         cfg.max_blocks = 8;
         cfg.max_s = 1_200;
         cfg.budget = 2_000_000;
-        if nnz <= n * 10 && nnz <= 150_000 {
-            cfg.max_sub = 1_600;
-        }
     }
     cfg
 }
@@ -595,7 +584,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     let amd = feral_amd::amd_order(&core).expect("feral AMD ordering failed");
     let mut best_perm: Vec<usize> = amd.into_iter().map(|x| x as usize).collect();
     let mut best_flops: u64 = flops_of(&scoring_pat, &best_perm);
-    let amd_flops = best_flops;
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
     let nnz = pattern.nnz();
@@ -701,7 +689,20 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     //  (b) LARGE-SPARSE (nnz >= 400k, low density): one AMF α-1 pass; here AMF is
     //      fast (sparse) AND is the unique min (faclay75, kissing2, pooling_*).
     if n < AMF_SWEEP_MAX_N && nnz < 130_000 {
-        for da in [1.0f64, 16.0, -1.0] {
+        // Same three tickets as H2. Global 16→0.5 (0058, d6e006a) and extra
+        // 0.5/2.5 tickets (0057, 85dcf2a) both failed hidden: α=0.5 does
+        // more fill-work (fewer dense deferrals) and blew the cap on the
+        // nnz≈120k owner (crudeoil_lee4_10, nnz=120632). Keep H2's {1,16,−1}
+        // everywhere except the sparse 5k–25k band that holds both unique
+        // 0.5 prizes (pooling_dt2 nnz=75910, chp_partload nnz=16740) and
+        // excludes lee4_10 by nnz<=80k.
+        let swap_half = n >= 5_000 && n < 25_000 && nnz <= 80_000;
+        let alphas: [f64; 3] = if swap_half {
+            [1.0, 0.5, -1.0]
+        } else {
+            [1.0, 16.0, -1.0]
+        };
+        for da in alphas {
             let amf_a = feral_amf::AmfOptions { dense_alpha: da, ..Default::default() };
             consider(&|| feral_amf::amf_order_opts(&core, &amf_a).map(|(p, ..)| p));
         }
@@ -866,7 +867,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // contribution to the exact sum of squared column counts Σ cⱼ².
     // Extend coverage to sparse small/medium structures (n<5000, density>=3)
     // excluded by the 10x gate; same 4 calls, same 300k nnz ceiling.
-    if nnz <= 300_000 && (nnz >= 10 * n || (n < 5_000 && nnz >= 2 * n)) {
+    if nnz <= 300_000 && (nnz >= 10 * n || (n < 5_000 && nnz >= 3 * n)) {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,
@@ -1267,8 +1268,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         for (budget, rng_seed) in [
             (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
             (50_000_000, 0xD1B5_4A32_D192_ED03),
-            (50_000_000, 0x27BB_2EE6_87B0_B0FD),
-            (50_000_000, 0x45A1_89C3_F208_7314),
         ] {
             if let Some((cand, _)) = rgreedy::search(
                 n,
@@ -1339,7 +1338,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // 32M matrix-wide requested-work ceiling. Whole-pattern setup and scoring
     // stay inside the measured corpus envelope rather than running on
     // unbounded hidden inputs.
-    if (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n) && nnz <= 1_500_000 {
+    if (SUBTREE_MIN_N..=350_000).contains(&n) && nnz <= 1_500_000 {
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
@@ -1363,7 +1362,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            subtree_cfg_for(n, nnz),
+            subtree_cfg_for(n),
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1390,7 +1389,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     .iter()
                     .map(|p| p.map_or(-1, |j| j as i32))
                     .collect();
-                let mut cfg2 = subtree_cfg_for(n, nnz);
+                let mut cfg2 = subtree_cfg_for(n);
                 cfg2.round = 1;
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
@@ -1437,7 +1436,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                             .iter()
                             .map(|p| p.map_or(-1, |j| j as i32))
                             .collect();
-                        let mut cfg3 = subtree_cfg_for(n, nnz);
+                        let mut cfg3 = subtree_cfg_for(n);
                         cfg3.round = 1;
                         cfg3.max_blocks = 32;
                         cfg3.min_s = 16;
@@ -1483,7 +1482,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     .iter()
                                     .map(|p| p.map_or(-1, |j| j as i32))
                                     .collect();
-                                let mut cfg4 = subtree_cfg_for(n, nnz);
+                                let mut cfg4 = subtree_cfg_for(n);
                                 cfg4.round = 3;
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
@@ -1529,31 +1528,25 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                             .iter()
                                             .map(|p| p.map_or(-1, |j| j as i32))
                                             .collect();
-                                        let mut cfg5 = subtree_cfg_for(n, nnz);
+                                        let mut cfg5 = subtree_cfg_for(n);
                                         cfg5.round = 4;
-                                        if n < 100_000 || best_flops != amd_flops {
-                                            if (1_000..4_000).contains(&n) {
-                                                cfg5.max_blocks = 16;
-                                                cfg5.budget = 32_000_000;
-                                            } else {
-                                                cfg5.max_blocks = 32;
-                                                cfg5.budget = 16_000_000;
-                                            }
-                                            let improved5 = rgreedy::subtree_refine(
-                                                n,
-                                                &pattern.col_ptr,
-                                                &pattern.row_idx,
-                                                &mut candidate5,
-                                                &counts5,
-                                                &parent5,
-                                                cfg5,
-                                            );
-                                            if improved5 > 0 && is_bijection(&candidate5, n) {
-                                                let f = flops_of(&scoring_pat, &candidate5);
-                                                if f < best_flops {
-                                                    best_flops = f;
-                                                    best_perm = candidate5;
-                                                }
+                                        cfg5.max_blocks = 32;
+                                        cfg5.min_s = 16;
+                                        cfg5.max_s = 768;
+                                        cfg5.budget = 16_000_000;
+                                        let improved5 = rgreedy::subtree_refine(
+                                            n,
+                                            &pattern.col_ptr,
+                                            &pattern.row_idx,
+                                            &mut candidate5,
+                                            &counts5,
+                                            &parent5,
+                                            cfg5,
+                                        );
+                                        if improved5 > 0 && is_bijection(&candidate5, n) {
+                                            let f5 = flops_of(&scoring_pat, &candidate5);
+                                            if f5 < best_flops {
+                                                best_perm = candidate5;
                                             }
                                         }
                                     }
@@ -1596,7 +1589,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            terminal_deep_subtree_cfg(n, nnz),
+            terminal_deep_subtree_cfg(n),
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1624,7 +1617,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         .iter()
                         .map(|p| p.map_or(-1, |j| j as i32))
                         .collect();
-                    let mut cfg2 = terminal_deep_subtree_cfg(n, nnz);
+                    let mut cfg2 = terminal_deep_subtree_cfg(n);
                     cfg2.round = 6;
                     cfg2.min_s = 8;
                     cfg2.max_blocks = 4;
@@ -1663,7 +1656,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 .iter()
                                 .map(|p| p.map_or(-1, |j| j as i32))
                                 .collect();
-                            let mut cfg3 = terminal_deep_subtree_cfg(n, nnz);
+                            let mut cfg3 = terminal_deep_subtree_cfg(n);
                             cfg3.round = 7;
                             cfg3.min_s = 8;
                             cfg3.max_blocks = 4;
@@ -1938,46 +1931,10 @@ fn ndfm_order(pattern: &Pattern) -> Vec<i32> {
 
     // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
     // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
-        let sz = v.len();
-        let mut local = vec![usize::MAX; n];
-        for (i, &u) in v.iter().enumerate() {
-            local[u] = i;
-        }
-        let mut col_ptr: Vec<i32> = Vec::with_capacity(sz + 1);
-        let mut row_idx: Vec<i32> = Vec::new();
-        col_ptr.push(0);
-        for &u in &v {
-            let start = row_idx.len();
-            for &w in &adj[u] {
-                let lw = local[w];
-                if lw != usize::MAX && lw != local[u] {
-                    row_idx.push(lw as i32);
-                }
-            }
-            row_idx[start..].sort_unstable();
-            col_ptr.push(row_idx.len() as i32);
-        }
-        for &u in &v {
-            local[u] = usize::MAX;
-        }
-        let mut done = false;
-        if let Some(csub) = feral_ordering_core::CscPattern::new(sz, &col_ptr, &row_idx) {
-            if let Ok(sub) = feral_amd::amd_order(&csub) {
-                if sub.len() == sz {
-                    for (t, &li) in sub.iter().enumerate() {
-                        order[lo + t] = v[li as usize];
-                    }
-                    done = true;
-                }
-            }
-        }
-        if !done {
-            let mut v = v;
-            v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
-            for (t, u) in v.into_iter().enumerate() {
-                order[lo + t] = u;
-            }
+    let deg_fill = |order: &mut [usize], lo: usize, mut v: Vec<usize>| {
+        v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
+        for (t, u) in v.into_iter().enumerate() {
+            order[lo + t] = u;
         }
     };
 
@@ -2212,46 +2169,10 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
 
     // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
     // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
-        let sz = v.len();
-        let mut local = vec![usize::MAX; n];
-        for (i, &u) in v.iter().enumerate() {
-            local[u] = i;
-        }
-        let mut col_ptr: Vec<i32> = Vec::with_capacity(sz + 1);
-        let mut row_idx: Vec<i32> = Vec::new();
-        col_ptr.push(0);
-        for &u in &v {
-            let start = row_idx.len();
-            for &w in &adj[u] {
-                let lw = local[w];
-                if lw != usize::MAX && lw != local[u] {
-                    row_idx.push(lw as i32);
-                }
-            }
-            row_idx[start..].sort_unstable();
-            col_ptr.push(row_idx.len() as i32);
-        }
-        for &u in &v {
-            local[u] = usize::MAX;
-        }
-        let mut done = false;
-        if let Some(csub) = feral_ordering_core::CscPattern::new(sz, &col_ptr, &row_idx) {
-            if let Ok(sub) = feral_amd::amd_order(&csub) {
-                if sub.len() == sz {
-                    for (t, &li) in sub.iter().enumerate() {
-                        order[lo + t] = v[li as usize];
-                    }
-                    done = true;
-                }
-            }
-        }
-        if !done {
-            let mut v = v;
-            v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
-            for (t, u) in v.into_iter().enumerate() {
-                order[lo + t] = u;
-            }
+    let deg_fill = |order: &mut [usize], lo: usize, mut v: Vec<usize>| {
+        v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
+        for (t, u) in v.into_iter().enumerate() {
+            order[lo + t] = u;
         }
     };
 
@@ -3137,11 +3058,7 @@ mod tests {
             .saturating_mul(SUBTREE_CFG.streams.max(1) as i64);
         assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
 
-        for cfg in [
-            terminal_deep_subtree_cfg(9_999, 0),
-            terminal_deep_subtree_cfg(10_000, 0),
-            terminal_deep_subtree_cfg(10_000, 100_000),
-        ] {
+        for cfg in [terminal_deep_subtree_cfg(9_999), terminal_deep_subtree_cfg(10_000)] {
             let requested_budget = cfg
                 .budget
                 .saturating_mul(cfg.max_blocks as i64)

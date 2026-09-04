@@ -22,10 +22,14 @@ it, rather than deleting it — a resolved question is a useful signpost.
       for RCM, both Sloan weights, `nd_order`, and `ndfm_order`: all five produced
       zero wins, with 0.071 s worst combined added local time. A multi-seed test
       remains open, but one-pass production additions are not supported.
-- [ ] **Sweep the relabelled-AMF `dense_alpha`.** Shipped at α=5.0 only (the base AMF
-      candidate's α). α ∈ {0.5, 2.0, 2.5} is the same argument one level down — a
-      different α is a different objective, hence another distinct lottery — and it is
-      cheap inside the existing gate. Mirror the base AMF α sweep in `order()`.
+- [x] **PARTIAL — Sweep the relabelled-AMF `dense_alpha`.** α=2.0 is already in the
+      relabel cycle `[5, 2, −1, 1, 16]`. Extra *relabelled* 0.5/2.5 on `n<1000`
+      was noise ([0056](experiments/0056-h3-density2-n10k.md) ablation 1).
+      Unlabelled extra 0.5/2.5 inside the existing `nnz<130k` AMF sweep is the
+      high-value slice: [0057](experiments/0057-amf-alpha-half-and-twofive.md)
+      measured two unique wins and −9.33 local bips, extra-pass worst +0.041 s.
+      Remaining: extra *relabelled* 0.5/2.5 on the full `RELABEL_AMF_MAX_NNZ`
+      envelope without rotating the five-alpha cycle.
 - [ ] **Is `RELABEL_AMF_MAX_NNZ = 130_000` leaving anything above it?** The ceiling is
       a cost bound, not a measured optimum. Measure the 130k–400k band's AMF per-pass
       cost in ISOLATION (`probe_family`) before raising it; the dev corpus has few

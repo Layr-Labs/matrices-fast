@@ -104,6 +104,7 @@ fn probe_timing_and_score() {
         let perm = order(pat);
         let secs = t0.elapsed().as_secs_f64();
         let mine = flops_of(&sp, &perm);
+        println!("COUNTS\t{name}\t{n}\t{}\t{base}\t{mine}", pat.nnz());
         let ratio = mine as f64 / base as f64;
 
         let b = bucket(n);
@@ -1780,5 +1781,70 @@ fn probe_lt1k() {
     rows.sort_by(|a, b| a.0.cmp(&b.0));
     for (name, ratio) in &rows {
         println!("ROW\t{name}\t{ratio:.6}");
+    }
+}
+
+
+/// Fresh synthetic families exercise repeatability across size tiers and hubs.
+#[test]
+#[ignore]
+fn probe_uniform_rounds_synthetic() {
+    let mut cases = Vec::new();
+    for (rows, cols) in [(11, 13), (33, 37), (101, 103)] {
+        let n = rows * cols;
+        let mut edges = Vec::new();
+        for row in 0..rows {
+            for col in 0..cols {
+                let v = row * cols + col;
+                if row + 1 < rows {
+                    edges.push((v, v + cols));
+                }
+                if col + 1 < cols {
+                    edges.push((v, v + 1));
+                }
+            }
+        }
+        cases.push((format!("grid-{rows}x{cols}"), Pattern::from_edges(n, &edges)));
+    }
+    let mut rng = 0x83AC_D059_2731_B6E5u64;
+    for n in [257, 1021] {
+        let mut edges = Vec::new();
+        for v in 0..n {
+            edges.push((v, (v + 1) % n));
+            for _ in 0..2 {
+                rng ^= rng << 13;
+                rng ^= rng >> 7;
+                rng ^= rng << 17;
+                let u = rng as usize % n;
+                if u != v {
+                    edges.push((v, u));
+                }
+            }
+        }
+        cases.push((format!("sparse-random-{n}"), Pattern::from_edges(n, &edges)));
+    }
+    let n = 389;
+    let mut edges = Vec::new();
+    for v in 1..n {
+        edges.push((0, v));
+        if v + 1 < n && v % 17 != 0 {
+            edges.push((v, v + 1));
+        }
+    }
+    cases.push(("hub-and-paths".to_owned(), Pattern::from_edges(n, &edges)));
+
+    for (name, pat) in cases {
+        let first = order(&pat);
+        assert!(is_bijection(&first, pat.n), "{name}: not a bijection");
+        assert_eq!(first, order(&pat), "{name}: non-deterministic");
+        let (cp, ri) = core_of(&pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let baseline = feral_amd::amd_order(&core).unwrap()
+            .into_iter().map(|v| v as usize).collect::<Vec<_>>();
+        let sp = scoring_pattern(&pat);
+        let mine = flops_of(&sp, &first);
+        let base = flops_of(&sp, &baseline);
+        assert!(mine <= base, "{name}: lost the AMD incumbent");
+        println!("SYNTHETIC\t{name}\t{}\t{}\t{base}\t{mine}", pat.n, pat.nnz());
     }
 }

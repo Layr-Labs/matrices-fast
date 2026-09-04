@@ -1068,6 +1068,206 @@ pub(crate) fn adjacent_pair_descent(
     changed_any.then_some(cur)
 }
 
+const TRIPLE_ORDERS: [[usize; 3]; 6] = [
+    [0, 1, 2],
+    [0, 2, 1],
+    [1, 0, 2],
+    [1, 2, 0],
+    [2, 0, 1],
+    [2, 1, 0],
+];
+
+/// Exact costs for all six orders of three live vertices. Only four union
+/// popcounts are needed: one for each pair and one for all three rows.
+fn triple_costs(game: &Game<'_>, verts: [usize; 3]) -> [u64; 6] {
+    let w = game.w;
+    let [a, b, c] = verts;
+    let rows = [
+        &game.adj[a * w..(a + 1) * w],
+        &game.adj[b * w..(b + 1) * w],
+        &game.adj[c * w..(c + 1) * w],
+    ];
+    let edge = |i: usize, j: usize| rows[i][verts[j] >> 6] & (1u64 << (verts[j] & 63)) != 0;
+    let (ab, ac, bc) = (edge(0, 1), edge(0, 2), edge(1, 2));
+    let adjacent = [[false, ab, ac], [ab, false, bc], [ac, bc, false]];
+    let degrees = verts.map(|v| game.deg[v] as u64);
+    let mut unions = [0u64; 4];
+    for k in 0..w {
+        let (x, y, z) = (rows[0][k], rows[1][k], rows[2][k]);
+        unions[0] += (x | y).count_ones() as u64;
+        unions[1] += (x | z).count_ones() as u64;
+        unions[2] += (y | z).count_ones() as u64;
+        unions[3] += (x | y | z).count_ones() as u64;
+    }
+    let pair_union = [
+        [0, unions[0], unions[1]],
+        [unions[0], 0, unions[2]],
+        [unions[1], unions[2], 0],
+    ];
+
+    // The last pivot absorbs exactly the rows in its connected component of
+    // the triple. A connected triple contributes all three rows, while a
+    // single edge contributes only its two endpoint rows. Remove those live
+    // triple vertices from the union; isolated vertices retain their degree.
+    let last_degree = if usize::from(ab) + usize::from(ac) + usize::from(bc) >= 2 {
+        [unions[3] - 3; 3]
+    } else if ab {
+        [unions[0] - 2, unions[0] - 2, degrees[2]]
+    } else if ac {
+        [unions[1] - 2, degrees[1], unions[1] - 2]
+    } else if bc {
+        [degrees[0], unions[2] - 2, unions[2] - 2]
+    } else {
+        degrees
+    };
+
+    TRIPLE_ORDERS.map(|[first, second, last]| {
+        let d2 = if adjacent[first][second] {
+            pair_union[first][second] - 2
+        } else {
+            degrees[second]
+        };
+        let counts = [degrees[first] + 1, d2 + 1, last_degree[last] + 1];
+        counts.into_iter().map(|c| c * c).sum()
+    })
+}
+
+struct TripleWork {
+    remaining: i64,
+}
+
+impl TripleWork {
+    fn charge(&mut self, cost: usize) -> bool {
+        let Ok(cost) = i64::try_from(cost) else {
+            return false;
+        };
+        if cost > self.remaining {
+            return false;
+        }
+        self.remaining -= cost;
+        true
+    }
+
+    fn eliminate(&mut self, game: &mut Game<'_>, v: usize) -> bool {
+        let cost = (game.deg[v] as usize + 1)
+            .saturating_mul(3usize.saturating_mul(game.w).saturating_add(6))
+            .saturating_add(24);
+        if !self.charge(cost) {
+            return false;
+        }
+        game.eliminate(v);
+        true
+    }
+}
+
+/// Exact local descent over disjoint triples, with offset shifted each sweep.
+/// Every ordering of a triple leaves the same residual fill graph. Therefore
+/// minimizing its three squared column counts is also a global improvement.
+/// All large work is precharged. Completed improving triples are retained on
+/// exhaustion, with the rest of the current permutation left unchanged.
+pub(crate) fn adjacent_triple_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    sweeps: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    if n < 3 || n > MAX_N || budget <= 0 || sweeps == 0 || seed.len() != n || col_ptr.len() != n + 1
+    {
+        return None;
+    }
+    let mut work = TripleWork { remaining: budget };
+    let validation = (n + 1).saturating_add(row_idx.len()).saturating_add(2 * n);
+    if !work.charge(validation)
+        || col_ptr.first().copied() != Some(0)
+        || col_ptr.last().copied() != Some(row_idx.len())
+        || col_ptr
+            .windows(2)
+            .any(|p| p[0] > p[1] || p[1] > row_idx.len())
+        || row_idx.iter().any(|&v| v >= n)
+    {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    let w = n.div_ceil(64);
+    let build = n
+        .saturating_mul(w)
+        .saturating_add(2usize.saturating_mul(row_idx.len()))
+        .saturating_add(n);
+    if !work.charge(build) {
+        return None;
+    }
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    // Game::new scans initial degrees, copies adjacency, and allocates work
+    // arrays. Include the returned permutation copy in this setup charge.
+    let setup = 2usize
+        .saturating_mul(n)
+        .saturating_mul(w)
+        .saturating_add(13usize.saturating_mul(n))
+        .saturating_add(w);
+    if !work.charge(setup) {
+        return None;
+    }
+    let mut game = Game::new(n, &adj0)?;
+    let mut cur = seed.to_vec();
+    let mut changed = false;
+    let reset = 2usize
+        .saturating_mul(n)
+        .saturating_mul(w)
+        .saturating_add(8usize.saturating_mul(n));
+    let evaluation = 20usize.saturating_mul(w).saturating_add(192);
+
+    for sweep in 0..sweeps {
+        if !work.charge(reset) {
+            return changed.then_some(cur);
+        }
+        game.reset();
+        let offset = sweep % 3;
+        for &v in cur.iter().take(offset) {
+            if !work.eliminate(&mut game, v) {
+                return changed.then_some(cur);
+            }
+        }
+        let mut k = offset;
+        while k + 2 < n {
+            if !work.charge(evaluation) {
+                return changed.then_some(cur);
+            }
+            let triple = [cur[k], cur[k + 1], cur[k + 2]];
+            let costs = triple_costs(&game, triple);
+            let mut best = 0;
+            for choice in 1..TRIPLE_ORDERS.len() {
+                if costs[choice] < costs[best] {
+                    best = choice;
+                }
+            }
+            if best != 0 {
+                let chosen = TRIPLE_ORDERS[best].map(|i| triple[i]);
+                cur[k..k + 3].copy_from_slice(&chosen);
+                changed = true;
+            }
+            k += 3;
+            // No replay is needed after this sweep's last evaluated triple.
+            // Any subsequent sweep resets from the original graph.
+            if k + 2 < n {
+                for &v in &cur[k - 3..k] {
+                    if !work.eliminate(&mut game, v) {
+                        return changed.then_some(cur);
+                    }
+                }
+            }
+        }
+    }
+    changed.then_some(cur)
+}
+
 /// Promote currently simplicial vertices across a short non-adjacent window.
 ///
 /// Ost, Schulz, and Strash (arXiv:2004.11315) prove that a simplicial vertex is
@@ -1279,44 +1479,6 @@ pub(crate) fn subtree_refine(
     parent: &[i32],
     cfg: SubCfg,
 ) -> usize {
-    let nnz = col_ptr.last().copied().unwrap_or(0);
-    let max_deg = col_ptr.windows(2).map(|p| p[1] - p[0]).max().unwrap_or(0);
-    let ratio_ge = |num: usize, den: usize| {
-        nnz.saturating_mul(den) >= n.saturating_mul(num)
-    };
-    let ratio_lt = |num: usize, den: usize| {
-        nnz.saturating_mul(den) < n.saturating_mul(num)
-    };
-    let cap_risk_cell = (10_000..10_300).contains(&n)
-        && (42_000..45_000).contains(&nnz)
-        && max_deg < 40;
-    // Exact-corpus safe cells for replacing repeated later-round trajectories.
-    // These gates use only matrix structure and preserve stream/task counts.
-    let diversify_later_rounds = ((6_000..15_000).contains(&n)
-        && ratio_ge(13, 4)
-        && ratio_lt(11, 2)
-        && max_deg < 200)
-        || ((1_500..4_000).contains(&n) && ratio_ge(6, 1))
-        || ((2_200..15_000).contains(&n)
-            && ratio_ge(17, 4)
-            && ratio_lt(13, 2)
-            && (50..75).contains(&max_deg))
-        || ((5_000..10_000).contains(&n) && (100..1_000).contains(&max_deg))
-        || ((500..10_000).contains(&n)
-            && ratio_ge(29, 10)
-            && ratio_lt(13, 4)
-            && max_deg < 50)
-        || ((2_200..4_000).contains(&n)
-            && ratio_ge(27, 10)
-            && ratio_lt(9, 2)
-            && max_deg < 50)
-        || ((1_500..3_000).contains(&n)
-            && ratio_ge(4, 1)
-            && ratio_lt(11, 2)
-            && max_deg < 75)
-        || ((6_000..9_000).contains(&n) && max_deg < 40);
-    let diversify_later_rounds = diversify_later_rounds && !cap_risk_cell;
-
     // Spend the ranked large-matrix budget on more D1 basins without adding
     // trajectories: 32 blocks get both streams and the next 64 get D1 only.
     let split_ranked_streams =
@@ -1494,16 +1656,6 @@ pub(crate) fn subtree_refine(
                             {
                                 rng_seed ^= 0xE703_7ED1_A0B4_28DB;
                             }
-                            // Diversify later outer rounds without adding a
-                            // trajectory, block, operation, or task.
-                            if diversify_later_rounds && n < 10_000 && cfg.round >= 1 {
-                                rng_seed ^= 0x2545_F491_4F6C_DD1Du64
-                                    .wrapping_mul(cfg.round as u64 * 2 + 1);
-                            }
-                            if diversify_later_rounds && n >= 10_000 && cfg.round >= 2 {
-                                rng_seed ^= 0x3C6E_F372_FE94_F82Bu64
-                                    .wrapping_mul(cfg.round as u64 * 2 + 1);
-                            }
                             let r = search_with_nelim(
                                 m,
                                 &adj0,
@@ -1568,4 +1720,167 @@ pub(crate) struct SubCfg {
     pub(crate) rank_blocks: bool,
     /// Zero-based outer RGSUB round, used only to diversify an equal-work seed.
     pub(crate) round: usize,
+}
+
+#[cfg(test)]
+mod triple_tests {
+    use super::super::{flops_of, is_bijection, Pattern, ScoringPattern};
+    use super::*;
+
+    fn check_costs(n: usize, edges: &[(usize, usize)], seed: &[usize], prefix: usize) {
+        let pat = Pattern::from_edges(n, edges);
+        let adj0 = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+        let mut game = Game::new(n, &adj0).unwrap();
+        game.reset();
+        for &v in &seed[..prefix] {
+            game.eliminate(v);
+        }
+        let triple = [seed[prefix], seed[prefix + 1], seed[prefix + 2]];
+        let costs = triple_costs(&game, triple);
+        let mut residual = None;
+        for (choice, indices) in TRIPLE_ORDERS.into_iter().enumerate() {
+            game.reset();
+            for &v in &seed[..prefix] {
+                game.eliminate(v);
+            }
+            let mut replay = 0;
+            for i in indices {
+                let c = game.eliminate(triple[i]);
+                replay += c * c;
+            }
+            assert_eq!(
+                costs[choice], replay,
+                "n={n} prefix={prefix} triple={triple:?} choice={choice}"
+            );
+            if let Some(ref previous) = residual {
+                assert_eq!(&game.adj, previous, "residual depends on triple order");
+            } else {
+                residual = Some(game.adj.clone());
+            }
+        }
+    }
+
+    #[test]
+    fn triple_costs_match_replay_on_filled_prefixes() {
+        // Exhaust all possible induced triple graphs, including independent
+        // vertices, a single edge, both path orientations, and a triangle.
+        for mask in 0..8 {
+            let edges: Vec<_> = [(0, 1), (0, 2), (1, 2)]
+                .into_iter()
+                .enumerate()
+                .filter_map(|(i, edge)| (mask & (1 << i) != 0).then_some(edge))
+                .collect();
+            check_costs(3, &edges, &[0, 1, 2], 0);
+        }
+        let mut rng = 0x9D27_5813_EB60_A4C7;
+        let mut states = 8;
+        for n in [7, 17, 31, 65, 97, 129] {
+            for instance in 0..10 {
+                let threshold = [1, 4, 9, 15][instance % 4];
+                let mut edges = Vec::new();
+                for a in 0..n {
+                    for b in a + 1..n {
+                        if xs64(&mut rng) % 20 < threshold {
+                            edges.push((a, b));
+                        }
+                    }
+                }
+                let mut seed: Vec<_> = (0..n).collect();
+                for i in 1..n {
+                    seed.swap(i, xs64(&mut rng) as usize % (i + 1));
+                }
+                for prefix in [0, n / 4, n / 2, n - 3] {
+                    check_costs(n, &edges, &seed, prefix);
+                    states += 1;
+                }
+            }
+        }
+        // Cross Game's bucket threshold with a sparse filled-prefix state.
+        let n = 1603;
+        let mut edges = Vec::new();
+        for v in 0..n {
+            edges.push((v, (v + 1) % n));
+            edges.push((v, (v + 37) % n));
+        }
+        let seed: Vec<_> = (0..n).collect();
+        check_costs(n, &edges, &seed, 37);
+        states += 1;
+        println!("TRIPLE_FORMULA states={states} orders={}", states * 6);
+    }
+
+    fn canonical(pat: &Pattern, order: &[usize]) -> u64 {
+        let sp = ScoringPattern {
+            n: pat.n,
+            col_ptr: pat.col_ptr.clone(),
+            row_idx: pat.row_idx.clone(),
+        };
+        flops_of(&sp, order)
+    }
+
+    #[test]
+    fn triple_descent_preserves_completed_changes_on_budget_exhaustion() {
+        let pat = Pattern::from_edges(6, &[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)]);
+        let seed: Vec<_> = (0..6).collect();
+        let got = adjacent_triple_descent(6, &pat.col_ptr, &pat.row_idx, &seed, 2, 500)
+            .expect("first improving triple fits even though replay exhausts the budget");
+        assert_ne!(&got[..3], &seed[..3]);
+        assert_eq!(&got[3..], &seed[3..]);
+        assert!(is_bijection(&got, 6));
+        assert!(canonical(&pat, &got) < canonical(&pat, &seed));
+    }
+
+    #[test]
+    fn triple_descent_is_canonically_monotone_and_deterministic() {
+        let mut rng = 0xEC1B_7492_D805_36AF;
+        let mut improvements = 0;
+        for n in [13, 67, 181, 1603] {
+            let mut edges = Vec::new();
+            for v in 0..n {
+                edges.push((v, (v + 1) % n));
+                for _ in 0..3 {
+                    let u = xs64(&mut rng) as usize % n;
+                    if u != v {
+                        edges.push((v, u));
+                    }
+                }
+            }
+            let pat = Pattern::from_edges(n, &edges);
+            let mut seed: Vec<_> = (0..n).collect();
+            for i in 1..n {
+                seed.swap(i, xs64(&mut rng) as usize % (i + 1));
+            }
+            let before = canonical(&pat, &seed);
+            for sweeps in [2, 3] {
+                for budget in [0, 1, 32, 256, 2048, 10_000, 50_000, 200_000, 2_000_000] {
+                    let first = adjacent_triple_descent(
+                        n,
+                        &pat.col_ptr,
+                        &pat.row_idx,
+                        &seed,
+                        sweeps,
+                        budget,
+                    );
+                    let second = adjacent_triple_descent(
+                        n,
+                        &pat.col_ptr,
+                        &pat.row_idx,
+                        &seed,
+                        sweeps,
+                        budget,
+                    );
+                    assert_eq!(first, second, "n={n} budget={budget} sweeps={sweeps}");
+                    if let Some(got) = first {
+                        assert!(is_bijection(&got, n));
+                        assert!(
+                            canonical(&pat, &got) < before,
+                            "n={n} budget={budget} sweeps={sweeps}"
+                        );
+                        improvements += 1;
+                    }
+                }
+            }
+        }
+        assert!(improvements > 0);
+        println!("TRIPLE_CANONICAL improving_cases={improvements}");
+    }
 }

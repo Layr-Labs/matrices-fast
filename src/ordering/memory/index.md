@@ -3,6 +3,18 @@
 The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
+## Verified 2026-09-05 checkpoint
+
+- Source baseline `fbd1e62` freshly measured at dev **0.844594**, fill **0.944255**.
+- Exact three-pivot final cleanup plus removal of corpus-conditioned salts and ND
+  scratch reuse: dev **0.844420**, fill **0.944152**, all 300 matrices pass the
+  trusted harness. Worst same-machine direct call **0.952 s**, baseline **0.962 s**.
+- Official frontier observed before submission: **0.870755**; new hidden result
+  pending. Dev and hidden scores are different datasets.
+- [0056: exact triple cleanup](experiments/0056-exact-triple-cleanup.md) records
+  independent exhaustive verification, negative controls, and reproducible results.
+  Older 'current best' entries below are historical and may lag their source.
+
 ## Current best
 - Best shippable locally verified candidate score: **0.849251** (fill
   **0.947647**) on all 300 dev matrices, 2026-09-03. On top of promoted

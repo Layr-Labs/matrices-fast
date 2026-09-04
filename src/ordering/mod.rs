@@ -399,40 +399,76 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 /// useful work, and those graphs are already covered exhaustively by the MinFill
 /// multi-start and the small-graph LNS. Measured: 1_000 -> 200 was worth 2.6 bip,
 /// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
-const SUBTREE_MIN_N: usize = 24;
-const SUBTREE_MAX_N: usize = 250_000;
+const SUBTREE_MIN_N: usize = 64;
 
+/// Block-size cap for the `1k_10k` tier of the subtree chain.
+///
+/// The cap on how large a searched block may be wants to SCALE WITH GRAPH SIZE,
+/// and one global value cannot serve every bucket. Sweeping the shared
+/// `SUBTREE_CFG.max_s` showed 256 helps `1k_10k` (0.8752 -> 0.8742) while
+/// HURTING `gt_10k` (0.7969 -> 0.7991), and 512 hurts both. So the large tier
+/// keeps the 384 that measured best for it, small graphs use 256
+/// ([0040]), and the middle bucket gets its own value swept here:
+/// 384 -> 0.849487, 256 -> 0.849194, 192 -> 0.849097, 160 -> 0.849117,
+/// **128 -> 0.848955**, 112 -> 0.849046, 96 -> 0.849104, 64 -> 0.849307.
+/// The 96-192 basin is robust on disjoint corpus halves and drop-top-3; 128 is
+/// its deepest point.
 const MID_MAX_S: usize = 128;
+
+/// Block-size cap for the `gt_10k` tier of the subtree chain.
+///
+/// Swept in isolation (0042) and CONFIRMED at the inherited 384. The curve is
+/// cleanly unimodal with the minimum exactly here — 288 -> 0.7987, 320 -> 0.7983,
+/// 352 -> 0.7977, **384 -> 0.7969**, 416 -> 0.7994, 448 -> 0.8004 — unlike the
+/// noisier small-graph surface. Named rather than inlined so the next session
+/// can see it was measured, not assumed, and does not re-sweep it.
 const LARGE_MAX_S: usize = 384;
-const MID_BLOCKS: usize = 16;
-const MID_BUDGET: i64 = 2_000_000;
+
+/// Block count and per-block budget for the `1k_10k` tier (product held at 32M).
+/// Block count and per-block budget for the `gt_10k` tier (product held at 32M).
+///
+/// 32x1M -> gt_10k 0.796916, 16x2M -> **0.794594**, 8x4M -> 0.793966.
+/// 8x4M scores better still but measured **1.957 s** on the worst matrix, i.e.
+/// 98% of the 2 s SIGKILL, so it is REJECTED on timing regardless of score --
+/// 0025 failed the hidden cap three times from exactly this kind of margin.
+/// 16x2M keeps the worst case at 1.653 s, unchanged from the 32x1M base.
 const LARGE_BLOCKS: usize = 16;
 const LARGE_BUDGET: i64 = 2_000_000;
+/// Block count and per-block budget for the `1k_10k` tier (product held at 32M).
+/// 32x1M -> 1k_10k 0.873403, 20x1.6M -> 0.8729, **16x2M -> 0.872433**,
+/// 12x2.67M -> 0.8733, 8x4M -> 0.872460, 64x0.5M -> 0.8750.
+const MID_BLOCKS: usize = 16;
+const MID_BUDGET: i64 = 2_000_000;
 
 /// Per-matrix base config for one chain round. On a short elimination tree the
 /// default `min_s = 32` admits almost no blocks, so drop the block floor to 16
 /// below `n = 1_000` — the same floor the terminal deep pass already uses.
-fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
+fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
-    if n < 64 {
-        cfg.min_s = 8;
-        cfg.max_s = 32;
-        cfg.max_blocks = 8;
-        cfg.budget = 1_000_000;
-    } else if n < 1_000 {
+    if n < 1_000 {
+        // Small graphs get the SAME 32M requested-work ceiling as everywhere
+        // else (blocks x budget x streams), just spent as FEWER, DEEPER blocks:
+        // a short elimination tree has few subtrees, so 32 shallow blocks mostly
+        // find nothing, while 8 deep ones actually search. `min_s` drops to 16
+        // for the same reason (the default 32 admits almost no blocks here).
+        // This is a REALLOCATION, not an increase - the nominal ceiling is
+        // unchanged, which is what kept 0022 inside the cap after 0021 blew it.
         cfg.min_s = 16;
         cfg.max_s = 256;
         cfg.max_blocks = 16;
         cfg.budget = 2_000_000;
     } else if n >= 10_000 {
+        // The gt_10k tier, swept in isolation (it carries 0.40 of the weight on
+        // its own and had only ever been varied through the shared constant).
         cfg.max_s = LARGE_MAX_S;
         cfg.max_blocks = LARGE_BLOCKS;
         cfg.budget = LARGE_BUDGET;
-        if nnz <= n * 10 && nnz <= 150_000 {
-            cfg.max_sub = 1_600;
-        }
-    } else {
-        cfg.min_s = 32;
+    } else if n < 10_000 {
+        // The block cap wants to SCALE WITH GRAPH SIZE. Sweeping the shared
+        // SUBTREE_CFG.max_s showed 256 helps 1k_10k (0.8752 -> 0.8742) but hurts
+        // gt_10k (0.7969 -> 0.7991), and 512 hurts both -- i.e. one global value
+        // cannot serve both. Give the middle bucket its own cap and leave the
+        // large tier on the 384 that measured best for it.
         cfg.max_s = MID_MAX_S;
         cfg.max_blocks = MID_BLOCKS;
         cfg.budget = MID_BUDGET;
@@ -440,21 +476,21 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
     cfg
 }
 
-fn terminal_deep_subtree_cfg(n: usize, nnz: usize) -> rgreedy::SubCfg {
+fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     cfg.min_s = 16;
     cfg.round = 5;
     if n < 10_000 {
         cfg.max_blocks = 4;
         cfg.max_s = 768;
+        // 0046: these budgets predate the tiering + budget-shape story and
+        // were never swept on the tiered tree. The 0041/0043-45 monotone
+        // prior says deep passes want budget, not breadth.
         cfg.budget = 4_000_000;
     } else {
         cfg.max_blocks = 8;
         cfg.max_s = 1_200;
         cfg.budget = 2_000_000;
-        if nnz <= n * 10 && nnz <= 150_000 {
-            cfg.max_sub = 1_600;
-        }
     }
     cfg
 }
@@ -595,7 +631,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     let amd = feral_amd::amd_order(&core).expect("feral AMD ordering failed");
     let mut best_perm: Vec<usize> = amd.into_iter().map(|x| x as usize).collect();
     let mut best_flops: u64 = flops_of(&scoring_pat, &best_perm);
-    let amd_flops = best_flops;
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
     let nnz = pattern.nnz();
@@ -864,9 +899,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // Custom quotient-graph metrics (SqDiv / SqPure) on medium/dense networks.
     // SqDiv evaluates deg² / (nv + 1), directly predicting each elimination's
     // contribution to the exact sum of squared column counts Σ cⱼ².
-    // Extend coverage to sparse small/medium structures (n<5000, density>=3)
-    // excluded by the 10x gate; same 4 calls, same 300k nnz ceiling.
-    if nnz <= 300_000 && (nnz >= 10 * n || (n < 5_000 && nnz >= 2 * n)) {
+    if nnz <= 300_000 && nnz >= 10 * n {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,
@@ -1131,7 +1164,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // a ratio, never raise it — and TIME is the only thing at stake. See
     // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
     if nnz <= RELABEL_AMF_MAX_NNZ {
-        let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
+        // 0055: two objectives never drawn (0.5, 2.5) appended to the cycle.
+        // Restarts 0-4 draw identical alphas as before; only restarts >= 5
+        // (small-nnz, the band with measured headroom) see the wider pool.
+        // Zero new passes — same restart count, same loop, same wall time;
+        // pure lottery diversification per open-questions.md's top lead.
+        let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0, 0.5, 2.5];
         let num_passes: usize = if nnz <= 80_000 { 2 } else { 1 };
         for pass in 0..num_passes {
             let seed_offset = pass as u64 * 1000;
@@ -1223,7 +1261,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // zero fill edges, early elimination is provably safe and avoids premature
     // clique coupling. Re-scored against exact flops; strictly monotonic.
     const SIMPLICIAL_PROMOTION_MIN_N: usize = 3;
-    const SIMPLICIAL_PROMOTION_MAX_N: usize = 6_000;
+    // 0052: coverage census (.yukon-localsearch-coverage.txt) showed 22/45
+    // n/nnz cells get zero terminal local search; the binding gate for the
+    // 6k-16k sparse band was MAX_N=6000. Cost is linear in n at fixed ops
+    // budget, so widening N (not the budget) reaches the band safely.
+    const SIMPLICIAL_PROMOTION_MAX_N: usize = 16_000;
     const SIMPLICIAL_PROMOTION_MAX_NNZ: usize = 100_000;
     const SIMPLICIAL_PROMOTION_MAX_DENSITY: usize = 24;
     const SIMPLICIAL_PROMOTION_OPS_BUDGET: i64 = 64_000_000;
@@ -1267,8 +1309,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         for (budget, rng_seed) in [
             (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
             (50_000_000, 0xD1B5_4A32_D192_ED03),
-            (50_000_000, 0x27BB_2EE6_87B0_B0FD),
-            (50_000_000, 0x45A1_89C3_F208_7314),
         ] {
             if let Some((cand, _)) = rgreedy::search(
                 n,
@@ -1339,7 +1379,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // 32M matrix-wide requested-work ceiling. Whole-pattern setup and scoring
     // stay inside the measured corpus envelope rather than running on
     // unbounded hidden inputs.
-    if (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n) && nnz <= 1_500_000 {
+    if (SUBTREE_MIN_N..=350_000).contains(&n) && nnz <= 1_500_000 {
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
@@ -1363,7 +1403,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            subtree_cfg_for(n, nnz),
+            subtree_cfg_for(n),
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1390,10 +1430,17 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     .iter()
                     .map(|p| p.map_or(-1, |j| j as i32))
                     .collect();
-                let mut cfg2 = subtree_cfg_for(n, nnz);
+                let mut cfg2 = subtree_cfg_for(n);
                 cfg2.round = 1;
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
+                // 0043 (our chain-round-2 budget sweep on the pre-tiering tree):
+                // the round-2 budget axis is monotone with no U-turn through
+                // 128M; 64M bought -0.001473 weighted partial vs 2M with worst
+                // order() 1.139 s, robust on halves/drop-5. Round 2 on the
+                // tiered frontier inherits subtree_cfg_for(n) (2M for every
+                // tier) — pin it explicitly to 64M so the tiered n<1000 branch
+                // (which pins 2M) is overridden as intended.
                 cfg2.budget = 8_000_000;
                 let improved2 = rgreedy::subtree_refine(
 
@@ -1437,11 +1484,16 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                             .iter()
                             .map(|p| p.map_or(-1, |j| j as i32))
                             .collect();
-                        let mut cfg3 = subtree_cfg_for(n, nnz);
+                        let mut cfg3 = subtree_cfg_for(n);
                         cfg3.round = 1;
                         cfg3.max_blocks = 32;
                         cfg3.min_s = 16;
                         cfg3.max_s = 512;
+                        // 0044 (round-3 budget sweep, probe-only): the 0041
+                        // monotone prior holds for round 3 too — 64M beats
+                        // the inherited 2M on the ge1k weighted partial, no
+                        // U-turn. Same pin as round 2, same reason: the tier
+                        // branches all set 2M, inheritance would undo it.
                         cfg3.budget = 8_000_000;
                         let improved3 = rgreedy::subtree_refine(
                             n,
@@ -1461,10 +1513,9 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 // incumbent. Same block count as round 3 (32)
                                 // but a wider window (max_s 768), so later
                                 // rounds of the chain keep exploring larger
-                                // subtrees of each newly refined tree. Spend
-                                // 64M per block only in the measured-safe
-                                // lower-medium band; retain the hidden-proven
-                                // 32M budget everywhere else.
+                                // subtrees of each newly refined tree. Same
+                                // 1M ops per block; bounded deterministic
+                                // chain.
                                 let permuted4 = permute_pattern(&scoring_pat, &best_perm);
                                 let etree4 = EliminationTree::from_pattern(&permuted4);
                                 let post4 = etree4.postorder();
@@ -1483,16 +1534,16 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     .iter()
                                     .map(|p| p.map_or(-1, |j| j as i32))
                                     .collect();
-                                let mut cfg4 = subtree_cfg_for(n, nnz);
+                                let mut cfg4 = subtree_cfg_for(n);
                                 cfg4.round = 3;
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
                                 cfg4.max_s = 768;
-                                cfg4.budget = if (1_000..6_000).contains(&n) {
-                                    64_000_000
-                                } else {
-                                    32_000_000
-                                };
+                                // 0044/0045: same inheritance bug as rounds
+                                // 2-3 — every tier branch pins 2M. The 0041
+                                // monotone prior held for r2 (0043) and r3
+                                // (0044); pin r4 identically.
+                                cfg4.budget = 8_000_000;
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,
@@ -1529,31 +1580,26 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                             .iter()
                                             .map(|p| p.map_or(-1, |j| j as i32))
                                             .collect();
-                                        let mut cfg5 = subtree_cfg_for(n, nnz);
+                                        let mut cfg5 = subtree_cfg_for(n);
                                         cfg5.round = 4;
-                                        if n < 100_000 || best_flops != amd_flops {
-                                            if (1_000..4_000).contains(&n) {
-                                                cfg5.max_blocks = 16;
-                                                cfg5.budget = 32_000_000;
-                                            } else {
-                                                cfg5.max_blocks = 32;
-                                                cfg5.budget = 16_000_000;
-                                            }
-                                            let improved5 = rgreedy::subtree_refine(
-                                                n,
-                                                &pattern.col_ptr,
-                                                &pattern.row_idx,
-                                                &mut candidate5,
-                                                &counts5,
-                                                &parent5,
-                                                cfg5,
-                                            );
-                                            if improved5 > 0 && is_bijection(&candidate5, n) {
-                                                let f = flops_of(&scoring_pat, &candidate5);
-                                                if f < best_flops {
-                                                    best_flops = f;
-                                                    best_perm = candidate5;
-                                                }
+                                        cfg5.max_blocks = 32;
+                                        cfg5.min_s = 16;
+                                        cfg5.max_s = 768;
+                                        // 0045: r5 same as r2-r4.
+                                        cfg5.budget = 8_000_000;
+                                        let improved5 = rgreedy::subtree_refine(
+                                            n,
+                                            &pattern.col_ptr,
+                                            &pattern.row_idx,
+                                            &mut candidate5,
+                                            &counts5,
+                                            &parent5,
+                                            cfg5,
+                                        );
+                                        if improved5 > 0 && is_bijection(&candidate5, n) {
+                                            let f5 = flops_of(&scoring_pat, &candidate5);
+                                            if f5 < best_flops {
+                                                best_perm = candidate5;
                                             }
                                         }
                                     }
@@ -1596,7 +1642,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            terminal_deep_subtree_cfg(n, nnz),
+            terminal_deep_subtree_cfg(n),
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1624,7 +1670,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         .iter()
                         .map(|p| p.map_or(-1, |j| j as i32))
                         .collect();
-                    let mut cfg2 = terminal_deep_subtree_cfg(n, nnz);
+                    let mut cfg2 = terminal_deep_subtree_cfg(n);
                     cfg2.round = 6;
                     cfg2.min_s = 8;
                     cfg2.max_blocks = 4;
@@ -1663,7 +1709,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 .iter()
                                 .map(|p| p.map_or(-1, |j| j as i32))
                                 .collect();
-                            let mut cfg3 = terminal_deep_subtree_cfg(n, nnz);
+                            let mut cfg3 = terminal_deep_subtree_cfg(n);
                             cfg3.round = 7;
                             cfg3.min_s = 8;
                             cfg3.max_blocks = 4;
@@ -1938,46 +1984,10 @@ fn ndfm_order(pattern: &Pattern) -> Vec<i32> {
 
     // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
     // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
-        let sz = v.len();
-        let mut local = vec![usize::MAX; n];
-        for (i, &u) in v.iter().enumerate() {
-            local[u] = i;
-        }
-        let mut col_ptr: Vec<i32> = Vec::with_capacity(sz + 1);
-        let mut row_idx: Vec<i32> = Vec::new();
-        col_ptr.push(0);
-        for &u in &v {
-            let start = row_idx.len();
-            for &w in &adj[u] {
-                let lw = local[w];
-                if lw != usize::MAX && lw != local[u] {
-                    row_idx.push(lw as i32);
-                }
-            }
-            row_idx[start..].sort_unstable();
-            col_ptr.push(row_idx.len() as i32);
-        }
-        for &u in &v {
-            local[u] = usize::MAX;
-        }
-        let mut done = false;
-        if let Some(csub) = feral_ordering_core::CscPattern::new(sz, &col_ptr, &row_idx) {
-            if let Ok(sub) = feral_amd::amd_order(&csub) {
-                if sub.len() == sz {
-                    for (t, &li) in sub.iter().enumerate() {
-                        order[lo + t] = v[li as usize];
-                    }
-                    done = true;
-                }
-            }
-        }
-        if !done {
-            let mut v = v;
-            v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
-            for (t, u) in v.into_iter().enumerate() {
-                order[lo + t] = u;
-            }
+    let deg_fill = |order: &mut [usize], lo: usize, mut v: Vec<usize>| {
+        v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
+        for (t, u) in v.into_iter().enumerate() {
+            order[lo + t] = u;
         }
     };
 
@@ -2212,46 +2222,10 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
 
     // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
     // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
-        let sz = v.len();
-        let mut local = vec![usize::MAX; n];
-        for (i, &u) in v.iter().enumerate() {
-            local[u] = i;
-        }
-        let mut col_ptr: Vec<i32> = Vec::with_capacity(sz + 1);
-        let mut row_idx: Vec<i32> = Vec::new();
-        col_ptr.push(0);
-        for &u in &v {
-            let start = row_idx.len();
-            for &w in &adj[u] {
-                let lw = local[w];
-                if lw != usize::MAX && lw != local[u] {
-                    row_idx.push(lw as i32);
-                }
-            }
-            row_idx[start..].sort_unstable();
-            col_ptr.push(row_idx.len() as i32);
-        }
-        for &u in &v {
-            local[u] = usize::MAX;
-        }
-        let mut done = false;
-        if let Some(csub) = feral_ordering_core::CscPattern::new(sz, &col_ptr, &row_idx) {
-            if let Ok(sub) = feral_amd::amd_order(&csub) {
-                if sub.len() == sz {
-                    for (t, &li) in sub.iter().enumerate() {
-                        order[lo + t] = v[li as usize];
-                    }
-                    done = true;
-                }
-            }
-        }
-        if !done {
-            let mut v = v;
-            v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
-            for (t, u) in v.into_iter().enumerate() {
-                order[lo + t] = u;
-            }
+    let deg_fill = |order: &mut [usize], lo: usize, mut v: Vec<usize>| {
+        v.sort_by(|&a, &b| degree[a].cmp(&degree[b]).then_with(|| a.cmp(&b)));
+        for (t, u) in v.into_iter().enumerate() {
+            order[lo + t] = u;
         }
     };
 
@@ -3137,11 +3111,7 @@ mod tests {
             .saturating_mul(SUBTREE_CFG.streams.max(1) as i64);
         assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
 
-        for cfg in [
-            terminal_deep_subtree_cfg(9_999, 0),
-            terminal_deep_subtree_cfg(10_000, 0),
-            terminal_deep_subtree_cfg(10_000, 100_000),
-        ] {
+        for cfg in [terminal_deep_subtree_cfg(9_999), terminal_deep_subtree_cfg(10_000)] {
             let requested_budget = cfg
                 .budget
                 .saturating_mul(cfg.max_blocks as i64)

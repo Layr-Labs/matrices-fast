@@ -185,6 +185,16 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
   score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
   retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;
   1k-10k worst observed call **0.661 s**. Submitted for hidden validation.
+- [0056](experiments/0056-h3-density2-n10k.md) — SqDiv/SqPure gate to n<10000,
+  density>=2. Local **0.845187** (−1.11 bips). **FAILED hidden** (`21e1d96`,
+  commit `2f1b84a`); do not resubmit.
+- [0057](experiments/0057-amf-alpha-half-and-twofive.md) — Unlabelled AMF
+  α∈{0.5, 2.5} as *extra* tickets inside the existing `nnz<130k` sweep. Local
+  full run **0.845281 → 0.844270** (−10.11 bips). **FAILED hidden** as `85dcf2a`.
+  Reverted. Do not add tickets on this envelope.
+- [0058](experiments/0058-amf-swap-16-for-half.md) — Same-count swap of
+  unlabelled AMF 16.0 for 0.5. Probe **0.845281 → 0.844348** (−9.33 bips),
+  2 unique / 0 conservative losses. 16→2.5 is a zero.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

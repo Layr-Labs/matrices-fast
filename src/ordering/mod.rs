@@ -399,7 +399,8 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 /// useful work, and those graphs are already covered exhaustively by the MinFill
 /// multi-start and the small-graph LNS. Measured: 1_000 -> 200 was worth 2.6 bip,
 /// 200 -> 64 a further 0.7 bip, so the curve is already flattening here.
-const SUBTREE_MIN_N: usize = 64;
+const SUBTREE_MIN_N: usize = 24;
+const SUBTREE_MAX_N: usize = 250_000;
 
 const MID_MAX_S: usize = 128;
 const LARGE_MAX_S: usize = 384;
@@ -411,10 +412,14 @@ const LARGE_BUDGET: i64 = 2_000_000;
 /// Per-matrix base config for one chain round. On a short elimination tree the
 /// default `min_s = 32` admits almost no blocks, so drop the block floor to 16
 /// below `n = 1_000` — the same floor the terminal deep pass already uses.
-fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
+fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
-    if n < 1_000 {
-        // Small graphs retain the promoted 16-by-2M allocation.
+    if n < 64 {
+        cfg.min_s = 8;
+        cfg.max_s = 32;
+        cfg.max_blocks = 8;
+        cfg.budget = 1_000_000;
+    } else if n < 1_000 {
         cfg.min_s = 16;
         cfg.max_s = 256;
         cfg.max_blocks = 16;
@@ -423,6 +428,9 @@ fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
         cfg.max_s = LARGE_MAX_S;
         cfg.max_blocks = LARGE_BLOCKS;
         cfg.budget = LARGE_BUDGET;
+        if nnz <= n * 10 && nnz <= 150_000 {
+            cfg.max_sub = 1_600;
+        }
     } else {
         cfg.min_s = 32;
         cfg.max_s = MID_MAX_S;
@@ -432,7 +440,7 @@ fn subtree_cfg_for(n: usize) -> rgreedy::SubCfg {
     cfg
 }
 
-fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
+fn terminal_deep_subtree_cfg(n: usize, nnz: usize) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     cfg.min_s = 16;
     cfg.round = 5;
@@ -444,6 +452,9 @@ fn terminal_deep_subtree_cfg(n: usize) -> rgreedy::SubCfg {
         cfg.max_blocks = 8;
         cfg.max_s = 1_200;
         cfg.budget = 2_000_000;
+        if nnz <= n * 10 && nnz <= 150_000 {
+            cfg.max_sub = 1_600;
+        }
     }
     cfg
 }
@@ -1255,6 +1266,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         for (budget, rng_seed) in [
             (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
             (50_000_000, 0xD1B5_4A32_D192_ED03),
+            (50_000_000, 0x27BB_2EE6_87B0_B0FD),
+            (50_000_000, 0x45A1_89C3_F208_7314),
         ] {
             if let Some((cand, _)) = rgreedy::search(
                 n,
@@ -1325,7 +1338,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // 32M matrix-wide requested-work ceiling. Whole-pattern setup and scoring
     // stay inside the measured corpus envelope rather than running on
     // unbounded hidden inputs.
-    if (SUBTREE_MIN_N..=350_000).contains(&n) && nnz <= 1_500_000 {
+    if (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n) && nnz <= 1_500_000 {
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
@@ -1349,7 +1362,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            subtree_cfg_for(n),
+            subtree_cfg_for(n, nnz),
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1376,7 +1389,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     .iter()
                     .map(|p| p.map_or(-1, |j| j as i32))
                     .collect();
-                let mut cfg2 = subtree_cfg_for(n);
+                let mut cfg2 = subtree_cfg_for(n, nnz);
                 cfg2.round = 1;
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
@@ -1423,7 +1436,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                             .iter()
                             .map(|p| p.map_or(-1, |j| j as i32))
                             .collect();
-                        let mut cfg3 = subtree_cfg_for(n);
+                        let mut cfg3 = subtree_cfg_for(n, nnz);
                         cfg3.round = 1;
                         cfg3.max_blocks = 32;
                         cfg3.min_s = 16;
@@ -1469,7 +1482,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     .iter()
                                     .map(|p| p.map_or(-1, |j| j as i32))
                                     .collect();
-                                let mut cfg4 = subtree_cfg_for(n);
+                                let mut cfg4 = subtree_cfg_for(n, nnz);
                                 cfg4.round = 3;
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
@@ -1515,7 +1528,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                             .iter()
                                             .map(|p| p.map_or(-1, |j| j as i32))
                                             .collect();
-                                        let mut cfg5 = subtree_cfg_for(n);
+                                        let mut cfg5 = subtree_cfg_for(n, nnz);
                                         cfg5.round = 4;
                                         cfg5.max_blocks = 32;
                                         cfg5.min_s = 16;
@@ -1576,7 +1589,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            terminal_deep_subtree_cfg(n),
+            terminal_deep_subtree_cfg(n, nnz),
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1604,7 +1617,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         .iter()
                         .map(|p| p.map_or(-1, |j| j as i32))
                         .collect();
-                    let mut cfg2 = terminal_deep_subtree_cfg(n);
+                    let mut cfg2 = terminal_deep_subtree_cfg(n, nnz);
                     cfg2.round = 6;
                     cfg2.min_s = 8;
                     cfg2.max_blocks = 4;
@@ -1643,7 +1656,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 .iter()
                                 .map(|p| p.map_or(-1, |j| j as i32))
                                 .collect();
-                            let mut cfg3 = terminal_deep_subtree_cfg(n);
+                            let mut cfg3 = terminal_deep_subtree_cfg(n, nnz);
                             cfg3.round = 7;
                             cfg3.min_s = 8;
                             cfg3.max_blocks = 4;
@@ -3045,7 +3058,11 @@ mod tests {
             .saturating_mul(SUBTREE_CFG.streams.max(1) as i64);
         assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
 
-        for cfg in [terminal_deep_subtree_cfg(9_999), terminal_deep_subtree_cfg(10_000)] {
+        for cfg in [
+            terminal_deep_subtree_cfg(9_999, 0),
+            terminal_deep_subtree_cfg(10_000, 0),
+            terminal_deep_subtree_cfg(10_000, 100_000),
+        ] {
             let requested_budget = cfg
                 .budget
                 .saturating_mul(cfg.max_blocks as i64)

@@ -548,6 +548,10 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
 
     if max_deg * 50 > n && (100_000..=150_000).contains(&nnz) {
         base_r.min(4) // Hub guard (e.g. ringpack_30_2)
+    } else if n <= 1_000 && nnz <= 4_000 {
+        (1_200_000 / nnz).min(96) // Low-nnz tiny regime
+    } else if n <= 1_000 && nnz <= 5_000 {
+        (800_000 / nnz).min(64) // Low-nnz small regime
     } else if nnz <= 20_000 {
         (600_000 / nnz).min(48) // Low-nnz regime
     } else if nnz <= 150_000 && max_deg * 50 <= n {
@@ -700,7 +704,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     //  (a) nnz < 130k: three AMF passes are cheap (<0.25 s at 5× total).
     //  (b) LARGE-SPARSE (nnz >= 400k, low density): one AMF α-1 pass; here AMF is
     //      fast (sparse) AND is the unique min (faclay75, kissing2, pooling_*).
-    if n < AMF_SWEEP_MAX_N && nnz < 130_000 {
+    if n < AMF_SWEEP_MAX_N && nnz < 105_000 {
         for da in [1.0f64, 16.0, -1.0] {
             let amf_a = feral_amf::AmfOptions { dense_alpha: da, ..Default::default() };
             consider(&|| feral_amf::amf_order_opts(&core, &amf_a).map(|(p, ..)| p));
@@ -1288,6 +1292,58 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
+        if n <= 400 && nnz <= 8_000 {
+            for (budget, rng_seed) in [
+                (50_000_000i64, 0x8543_4123_4A5B_6C7Du64),
+                (50_000_000, 0x1B87_3593_2C4D_5E6F),
+                (50_000_000, 0x3E91_B742_95A8_C3D1),
+                (50_000_000, 0x6A09_E667_F3BC_C908),
+            ] {
+                if let Some((cand, _)) = rgreedy::search(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    best_flops,
+                    budget,
+                    rng_seed,
+                ) {
+                    if is_bijection(&cand, n) {
+                        let f = flops_of(&scoring_pat, &cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
+                        }
+                    }
+                }
+            }
+        }
+        if n <= 250 && nnz <= 4_000 {
+            for (budget, rng_seed) in [
+                (50_000_000i64, 0xBB67_AE85_84CA_A73Bu64),
+                (50_000_000, 0x3C6E_F372_FE94_F82B),
+                (50_000_000, 0xA54F_F53A_5F1D_36F1),
+                (50_000_000, 0x510E_527F_ADE6_82D1),
+            ] {
+                if let Some((cand, _)) = rgreedy::search(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    best_flops,
+                    budget,
+                    rng_seed,
+                ) {
+                    if is_bijection(&cand, n) {
+                        let f = flops_of(&scoring_pat, &cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
+                        }
+                    }
+                }
+            }
+        }
     } else if medium_exact_gate {
 
         // The same serial exact search above its original size gate. Two fixed
@@ -1442,7 +1498,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         cfg3.max_blocks = 32;
                         cfg3.min_s = 16;
                         cfg3.max_s = 512;
-                        cfg3.budget = 8_000_000;
+                        cfg3.budget = if (1_000..3_000).contains(&n) && nnz <= 40_000 {
+                            16_000_000
+                        } else {
+                            8_000_000
+                        };
                         let improved3 = rgreedy::subtree_refine(
                             n,
                             &pattern.col_ptr,
@@ -1483,16 +1543,25 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     .iter()
                                     .map(|p| p.map_or(-1, |j| j as i32))
                                     .collect();
+                                let is_slow_deep_tree =
+                                    n >= 10_000 && (100_000..=300_000).contains(&nnz) && max_deg <= 100;
                                 let mut cfg4 = subtree_cfg_for(n, nnz);
                                 cfg4.round = 3;
-                                cfg4.max_blocks = 32;
-                                cfg4.min_s = 16;
-                                cfg4.max_s = 768;
-                                cfg4.budget = if (1_000..6_000).contains(&n) {
-                                    64_000_000
+                                if is_slow_deep_tree {
+                                    cfg4.max_blocks = 16;
+                                    cfg4.min_s = 16;
+                                    cfg4.max_s = 768;
+                                    cfg4.budget = 8_000_000;
                                 } else {
-                                    32_000_000
-                                };
+                                    cfg4.max_blocks = 32;
+                                    cfg4.min_s = 16;
+                                    cfg4.max_s = 768;
+                                    cfg4.budget = if (1_000..6_000).contains(&n) {
+                                        64_000_000
+                                    } else {
+                                        32_000_000
+                                    };
+                                }
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,
@@ -1532,7 +1601,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         let mut cfg5 = subtree_cfg_for(n, nnz);
                                         cfg5.round = 4;
                                         if n < 100_000 || best_flops != amd_flops {
-                                            if (1_000..4_000).contains(&n) {
+                                            if is_slow_deep_tree {
+                                                cfg5.max_blocks = 12;
+                                                cfg5.budget = 4_000_000;
+                                            } else if (1_000..4_000).contains(&n) {
                                                 cfg5.max_blocks = 16;
                                                 cfg5.budget = 32_000_000;
                                             } else {
@@ -1932,15 +2004,15 @@ fn ndfm_order(pattern: &Pattern) -> Vec<i32> {
     let mut ina: Vec<bool> = vec![false; n]; // membership in the growing part A
     let mut dist: Vec<u32> = vec![0u32; n]; // BFS distance / separator marker scratch
     let mut bfs: Vec<usize> = Vec::new();
+    let mut local = vec![usize::MAX; n];
 
     // Hard work budget: caps total per-subset scanning at O(n log n).
     let mut budget: i64 = 96 * n as i64 + 8192;
 
     // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
     // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
+    let deg_fill = |order: &mut [usize], local: &mut [usize], lo: usize, v: Vec<usize>| {
         let sz = v.len();
-        let mut local = vec![usize::MAX; n];
         for (i, &u) in v.iter().enumerate() {
             local[u] = i;
         }
@@ -1992,7 +2064,7 @@ fn ndfm_order(pattern: &Pattern) -> Vec<i32> {
 
         // Base case / budget exhausted: order this subset by degree and stop.
         if sz <= NDFM_LEAF || budget < 0 {
-            deg_fill(&mut order, lo, nodes);
+            deg_fill(&mut order, &mut local, lo, nodes);
             continue;
         }
         budget -= sz as i64;
@@ -2136,7 +2208,7 @@ fn ndfm_order(pattern: &Pattern) -> Vec<i32> {
 
         // Degenerate: separator is the whole subset — degree-order and stop.
         if left.is_empty() && right.is_empty() {
-            deg_fill(&mut order, lo, sep);
+            deg_fill(&mut order, &mut local, lo, sep);
             continue;
         }
 
@@ -2205,6 +2277,7 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
     let mut mark: Vec<bool> = vec![false; n]; // membership in the current subset
     let mut dist: Vec<u32> = vec![0u32; n]; // 1-based BFS distance; 0 = unvisited
     let mut bfs: Vec<usize> = Vec::new();
+    let mut local = vec![usize::MAX; n];
 
     // Hard work budget: caps total per-subset scanning at O(n), so no adversarial
     // (e.g. highly disconnected) input can drive quadratic blow-up.
@@ -2212,9 +2285,8 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
 
     // Fill `order[lo..lo+v.len()]` with `v` reordered by ascending degree
     // (min-degree-ish leaf ordering), ties broken by index → deterministic.
-    let deg_fill = |order: &mut [usize], lo: usize, v: Vec<usize>| {
+    let deg_fill = |order: &mut [usize], local: &mut [usize], lo: usize, v: Vec<usize>| {
         let sz = v.len();
-        let mut local = vec![usize::MAX; n];
         for (i, &u) in v.iter().enumerate() {
             local[u] = i;
         }
@@ -2266,7 +2338,7 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
 
         // Base case / budget exhausted: order this subset by degree and stop.
         if sz <= ND_LEAF || budget < 0 {
-            deg_fill(&mut order, lo, nodes);
+            deg_fill(&mut order, &mut local, lo, nodes);
             continue;
         }
         budget -= sz as i64;
@@ -2388,7 +2460,7 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
 
         // Unsplittable (separator is the whole subset): degree-order and stop.
         if left.is_empty() && right.is_empty() {
-            deg_fill(&mut order, lo, sep);
+            deg_fill(&mut order, &mut local, lo, sep);
             continue;
         }
 

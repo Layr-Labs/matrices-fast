@@ -852,7 +852,9 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // Custom quotient-graph metrics (SqDiv / SqPure) on medium/dense networks.
     // SqDiv evaluates deg² / (nv + 1), directly predicting each elimination's
     // contribution to the exact sum of squared column counts Σ cⱼ².
-    if nnz <= 300_000 && nnz >= 10 * n {
+    // Extend coverage to sparse small/medium structures (n<5000, density>=3)
+    // excluded by the 10x gate; same 4 calls, same 300k nnz ceiling.
+    if nnz <= 300_000 && (nnz >= 10 * n || (n < 5_000 && nnz >= 3 * n)) {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,

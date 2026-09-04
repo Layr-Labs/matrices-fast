@@ -72,13 +72,7 @@ fn core_of(pattern: &Pattern) -> (Vec<i32>, Vec<i32>) {
 #[test]
 #[ignore]
 fn probe_timing_and_score() {
-    let corpus = match std::env::var("SSI_CORPUS_FILE") {
-        Ok(path) if !path.trim().is_empty() => {
-            ssi_scoring::load_corpus_jsonl(std::path::Path::new(&path))
-                .unwrap_or_else(|_| crate::corpus::corpus())
-        }
-        _ => crate::corpus::corpus(),
-    };
+    let corpus = crate::corpus::corpus();
     let mut rows: Vec<(f64, String, usize, usize, f64)> = Vec::new();
     let mut log_sums = [0.0f64; 3];
     let mut counts = [0usize; 3];
@@ -1780,5 +1774,113 @@ fn probe_lt1k() {
     rows.sort_by(|a, b| a.0.cmp(&b.0));
     for (name, ratio) in &rows {
         println!("ROW\t{name}\t{ratio:.6}");
+    }
+}
+
+/// Unique-win probe for unlabelled AMF α ∈ {0.5, 2.5} under the existing
+/// `nnz < 130_000` sweep envelope. Compares each extra pass against the
+/// current `order()` incumbent (not against AMD), so a "win" here is a
+/// ticket the portfolio does not already hold. Extra passes are not wired
+/// into `order()`; time of the extras is reported separately and cannot
+/// move matrices outside the 130k gate (the current worst-case tier).
+#[test]
+#[ignore]
+fn probe_amf_extra_alpha() {
+    let corpus = crate::corpus::corpus();
+    let mut base_logs = [0.0f64; 3];
+    let mut new_logs = [0.0f64; 3];
+    let mut counts = [0usize; 3];
+    let mut unique = 0usize;
+    let mut eligible = 0usize;
+    let mut extra_worst = 0.0f64;
+    let mut extra_worst_name = String::new();
+    let mut order_worst = 0.0f64;
+    let mut order_worst_name = String::new();
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+
+        let t0 = Instant::now();
+        let perm = order(pat);
+        let order_s = t0.elapsed().as_secs_f64();
+        if order_s > order_worst {
+            order_worst = order_s;
+            order_worst_name = name.clone();
+        }
+        let mut best = flops_of(&sp, &perm);
+        let before = best;
+
+        if n < 300_000 && nnz < 130_000 {
+            eligible += 1;
+            let t1 = Instant::now();
+            for da in [0.5f64, 2.5] {
+                let o = feral_amf::AmfOptions {
+                    dense_alpha: da,
+                    ..Default::default()
+                };
+                if let Ok((p, ..)) = feral_amf::amf_order_opts(&core, &o) {
+                    let perm: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                    if perm.len() == n {
+                        let f = flops_of(&sp, &perm);
+                        if f < best {
+                            best = f;
+                        }
+                    }
+                }
+            }
+            let extra_s = t1.elapsed().as_secs_f64();
+            if extra_s > extra_worst {
+                extra_worst = extra_s;
+                extra_worst_name = name.clone();
+            }
+        }
+
+        let b = bucket(n);
+        base_logs[b] += (before as f64 / amd_flops as f64).ln();
+        new_logs[b] += (best as f64 / amd_flops as f64).ln();
+        counts[b] += 1;
+        if best < before {
+            unique += 1;
+            let old_r = before as f64 / amd_flops as f64;
+            let new_r = best as f64 / amd_flops as f64;
+            println!(
+                "WIN\t{name}\tn={n}\tnnz={nnz}\t{old_r:.6} -> {new_r:.6}"
+            );
+        }
+    }
+
+    let base = aggregate(&base_logs, &counts);
+    let neu = aggregate(&new_logs, &counts);
+    println!("eligible nnz<130k = {eligible}");
+    println!("unique_wins = {unique}");
+    println!("score {base:.6} -> {neu:.6}  delta={:.6}", neu - base);
+    println!("order() worst = {order_worst:.3}s on {order_worst_name}");
+    println!("extra AMF worst = {extra_worst:.3}s on {extra_worst_name}");
+    for b in 0..3 {
+        if counts[b] == 0 {
+            continue;
+        }
+        let gb = (base_logs[b] / counts[b] as f64).exp();
+        let gn = (new_logs[b] / counts[b] as f64).exp();
+        println!(
+            "bucket {}\t{gb:.6} -> {gn:.6}\tn={}",
+            BUCKET_NAMES[b],
+            counts[b]
+        );
     }
 }

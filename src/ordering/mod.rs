@@ -852,9 +852,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // Custom quotient-graph metrics (SqDiv / SqPure) on medium/dense networks.
     // SqDiv evaluates deg² / (nv + 1), directly predicting each elimination's
     // contribution to the exact sum of squared column counts Σ cⱼ².
-    // Extend coverage to sparse small/medium structures (n<5000, density>=3)
-    // excluded by the 10x gate; same 4 calls, same 300k nnz ceiling.
-    if nnz <= 300_000 && (nnz >= 10 * n || (n < 5_000 && nnz >= 3 * n)) {
+    if nnz <= 300_000 && nnz >= 10 * n {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,
@@ -1240,7 +1238,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // Uses the vast time headroom at n <= 1,000 to perform exact elimination game
     // simulation on true fill graphs with zero-cost objective tracking.
     // Explores alternative prefix and suffix elimination orderings via LNS plateau search.
-    if n <= 1_000 && nnz <= 30_000 {
+    if n <= 1_000 && nnz <= 125_000 {
         // TWO streams, not one. 0004 settled that this family is a pure lottery
         // with no exploitable local structure, so the only lever that reliably
         // pays is MORE TICKETS, not smarter ones — and a fresh `rng_seed` is a
@@ -1255,6 +1253,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         for (budget, rng_seed) in [
             (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
             (50_000_000, 0xD1B5_4A32_D192_ED03),
+            (50_000_000, 0x27BB_2EE6_87B0_B0FD),
+            (50_000_000, 0x45A1_89C3_F208_7314),
+            (50_000_000, 0x85EB_CA77_C2B2_AE63),
+            (50_000_000, 0x1B87_3593_2C64_07D5),
+            (50_000_000, 0x3C6E_F372_FE94_F82B),
+            (50_000_000, 0x5491_4F6C_DD1D_2545),
         ] {
             if let Some((cand, _)) = rgreedy::search(
                 n,
@@ -1302,7 +1306,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     // On the medium exact-search gate, refine the new incumbent once more.
-    if pair_descent_gate && medium_exact_gate {
+    if pair_descent_gate && (medium_exact_gate || (n <= 1_000 && nnz <= 125_000)) {
         if let Some(cand) = rgreedy::adjacent_pair_descent(
             n,
             &pattern.col_ptr,

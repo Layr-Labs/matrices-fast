@@ -72,7 +72,13 @@ fn core_of(pattern: &Pattern) -> (Vec<i32>, Vec<i32>) {
 #[test]
 #[ignore]
 fn probe_timing_and_score() {
-    let corpus = crate::corpus::corpus();
+    let corpus = match std::env::var("SSI_CORPUS_FILE") {
+        Ok(path) if !path.trim().is_empty() => {
+            ssi_scoring::load_corpus_jsonl(std::path::Path::new(&path))
+                .unwrap_or_else(|_| crate::corpus::corpus())
+        }
+        _ => crate::corpus::corpus(),
+    };
     let mut rows: Vec<(f64, String, usize, usize, f64)> = Vec::new();
     let mut log_sums = [0.0f64; 3];
     let mut counts = [0usize; 3];

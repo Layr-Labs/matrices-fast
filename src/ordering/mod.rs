@@ -440,8 +440,8 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
         cfg.max_s = 32;
         cfg.max_blocks = 8;
         cfg.budget = 1_000_000; if n >= 1_000 { cfg.budget /= 2; }
-    } else if n < 1_000 {
-        cfg.min_s = 16;
+    } else if n <= 1_000 {
+        cfg.min_s = 8;
         cfg.max_s = 256;
         cfg.max_blocks = 16;
         cfg.budget = 2_000_000; if n >= 1_000 { cfg.budget /= 2; }
@@ -575,7 +575,11 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
     } else if nnz <= 150_000 && max_deg * 50 <= n {
         base_r.max(12) // Mid-band non-hub floor
     } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
-        base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
+        if n >= 40_000 && nnz <= 200_000 {
+            base_r.max(4)
+        } else {
+            base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
+        }
     } else {
         base_r
     }
@@ -741,7 +745,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // eligible matrix STRICTLY below the slowest tier (`nnz ≥ 163 k`), where a
     // few AMD passes are milliseconds — so the worst-case time is held
     // byte-for-byte. Best-of floor makes all three variants pure upside.
-    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ {
+    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ && (nnz <= 12 * n || nnz <= 150_000) {
         let amd_robust = feral_amd::AmdOptions {
             aggressive: false,
             dense_alpha: 10.0,
@@ -868,7 +872,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(minfill_order(pattern))
         });
         if n < 2_000 && nnz < 10_000 {
-            let minfill_restarts = if n < 1_000 && nnz < 5_000 { 12 } else { 6 };
+            let minfill_restarts = if n <= 1_000 && nnz <= 5_000 {
+                24
+            } else {
+                6
+            };
             for seed in 1..=minfill_restarts {
                 let q = relabel(n, seed);
                 let b = permute_pattern(&scoring_pat, &q);
@@ -1162,11 +1170,16 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // a ratio, never raise it — and TIME is the only thing at stake. See
     // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
     if nnz <= RELABEL_AMF_MAX_NNZ {
+        let amf_restarts = if n >= 10_000 && nnz >= 100_000 {
+            restarts.min(8)
+        } else {
+            restarts
+        };
         let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
         let num_passes: usize = if nnz <= 80_000 { 2 } else { 1 };
         for pass in 0..num_passes {
             let seed_offset = pass as u64 * 1000;
-            for r in 0..restarts {
+            for r in 0..amf_restarts {
                 let seed = seed_offset + r as u64 + 1;
                 let da = amf_alphas[(r + pass) % amf_alphas.len()];
                 let amf_relabel_opts = feral_amf::AmfOptions {
@@ -1208,12 +1221,16 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // nnz cap keeps this off the local worst-case matrices.
     let extra_relabel = amd_flops > 0
         && best_flops < amd_flops
-        && best_flops.saturating_mul(5) < amd_flops.saturating_mul(4)
+        && (best_flops.saturating_mul(20) < amd_flops.saturating_mul(17) || (n <= 1_000 && nnz <= 30_000))
         && nnz > 0
         && n < EXTRA_RELABEL_MAX_N
         && nnz <= EXTRA_RELABEL_MAX_NNZ;
     if extra_relabel {
-        let extra = 16usize;
+        let extra = if best_flops.saturating_mul(5) < amd_flops.saturating_mul(4) {
+            16usize
+        } else {
+            8usize
+        };
         for r in 0..extra {
             let seed = 50_000u64 + r as u64;
             let q = relabel(n, seed);
@@ -1291,8 +1308,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     } else {
         PAIR_DESCENT_OPS_BUDGET
     };
-    let mut well_below;
-    let mut medium_exact_gate;
+    let well_below;
+    let medium_exact_gate;
 
     if pair_descent_gate {
         if let Some(cand) = rgreedy::adjacent_pair_descent(
@@ -1380,6 +1397,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0xD1B5_4A32_D192_ED03),
                 (50_000_000, 0x27BB_2EE6_87B0_B0FD),
                 (50_000_000, 0x45A1_89C3_F208_7314),
+                (100_000_000, 0xA076_1D64_78BD_642F),
             ]
         };
         for &(budget, rng_seed) in small_streams {
@@ -2035,23 +2053,13 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         .collect();
                     handles.into_iter().map(|h| h.join().ok().flatten()).collect()
                 });
-                let mut pick: Option<(u64, usize)> = None;
-                for (k, r) in results.iter().enumerate() {
-                    if let Some((f, _)) = r {
-                        if pick.map_or(true, |(bf, _)| *f < bf) {
-                            pick = Some((*f, k));
-                        }
-                    }
-                }
-                if let Some((_, k)) = pick {
-                    if let Some((_, cp)) = &results[k] {
-                        let cand = core_lift::splice(&cl, cp);
-                        if is_bijection(&cand, n) {
-                            let f = flops_of(&scoring_pat, &cand);
-                            if f < best_flops {
-                                best_flops = f;
-                                best_perm = cand;
-                            }
+                for (_, cp) in results.into_iter().flatten() {
+                    let cand = core_lift::splice(&cl, &cp);
+                    if is_bijection(&cand, n) {
+                        let f = flops_of(&scoring_pat, &cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
                         }
                     }
                 }
@@ -2070,6 +2078,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
         ) {
             if is_bijection(&candidate, n) && flops_of(&scoring_pat, &candidate) < best_flops {
+                best_flops = flops_of(&scoring_pat, &candidate);
                 best_perm = candidate;
             }
         }

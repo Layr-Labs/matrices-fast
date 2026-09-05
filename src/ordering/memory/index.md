@@ -5,6 +5,7 @@ first; keep it current whenever you add, rename, or retire a page.
 
 ## Verified 2026-09-05 checkpoint
 
+- Current shippable locally verified candidate score: **0.843657** (fill **0.943813**) on all 300 dev matrices, 2026-09-05. Base `ea67ff8` score 0.843978. Conditional search escalation on below-anchor matrices: lt_1k **0.890328** / 1k_10k **0.865965** / gt_10k **0.791924** (−3.21 bips gain). Worst same-machine order() 1.352 s (faster than base 1.358 s). See [0060](experiments/0060-conditional-search-escalation-below-anchor.md).
 - Preceding four-pivot/atomic winner: dev **0.84419540581772**, hidden **0.870307**, officially promoted as `da03dc2c` / source `649c230`.
 - New component-factored five-pivot cleanup with cache and boundary repairs: dev **0.8440714862418132**, fill **0.943946**; all **300 trusted cases and 44 active tests pass**. Exact counts agree with the isolated probe. **42 better / 2 worse / 256 unchanged** versus the preceding winner; both corpus halves and drop-five sensitivity improve. Official follow-up result pending submission/validation.
 - [0059: component five-pivot cleanup](experiments/0059-component-five-pivot-cleanup.md) records the exact formula, native implementation, work ledger, negative controls and source audits.

@@ -1756,6 +1756,29 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // Preserve the complete incumbent, including all prior refinement. Explore
+    // one complementary metric on a fixed numbering under a smaller size gate.
+    if n < 20_000 && nnz < 130_000 {
+        best_flops = flops_of(&scoring_pat, &best_perm);
+        for seed in [101] {
+            let q = if seed == 0 { (0..n).collect() } else { relabel(n, seed) };
+            let b = permute_pattern(&scoring_pat, &q);
+            let cp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let ri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Some(core) = feral_ordering_core::CscPattern::new(n, &cp, &ri) else { continue; };
+            for variant in [custom_metrics::ScoreVariant::DegP075] {
+                let produced = std::panic::catch_unwind(std::panic::AssertUnwindSafe(||
+                    custom_metrics::order_variant(&core, 5.0, true, variant)));
+                let Ok(Ok(raw)) = produced else { continue; };
+                let indices: Vec<usize> = raw.into_iter().map(|x| x as usize).collect();
+                if !is_bijection(&indices, n) { continue; }
+                let candidate: Vec<usize> = indices.into_iter().map(|i| q[i]).collect();
+                let f = flops_of(&scoring_pat, &candidate);
+                if f < best_flops { best_flops = f; best_perm = candidate; }
+            }
+        }
+    }
+
     best_perm
 }
 

@@ -152,6 +152,8 @@ mod probe;
 
 pub mod rgreedy;
 pub mod custom_metrics;
+/// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
+mod core_lift;
 
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
@@ -163,6 +165,17 @@ use feral::symbolic::column_counts_gnp;
 /// gt_10k wins (e.g. pooling_*). This is the SAME envelope as the prior safe run.
 const AMF_MAX_N: usize = 250_000;
 const AMF_MAX_NNZ: usize = 1_500_000;
+
+/// REDUCE-THEN-AMF gates (matrices_mage). Row-degree bound for the exact
+/// prefix, the largest residual core the AMF grid is asked to order, and the
+/// (n, nnz) envelope of the whole terminal phase. Structural only.
+const REDUCE_MIN_N: usize = 50;
+const REDUCE_MAX_NNZ: usize = 1_500_000;
+const REDUCE_ROW_DEG: usize = 3;
+const REDUCE_MAX_CORE_N: usize = 60_000;
+const REDUCE_MAX_CORE_EDGES: usize = 3_000_000;
+const REDUCE_MAX_CORE_NNZ: usize = 1_500_000;
+const REDUCE_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
 
 /// Medium-size envelope for the *extra* tuned candidates (α-5/α-2 AMD, default
 /// AMF, α-2 AMF). A few extra AMD/AMF passes are trivially cheap in this region;
@@ -1939,6 +1952,91 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             }
             if !round_improved {
                 break;
+            }
+        }
+    }
+
+    // ── REDUCE-THEN-AMF, TERMINAL (matrices_mage) ───────────────────────────
+    // Peel pendants and eliminate every vertex of live degree <= REDUCE_ROW_DEG
+    // EXACTLY (each elimination closes its live neighbourhood into a clique, so
+    // the residual is the exact fill graph after the prefix and Σ c_j² splits
+    // into a FIXED prefix term plus a term computed on the core alone). Run the
+    // AMF alpha grid and AMD on the residual core, rank the core orderings on
+    // the core graph (exact by the split), splice the argmin behind the prefix
+    // and admit it through the trusted scorer with strict `<` against the
+    // finished pipeline. Placed LAST on purpose: as a portfolio candidate it
+    // displaces the pool argmin and re-seeds the descent phases (non-monotone);
+    // here the pipeline above is byte-identical and this can only lower the
+    // result. Gated on (n, nnz) and the core size only — never on identity.
+    if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
+        let lifted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            core_lift::reduce(
+                &scoring_pat,
+                REDUCE_ROW_DEG,
+                REDUCE_MAX_CORE_N,
+                REDUCE_MAX_CORE_EDGES,
+            )
+        }));
+        if let Ok(Some(cl)) = lifted {
+            let cn = cl.core_n();
+            if cn > 0 && cn < n && cl.core_nnz() <= REDUCE_MAX_CORE_NNZ {
+                let core_pat = ScoringPattern {
+                    n: cn,
+                    col_ptr: cl.core_col_ptr.clone(),
+                    row_idx: cl.core_row_idx.clone(),
+                };
+                let ccp: Vec<i32> = cl.core_col_ptr.iter().map(|&x| x as i32).collect();
+                let cri: Vec<i32> = cl.core_row_idx.iter().map(|&x| x as i32).collect();
+                // Four AMF alphas + AMD, each an independent pure function of
+                // the core; results are merged by task index, so thread timing
+                // never reaches the output.
+                let results: Vec<Option<(u64, Vec<usize>)>> = std::thread::scope(|sc| {
+                    let handles: Vec<_> = (0..=REDUCE_ALPHAS.len())
+                        .map(|k| {
+                            let (ccp, cri, core_pat) = (&ccp, &cri, &core_pat);
+                            sc.spawn(move || -> Option<(u64, Vec<usize>)> {
+                                let ccore =
+                                    feral_ordering_core::CscPattern::new(cn, ccp, cri)?;
+                                let p: Vec<i32> = if k < REDUCE_ALPHAS.len() {
+                                    let o = feral_amf::AmfOptions {
+                                        dense_alpha: REDUCE_ALPHAS[k],
+                                        ..Default::default()
+                                    };
+                                    feral_amf::amf_order_opts(&ccore, &o).ok()?.0
+                                } else {
+                                    feral_amd::amd_order(&ccore).ok()?
+                                };
+                                let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                                if !is_bijection(&cp, cn) {
+                                    return None;
+                                }
+                                let f = flops_of(core_pat, &cp);
+                                Some((f, cp))
+                            })
+                        })
+                        .collect();
+                    handles.into_iter().map(|h| h.join().ok().flatten()).collect()
+                });
+                let mut pick: Option<(u64, usize)> = None;
+                for (k, r) in results.iter().enumerate() {
+                    if let Some((f, _)) = r {
+                        if pick.map_or(true, |(bf, _)| *f < bf) {
+                            pick = Some((*f, k));
+                        }
+                    }
+                }
+                if let Some((_, k)) = pick {
+                    if let Some((_, cp)) = &results[k] {
+                        let cand = core_lift::splice(&cl, cp);
+                        if is_bijection(&cand, n) {
+                            let f = flops_of(&scoring_pat, &cand);
+                            if f < best_flops {
+                                best_flops = f;
+                                best_perm = cand;
+                            }
+                        }
+                    }
+                }
             }
         }
     }

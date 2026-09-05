@@ -2057,6 +2057,142 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // TERMINAL EXTRA EXACT-LNS TICKETS on well-below medium/small graphs +
+    // sparse-large relabel (0064).
+    // All three blocks are terminal (after the full pipeline incl.
+    // reduce-then-AMF) => strictly monotonic: each ticket is accepted only on
+    // strict `<`, so per-matrix ratio can never worsen vs the base above.
+    // 0004: more i.i.d. tickets is the only reliable lever; 0056/0061:
+    // conversion tracks well-below margin (ratio<0.8). Gates exclude every
+    // known worst-case matrix (n/nnz caps), so the global worst is unmoved.
+    // Deterministic (fixed seeds, pure functions of the pattern).
+    if n > 1_000
+        && n <= 6_000
+        && nnz <= 30_000
+        && nnz > 0
+        && amd_flops > 0
+        && best_flops < amd_flops
+        && best_flops.saturating_mul(5) < amd_flops.saturating_mul(4)
+    {
+        for &seed in &[
+            0x6A09_E667_F3BC_C909u64,
+            0x510E_527F_ADE6_82D1u64,
+            0x9B05_4069_7C5A_1E59u64,
+            0x1F83_D9AB_FB41_BD6Bu64,
+        ] {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                50_000_000,
+                seed,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
+    }
+    if n <= 1_000
+        && nnz <= 30_000
+        && nnz > 0
+        && amd_flops > 0
+        && best_flops < amd_flops
+        && best_flops.saturating_mul(5) < amd_flops.saturating_mul(4)
+    {
+        for &seed in &[
+            0xBB67_AE85_84CA_A73Bu64,
+            0x3C6E_F372_FE94_F82Bu64,
+            0xA54F_F53A_5F1D_36F1u64,
+            0x510E_527F_ADE6_82D1u64,
+            0x2545_F491_4F6C_DD1Du64,
+            0x4528_21E6_38D0_AC72u64,
+        ] {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                50_000_000,
+                seed,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
+    }
+    if n >= 10_000
+        && nnz <= 60_000
+        && nnz > 0
+        && amd_flops > 0
+        && best_flops < amd_flops
+        && best_flops.saturating_mul(5) < amd_flops.saturating_mul(4)
+    {
+        for r in 0..4usize {
+            let seed = 66_000u64 + r as u64;
+            let q = relabel(n, seed);
+            let b = permute_pattern(&scoring_pat, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+            })) else {
+                continue;
+            };
+            if nnz <= RELABEL_AMF_MAX_NNZ {
+                let da = [5.0f64, 2.0, -1.0, 1.0][r % 4];
+                let opts = feral_amf::AmfOptions {
+                    dense_alpha: da,
+                    ..Default::default()
+                };
+                if let Ok(Ok((pb, ..))) =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        feral_amf::amf_order_opts(&bcore, &opts)
+                    }))
+                {
+                    let perm: Vec<usize> =
+                        pb.iter().map(|&x| q[x as usize] as usize).collect();
+                    if is_bijection(&perm, n) {
+                        let f = flops_of(&scoring_pat, &perm);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = perm;
+                        }
+                    }
+                }
+            }
+            let amd_opt = feral_amd::AmdOptions {
+                aggressive: r % 2 == 0,
+                dense_alpha: 10.0,
+            };
+            if let Ok(Ok(pb)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                feral_amd::amd_order_opts(&bcore, &amd_opt).map(|(p, ..)| p)
+            })) {
+                let perm: Vec<usize> =
+                    pb.iter().map(|&x| q[x as usize] as usize).collect();
+                if is_bijection(&perm, n) {
+                    let f = flops_of(&scoring_pat, &perm);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = perm;
+                    }
+                }
+            }
+        }
+    }
+
     best_perm
 }
 

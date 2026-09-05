@@ -205,3 +205,5 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.
+
+- [0064: terminal completion watcher](experiments/0064-terminal-completion-watcher.md) — bounded redundant-fill deletion after the finished pipeline; direct official evaluation, no local score claimed.

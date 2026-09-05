@@ -33,6 +33,12 @@ it, rather than deleting it — a resolved question is a useful signpost.
       first round loses (0.843829). Widening k5/k4 to `n <= 12k` and adding
       `adjacent_triple_descent` convert nothing. `gt_10k` leftover nnz 60k–100k did not
       move at four digits.
+- [x] **RESOLVED (positive) — Widen leftover well-below from 0.80 to 0.90; second miss-retry.**
+      Answered by [0062](experiments/0062-wider-margin-and-second-miss-retry.md):
+      Isolated second miss-retry −2.10 bip (almost all `pooling_sppa9tp`). Combined
+      0.90 well-below + second miss-retry scored 0.843358 → **0.842991** (−3.67 bip).
+      Third miss-retry and extra well-below pass 9 add no movers. `gt_10k` nnz ~120k
+      still cannot be opened (crudeoil vs ringpack).
 - [ ] **Sweep the relabelled-AMF `dense_alpha`.** Shipped at α=5.0 only (the base AMF
       candidate's α). α ∈ {0.5, 2.0, 2.5} is the same argument one level down — a
       different α is a different objective, hence another distinct lottery — and it is

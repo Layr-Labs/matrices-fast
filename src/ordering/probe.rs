@@ -1490,6 +1490,307 @@ fn probe_next_subtree_variants() {
     }
 }
 
+/// Measure relabelled AMF/AMD orderings on the exact residual core produced by
+/// the shipped degree-three reduction. The prefix is fixed, so every candidate
+/// can be scored with the ordinary full-pattern scorer after splicing.
+#[test]
+#[ignore]
+fn probe_core_relabel_variants() {
+    let corpus = crate::corpus::corpus();
+    let labels = ["amf4", "amf8", "amd4", "amd8", "union8"];
+    let mut base_sums = [0.0f64; 3];
+    let mut sums = [[0.0f64; 3]; 5];
+    let mut counts = [0usize; 3];
+    let mut improved = [0usize; 5];
+    let mut union_rows: Vec<(String, usize, usize, usize, u64, u64)> = Vec::new();
+    let mut core_times: Vec<(f64, String, usize, usize, usize, usize)> = Vec::new();
+    let mut core_rows: Vec<(usize, usize, usize, u64, u64, u64)> = Vec::new();
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let incumbent = flops_of(&sp, &order(pat));
+        let bkt = bucket(n);
+        counts[bkt] += 1;
+        base_sums[bkt] += (incumbent as f64 / amd_flops as f64).ln();
+        let mut best = [incumbent; 5];
+        let mut core_n_for_row = 0;
+        let mut core_nnz_for_row = 0;
+
+        if n >= 50 && nnz <= 1_500_000 {
+            if let Some(cl) = core_lift::reduce(&sp, 3, 60_000, 3_000_000) {
+                let cn = cl.core_n();
+                core_n_for_row = cn;
+                core_nnz_for_row = cl.core_nnz();
+                if cn > 0 && cn < n && cl.core_nnz() <= 1_500_000 {
+                    let core_t0 = Instant::now();
+                    let core_pat = ScoringPattern {
+                        n: cn,
+                        col_ptr: cl.core_col_ptr.clone(),
+                        row_idx: cl.core_row_idx.clone(),
+                    };
+                    for r in 0..8usize {
+                        let q = relabel(cn, 0xC0DE_0000u64 + r as u64);
+                        let relabeled = permute_pattern(&core_pat, &q);
+                        let bcp: Vec<i32> = relabeled.col_ptr.iter().map(|&x| x as i32).collect();
+                        let bri: Vec<i32> = relabeled.row_idx.iter().map(|&x| x as i32).collect();
+                        let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            feral_ordering_core::CscPattern::new(cn, &bcp, &bri)
+                        })) else {
+                            continue;
+                        };
+
+                        let mut try_core = |p: Vec<i32>, slots: &[usize]| {
+                            let core_perm: Vec<usize> =
+                                p.into_iter().map(|x| q[x as usize] as usize).collect();
+                            let cand = core_lift::splice(&cl, &core_perm);
+                            if !is_bijection(&cand, n) {
+                                return;
+                            }
+                            let f = flops_of(&sp, &cand);
+                            for &slot in slots {
+                                if f < best[slot] {
+                                    best[slot] = f;
+                                }
+                            }
+                        };
+
+                        let alpha = [0.5f64, 2.5, 5.0, 10.0][r % 4];
+                        let amf_opts = feral_amf::AmfOptions {
+                            dense_alpha: alpha,
+                            ..Default::default()
+                        };
+                        if let Ok((p, ..)) = feral_amf::amf_order_opts(&bcore, &amf_opts) {
+                            let slots: &[usize] = if r < 4 { &[0, 1, 4] } else { &[1, 4] };
+                            try_core(p, slots);
+                        }
+
+                        let amd_opts = &[
+                            feral_amd::AmdOptions { aggressive: true, dense_alpha: 10.0 },
+                            feral_amd::AmdOptions { aggressive: false, dense_alpha: 10.0 },
+                            feral_amd::AmdOptions { aggressive: true, dense_alpha: 5.0 },
+                            feral_amd::AmdOptions { aggressive: false, dense_alpha: 2.0 },
+                        ][r % 4];
+                        if let Ok(p) = feral_amd::amd_order_opts(&bcore, amd_opts).map(|(p, ..)| p) {
+                            let slots: &[usize] = if r < 4 { &[2, 3, 4] } else { &[3, 4] };
+                            try_core(p, slots);
+                        }
+                    }
+                    core_times.push((
+                        core_t0.elapsed().as_secs_f64(),
+                        name.clone(),
+                        n,
+                        nnz,
+                        cn,
+                        cl.core_nnz(),
+                    ));
+                }
+            }
+        }
+
+        for (vi, &f) in best.iter().enumerate() {
+            let ratio = f as f64 / amd_flops as f64;
+            sums[vi][bkt] += ratio.ln();
+            if f < incumbent {
+                improved[vi] += 1;
+            }
+        }
+        if best[4] < incumbent {
+            union_rows.push((name.clone(), n, nnz, core_n_for_row, incumbent, best[4]));
+        }
+        core_rows.push((
+            bkt,
+            core_n_for_row,
+            core_nnz_for_row,
+            incumbent,
+            best[4],
+            amd_flops,
+        ));
+    }
+
+    let base = aggregate(&base_sums, &counts);
+    println!("\nshipped order(): {base:.6}");
+    for vi in 0..labels.len() {
+        let score = aggregate(&sums[vi], &counts);
+        println!(
+            "{:>8} score {score:.6}  d {:+.6}  improved {} matrices",
+            labels[vi],
+            score - base,
+            improved[vi]
+        );
+    }
+    union_rows.sort_by(|a, b| {
+        (a.5 as f64 / a.4 as f64)
+            .partial_cmp(&(b.5 as f64 / b.4 as f64))
+            .unwrap()
+    });
+    println!("\nunion8 movers:");
+    for (name, n, nnz, cn, before, after) in union_rows {
+        println!(
+            "  {name:32} n={n:<7} nnz={nnz:<8} core={cn:<7} {before} -> {after} ({:.4})",
+            after as f64 / before as f64
+        );
+    }
+    core_times.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    println!("\ncore relabel time, slowest first:");
+    for (secs, name, n, nnz, cn, cnnz) in core_times.iter().take(12) {
+        println!("  {secs:.4}s {name:32} n={n:<7} nnz={nnz:<8} core={cn:<7} core_nnz={cnnz}");
+    }
+    println!("\nunion8 structural gates (hypothetical score / max family time):");
+    for (label, max_cn, max_cnnz) in [
+        ("all", None, None),
+        ("core_n<=4000", Some(4_000), None),
+        ("core_n<=8000", Some(8_000), None),
+        ("core_n<=12000", Some(12_000), None),
+        ("core_n<=16000", Some(16_000), None),
+        ("core_nnz<=100k", None, Some(100_000)),
+    ] {
+        let mut gated = [0.0f64; 3];
+        let mut gate_times = 0.0;
+        let mut gate_worst: f64 = 0.0;
+        for &(bkt, cn, cnnz, incumbent, union, amd_flops) in &core_rows {
+            let in_gate = max_cn.map_or(true, |limit| cn <= limit)
+                && max_cnnz.map_or(true, |limit| cnnz <= limit);
+            let f = if in_gate { union } else { incumbent };
+            gated[bkt] += (f as f64 / amd_flops as f64).ln();
+        }
+        for &(secs, _, _, _, cn, cnnz) in &core_times {
+            let in_gate = max_cn.map_or(true, |limit| cn <= limit)
+                && max_cnnz.map_or(true, |limit| cnnz <= limit);
+            if in_gate {
+                gate_times += secs;
+                gate_worst = gate_worst.max(secs);
+            }
+        }
+        let score = aggregate(&gated, &counts);
+        println!(
+            "  {label:16} score={score:.6} d={:+.6} total={gate_times:.3}s worst={gate_worst:.3}s",
+            score - base
+        );
+    }
+}
+
+/// Test eight additional fixed relabel seeds beyond the eight shipped core
+/// restarts. This compares only the extra tickets against the current order().
+#[test]
+#[ignore]
+fn probe_core_extra_restarts() {
+    let corpus = crate::corpus::corpus();
+    let mut base_sums = [0.0f64; 3];
+    let mut extra_sums = [0.0f64; 3];
+    let mut counts = [0usize; 3];
+    let mut improved = 0usize;
+    let mut rows: Vec<(f64, String, usize, usize, usize, usize, u64)> = Vec::new();
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let incumbent = flops_of(&sp, &order(pat));
+        let bkt = bucket(n);
+        counts[bkt] += 1;
+        base_sums[bkt] += (incumbent as f64 / amd_flops as f64).ln();
+        let mut best = incumbent;
+        let mut core_n = 0;
+        let mut core_nnz = 0;
+        let mut elapsed = 0.0;
+
+        if n >= 50 && nnz <= 1_500_000 {
+            if let Some(cl) = core_lift::reduce(&sp, 3, 60_000, 3_000_000) {
+                core_n = cl.core_n();
+                core_nnz = cl.core_nnz();
+                if core_n > 0 && core_n < n && core_n <= 4_000 && core_nnz <= 1_500_000 {
+                    let t0 = Instant::now();
+                    let core_pat = ScoringPattern {
+                        n: core_n,
+                        col_ptr: cl.core_col_ptr.clone(),
+                        row_idx: cl.core_row_idx.clone(),
+                    };
+                    for r in 8..16usize {
+                        let q = relabel(core_n, 0xC0DE_0000u64 + r as u64);
+                        let relabeled = permute_pattern(&core_pat, &q);
+                        let bcp: Vec<i32> = relabeled.col_ptr.iter().map(|&x| x as i32).collect();
+                        let bri: Vec<i32> = relabeled.row_idx.iter().map(|&x| x as i32).collect();
+                        let Some(bcore) = feral_ordering_core::CscPattern::new(core_n, &bcp, &bri) else {
+                            continue;
+                        };
+                        let mut try_core = |p: Vec<i32>| {
+                            let core_perm: Vec<usize> =
+                                p.into_iter().map(|x| q[x as usize] as usize).collect();
+                            if !is_bijection(&core_perm, core_n) {
+                                return;
+                            }
+                            let cand = core_lift::splice(&cl, &core_perm);
+                            if is_bijection(&cand, n) {
+                                best = best.min(flops_of(&sp, &cand));
+                            }
+                        };
+                        let amf_opts = feral_amf::AmfOptions {
+                            dense_alpha: [0.5f64, 2.5, 5.0, 10.0][r % 4],
+                            ..Default::default()
+                        };
+                        if let Ok((p, ..)) = feral_amf::amf_order_opts(&bcore, &amf_opts) {
+                            try_core(p);
+                        }
+                        let amd_opts = &[
+                            feral_amd::AmdOptions { aggressive: true, dense_alpha: 10.0 },
+                            feral_amd::AmdOptions { aggressive: false, dense_alpha: 10.0 },
+                            feral_amd::AmdOptions { aggressive: true, dense_alpha: 5.0 },
+                            feral_amd::AmdOptions { aggressive: false, dense_alpha: 2.0 },
+                        ][r % 4];
+                        if let Ok(p) = feral_amd::amd_order_opts(&bcore, amd_opts).map(|(p, ..)| p) {
+                            try_core(p);
+                        }
+                    }
+                    elapsed = t0.elapsed().as_secs_f64();
+                }
+            }
+        }
+        extra_sums[bkt] += (best as f64 / amd_flops as f64).ln();
+        if best < incumbent {
+            improved += 1;
+        }
+        rows.push((elapsed, name.clone(), n, nnz, core_n, core_nnz, best));
+    }
+
+    let base = aggregate(&base_sums, &counts);
+    let extra = aggregate(&extra_sums, &counts);
+    println!("\nshipped order(): {base:.6}");
+    println!("extra core seeds score {extra:.6} d {:+.6} improved {improved} matrices", extra - base);
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    println!("extra core seeds, slowest first:");
+    for (secs, name, n, nnz, cn, cnnz, _) in rows.iter().filter(|r| r.0 > 0.0).take(12) {
+        println!("  {secs:.4}s {name:32} n={n:<7} nnz={nnz:<8} core={cn:<7} core_nnz={cnnz}");
+    }
+}
+
 /// Cost AND benefit of tie-breaking candidates on the matrices still tied at the
 /// AMD baseline in the two leverage-rich buckets (`1k_10k`, `gt_10k`).
 ///

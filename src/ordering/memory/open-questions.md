@@ -7,6 +7,16 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Active
 
+- [ ] **Validate the 0064 extra round-5 pass outside the dev corpus.** The local
+      result is positive and timing-safe on this box, but the gain has not yet
+      been measured on an independent corpus or hidden evaluation. Do not widen
+      its gate or budget until that timing/score risk is measured. See
+      [0064](experiments/0064-extra-ranked-subtree-round5.md).
+- [ ] **Validate the 0065 residual-core relabelling pass outside the dev corpus.**
+      The core-size gate preserves local timing margin and the seven observed
+      movers, but no independent or hidden measurement is available yet. Keep
+      the `core_n <= 4000` gate until that validation exists. See
+      [0065](experiments/0065-core-relabelled-objectives.md).
 - [ ] **Work the residual core, not the full matrix (0062 substrate).** After the exact degree-<=3 prefix the core is ~n/3 with the same objective. Untested on the core: relabelled AMF/AMD multistart (tickets ~3x cheaper), multi-depth prefixes K in {2,4,5} (distinct cores only), and the late phases run on the core under a per-call WORK budget as a REPLACEMENT of a late phase (never additive on rows >= 0.8 s). See [0062](experiments/0062-reduce-then-amf-terminal.md).
 - [ ] **Relabel the OTHER numbering-sensitive routines (top lead).**
       [0005](experiments/0005-relabelled-amf-multistart.md) established the general

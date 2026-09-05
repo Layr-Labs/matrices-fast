@@ -1984,6 +1984,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // displaces the pool argmin and re-seeds the descent phases (non-monotone);
     // here the pipeline above is byte-identical and this can only lower the
     // result. Gated on (n, nnz) and the core size only — never on identity.
+    let mut residual_core: Option<core_lift::CoreLift> = None;
     if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
         let lifted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             core_lift::reduce(
@@ -2044,6 +2045,118 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 if let Some((_, k)) = pick {
                     if let Some((_, cp)) = &results[k] {
                         let cand = core_lift::splice(&cl, cp);
+                        if is_bijection(&cand, n) {
+                            let f = flops_of(&scoring_pat, &cand);
+                            if f < best_flops {
+                                best_flops = f;
+                                best_perm = cand;
+                            }
+                        }
+                    }
+                }
+                residual_core = Some(cl);
+            }
+        }
+    }
+
+    // One final ranked-subtree ticket on the same measured small/medium gate as
+    // the probe winner. Keep it after the full pipeline so it cannot perturb any
+    // earlier search gates; strict admission preserves the AMD floor.
+    if (1_000..=80_000).contains(&n) && nnz <= 250_000 {
+        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let mut cfg = SUBTREE_CFG;
+        cfg.round = 5;
+        cfg.max_blocks = 4;
+        cfg.min_s = 16;
+        cfg.max_s = 768;
+        cfg.max_sub = 1_200;
+        cfg.budget = 8_000_000;
+        let improved = rgreedy::subtree_refine(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &mut candidate,
+            &counts,
+            &parent,
+            cfg,
+        );
+        if improved > 0 && is_bijection(&candidate, n) {
+            let f = flops_of(&scoring_pat, &candidate);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = candidate;
+            }
+        }
+    }
+
+    // Relabel the reduced core with two independent objective families. The
+    // probe showed that almost all of the gain is on cores of at most 4,000
+    // vertices; keep that structural gate to avoid paying for dense large cores.
+    if let Some(cl) = residual_core {
+        let cn = cl.core_n();
+        if cn <= 4_000 {
+            let core_pat = ScoringPattern {
+                n: cn,
+                col_ptr: cl.core_col_ptr.clone(),
+                row_idx: cl.core_row_idx.clone(),
+            };
+            let mut ccp: Vec<i32> = cl.core_col_ptr.iter().map(|&x| x as i32).collect();
+            let mut cri: Vec<i32> = cl.core_row_idx.iter().map(|&x| x as i32).collect();
+            for r in 0..8usize {
+                let q = relabel(cn, 0xC0DE_0000u64 + r as u64);
+                let relabeled = permute_pattern(&core_pat, &q);
+                ccp.clear();
+                ccp.extend(relabeled.col_ptr.iter().map(|&x| x as i32));
+                cri.clear();
+                cri.extend(relabeled.row_idx.iter().map(|&x| x as i32));
+                let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    feral_ordering_core::CscPattern::new(cn, &ccp, &cri)
+                })) else {
+                    continue;
+                };
+                let amf_opts = feral_amf::AmfOptions {
+                    dense_alpha: [0.5f64, 2.5, 5.0, 10.0][r % 4],
+                    ..Default::default()
+                };
+                if let Ok((p, ..)) = feral_amf::amf_order_opts(&bcore, &amf_opts) {
+                    let core_perm: Vec<usize> =
+                        p.into_iter().map(|x| q[x as usize] as usize).collect();
+                    if is_bijection(&core_perm, cn) {
+                        let cand = core_lift::splice(&cl, &core_perm);
+                        if is_bijection(&cand, n) {
+                            let f = flops_of(&scoring_pat, &cand);
+                            if f < best_flops {
+                                best_flops = f;
+                                best_perm = cand;
+                            }
+                        }
+                    }
+                }
+                let amd_opts = [
+                    feral_amd::AmdOptions { aggressive: true, dense_alpha: 10.0 },
+                    feral_amd::AmdOptions { aggressive: false, dense_alpha: 10.0 },
+                    feral_amd::AmdOptions { aggressive: true, dense_alpha: 5.0 },
+                    feral_amd::AmdOptions { aggressive: false, dense_alpha: 2.0 },
+                ][r % 4].clone();
+                if let Ok(p) = feral_amd::amd_order_opts(&bcore, &amd_opts).map(|(p, ..)| p) {
+                    let core_perm: Vec<usize> =
+                        p.into_iter().map(|x| q[x as usize] as usize).collect();
+                    if is_bijection(&core_perm, cn) {
+                        let cand = core_lift::splice(&cl, &core_perm);
                         if is_bijection(&cand, n) {
                             let f = flops_of(&scoring_pat, &cand);
                             if f < best_flops {

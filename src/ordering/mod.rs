@@ -1903,7 +1903,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
             if f < best_flops {
-                best_flops = f;
                 best_perm = candidate;
             }
         }
@@ -2053,6 +2052,50 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // One final ranked-subtree ticket on the same measured small/medium gate as
+    // the probe winner. Keep it after the full pipeline so it cannot perturb any
+    // earlier search gates; strict admission preserves the AMD floor.
+    if (1_000..=80_000).contains(&n) && nnz <= 250_000 {
+        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let mut cfg = SUBTREE_CFG;
+        cfg.round = 5;
+        cfg.max_blocks = 4;
+        cfg.min_s = 16;
+        cfg.max_s = 768;
+        cfg.max_sub = 1_200;
+        cfg.budget = 8_000_000;
+        let improved = rgreedy::subtree_refine(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &mut candidate,
+            &counts,
+            &parent,
+            cfg,
+        );
+        if improved > 0 && is_bijection(&candidate, n) {
+            let f = flops_of(&scoring_pat, &candidate);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = candidate;
             }
         }
     }

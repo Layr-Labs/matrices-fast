@@ -402,6 +402,22 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 const SUBTREE_MIN_N: usize = 24;
 const SUBTREE_MAX_N: usize = 250_000;
 
+/// Sparse envelope for the unconditional terminal escalation below. Matches the
+/// promoted terminal chain's round-3 gate (`nnz <= 50_000` on large below-anchor
+/// matrices) so this stage only runs where the frontier already proved sparse
+/// large graphs can afford another pass.
+const ESCALATION_MAX_NNZ: usize = 50_000;
+
+/// Three cheap rounds after the conditional chain stalls. Sized conservatively
+/// after two hidden-cap failures from 32M×32×4 variants: 8M×8 is one eighth
+/// the per-round requested work and only runs below the AMD anchor.
+const ESCALATION_ROUNDS: [(usize, usize, i64); 3] = [
+    (384, 8, 8_000_000),
+    (768, 8, 8_000_000),
+    (384, 8, 8_000_000),
+];
+const ESCALATION_ROUND_BASE: usize = 10;
+
 const MID_MAX_S: usize = 128;
 const LARGE_MAX_S: usize = 384;
 const MID_BLOCKS: usize = 16;
@@ -1765,6 +1781,63 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             }
             if !round_improved {
                 break;
+            }
+        }
+    }
+
+    // ── BELOW-ANCHOR TERMINAL ESCALATION ────────────────────────────────────
+    // Last stage in `order()` so nothing downstream can undo a gain. The subtree
+    // chain above is conditional on each round improving; when it stalls once the
+    // matrix is dropped even if budget remains. Re-postordering with a new seed on
+    // below-anchor matrices still converts on dev; ties do not (0056), so spend
+    // nothing where best_flops == amd_flops.
+    //
+    // Deliberately small: 8M×8 blocks, two rounds, nnz <= 50_000 only. Larger
+    // variants failed the hidden cap twice; this requests at most 128M word-ops.
+    if best_flops < amd_flops
+        && (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n)
+        && nnz <= ESCALATION_MAX_NNZ
+    {
+        for (k, &(max_s, max_blocks, budget)) in ESCALATION_ROUNDS.iter().enumerate() {
+            let permuted = permute_pattern(&scoring_pat, &best_perm);
+            let etree = EliminationTree::from_pattern(&permuted);
+            let post = etree.postorder();
+            let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+            let post_pattern = permute_pattern(&scoring_pat, &candidate);
+            let post_etree = EliminationTree::from_pattern(&post_pattern);
+            let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+                .into_iter()
+                .map(|c| c as u32)
+                .collect();
+            let parent: Vec<i32> = post_etree
+                .parent
+                .iter()
+                .map(|p| p.map_or(-1, |j| j as i32))
+                .collect();
+
+            let mut cfg = SUBTREE_CFG;
+            cfg.round = ESCALATION_ROUND_BASE + k;
+            cfg.min_s = 16;
+            cfg.max_s = max_s;
+            cfg.max_blocks = max_blocks;
+            cfg.budget = budget;
+
+            let improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate,
+                &counts,
+                &parent,
+                cfg,
+            );
+            if improved > 0 && is_bijection(&candidate, n) {
+                let f = flops_of(&scoring_pat, &candidate);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = candidate;
+                }
             }
         }
     }

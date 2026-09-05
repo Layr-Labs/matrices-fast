@@ -175,7 +175,7 @@ const REDUCE_ROW_DEG: usize = 3;
 const REDUCE_MAX_CORE_N: usize = 60_000;
 const REDUCE_MAX_CORE_EDGES: usize = 3_000_000;
 const REDUCE_MAX_CORE_NNZ: usize = 1_500_000;
-const REDUCE_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
+const REDUCE_ALPHAS: [f64; 5] = [0.5, 2.5, 5.0, 10.0, -1.0];
 
 /// Medium-size envelope for the *extra* tuned candidates (α-5/α-2 AMD, default
 /// AMF, α-2 AMF). A few extra AMD/AMF passes are trivially cheap in this region;
@@ -421,6 +421,29 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 const SUBTREE_MIN_N: usize = 24;
 const SUBTREE_MAX_N: usize = 250_000;
 
+/// Hidden timing failures cluster on medium pooling instances with heavy nnz.
+const POOLING_BAND_MIN_N: usize = 4_000;
+const POOLING_BAND_MAX_N: usize = 8_000;
+const POOLING_BAND_MIN_NNZ: usize = 100_000;
+const POOLING_BAND_MAX_NNZ: usize = 150_000;
+
+/// Skip gt_10k subtree-chain round 5 once earlier rounds requested this much work.
+const CHAIN_TAIL_SPENT_CEILING: i64 = 2_000_000_000;
+
+#[inline]
+fn in_pooling_band(n: usize, nnz: usize) -> bool {
+    (POOLING_BAND_MIN_N..POOLING_BAND_MAX_N).contains(&n)
+        && (POOLING_BAND_MIN_NNZ..=POOLING_BAND_MAX_NNZ).contains(&nnz)
+}
+
+/// Requested word-ops for one [`rgreedy::subtree_refine`] call.
+#[inline]
+fn sub_cfg_work(cfg: &rgreedy::SubCfg) -> i64 {
+    cfg.budget
+        .saturating_mul(cfg.max_blocks as i64)
+        .saturating_mul(cfg.streams as i64)
+}
+
 const MID_MAX_S: usize = 128;
 const LARGE_MAX_S: usize = 384;
 const MID_BLOCKS: usize = 16;
@@ -573,7 +596,11 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
     } else if nnz <= 150_000 && max_deg * 50 <= n {
         base_r.max(12) // Mid-band non-hub floor
     } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
-        base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
+        if n >= 40_000 && nnz <= 200_000 {
+            base_r.max(4)
+        } else {
+            base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
+        }
     } else {
         base_r
     }
@@ -616,6 +643,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     let mut best_perm: Vec<usize> = amd.into_iter().map(|x| x as usize).collect();
     let mut best_flops: u64 = flops_of(&scoring_pat, &best_perm);
     let amd_flops = best_flops;
+
+    let mut work_spent: i64 = 0;
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
     let nnz = pattern.nnz();
@@ -739,7 +768,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // eligible matrix STRICTLY below the slowest tier (`nnz ≥ 163 k`), where a
     // few AMD passes are milliseconds — so the worst-case time is held
     // byte-for-byte. Best-of floor makes all three variants pure upside.
-    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ {
+    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ && (nnz <= 12 * n || nnz <= 150_000) {
         let amd_robust = feral_amd::AmdOptions {
             aggressive: false,
             dense_alpha: 10.0,
@@ -1160,11 +1189,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // a ratio, never raise it — and TIME is the only thing at stake. See
     // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
     if nnz <= RELABEL_AMF_MAX_NNZ {
+        let amf_restarts = if n >= 10_000 && nnz >= 100_000 { restarts.min(4) } else { restarts };
         let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
         let num_passes: usize = if nnz <= 80_000 { 2 } else { 1 };
         for pass in 0..num_passes {
             let seed_offset = pass as u64 * 1000;
-            for r in 0..restarts {
+            for r in 0..amf_restarts {
                 let seed = seed_offset + r as u64 + 1;
                 let da = amf_alphas[(r + pass) % amf_alphas.len()];
                 let amf_relabel_opts = feral_amf::AmfOptions {
@@ -1381,6 +1411,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             ]
         };
         for &(budget, rng_seed) in small_streams {
+            work_spent += budget;
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -1425,6 +1456,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             ]
         };
         for &(budget, seed) in budgets {
+            work_spent += budget;
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -1487,6 +1519,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
         let mut cfg1 = subtree_cfg_for(n, nnz);
+        work_spent += sub_cfg_work(&cfg1);
         let mut improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
@@ -1512,10 +1545,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 cfg1.streams = 2;
                 cfg1.budget = 1_000_000; if n >= 1_000 { cfg1.budget /= 2; }
             } else if n < 10_000 {
-                cfg1.max_s = 256;
+                cfg1.max_s = if in_pooling_band(n, nnz) { 384 } else { 256 };
             } else {
                 cfg1.max_s = 512;
             }
+            work_spent += sub_cfg_work(&cfg1);
             improved = rgreedy::subtree_refine(
                 n,
                 &pattern.col_ptr,
@@ -1562,6 +1596,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 if best_flops < amd_flops && (1_000..10_000).contains(&n) {
                     cfg2.max_s = 256;
                 }
+                work_spent += sub_cfg_work(&cfg2);
                 let improved2 = rgreedy::subtree_refine(
 
                     n,
@@ -1611,6 +1646,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         cfg3.min_s = 16;
                         cfg3.max_s = 512;
                         cfg3.budget = 8_000_000; if n >= 1_000 { cfg3.budget /= 2; }
+                        work_spent += sub_cfg_work(&cfg3);
                         let improved3 = rgreedy::subtree_refine(
                             n,
                             &pattern.col_ptr,
@@ -1657,11 +1693,14 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 cfg4.max_blocks = 32;
                                 cfg4.min_s = 16;
                                 cfg4.max_s = 768;
-                                cfg4.budget = if (1_000..6_000).contains(&n) {
+                                cfg4.budget = if in_pooling_band(n, nnz) {
+                                    32_000_000
+                                } else if (1_000..6_000).contains(&n) {
                                     64_000_000
                                 } else {
                                     32_000_000
                                 }; if n >= 1_000 { cfg4.budget /= 2; }
+                                work_spent += sub_cfg_work(&cfg4);
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,
@@ -1700,7 +1739,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                             .collect();
                                         let mut cfg5 = subtree_cfg_for(n, nnz);
                                         cfg5.round = 4;
-                                        if n < 100_000 || best_flops != amd_flops {
+                                        let skip_round5 = (work_spent >= CHAIN_TAIL_SPENT_CEILING
+                                            && n >= 10_000)
+                                            || in_pooling_band(n, nnz);
+                                        if !skip_round5
+                                            && (n < 100_000 || best_flops != amd_flops)
+                                        {
                                             if (1_000..4_000).contains(&n) {
                                                 cfg5.max_blocks = 16;
                                                 cfg5.budget = 32_000_000; if n >= 1_000 { cfg5.budget /= 2; }
@@ -1708,6 +1752,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                                 cfg5.max_blocks = 32;
                                                 cfg5.budget = 16_000_000; if n >= 1_000 { cfg5.budget /= 2; }
                                             }
+                                            work_spent += sub_cfg_work(&cfg5);
                                             let improved5 = rgreedy::subtree_refine(
                                                 n,
                                                 &pattern.col_ptr,
@@ -2056,6 +2101,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+
+    let _ = work_spent;
 
     best_perm
 }

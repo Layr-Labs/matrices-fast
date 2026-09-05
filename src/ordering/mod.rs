@@ -573,7 +573,11 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
     } else if nnz <= 150_000 && max_deg * 50 <= n {
         base_r.max(12) // Mid-band non-hub floor
     } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
-        base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
+        if n >= 40_000 {
+            base_r.max(4)
+        } else {
+            base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
+        }
     } else {
         base_r
     }
@@ -739,7 +743,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // eligible matrix STRICTLY below the slowest tier (`nnz ≥ 163 k`), where a
     // few AMD passes are milliseconds — so the worst-case time is held
     // byte-for-byte. Best-of floor makes all three variants pure upside.
-    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ {
+    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ && (nnz <= 12 * n || nnz <= 150_000) {
         let amd_robust = feral_amd::AmdOptions {
             aggressive: false,
             dense_alpha: 10.0,
@@ -1160,11 +1164,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // a ratio, never raise it — and TIME is the only thing at stake. See
     // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
     if nnz <= RELABEL_AMF_MAX_NNZ {
+        let amf_restarts = if n >= 10_000 { restarts.min(4) } else { restarts };
         let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
         let num_passes: usize = if nnz <= 80_000 { 2 } else { 1 };
         for pass in 0..num_passes {
             let seed_offset = pass as u64 * 1000;
-            for r in 0..restarts {
+            for r in 0..amf_restarts {
                 let seed = seed_offset + r as u64 + 1;
                 let da = amf_alphas[(r + pass) % amf_alphas.len()];
                 let amf_relabel_opts = feral_amf::AmfOptions {
@@ -1511,6 +1516,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             if n < 1_000 {
                 cfg1.streams = 2;
                 cfg1.budget = 1_000_000; if n >= 1_000 { cfg1.budget /= 2; }
+            } else if (4_000..8_000).contains(&n)
+                && (100_000..=150_000).contains(&nnz)
+            {
+                cfg1.max_s = 384;
             } else if n < 10_000 {
                 cfg1.max_s = 256;
             } else {
@@ -1964,6 +1973,23 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     best_flops = f;
                     best_perm = cand;
                     round_improved = true;
+                }
+            }
+            if n <= 4_000 && nnz <= 30_000 {
+                if let Some(cand) = rgreedy::adjacent_triple_descent(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    1,
+                    pair_descent_ops_budget,
+                ) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                        round_improved = true;
+                    }
                 }
             }
             if !round_improved {
@@ -3537,6 +3563,7 @@ mod tests {
         for (n, nnz, best, amd) in [
             (500usize, 2_000usize, 50u64, 100u64),
             (5_000, 10_000, 50, 100),
+            (5_040, 121_302, 50, 100),
             (20_000, 80_000, 50, 100),
         ] {
             let mut cfg = subtree_cfg_for(n, nnz);
@@ -3544,6 +3571,10 @@ mod tests {
             if n < 1_000 {
                 cfg.streams = 2;
                 cfg.budget = 1_000_000;
+            } else if (4_000..8_000).contains(&n)
+                && (100_000..=150_000).contains(&nnz)
+            {
+                cfg.max_s = 384;
             } else if n < 10_000 {
                 cfg.max_s = 256;
             } else {

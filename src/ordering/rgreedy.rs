@@ -60,20 +60,27 @@ fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) ->
     product
 }
 
-pub(crate) fn rank_alpha_three_quarters_cmp(
+pub(crate) fn rank_efficiency_density_cmp(
     a: &(usize, usize, u64),
     b: &(usize, usize, u64),
 ) -> std::cmp::Ordering {
     let len_a = a.1 + 1 - a.0;
     let len_b = b.1 + 1 - b.0;
-    let b_cross = rank_product(b.2, 4, len_a, 3);
-    let a_cross = rank_product(a.2, 4, len_b, 3);
+    let b_cross = rank_product(b.2, 2, len_a, 3);
+    let a_cross = rank_product(a.2, 2, len_b, 3);
     b_cross
         .iter()
         .rev()
         .cmp(a_cross.iter().rev())
         .then_with(|| b.2.cmp(&a.2))
         .then_with(|| b.1.cmp(&a.1))
+}
+
+pub(crate) fn rank_alpha_three_quarters_cmp(
+    a: &(usize, usize, u64),
+    b: &(usize, usize, u64),
+) -> std::cmp::Ordering {
+    rank_efficiency_density_cmp(a, b)
 }
 
 /// Largest `n` this module will allocate for. Memory is `2 · n · ⌈n/64⌉ · 8`
@@ -1649,14 +1656,20 @@ pub(crate) fn adjacent_four_descent(
         }
         let mut k = offset;
         while k + 3 < n {
-            if !work.charge(four_window_work(words)) {
-                return changed.then_some(cur);
-            }
             let window = [cur[k], cur[k + 1], cur[k + 2], cur[k + 3]];
-            let (order, best, incumbent) = FourWindow::new(&game, window).solve();
-            if best < incumbent {
-                cur[k..k + 4].copy_from_slice(&order.map(|i| window[i]));
-                changed = true;
+            let d0 = game.deg[window[0]];
+            let d1 = game.deg[window[1]];
+            let d2 = game.deg[window[2]];
+            let d3 = game.deg[window[3]];
+            if !(d0 <= d1 && d1 <= d2 && d2 <= d3) {
+                if !work.charge(four_window_work(words)) {
+                    return changed.then_some(cur);
+                }
+                let (order, best, incumbent) = FourWindow::new(&game, window).solve();
+                if best < incumbent {
+                    cur[k..k + 4].copy_from_slice(&order.map(|i| window[i]));
+                    changed = true;
+                }
             }
             k += 4;
             if k + 3 < n {
@@ -2109,7 +2122,7 @@ pub(crate) fn simplicial_promotion(
         let x = cur[k];
         let x_degree = game.deg[x];
         let last = (k + MAX_DISTANCE).min(n - 1);
-        let mut best: Option<(u32, usize, usize)> = None;
+        let mut best: Option<(std::cmp::Reverse<u32>, usize, usize)> = None;
 
         for (j, &v) in cur.iter().enumerate().take(last + 1).skip(k + 2) {
             // Position/id reads, degree comparison, and adjacency membership.
@@ -2129,7 +2142,7 @@ pub(crate) fn simplicial_promotion(
                 return None;
             }
             if game.deficiency(v) == 0 {
-                let key = (degree, j, v);
+                let key = (std::cmp::Reverse(degree), j, v);
                 if best.is_none_or(|old| key < old) {
                     best = Some(key);
                 }

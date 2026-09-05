@@ -62,3 +62,28 @@ round, so note the round if you know it.
 
 2026-09-05 | official correction to0057 | submission `da03dc2c` **PROMOTED TO FIRST**, hidden **0.870307**, source `649c230`; local score remains0.84419540581772 on the distinct dev corpus.
 2026-09-05 | winner dev0.84419540581772 -> **0.8440714862418132**, fill0.944012 -> **0.943946** | component-factored exact five-pivot final cleanup at existing gates/allowances, cache synchronization and capped boundary preparation | **FULL LOCAL PASS, official pending.** 300 trusted cases,44 active tests;42 better/2worse/256same; both halves/drop5 improve; isolated worst0.970s. Static k4 charge controls positive but smaller; dynamic tuple kernel and rolling schedule rejected. See [0059](experiments/0059-component-five-pivot-cleanup.md).
+
+2026-09-05 | base `ea67ff8` dev 0.843978 -> **0.843231**, fill **0.943347** | ledger-gated terminal escalation: four UNCONDITIONAL subtree rounds after the existing chain, gated on a new requested-work ledger (`work_spent < 2.0e9`) instead of on `(n, nnz)` or on the previous round having improved | **FULL LOCAL PASS, not submitted (no Yukon CLI/API token in this environment).** 35 better / **0 worse** / 264 same; all three buckets improve; worst escalated `order()` 1.179 s vs base worst 1.375-1.378 s (the corpus worst matrix is excluded by the gate and runs identical code). Bootstrap 95% CI on the delta [-20.92, -2.10] bip — the gain is concentrated in ~10 matrices. Negative controls: margin-only gating, `(n,nnz)` gating (216 combos, none under the bar), extra `streams` instead of rounds, depths 5-6. Contradicts the received wisdom on ties: 3 of 83 convert and are worth ~5.3 bip because all three are `gt_10k`. See [0060](experiments/0060-ledger-gated-terminal-escalation.md).
+
+## 0061 — conjunctive cost gate for the terminal escalation (2026-09-05)
+
+Base `ea67ff8` re-measured this session: **0.843978**, worst `order()` 1.485 s
+(same code measured 1.375 s in the previous session — this box's timing noise is
+~0.1 s, and no timing claim here is finer than that).
+
+**0060 failed on the hidden corpus** (`f6665de9`, workflow failure at step
+"Benchmark"). Its gate bounded expensive search via the work ledger and nothing
+else; the ledger is blind to O(nnz) candidate construction, and the escalation
+it admitted requested 4.1e9 word-ops against a 2.0e9 ceiling.
+
+0061 keeps the mechanism, replaces the cost model with a conjunctive gate
+(`work_spent < 5e8` AND `nnz <= 150k`) and halves the per-round budget to 16M.
+
+Result: **0.843978 → 0.843356 (−6.22 bip)**, 22 better / 0 worse / 278 unchanged.
+Buckets 0.8901 / 0.8661 / 0.7912. Worst `order()` 1.365 s; worst among matrices
+that actually escalate **0.918 s** (`ringpack_30_2`), against 1.179 s in 0060.
+The gate excludes all 31 dev matrices over 0.9 s.
+
+New probe `probe_budget_saturation` establishes that wall time is linear in
+`budget` (median 3.976x for a 4x rise), which is what makes requested work a
+legitimate time bound.

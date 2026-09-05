@@ -20,12 +20,23 @@
 //!
 //! ## Where the headroom is
 //!
-//! 122 of the 300 dev matrices are STILL TIED at exactly 1.000 — AMD beats every
-//! separator-, profile- and bandwidth-based candidate on them (60 in `lt_1k`, 40
-//! in `1k_10k`, 22 in `gt_10k`). Each tie is pure upside. Note the leverage is
-//! very uneven: `gt_10k` carries weight 0.40 over only 45 matrices, so one large
-//! matrix is worth ~4.4 small ones — but it is also where the time cap bites
-//! hardest.
+//! A large minority of the dev matrices are still TIED at exactly 1.000 — AMD
+//! beats every separator-, profile- and bandwidth-based candidate on them.
+//!
+//! **"Each tie is pure upside" — an earlier version of this paragraph — is
+//! wrong, and so is the opposite claim that ties are dead.** Measured in
+//! `memory/experiments/0060-*.md`: of 83 ties reachable by the terminal
+//! escalation, exactly 3 convert (3.6%), against 20-42% for matrices already
+//! below the anchor. So a tie is a BAD TARGET — do not design a candidate family
+//! aimed at ties, and note that the exact elimination game provably cannot leave
+//! them. But do not exclude them from a monotone pass either: all 3 that moved
+//! are `gt_10k` and together they are worth ~5.3 bip, because re-postordering the
+//! elimination tree and searching different subtrees is a different move from the
+//! elimination game and does escape.
+//!
+//! The leverage is very uneven: `gt_10k` carries weight 0.40 over only 45
+//! matrices, so one large matrix is worth ~4.4 small ones (~0.7 bip per 1% of
+//! flops) — but it is also where the time cap bites hardest.
 //!
 //! ## The timing fact that bounds every change here
 //!
@@ -459,6 +470,73 @@ fn terminal_deep_subtree_cfg(n: usize, nnz: usize) -> rgreedy::SubCfg {
     cfg
 }
 
+/// Ceiling on the requested-work ledger above which the terminal escalation at
+/// the end of [`order`] is skipped entirely.
+///
+/// This is a COST bound, not a quality one, and it is deliberately far tighter
+/// than the quality curve alone would justify: raising it from 5e8 to 2e9 admits
+/// 33 more matrices and is worth 0.1 bip, so the tight setting is very nearly
+/// free.
+///
+/// The ledger counts REQUESTED ops, so it is a pure function of the pattern (the
+/// gates that decide each stage are), which the determinism contract requires.
+/// It is an ENVELOPE, not an estimator — `corr(log10 ledger, secs)` is only
+/// 0.399 — and one direction of that envelope is unsound on its own: a matrix
+/// can be cheap in the ledger and still slow, because the ledger sees only the
+/// exact-search stages and none of the O(nnz) candidate construction. On the dev
+/// corpus `ringpack_30_2` has a 48M ledger and still takes 0.714 s. That is why
+/// this ceiling is paired with [`ESCALATION_MAX_NNZ`] rather than used alone.
+const ESCALATION_WORK_CEILING: i64 = 500_000_000;
+
+/// Companion bound to [`ESCALATION_WORK_CEILING`], covering the cost the ledger
+/// cannot see.
+///
+/// The escalation re-postorders on every round, and that setup — permute,
+/// elimination tree, column counts — is O(nnz) and is charged once per round.
+/// Measured across the dev corpus, escalation cost rises with `nnz` exactly as
+/// that predicts: at a fixed budget the four rounds cost at most 0.135 s below
+/// 60k nnz, 0.172 s to 150k, 0.218 s to 400k, and 0.467 s on `gabriel10` at
+/// 1.15M nnz.
+///
+/// Conjoined with the ledger ceiling, this is what makes the stage safe rather
+/// than merely cheap on average: the two bounds together exclude ALL 31 dev
+/// matrices whose `order()` exceeds 0.9 s, and cap the slowest matrix that still
+/// escalates at 0.714 s before the stage runs and 0.878 s after it.
+const ESCALATION_MAX_NNZ: usize = 150_000;
+
+/// `(max_s, max_blocks, budget)` for each terminal escalation round.
+///
+/// Four rounds; the window is varied rather than repeated so successive rounds
+/// see different block decompositions. The variation is doing real work — the
+/// fourth round, the only one at `max_s = 384`, is where the count of moved
+/// matrices jumps, because a narrow window finds blocks the wide ones covered.
+///
+/// The per-block budget is 16M, half the 32M this stage first shipped with.
+/// Wall time is very nearly linear in `budget` (a 4x rise gives a median 3.98x
+/// in time), so the budget is a direct time knob, and the measured return on
+/// spending more of it is poor: 32M costs 2x the time of 16M for well under 2x
+/// the gain once the gates above are applied.
+const ESCALATION_ROUNDS: [(usize, usize, i64); 4] = [
+    (768, 32, 16_000_000),
+    (768, 32, 16_000_000),
+    (1_200, 16, 16_000_000),
+    (384, 32, 16_000_000),
+];
+
+/// Seed base for the escalation rounds. Distinct from every `round` the chain
+/// above uses (0, 1, 3, 4 in the main chain; 5, 6, 7 in the terminal chain) so
+/// each escalation round is a genuinely new trajectory rather than a replay.
+const ESCALATION_ROUND_BASE: usize = 10;
+
+/// Requested word-ops for one [`rgreedy::subtree_refine`] call: every block gets
+/// `budget` per stream, and at most `max_blocks` blocks are searched.
+#[inline]
+fn sub_cfg_work(cfg: &rgreedy::SubCfg) -> i64 {
+    cfg.budget
+        .saturating_mul(cfg.max_blocks as i64)
+        .saturating_mul(cfg.streams as i64)
+}
+
 /// Deterministic 64-bit mixer (SplitMix64). Used only to derive relabelings from
 /// a fixed seed, so every run produces the identical sequence — the determinism
 /// gate requires the two `order()` runs to agree byte-for-byte.
@@ -596,6 +674,15 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     let mut best_perm: Vec<usize> = amd.into_iter().map(|x| x as usize).collect();
     let mut best_flops: u64 = flops_of(&scoring_pat, &best_perm);
     let amd_flops = best_flops;
+
+    // Requested-work ledger for the exact-search stages, in word-ops. Every
+    // stage below adds what it ASKED for, not what it used, so the total is a
+    // pure function of the pattern (the gates are) and is available to later
+    // stages as a cost signal. `(n, nnz)` does not predict the cost of this
+    // pipeline — the chain rounds are conditional on each other, so two
+    // matrices of the same size can differ 10x — and the escalation at the end
+    // of `order()` needs a cost signal it can actually trust.
+    let mut work_spent: i64 = 0;
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
     let nnz = pattern.nnz();
@@ -1270,6 +1357,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             (50_000_000, 0x27BB_2EE6_87B0_B0FD),
             (50_000_000, 0x45A1_89C3_F208_7314),
         ] {
+            work_spent += budget;
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -1295,6 +1383,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         // moved 0.860780 -> 0.859116 after the final pair pass. The separate
         // branch leaves the accepted n <= 1,000 path byte-for-byte unchanged.
         for budget in [100_000_000, 50_000_000] {
+            work_spent += budget;
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -1356,6 +1445,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             .iter()
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
+        let cfg1 = subtree_cfg_for(n, nnz);
+        work_spent += sub_cfg_work(&cfg1);
         let improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
@@ -1363,7 +1454,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            subtree_cfg_for(n, nnz),
+            cfg1,
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1395,6 +1486,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
                 cfg2.budget = 8_000_000;
+                work_spent += sub_cfg_work(&cfg2);
                 let improved2 = rgreedy::subtree_refine(
 
                     n,
@@ -1444,6 +1536,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         cfg3.min_s = 16;
                         cfg3.max_s = 512;
                         cfg3.budget = 8_000_000;
+                        work_spent += sub_cfg_work(&cfg3);
                         let improved3 = rgreedy::subtree_refine(
                             n,
                             &pattern.col_ptr,
@@ -1495,6 +1588,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 } else {
                                     32_000_000
                                 };
+                                work_spent += sub_cfg_work(&cfg4);
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,
@@ -1541,6 +1635,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                                 cfg5.max_blocks = 32;
                                                 cfg5.budget = 16_000_000;
                                             }
+                                            work_spent += sub_cfg_work(&cfg5);
                                             let improved5 = rgreedy::subtree_refine(
                                                 n,
                                                 &pattern.col_ptr,
@@ -1591,6 +1686,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             .iter()
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
+        let tcfg1 = terminal_deep_subtree_cfg(n, nnz);
+        work_spent += sub_cfg_work(&tcfg1);
         let improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
@@ -1598,7 +1695,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &mut candidate,
             &counts,
             &parent,
-            terminal_deep_subtree_cfg(n, nnz),
+            tcfg1,
         );
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1631,6 +1728,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     cfg2.min_s = 8;
                     cfg2.max_blocks = 4;
                     cfg2.budget = 4_000_000;
+                    work_spent += sub_cfg_work(&cfg2);
                     let improved2 = rgreedy::subtree_refine(
                         n,
                         &pattern.col_ptr,
@@ -1670,6 +1768,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                             cfg3.min_s = 8;
                             cfg3.max_blocks = 4;
                             cfg3.budget = 4_000_000;
+                            work_spent += sub_cfg_work(&cfg3);
                             let improved3 = rgreedy::subtree_refine(
                                 n,
                                 &pattern.col_ptr,
@@ -1756,7 +1855,104 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── LEDGER-GATED TERMINAL ESCALATION ────────────────────────────────────
+    // Every subtree round above is conditional on the previous one having
+    // improved, so a matrix whose chain stalls once is dropped from the search
+    // for good — even when it has most of its time budget left. Measured, that
+    // stall is a property of the round's SEED, not of the incumbent: replaying
+    // the same search on a freshly postordered elimination tree with a new seed
+    // still moves 22 of the 300 dev matrices, several by 2-4%, every one of
+    // which the chain above had already declared finished.
+    //
+    // The reason this cannot simply be switched on everywhere is cost, and the
+    // gate is deliberately conjunctive because the two cost drivers are
+    // independent and neither bound catches the other.
+    //
+    // [`work_spent`] catches expensive SEARCH. `(n, nnz)` cannot: the chain is
+    // conditional, so `crudeoil_lee1_07` (n=3670) costs 1.14 s while
+    // `rsyn0810m04m` (n=4772, similar nnz) costs 0.99 s and `batchs121208m`
+    // costs a fifth of that.
+    //
+    // [`ESCALATION_MAX_NNZ`] catches expensive CONSTRUCTION, which the ledger
+    // is blind to because it counts only the exact-search stages.
+    // `ringpack_30_2` has a 48M ledger — a fortieth of the ceiling — and still
+    // takes 0.714 s, all of it in the O(nnz) candidate families. A ledger bound
+    // alone therefore admits slow matrices, which is precisely how the first
+    // version of this stage overran the cap on the hidden corpus.
+    //
+    // Together the two bounds exclude every dev matrix over 0.9 s, and the cost
+    // added inside the gate is bounded on both axes as well: search by
+    // `budget * max_blocks` (wall time is linear in it, so it is a real time
+    // knob) and setup by `nnz` per round.
+    //
+    // Four rounds, unconditional within the gate (no "only if the last one
+    // improved" chaining — that is the failure mode this stage exists to fix).
+    // Each round re-postorders, so the block decomposition is genuinely new
+    // rather than a re-roll of the same one. Routed through the best-of floor,
+    // so it is monotone: a round can lower `best_flops` or do nothing.
+    if work_spent < ESCALATION_WORK_CEILING
+        && (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n)
+        && nnz <= ESCALATION_MAX_NNZ
+    {
+        for (k, &(max_s, max_blocks, budget)) in ESCALATION_ROUNDS.iter().enumerate() {
+            let permuted = permute_pattern(&scoring_pat, &best_perm);
+            let etree = EliminationTree::from_pattern(&permuted);
+            let post = etree.postorder();
+            let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+            let post_pattern = permute_pattern(&scoring_pat, &candidate);
+            let post_etree = EliminationTree::from_pattern(&post_pattern);
+            let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+                .into_iter()
+                .map(|c| c as u32)
+                .collect();
+            let parent: Vec<i32> = post_etree
+                .parent
+                .iter()
+                .map(|p| p.map_or(-1, |j| j as i32))
+                .collect();
+
+            let mut cfg = SUBTREE_CFG;
+            cfg.round = ESCALATION_ROUND_BASE + k;
+            cfg.min_s = 16;
+            cfg.max_s = max_s;
+            cfg.max_blocks = max_blocks;
+            cfg.budget = budget;
+            work_spent += sub_cfg_work(&cfg);
+
+            let improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate,
+                &counts,
+                &parent,
+                cfg,
+            );
+            if improved > 0 && is_bijection(&candidate, n) {
+                let f = flops_of(&scoring_pat, &candidate);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = candidate;
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    LAST_WORK_SPENT.with(|c| c.set(work_spent));
+
     best_perm
+}
+
+// The requested-work ledger of the most recent `order()` call on this thread.
+// TEST-ONLY: it exists so `probe_work_ledger` can check that the ledger tracks
+// wall-clock cost well enough to gate on. `order()` itself reads the ledger from
+// its own local, never from here.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static LAST_WORK_SPENT: std::cell::Cell<i64> =
+        const { std::cell::Cell::new(0) };
 }
 
 /// Minimum-FILL (minimum-deficiency) ordering (pure Rust, hard work budget).

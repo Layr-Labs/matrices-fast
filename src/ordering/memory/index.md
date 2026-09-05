@@ -3,6 +3,49 @@
 The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
+## Verified 2026-09-05 checkpoint (0061)
+
+- **0060 was submitted and FAILED on the hidden corpus.** Read the verdict at
+  the end of [0060](experiments/0060-ledger-gated-terminal-escalation.md) before
+  trusting anything in the section below it. Short version: a cost gate must
+  bound **every** cost axis. The `work_spent` ledger sees only the exact-search
+  stages and is blind to O(nnz) candidate construction, so it rates
+  `ringpack_30_2` (ledger 48M, 0.714 s) as free.
+- Base `ea67ff8` re-measured again this session: dev **0.843978** (identical),
+  worst `order()` **1.485 s** — the same code measured 1.375 s a session earlier.
+  **This box's timing noise is ~0.1 s / 8%.** Never quote a local time to finer
+  precision, and never compare times across sessions.
+- [0061: conjunctive cost gate](experiments/0061-conjunctive-cost-gate.md) takes
+  dev to **0.843356** (−6.22 bip), fill 0.943300; 22 better / **0 worse** / 278
+  unchanged; buckets 0.8901 / 0.8661 / 0.7912. Gate is `work_spent < 5e8` AND
+  `nnz <= 150_000`, per-round budget 16M. It excludes all 31 dev matrices over
+  0.9 s, and the worst matrix that actually escalates is **0.918 s** against a
+  2 s cap.
+- `subtree_refine` wall time is **linear in `budget`** (median 3.976x for a 4x
+  rise, `probe_budget_saturation`). Budget is a direct time knob; requested work
+  is a tight bound. Size any new search stage accordingly.
+
+## Superseded 2026-09-05 checkpoint (0060)
+
+- Base `ea67ff8` (promoted tip, hidden **0.869826**) re-measured TWICE on the
+  current box: dev **0.843978**, buckets 0.8903 / 0.8670 / 0.7920, worst
+  `order()` 1.378 s and 1.375 s. Score identical across runs, times not.
+- [0060: ledger-gated terminal escalation](experiments/0060-ledger-gated-terminal-escalation.md)
+  takes it to dev **0.843231** (−7.47 bip), fill 0.943347; 35 better / **0
+  worse** / 264 unchanged; 44 tests pass; full harness run `OK` with
+  `score.json`. Worst `order()` among matrices it touches **1.179 s**.
+- **The header's "each tie is pure upside" and the brief's "ties are not
+  headroom" are BOTH wrong as stated.** Only 3 of 83 eligible ties convert
+  (3.6%), so ties are a bad target — but all three are `gt_10k` and together
+  worth ~5.3 bip, so excluding them costs 3.0-4.3 bip. See 0060.
+- **`(n, nnz)` cannot gate an expensive terminal stage** (216 combinations, none
+  under the timing bar) because the chain is conditional and size does not
+  predict its cost. Use the requested-work ledger; its upper envelope is clean
+  even though its correlation with time is only 0.399.
+- **A dev delta of this size is soft.** Bootstrap over the 300 dev matrices:
+  mean −9.76 bip, 95% interval [−20.92, −2.10]. Ten matrices carry almost all
+  of it.
+
 ## Verified 2026-09-05 checkpoint
 
 - Preceding four-pivot/atomic winner: dev **0.84419540581772**, hidden **0.870307**, officially promoted as `da03dc2c` / source `649c230`.
@@ -190,6 +233,14 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0052](experiments/0052-round4-64m-boundary.md) — Raising round 4 globally
   from 32M to 64M improved dev to **0.845411**, but submission `de541fe9`
   exceeded the hidden 2-second matrix cap. Global 64M is closed.
+- [0060](experiments/0060-ledger-gated-terminal-escalation.md) — Four
+  UNCONDITIONAL subtree rounds after the existing chain, gated on a new
+  requested-work ledger rather than on `(n, nnz)` or on the previous round having
+  improved. The chain's conditional stopping rule was discarding live search: 67
+  matrices move on the first extra round alone. Dev **0.843978 → 0.843231**
+  (−7.47 bip), 35 better / 0 worse. Carries four negative controls (margin-only
+  gating, `(n,nnz)` gating, `streams` instead of rounds, depths 5-6) and the
+  corpus bootstrap.
 - [0053](experiments/0053-selective-lower-medium-round4-depth.md) — Reclaim the
   score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
   retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;

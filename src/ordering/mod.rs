@@ -426,7 +426,8 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
         cfg.budget = 2_000_000;
     } else if n >= 10_000 {
         cfg.max_s = LARGE_MAX_S;
-        cfg.max_blocks = LARGE_BLOCKS;
+        let avg_deg = (nnz / n).max(1);
+        cfg.max_blocks = (LARGE_BLOCKS * 10 / avg_deg).clamp(1, LARGE_BLOCKS);
         cfg.budget = LARGE_BUDGET;
         if nnz <= n * 10 && nnz <= 150_000 {
             cfg.max_sub = 1_600;
@@ -552,7 +553,7 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
     } else if nnz <= 20_000 {
         (600_000 / nnz).min(48) // Low-nnz regime
     } else if nnz <= 150_000 && max_deg * 50 <= n {
-        base_r.max(12) // Mid-band non-hub floor
+        base_r.max(12) // Trace
     } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
         base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
     } else {
@@ -718,7 +719,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // eligible matrix STRICTLY below the slowest tier (`nnz ≥ 163 k`), where a
     // few AMD passes are milliseconds — so the worst-case time is held
     // byte-for-byte. Best-of floor makes all three variants pure upside.
-    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ {
+    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ && (nnz <= 12 * n || nnz <= 150_000) {
         let amd_robust = feral_amd::AmdOptions {
             aggressive: false,
             dense_alpha: 10.0,
@@ -1059,6 +1060,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // `memory/experiments/0004-structured-relabelings.md`. Do not re-derive this;
     // if you want more from this family, buy more restarts, not smarter ones.
     let (relabel_budget, relabel_cap) = relabel_budget_and_cap(n);
+    let base_restarts = relabel_restarts(relabel_budget, relabel_cap, nnz);
     let restarts = relabel_restarts_tuned(relabel_budget, relabel_cap, n, nnz, max_deg);
     for r in 0..restarts {
         let seed = r as u64 + 1;
@@ -1132,11 +1134,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // a ratio, never raise it — and TIME is the only thing at stake. See
     // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
     if nnz <= RELABEL_AMF_MAX_NNZ {
+        let amf_restarts = if n >= 10_000 { base_restarts.min(4) } else { restarts };
         let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
         let num_passes: usize = if nnz <= 80_000 { 2 } else { 1 };
         for pass in 0..num_passes {
             let seed_offset = pass as u64 * 1000;
-            for r in 0..restarts {
+            for r in 0..amf_restarts {
                 let seed = seed_offset + r as u64 + 1;
                 let da = amf_alphas[(r + pass) % amf_alphas.len()];
                 let amf_relabel_opts = feral_amf::AmfOptions {
@@ -1260,8 +1263,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     } else {
         PAIR_DESCENT_OPS_BUDGET
     };
-    let mut well_below;
-    let mut medium_exact_gate;
+
 
     if pair_descent_gate {
         if let Some(cand) = rgreedy::adjacent_pair_descent(
@@ -1311,10 +1313,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
-    well_below = amd_flops > 0
+    let well_below = amd_flops > 0
         && best_flops < amd_flops
         && best_flops.saturating_mul(5) < amd_flops.saturating_mul(4);
-    medium_exact_gate = n > 1_000
+    let medium_exact_gate = n > 1_000
         && n <= 6_000
         && (nnz <= 30_000 || (well_below && nnz <= 50_000));
 
@@ -1342,6 +1344,14 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0x45A1_89C3_F208_7314),
                 (100_000_000, 0xA076_1D64_78BD_642F),
                 (50_000_000, 0xE703_7ED1_A0B4_28DB),
+            ]
+        } else if best_flops < amd_flops && n <= 1_000 && nnz <= 15_000 {
+            &[
+                (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
+                (50_000_000, 0xD1B5_4A32_D192_ED03),
+                (50_000_000, 0x27BB_2EE6_87B0_B0FD),
+                (50_000_000, 0x45A1_89C3_F208_7314),
+                (50_000_000, 0x3C6E_F372_FE94_F82B),
             ]
         } else {
             &[
@@ -1496,6 +1506,29 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 &parent,
                 cfg1,
             );
+            if improved == 0
+                && best_flops < amd_flops
+                && n <= 4_000
+                && nnz <= 30_000
+            {
+                cfg1.round = 2;
+                if n < 1_000 {
+                    cfg1.streams = 2;
+                    cfg1.budget = 1_000_000;
+                    cfg1.max_s = 256;
+                } else {
+                    cfg1.max_s = 384;
+                }
+                improved = rgreedy::subtree_refine(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &mut candidate,
+                    &counts,
+                    &parent,
+                    cfg1,
+                );
+            }
         }
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
@@ -1524,7 +1557,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     .collect();
                 let mut cfg2 = subtree_cfg_for(n, nnz);
                 cfg2.round = 1;
-                cfg2.max_blocks = 32;
+                cfg2.max_blocks = if n >= 10_000 { 16 } else { 32 };
                 cfg2.min_s = 16;
                 cfg2.budget = 8_000_000;
                 // Wider round-2 window only on below-anchor medium graphs.
@@ -1534,7 +1567,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     cfg2.max_s = 256;
                 }
                 let improved2 = rgreedy::subtree_refine(
-
                     n,
                     &pattern.col_ptr,
                     &pattern.row_idx,
@@ -1578,7 +1610,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                             .collect();
                         let mut cfg3 = subtree_cfg_for(n, nnz);
                         cfg3.round = 1;
-                        cfg3.max_blocks = 32;
+                        cfg3.max_blocks = if n >= 10_000 { 16 } else { 32 };
                         cfg3.min_s = 16;
                         cfg3.max_s = 512;
                         cfg3.budget = 8_000_000;
@@ -1625,7 +1657,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     .collect();
                                 let mut cfg4 = subtree_cfg_for(n, nnz);
                                 cfg4.round = 3;
-                                cfg4.max_blocks = 32;
+                                cfg4.max_blocks = if n >= 10_000 { 16 } else { 32 };
                                 cfg4.min_s = 16;
                                 cfg4.max_s = 768;
                                 cfg4.budget = if (1_000..6_000).contains(&n) {
@@ -1676,7 +1708,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                                 cfg5.max_blocks = 16;
                                                 cfg5.budget = 32_000_000;
                                             } else {
-                                                cfg5.max_blocks = 32;
+                                                cfg5.max_blocks = if n >= 10_000 { 16 } else { 32 };
                                                 cfg5.budget = 16_000_000;
                                             }
                                             let improved5 = rgreedy::subtree_refine(
@@ -1913,6 +1945,21 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     &pattern.col_ptr,
                     &pattern.row_idx,
                     &best_perm,
+                    pair_descent_ops_budget,
+                ) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                        round_improved = true;
+                    }
+                }
+                if let Some(cand) = rgreedy::adjacent_pair_descent(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    1,
                     pair_descent_ops_budget,
                 ) {
                     let f = flops_of(&scoring_pat, &cand);

@@ -1718,7 +1718,13 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if pair_descent_gate {
-        for _ in 0..2 {
+        // Keep the first full alternating round, then split the second round's
+        // allowance across two chances to cross the five/four boundary.
+        for cleanup_budget in [
+            pair_descent_ops_budget,
+            pair_descent_ops_budget / 2,
+            pair_descent_ops_budget / 2,
+        ] {
             let mut round_improved = false;
             if n >= 5 {
                 if let Some(cand) = rgreedy::adjacent_five_descent(
@@ -1726,7 +1732,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     &pattern.col_ptr,
                     &pattern.row_idx,
                     &best_perm,
-                    pair_descent_ops_budget,
+                    cleanup_budget,
                 ) {
                     let f = flops_of(&scoring_pat, &cand);
                     if f < best_flops {
@@ -1741,7 +1747,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 &pattern.col_ptr,
                 &pattern.row_idx,
                 &best_perm,
-                pair_descent_ops_budget,
+                cleanup_budget,
             ) {
                 let f = flops_of(&scoring_pat, &cand);
                 if f < best_flops {

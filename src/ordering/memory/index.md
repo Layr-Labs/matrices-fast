@@ -5,7 +5,7 @@ first; keep it current whenever you add, rename, or retire a page.
 
 ## Verified 2026-09-05 checkpoint
 
-- Current shippable locally verified candidate score: **0.843358** on all 300 dev matrices, 2026-09-05. Tip `649ae53` / hidden **0.869723** re-measured at 0.843658. Margin-scaled leftover search on well-below-anchor matrices: lt_1k **0.8903** / 1k_10k **0.8650** / gt_10k **0.7919** (−3.00 bips). Worst same-machine order() 1.347 s (faster than tip 1.356 s). See [0061](experiments/0061-margin-scaled-leftover-search.md).
+- Current shippable locally verified candidate score: **0.843057** (fill **0.9435**) on all 300 dev matrices, 2026-09-05. Base `784bfe5` / hidden **0.86837** at 0.843358. Chain-tail skip + flops-gated escalation: lt_1k **0.8901** / 1k_10k **0.8642** / gt_10k **0.7919** (−3.01 bips). Worst `order()` 1.360 s. See [0064](experiments/0064-chain-tail-plus-flops-gated-escalation.md).
 - Preceding 0060 substitutive escalation: local **0.843657**, hidden **0.869723** (promoted `bd451297`). See [0060](experiments/0060-conditional-search-escalation-below-anchor.md).
 - Preceding four-pivot/atomic winner: dev **0.84419540581772**, hidden **0.870307**, officially promoted as `da03dc2c` / source `649c230`.
 - New component-factored five-pivot cleanup with cache and boundary repairs: dev **0.8440714862418132**, fill **0.943946**; all **300 trusted cases and 44 active tests pass**. Exact counts agree with the isolated probe. **42 better / 2 worse / 256 unchanged** versus the preceding winner; both corpus halves and drop-five sensitivity improve. Official follow-up result pending submission/validation.

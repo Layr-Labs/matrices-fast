@@ -33,6 +33,25 @@ it, rather than deleting it — a resolved question is a useful signpost.
       first round loses (0.843829). Widening k5/k4 to `n <= 12k` and adding
       `adjacent_triple_descent` convert nothing. `gt_10k` leftover nnz 60k–100k did not
       move at four digits.
+- [x] **RESOLVED (negative, hidden timeout) — Widen leftover well-below from 0.80 to 0.90 on large extra relabel.**
+      Answered by [0062](experiments/0062-wider-margin-and-second-miss-retry.md):
+      Local 0.843358 → **0.842991** (−3.67 bip), but submission `395313f1` failed
+      the hidden 2 s cap. Extra relabel at 0.90 on `n >= 10k` is closed.
+      Isolated second miss-retry −2.10 bip (almost all `pooling_sppa9tp`).
+      Third miss-retry and extra well-below pass 9 add no movers. `gt_10k` nnz ~120k
+      still cannot be opened (crudeoil vs ringpack). See [0063](experiments/0063-drop-large-090-extra-relabel.md).
+- [x] **RESOLVED (negative, hidden timeout) — Keep 0062 leftover tickets off large graphs.**
+      Answered by [0063](experiments/0063-drop-large-090-extra-relabel.md):
+      Submission `2d954e54` still failed the 2 s cap. Remaining 0.80–0.90 LNS /
+      small extra-relabel tickets are closed. See [0064](experiments/0064-isolated-second-miss-retry.md).
+- [x] **RESOLVED (negative, hidden timeout) — Isolated second first-round miss-retry.**
+      Answered by [0064](experiments/0064-isolated-second-miss-retry.md):
+      Submission `71f76302` failed the 2 s cap. A second leftover `subtree_refine`
+      is closed even on `n<10k`. See [0065](experiments/0065-widen-existing-leftover-max-s.md).
+- [x] **RESOLVED (pending hidden) — Widen existing leftover miss-retry `max_s`.**
+      Answered by [0065](experiments/0065-widen-existing-leftover-max-s.md):
+      Medium leftover ticket 256→384. No extra refine. Local 0.843358 → **0.843147**
+      (−2.11 bip), worst 1.355 s. Second miss-retry removed.
 - [ ] **Sweep the relabelled-AMF `dense_alpha`.** Shipped at α=5.0 only (the base AMF
       candidate's α). α ∈ {0.5, 2.0, 2.5} is the same argument one level down — a
       different α is a different objective, hence another distinct lottery — and it is

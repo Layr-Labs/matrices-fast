@@ -554,6 +554,16 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
         base_r.max(12) // Mid-band non-hub floor
     } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
         base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
+    } else if nnz <= 1_200_000
+        && n <= 250_000
+        && nnz <= 6 * n
+        && max_deg * 50 <= n
+        && n >= 10_000
+    {
+        // Larger sparse non-hub patterns previously received no restarts at
+        // all; allocate two relabelled-AMD restarts so the multi-start is not
+        // seed-starved in this band either.
+        base_r.max(2)
     } else {
         base_r
     }

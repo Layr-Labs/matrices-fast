@@ -1718,11 +1718,13 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if pair_descent_gate {
-        // Preserve the four-pivot cleanup when a five-pivot window cannot fit.
+        // Preserve the promoted five/four cleanup where a six-window cannot fit.
         let cleanup = if n < 5 {
             rgreedy::adjacent_four_descent
-        } else {
+        } else if n < 6 {
             rgreedy::adjacent_five_descent
+        } else {
+            rgreedy::adjacent_six_descent
         };
         if let Some(cand) = cleanup(
             n,

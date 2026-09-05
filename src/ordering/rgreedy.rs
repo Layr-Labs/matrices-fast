@@ -1999,6 +1999,434 @@ pub(crate) fn adjacent_five_descent(
     changed.then_some(cur)
 }
 
+/// Exact component widths for a fixed six-pivot window. Only connected
+/// nonsingletons stream graph rows; singleton widths use cached live degrees.
+/// The topology and all scalar DP work are charged before metadata setup, and
+/// the topology-dependent word charge is paid before any row reduction.
+struct SixWindow {
+    internal_union: [u8; 64],
+    component_width: [u32; 64],
+}
+
+// Logical work, not a whole-order wall-time bound. Scalar envelope 32768:
+// 63 connectivity closures*96 + 198 DP/incumbent widths*112 + 36 probes*16
+// + 63 internal unions*12 + 57 reduction setups*16 + 384 array work
+// + 192 skipped-pivot checks*3 = 31428, with 1340 units of slack.
+// Each width closes at most six iterations. A static union of s<=6 rows
+// needs at most 3*s+3<=21 units per word; reserve 24 per connected
+// nonsingleton plus 16 word-overhead units. There are at most 57 scans.
+const SIX_WINDOW_SCALAR_WORK: usize = 32768;
+
+fn six_window_scan_work(words: usize, connected_nonsingletons: usize) -> usize {
+    24usize
+        .saturating_mul(connected_nonsingletons)
+        .saturating_add(16)
+        .saturating_mul(words)
+}
+
+impl SixWindow {
+    fn new(game: &Game<'_>, verts: [usize; 6], work: &mut TripleWork) -> Option<Self> {
+        if !work.charge(SIX_WINDOW_SCALAR_WORK) {
+            return None;
+        }
+        let rows = verts.map(|v| &game.adj[v * game.w..(v + 1) * game.w]);
+        let mut inside = [0u8; 6];
+        for i in 0..6 {
+            for j in 0..6 {
+                if rows[i][verts[j] >> 6] & (1u64 << (verts[j] & 63)) != 0 {
+                    inside[i] |= 1 << j;
+                }
+            }
+        }
+        let mut internal_union = [0u8; 64];
+        for mask in 1usize..64 {
+            let rest = mask & (mask - 1);
+            internal_union[mask] = internal_union[rest] | inside[mask.trailing_zeros() as usize];
+        }
+        let mut connected = [false; 64];
+        let mut q = 0;
+        for mask in 1usize..64 {
+            let mut component = 1u8 << mask.trailing_zeros();
+            loop {
+                let expanded = component | (internal_union[component as usize] & mask as u8);
+                if expanded == component {
+                    break;
+                }
+                component = expanded;
+            }
+            connected[mask] = component as usize == mask;
+            if connected[mask] && mask.count_ones() > 1 {
+                q += 1;
+            }
+        }
+        if !work.charge(six_window_scan_work(game.w, q)) {
+            return None;
+        }
+        // Each topology branch is outside its fixed-arity contiguous word
+        // reduction. There is no dynamic per-word subset plan or scratch union.
+        #[inline]
+        fn union2(a: &[u64], b: &[u64]) -> u32 {
+            a.iter().zip(b).map(|(&a, &b)| (a | b).count_ones()).sum()
+        }
+        #[inline]
+        fn union3(a: &[u64], b: &[u64], c: &[u64]) -> u32 {
+            a.iter()
+                .zip(b)
+                .zip(c)
+                .map(|((&a, &b), &c)| (a | b | c).count_ones())
+                .sum()
+        }
+        #[inline]
+        fn union4(a: &[u64], b: &[u64], c: &[u64], d: &[u64]) -> u32 {
+            a.iter()
+                .zip(b)
+                .zip(c)
+                .zip(d)
+                .map(|(((&a, &b), &c), &d)| (a | b | c | d).count_ones())
+                .sum()
+        }
+        #[inline]
+        fn union5(a: &[u64], b: &[u64], c: &[u64], d: &[u64], e: &[u64]) -> u32 {
+            a.iter()
+                .zip(b)
+                .zip(c)
+                .zip(d)
+                .zip(e)
+                .map(|((((&a, &b), &c), &d), &e)| (a | b | c | d | e).count_ones())
+                .sum()
+        }
+        #[inline]
+        fn union6(a: &[u64], b: &[u64], c: &[u64], d: &[u64], e: &[u64], f: &[u64]) -> u32 {
+            a.iter().zip(b).zip(c).zip(d).zip(e).zip(f)
+                .map(|(((((&a, &b), &c), &d), &e), &f)| (a | b | c | d | e | f).count_ones())
+                .sum()
+        }
+        let mut component_width = [0u32; 64];
+        for i in 0..6 {
+            component_width[1 << i] = game.deg[verts[i]] + 1;
+        }
+        if connected[3] {
+            component_width[3] = union2(rows[0], rows[1]) - 1;
+        }
+        if connected[5] {
+            component_width[5] = union2(rows[0], rows[2]) - 1;
+        }
+        if connected[6] {
+            component_width[6] = union2(rows[1], rows[2]) - 1;
+        }
+        if connected[7] {
+            component_width[7] = union3(rows[0], rows[1], rows[2]) - 2;
+        }
+        if connected[9] {
+            component_width[9] = union2(rows[0], rows[3]) - 1;
+        }
+        if connected[10] {
+            component_width[10] = union2(rows[1], rows[3]) - 1;
+        }
+        if connected[11] {
+            component_width[11] = union3(rows[0], rows[1], rows[3]) - 2;
+        }
+        if connected[12] {
+            component_width[12] = union2(rows[2], rows[3]) - 1;
+        }
+        if connected[13] {
+            component_width[13] = union3(rows[0], rows[2], rows[3]) - 2;
+        }
+        if connected[14] {
+            component_width[14] = union3(rows[1], rows[2], rows[3]) - 2;
+        }
+        if connected[15] {
+            component_width[15] = union4(rows[0], rows[1], rows[2], rows[3]) - 3;
+        }
+        if connected[17] {
+            component_width[17] = union2(rows[0], rows[4]) - 1;
+        }
+        if connected[18] {
+            component_width[18] = union2(rows[1], rows[4]) - 1;
+        }
+        if connected[19] {
+            component_width[19] = union3(rows[0], rows[1], rows[4]) - 2;
+        }
+        if connected[20] {
+            component_width[20] = union2(rows[2], rows[4]) - 1;
+        }
+        if connected[21] {
+            component_width[21] = union3(rows[0], rows[2], rows[4]) - 2;
+        }
+        if connected[22] {
+            component_width[22] = union3(rows[1], rows[2], rows[4]) - 2;
+        }
+        if connected[23] {
+            component_width[23] = union4(rows[0], rows[1], rows[2], rows[4]) - 3;
+        }
+        if connected[24] {
+            component_width[24] = union2(rows[3], rows[4]) - 1;
+        }
+        if connected[25] {
+            component_width[25] = union3(rows[0], rows[3], rows[4]) - 2;
+        }
+        if connected[26] {
+            component_width[26] = union3(rows[1], rows[3], rows[4]) - 2;
+        }
+        if connected[27] {
+            component_width[27] = union4(rows[0], rows[1], rows[3], rows[4]) - 3;
+        }
+        if connected[28] {
+            component_width[28] = union3(rows[2], rows[3], rows[4]) - 2;
+        }
+        if connected[29] {
+            component_width[29] = union4(rows[0], rows[2], rows[3], rows[4]) - 3;
+        }
+        if connected[30] {
+            component_width[30] = union4(rows[1], rows[2], rows[3], rows[4]) - 3;
+        }
+        if connected[31] {
+            component_width[31] = union5(rows[0], rows[1], rows[2], rows[3], rows[4]) - 4;
+        }
+        if connected[33] {
+            component_width[33] = union2(rows[0], rows[5]) - 1;
+        }
+        if connected[34] {
+            component_width[34] = union2(rows[1], rows[5]) - 1;
+        }
+        if connected[35] {
+            component_width[35] = union3(rows[0], rows[1], rows[5]) - 2;
+        }
+        if connected[36] {
+            component_width[36] = union2(rows[2], rows[5]) - 1;
+        }
+        if connected[37] {
+            component_width[37] = union3(rows[0], rows[2], rows[5]) - 2;
+        }
+        if connected[38] {
+            component_width[38] = union3(rows[1], rows[2], rows[5]) - 2;
+        }
+        if connected[39] {
+            component_width[39] = union4(rows[0], rows[1], rows[2], rows[5]) - 3;
+        }
+        if connected[40] {
+            component_width[40] = union2(rows[3], rows[5]) - 1;
+        }
+        if connected[41] {
+            component_width[41] = union3(rows[0], rows[3], rows[5]) - 2;
+        }
+        if connected[42] {
+            component_width[42] = union3(rows[1], rows[3], rows[5]) - 2;
+        }
+        if connected[43] {
+            component_width[43] = union4(rows[0], rows[1], rows[3], rows[5]) - 3;
+        }
+        if connected[44] {
+            component_width[44] = union3(rows[2], rows[3], rows[5]) - 2;
+        }
+        if connected[45] {
+            component_width[45] = union4(rows[0], rows[2], rows[3], rows[5]) - 3;
+        }
+        if connected[46] {
+            component_width[46] = union4(rows[1], rows[2], rows[3], rows[5]) - 3;
+        }
+        if connected[47] {
+            component_width[47] = union5(rows[0], rows[1], rows[2], rows[3], rows[5]) - 4;
+        }
+        if connected[48] {
+            component_width[48] = union2(rows[4], rows[5]) - 1;
+        }
+        if connected[49] {
+            component_width[49] = union3(rows[0], rows[4], rows[5]) - 2;
+        }
+        if connected[50] {
+            component_width[50] = union3(rows[1], rows[4], rows[5]) - 2;
+        }
+        if connected[51] {
+            component_width[51] = union4(rows[0], rows[1], rows[4], rows[5]) - 3;
+        }
+        if connected[52] {
+            component_width[52] = union3(rows[2], rows[4], rows[5]) - 2;
+        }
+        if connected[53] {
+            component_width[53] = union4(rows[0], rows[2], rows[4], rows[5]) - 3;
+        }
+        if connected[54] {
+            component_width[54] = union4(rows[1], rows[2], rows[4], rows[5]) - 3;
+        }
+        if connected[55] {
+            component_width[55] = union5(rows[0], rows[1], rows[2], rows[4], rows[5]) - 4;
+        }
+        if connected[56] {
+            component_width[56] = union3(rows[3], rows[4], rows[5]) - 2;
+        }
+        if connected[57] {
+            component_width[57] = union4(rows[0], rows[3], rows[4], rows[5]) - 3;
+        }
+        if connected[58] {
+            component_width[58] = union4(rows[1], rows[3], rows[4], rows[5]) - 3;
+        }
+        if connected[59] {
+            component_width[59] = union5(rows[0], rows[1], rows[3], rows[4], rows[5]) - 4;
+        }
+        if connected[60] {
+            component_width[60] = union4(rows[2], rows[3], rows[4], rows[5]) - 3;
+        }
+        if connected[61] {
+            component_width[61] = union5(rows[0], rows[2], rows[3], rows[4], rows[5]) - 4;
+        }
+        if connected[62] {
+            component_width[62] = union5(rows[1], rows[2], rows[3], rows[4], rows[5]) - 4;
+        }
+        if connected[63] {
+            component_width[63] = union6(rows[0], rows[1], rows[2], rows[3], rows[4], rows[5]) - 5;
+        }
+        Some(Self {
+            internal_union,
+            component_width,
+        })
+    }
+
+    fn width(&self, eliminated: u8, pivot: usize) -> u64 {
+        let mut component = 1u8 << pivot;
+        loop {
+            let expanded = component | (self.internal_union[component as usize] & eliminated);
+            if expanded == component {
+                break;
+            }
+            component = expanded;
+        }
+        self.component_width[component as usize] as u64
+    }
+
+    // All paths to a subset have equal length. Six base-eight position digits
+    // fit in u32, whose numeric order therefore gives global lexicographic ties.
+    // An optimum tied with the incumbent always keeps the original order.
+    fn solve(&self) -> ([usize; 6], u64, u64) {
+        let mut best = [u64::MAX; 64];
+        let mut path = [u32::MAX; 64];
+        best[0] = 0;
+        path[0] = 0;
+        for mask in 0usize..63 {
+            for pivot in 0..6 {
+                let bit = 1usize << pivot;
+                if mask & bit != 0 {
+                    continue;
+                }
+                let width = self.width(mask as u8, pivot);
+                let cost = best[mask] + width * width;
+                let code = (path[mask] << 3) | pivot as u32;
+                let next = mask | bit;
+                if cost < best[next] || (cost == best[next] && code < path[next]) {
+                    best[next] = cost;
+                    path[next] = code;
+                }
+            }
+        }
+        let incumbent = (0..6)
+            .map(|pivot| {
+                let width = self.width((1 << pivot) - 1, pivot);
+                width * width
+            })
+            .sum();
+        let order = if best[63] < incumbent {
+            [15, 12, 9, 6, 3, 0].map(|shift| ((path[63] >> shift) & 7) as usize)
+        } else {
+            [0, 1, 2, 3, 4, 5]
+        };
+        (order, best[63], incumbent)
+    }
+}
+
+/// One complete six-offset, stride-six terminal cycle under the inherited
+/// single cleanup allowance. Finished strict gains and untouched suffixes
+/// survive either metadata/scan refusal or replay exhaustion. Windows shorter
+/// than six are handled by the unchanged five/four helpers at the caller.
+pub(crate) fn adjacent_six_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    budget: i64,
+) -> Option<Vec<usize>> {
+    if n < 6 || n > MAX_N || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
+        return None;
+    }
+    let mut work = TripleWork { remaining: budget };
+    let validation = (n + 1).saturating_add(row_idx.len()).saturating_add(2 * n);
+    if !work.charge(validation)
+        || col_ptr.first().copied() != Some(0)
+        || col_ptr.last().copied() != Some(row_idx.len())
+        || col_ptr
+            .windows(2)
+            .any(|p| p[0] > p[1] || p[1] > row_idx.len())
+        || row_idx.iter().any(|&v| v >= n)
+    {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    let words = n.div_ceil(64);
+    let build = n
+        .saturating_mul(words)
+        .saturating_add(2usize.saturating_mul(row_idx.len()))
+        .saturating_add(n);
+    if !work.charge(build) {
+        return None;
+    }
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    let setup = 2usize
+        .saturating_mul(n)
+        .saturating_mul(words)
+        .saturating_add(13usize.saturating_mul(n))
+        .saturating_add(words);
+    if !work.charge(setup) {
+        return None;
+    }
+    let mut game = Game::new(n, &adj0)?;
+    let mut cur = seed.to_vec();
+    let mut changed = false;
+    let reset = 2usize
+        .saturating_mul(n)
+        .saturating_mul(words)
+        .saturating_add(8usize.saturating_mul(n));
+    for offset in 0..6 {
+        if offset + 6 > n {
+            break;
+        }
+        if !work.charge(reset) {
+            return changed.then_some(cur);
+        }
+        game.reset();
+        for &v in cur.iter().take(offset) {
+            if !work.eliminate(&mut game, v) {
+                return changed.then_some(cur);
+            }
+        }
+        let mut k = offset;
+        while k + 5 < n {
+            let window = [cur[k], cur[k + 1], cur[k + 2], cur[k + 3], cur[k + 4], cur[k + 5]];
+            let Some(kernel) = SixWindow::new(&game, window, &mut work) else {
+                return changed.then_some(cur);
+            };
+            let (order, best, incumbent) = kernel.solve();
+            if best < incumbent {
+                cur[k..k + 6].copy_from_slice(&order.map(|i| window[i]));
+                changed = true;
+            }
+            k += 6;
+            if k + 5 < n {
+                for &v in &cur[k - 6..k] {
+                    if !work.eliminate(&mut game, v) {
+                        return changed.then_some(cur);
+                    }
+                }
+            }
+        }
+    }
+    changed.then_some(cur)
+}
+
 /// Promote currently simplicial vertices across a short non-adjacent window.
 ///
 /// Ost, Schulz, and Strash (arXiv:2004.11315) prove that a simplicial vertex is
@@ -3541,6 +3969,359 @@ mod five_window_tests {
                 assert_eq!(
                     first,
                     adjacent_five_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget)
+                );
+                if let Some(candidate) = first {
+                    assert!(is_bijection(&candidate, n));
+                    assert!(canonical(&pat, &candidate) < before);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod six_window_tests {
+    use super::super::{flops_of, is_bijection, Pattern, ScoringPattern};
+    use super::*;
+
+    // Independent Boolean clique elimination: no component or bitset formula.
+    fn oracle_eliminate(graph: &mut [Vec<bool>], vertex: usize) -> u64 {
+        let neighbors: Vec<_> = graph[vertex]
+            .iter()
+            .enumerate()
+            .filter_map(|(v, &edge)| edge.then_some(v))
+            .collect();
+        for &u in &neighbors {
+            graph[u][vertex] = false;
+            for &v in &neighbors {
+                if u != v {
+                    graph[u][v] = true;
+                }
+            }
+        }
+        graph[vertex].fill(false);
+        neighbors.len() as u64 + 1
+    }
+
+    fn permutations() -> Vec<[usize; 6]> {
+        fn visit(order: &mut [usize; 6], depth: usize, used: u8, out: &mut Vec<[usize; 6]>) {
+            if depth == 6 {
+                out.push(*order);
+                return;
+            }
+            for v in 0..6 {
+                if used & (1 << v) == 0 {
+                    order[depth] = v;
+                    visit(order, depth + 1, used | (1 << v), out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        visit(&mut [0; 6], 0, 0, &mut out);
+        out
+    }
+
+    fn canonical(pat: &Pattern, perm: &[usize]) -> u64 {
+        flops_of(
+            &ScoringPattern {
+                n: pat.n,
+                col_ptr: pat.col_ptr.clone(),
+                row_idx: pat.row_idx.clone(),
+            },
+            perm,
+        )
+    }
+
+    fn verify_window(n: usize, edges: &[(usize, usize)], prefix: &[usize], window: [usize; 6]) {
+        let pat = Pattern::from_edges(n, edges);
+        let adj = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+        let mut game = Game::new(n, &adj).unwrap();
+        game.reset();
+        let mut graph = vec![vec![false; n]; n];
+        for &(u, v) in edges {
+            graph[u][v] = true;
+            graph[v][u] = true;
+        }
+        for &v in prefix {
+            game.eliminate(v);
+            oracle_eliminate(&mut graph, v);
+        }
+        let mut work = TripleWork {
+            remaining: 1_000_000,
+        };
+        let kernel = SixWindow::new(&game, window, &mut work).unwrap();
+        for mask in 0usize..64 {
+            let mut residual = graph.clone();
+            for pivot in 0..6 {
+                if mask & (1 << pivot) != 0 {
+                    oracle_eliminate(&mut residual, window[pivot]);
+                }
+            }
+            for pivot in 0..6 {
+                if mask & (1 << pivot) == 0 {
+                    let width =
+                        residual[window[pivot]].iter().filter(|&&edge| edge).count() as u64 + 1;
+                    assert_eq!(
+                        kernel.width(mask as u8, pivot),
+                        width,
+                        "n={n} prefix={prefix:?} window={window:?} mask={mask} pivot={pivot}"
+                    );
+                }
+            }
+        }
+        let mut optimum = u64::MAX;
+        let mut best_order = [0, 1, 2, 3, 4, 5];
+        let mut incumbent = 0;
+        let mut reference_residual = None;
+        for order in permutations() {
+            let mut residual = graph.clone();
+            let mut cost = 0;
+            let mut eliminated = 0;
+            for pivot in order {
+                let width = oracle_eliminate(&mut residual, window[pivot]);
+                assert_eq!(kernel.width(eliminated, pivot), width);
+                eliminated |= 1 << pivot;
+                cost += width * width;
+            }
+            if order == [0, 1, 2, 3, 4, 5] {
+                incumbent = cost;
+            }
+            if cost < optimum {
+                optimum = cost;
+                best_order = order;
+            }
+            if let Some(reference) = &reference_residual {
+                assert_eq!(
+                    &residual, reference,
+                    "full-window residual depends on order"
+                );
+            } else {
+                reference_residual = Some(residual);
+            }
+        }
+        if optimum == incumbent {
+            best_order = [0, 1, 2, 3, 4, 5];
+        }
+        assert_eq!(kernel.solve(), (best_order, optimum, incumbent));
+        let mut original = prefix.to_vec();
+        original.extend(window);
+        original.extend((0..n).filter(|v| !prefix.contains(v) && !window.contains(v)));
+        let mut chosen = original.clone();
+        chosen[prefix.len()..prefix.len() + 6].copy_from_slice(&best_order.map(|i| window[i]));
+        assert!(is_bijection(&chosen, n));
+        assert_eq!(
+            canonical(&pat, &original) - canonical(&pat, &chosen),
+            incumbent - optimum
+        );
+    }
+
+    #[test]
+    fn six_window_dp_matches_independent_oracle() {
+        // Exhaust all 64 graphs on the first four pivots, with the other
+        // two isolated, then add shared live external context. This bounded
+        // suite checks every one of 720 orders for each of 128 windows.
+        let pairs: Vec<_> = (0..4).flat_map(|u| (u+1..4).map(move |v| (u,v))).collect();
+        assert_eq!(permutations().len(),720);
+        for bits in 0usize..64 {
+            let mut edges: Vec<_> = pairs.iter().enumerate()
+                .filter_map(|(i,&edge)| (bits&(1<<i)!=0).then_some(edge)).collect();
+            verify_window(6,&edges,&[],[0,1,2,3,4,5]);
+            edges.extend([(0,6),(2,6),(1,7),(4,7),(5,7),(6,7)]);
+            verify_window(8,&edges,&[],[0,1,2,3,4,5]);
+        }
+        println!("SIX_BOUNDED windows=128 transitions=24576 permutations=92160 permutation_widths=552960");
+    }
+
+    #[test]
+    fn six_all_static_component_branches_and_eighteen_bit_tie_path() {
+        // A clique makes all 57 nonsingleton masks connected. Each row gets
+        // disjoint power-of-two external sets, exposing wrong row/mask plans.
+        let mut edges: Vec<_> = (0..6).flat_map(|u| (u+1..6).map(move |v| (u,v))).collect();
+        let mut next = 6;
+        for row in 0..6 {
+            for v in next..next+(1<<row) { edges.push((row,v)); }
+            next += 1<<row;
+        }
+        assert_eq!(next,69);
+        verify_window(next,&edges,&[],[0,1,2,3,4,5]);
+        let pat = Pattern::from_edges(next,&edges);
+        let adj = Game::build_adj(next,&pat.col_ptr,&pat.row_idx).unwrap();
+        let mut game=Game::new(next,&adj).unwrap();game.reset();
+        let mut work=TripleWork{remaining:1_000_000};
+        let kernel=SixWindow::new(&game,[0,1,2,3,4,5],&mut work).unwrap();
+        let mut branches=0;
+        for mask in 1usize..64 {
+            if mask.count_ones()>1 {
+                let external: u32=(0..6).filter(|i|mask&(1<<i)!=0).map(|i|1u32<<i).sum();
+                assert_eq!(kernel.component_width[mask], external+7-mask.count_ones(),"mask={mask}");
+                branches+=1;
+            }
+        }
+        assert_eq!(branches,57);
+        // Only position five lacks the shared external neighbor, so it must
+        // lead every optimum. Its base-eight code needs more than 16 bits.
+        let mut edges: Vec<_>=(0..6).flat_map(|u|(u+1..6).map(move|v|(u,v))).collect();
+        edges.extend((0..5).map(|v|(v,6)));
+        verify_window(7,&edges,&[],[0,1,2,3,4,5]);
+        let pat=Pattern::from_edges(7,&edges);
+        let adj=Game::build_adj(7,&pat.col_ptr,&pat.row_idx).unwrap();
+        let mut game=Game::new(7,&adj).unwrap();game.reset();
+        let mut work=TripleWork{remaining:1_000_000};
+        let (order,best,original)=SixWindow::new(&game,[0,1,2,3,4,5],&mut work).unwrap().solve();
+        assert_eq!(order,[5,0,1,2,3,4]);
+        assert!(best<original);
+        assert!(order.iter().fold(0u32,|code,&pivot|(code<<3)|pivot as u32)>u16::MAX as u32);
+    }
+
+    #[test]
+    fn six_windows_handle_filled_prefixes_and_cross_word_labels() {
+        let edges = [
+            (1, 0),
+            (1, 63),
+            (1, 64),
+            (2, 63),
+            (2, 128),
+            (2, 129),
+            (0, 3),
+            (63, 3),
+            (64, 3),
+            (128, 3),
+            (129, 3),
+            (3, 4),
+            (0, 64),
+            (128, 129),
+            (64, 127),
+            (129, 127),
+        ];
+        let window = [0, 63, 64, 126, 128, 129];
+        for prefix in [&[][..], &[1][..], &[1, 2][..]] {
+            for order in [[0, 1, 2, 3, 4, 5], [5, 4, 3, 2, 1, 0], [2, 0, 5, 4, 1, 3]] {
+                verify_window(130, &edges, prefix, order.map(|i| window[i]));
+            }
+        }
+        let mut rng = 0x53F0_A7C2_944D_180B;
+        for n in [9, 67] {
+            for _ in 0..4 {
+                let mut edges = Vec::new();
+                for u in 0..n {
+                    for v in u + 1..n {
+                        if xs64(&mut rng) % 11 == 0 {
+                            edges.push((u, v));
+                        }
+                    }
+                }
+                verify_window(n, &edges, &[0, 1], [n - 1, 2, n - 2, 3, 4, 5]);
+            }
+        }
+    }
+
+    #[test]
+    fn six_window_charges_scalar_then_connected_scans() {
+        for clique in [false, true] {
+            let edges: Vec<_> = if clique {
+                (0..6)
+                    .flat_map(|u| (u + 1..6).map(move |v| (u, v)))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let pat = Pattern::from_edges(130, &edges);
+            let adj = Game::build_adj(130, &pat.col_ptr, &pat.row_idx).unwrap();
+            let mut game = Game::new(130, &adj).unwrap();
+            game.reset();
+            let q = if clique { 57 } else { 0 };
+            let scalar = SIX_WINDOW_SCALAR_WORK as i64;
+            let scan = six_window_scan_work(game.w, q) as i64;
+            for allowance in [scalar - 1, scalar + scan - 1, scalar + scan] {
+                let mut work = TripleWork {
+                    remaining: allowance,
+                };
+                let result = SixWindow::new(&game, [0, 1, 2, 3, 4, 5], &mut work);
+                assert_eq!(result.is_some(), allowance == scalar + scan);
+                let charged = if allowance < scalar {
+                    0
+                } else if allowance < scalar + scan {
+                    scalar
+                } else {
+                    scalar + scan
+                };
+                assert_eq!(work.remaining, allowance - charged);
+                assert!(work.remaining >= 0);
+            }
+        }
+    }
+
+    #[test]
+    fn six_window_budget_preserves_completed_gain_and_suffix() {
+        let n = 12;
+        let edges: Vec<_> = (1..n).map(|v| (0, v)).collect();
+        let pat = Pattern::from_edges(n, &edges);
+        let seed: Vec<_> = (0..n).collect();
+        let w = n.div_ceil(64);
+        let setup = (n + 1 + pat.row_idx.len() + 2 * n)
+            + (n * w + 2 * pat.row_idx.len() + n)
+            + (2 * n * w + 13 * n + w)
+            + (2 * n * w + 8 * n);
+        // A six-window star has exactly 31 connected nonsingleton subsets.
+        let first_window = setup + SIX_WINDOW_SCALAR_WORK + six_window_scan_work(w, 31);
+        for budget in [0, 1, setup + SIX_WINDOW_SCALAR_WORK - 1, first_window - 1] {
+            assert!(
+                adjacent_six_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget as i64)
+                    .is_none()
+            );
+        }
+        // The exact admission budget completes one strict window gain but
+        // cannot replay a pivot; 42 extra units replay precisely one leaf.
+        for budget in [first_window, first_window + 42] {
+            let candidate =
+                adjacent_six_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget as i64)
+                    .expect("retain completed gain on replay refusal");
+            assert_eq!(&candidate[..6], &[1, 2, 3, 4, 5, 0]);
+            assert_eq!(&candidate[6..], &seed[6..]);
+            assert!(is_bijection(&candidate, n));
+            assert!(canonical(&pat, &candidate) < canonical(&pat, &seed));
+        }
+        assert!(adjacent_six_descent(n, &[0], &[], &seed, i64::MAX).is_none());
+        assert!(adjacent_six_descent(MAX_N + 1, &[], &[], &[], i64::MAX).is_none());
+        let mut duplicate = seed.clone();
+        duplicate[1] = 0;
+        assert!(
+            adjacent_six_descent(n, &pat.col_ptr, &pat.row_idx, &duplicate, i64::MAX).is_none()
+        );
+        let mut bad_rows=pat.row_idx.clone(); bad_rows[0]=n;
+        assert!(adjacent_six_descent(n,&pat.col_ptr,&bad_rows,&seed,i64::MAX).is_none());
+        let mut bad_ptr=pat.col_ptr.clone(); bad_ptr[1]=bad_ptr[n]+1;
+        assert!(adjacent_six_descent(n,&bad_ptr,&pat.row_idx,&seed,i64::MAX).is_none());
+        let small = Pattern::from_edges(4, &[(0, 1), (0, 2), (0, 3)]);
+        assert!(
+            adjacent_six_descent(4, &small.col_ptr, &small.row_idx, &[0, 1, 2, 3], i64::MAX)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn six_window_descent_is_monotone_and_deterministic() {
+        let mut rng = 0x72E4_135C_8810_F97B;
+        for n in [13, 67, 1603] {
+            let mut edges = Vec::new();
+            for v in 0..n {
+                edges.push((v, (v + 1) % n));
+                let u = xs64(&mut rng) as usize % n;
+                if u != v {
+                    edges.push((v, u));
+                }
+            }
+            let pat = Pattern::from_edges(n, &edges);
+            let mut seed: Vec<_> = (0..n).collect();
+            for i in 1..n {
+                seed.swap(i, xs64(&mut rng) as usize % (i + 1));
+            }
+            let before = canonical(&pat, &seed);
+            for budget in [0, 1, 8192, 20_000, 100_000, 1_000_000] {
+                let first = adjacent_six_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget);
+                assert_eq!(
+                    first,
+                    adjacent_six_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget)
                 );
                 if let Some(candidate) = first {
                     assert!(is_bijection(&candidate, n));

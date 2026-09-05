@@ -1718,40 +1718,47 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if pair_descent_gate {
-        for _ in 0..2 {
-            let mut round_improved = false;
-            if n >= 5 {
-                if let Some(cand) = rgreedy::adjacent_five_descent(
-                    n,
-                    &pattern.col_ptr,
-                    &pattern.row_idx,
-                    &best_perm,
-                    pair_descent_ops_budget,
-                ) {
-                    let f = flops_of(&scoring_pat, &cand);
-                    if f < best_flops {
-                        best_flops = f;
-                        best_perm = cand;
-                        round_improved = true;
-                    }
-                }
+        // Preserve the four-pivot cleanup when a five-pivot window cannot fit.
+        let cleanup = if n < 5 {
+            rgreedy::adjacent_four_descent
+        } else {
+            rgreedy::adjacent_five_descent
+        };
+        if let Some(cand) = cleanup(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &best_perm,
+            pair_descent_ops_budget,
+        ) {
+            let f = flops_of(&scoring_pat, &cand);
+            if f < best_flops {
+                best_perm = cand;
             }
-            if let Some(cand) = rgreedy::adjacent_four_descent(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                pair_descent_ops_budget,
-            ) {
-                let f = flops_of(&scoring_pat, &cand);
-                if f < best_flops {
-                    best_flops = f;
-                    best_perm = cand;
-                    round_improved = true;
-                }
-            }
-            if !round_improved {
-                break;
+        }
+    }
+
+    // Preserve the complete incumbent, including all prior refinement. Explore
+    // distinct quotient metrics on three fixed numberings under a bounded gate.
+    if n < 150_000 && nnz < 130_000 {
+        best_flops = flops_of(&scoring_pat, &best_perm);
+        for seed in [0, 101, 211] {
+            let q = if seed == 0 { (0..n).collect() } else { relabel(n, seed) };
+            let b = permute_pattern(&scoring_pat, &q);
+            let cp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let ri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Some(core) = feral_ordering_core::CscPattern::new(n, &cp, &ri) else { continue; };
+            for variant in [custom_metrics::ScoreVariant::DegP075,
+                            custom_metrics::ScoreVariant::DegDivNvWfP15,
+                            custom_metrics::ScoreVariant::DegDivNvSqrtWf] {
+                let produced = std::panic::catch_unwind(std::panic::AssertUnwindSafe(||
+                    custom_metrics::order_variant(&core, 5.0, true, variant)));
+                let Ok(Ok(raw)) = produced else { continue; };
+                let indices: Vec<usize> = raw.into_iter().map(|x| x as usize).collect();
+                if !is_bijection(&indices, n) { continue; }
+                let candidate: Vec<usize> = indices.into_iter().map(|i| q[i]).collect();
+                let f = flops_of(&scoring_pat, &candidate);
+                if f < best_flops { best_flops = f; best_perm = candidate; }
             }
         }
     }

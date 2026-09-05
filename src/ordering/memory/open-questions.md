@@ -135,3 +135,7 @@ it, rather than deleting it — a resolved question is a useful signpost.
       Every absolute second in `memory/` is box-relative. A revision judged safe on
       a fast box can be at 85% of the cap on a slow one — which is the most likely
       mechanism behind the three hidden-cap failures in 0025.
+
+## Returned research, 2026-09-06
+
+[Experiment 0065](experiments/0065-returned-pro-and-core-cleanup.md) narrows the next useful questions. Do actual native second-best seeds refine past the finished incumbent, and does an edge-distance signal predict that better than score alone? Measure candidate streams and replay under fixed controls before a shared-workspace refactor. The portfolio mask also needs actual variant-level reach and timing evidence. Current prefix and protected-erasure prototypes provide no added public gain beyond the selected residual-core cleanup; weighted true-twin gates admit zero public cases. Adaptive allocation remains blocked on sound charging and single-path continuation, not on a missing budget sweep.

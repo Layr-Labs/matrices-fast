@@ -3,14 +3,28 @@
 The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
-## Verified 2026-09-05 checkpoint
+## Latest candidate: 08a9935 plus residual-core cleanup
+
+- [0066: latest-frontier integration](experiments/0066-core-cleanup-latest-frontier.md): source `08a9935` (official **0.867023**) plus existing residual k5→k4 cleanup. Public **0.8389332841047089 → 0.8388909882140252**, **6 better / 0 worse / 294 same**, **0.504163 relative basis points**.
+- **50 active tests and all 300 trusted cases pass**, every exact trusted count equals the native probe. Rounded score/fill **0.838891 / 0.942605**; worst observed direct call **0.7024 s**. This is a small local gain, not a promotion or hidden-runtime guarantee.
+- [0065](experiments/0065-returned-pro-and-core-cleanup.md) and its six research returns remain a historical controlled study on `2a28517`. The new upstream kernels are preserved.
+
+## Initial 2026-09-06 returned-research checkpoint
+
+- Starting official frontier: `2a28517ddc00dac41a52c270f9601702df982200`, hidden **0.867211**. Our four-pivot and five-pivot submissions were previously promoted; four later successors advanced the frontier.
+- Six returned research studies audited. Selected residual-core k5→k4 cleanup: public **0.8390631716578836 → 0.8390208740493201**, **6 better / 0 worse / 294 same**, **0.504105 relative basis points**. All **50 active tests and 300 trusted cases pass**; every exact trusted count equals the direct probe. No new official promotion established yet.
+- [0065: returned research and core cleanup](experiments/0065-returned-pro-and-core-cleanup.md) records controls, rejected alternatives and limits. [Residual-core refinement](techniques/residual-core-refinement.md) explains exact score transfer and final acceptance.
+- New primary-source notes: [Heggernes–Peyton](literature/heggernes-peyton-minimal-fill.md) and [Culbertson–Guralnik–Stiller](literature/culbertson-guralnik-stiller-edge-erasures.md). The fill-edge prototype adds no measured benefit beyond cleanup; one optional prefix has zero final gains; weighted true-twin initial gates reach zero of 300 public cases.
+- Earlier checkpoint claims below are historical, reflect their own source/corpus, and do not describe the current candidate. Logical allowances and local timings do not prove hidden runtime or promotion.
+
+## Historical verified 2026-09-05 checkpoint
 
 - Current shippable locally verified candidate score: **0.839063** on all 300 dev matrices, 2026-09-05 (crown 784bfe5 = 0.843358 on this box), independent out-of-sample corpus (591 MINLPLib KKT patterns outside dev) 0.863823 → **0.856455**. Time-margin package on top of 0062: partitioner cascade, structural windows on the extra relabel tickets / hand-rolled families / subtree budgets / robust AMD envelope. Worst same-machine order() 1.084 s dev / 0.951 s out-of-sample (crown 1.823 / 1.574 s). Every upload by every solver since 07:44 UTC was killed by the 2 s cap; this package trades part of 0062's gain for wall-clock margin. See [0063](experiments/0063-time-margin-by-structure.md).
 - Current shippable locally verified candidate score: **0.837523** on all 300 dev matrices, 2026-09-05 (base 784bfe5 / hidden **0.86837** re-measured at 0.843358 on this box). Exact degree-<=3 elimination prefix + AMF alpha-grid/AMD on the residual core, terminal strict-<: **−69 bips dev, 16 better / 0 worse / 284 unchanged**; independent out-of-sample corpus (591 MINLPLib KKT patterns outside dev) 0.863823 → **0.855486** (-0.965% rel, 96.5 bip, 15 better / 0 worse). Worst same-machine order() 1.284 s (crown 1.823 s on the same box). See [0062](experiments/0062-reduce-then-amf-terminal.md).
 - Current shippable locally verified candidate score: **0.843358** on all 300 dev matrices, 2026-09-05. Tip `649ae53` / hidden **0.869723** re-measured at 0.843658. Margin-scaled leftover search on well-below-anchor matrices: lt_1k **0.8903** / 1k_10k **0.8650** / gt_10k **0.7919** (−3.00 bips). Worst same-machine order() 1.347 s (faster than tip 1.356 s). See [0061](experiments/0061-margin-scaled-leftover-search.md).
 - Preceding 0060 substitutive escalation: local **0.843657**, hidden **0.869723** (promoted `bd451297`). See [0060](experiments/0060-conditional-search-escalation-below-anchor.md).
 - Preceding four-pivot/atomic winner: dev **0.84419540581772**, hidden **0.870307**, officially promoted as `da03dc2c` / source `649c230`.
-- New component-factored five-pivot cleanup with cache and boundary repairs: dev **0.8440714862418132**, fill **0.943946**; all **300 trusted cases and 44 active tests pass**. Exact counts agree with the isolated probe. **42 better / 2 worse / 256 unchanged** versus the preceding winner; both corpus halves and drop-five sensitivity improve. Official follow-up result pending submission/validation.
+- New component-factored five-pivot cleanup with cache and boundary repairs: dev **0.8440714862418132**, fill **0.943946**; all **300 trusted cases and 44 active tests pass**. Exact counts agree with the isolated probe. **42 better / 2 worse / 256 unchanged** versus the preceding winner; both corpus halves and drop-five sensitivity improve. The five-pivot candidate was subsequently promoted as `9c695fea`, hidden 0.870120, before the newer successors.
 - [0063: time margin by structure](experiments/0063-time-margin-by-structure.md) — ten single-family ablations on the 169 slowest dev + out-of-sample rows; the extra partitioner variants are the tree's clearest dev over-fit (45 bip dev / 7 bip out-of-sample) and the costliest family where they never win. Cascade + structural windows: dev **0.839063**, out-of-sample **0.856455**, worst order() 1.084 / 0.951 s.
 - [0062: reduce-then-AMF terminal](experiments/0062-reduce-then-amf-terminal.md) eliminates every degree-<=3 vertex EXACTLY up front (the objective splits exactly into a fixed prefix term + a core term), orders the residual core with AMF α∈{0.5,2.5,5,10} and AMD, ranks on the core graph, splices, admits with strict `<` after the finished pipeline. Dev **0.837523** (−69 bip), 16/0; out-of-sample 0.855486; worst order() down. New `core_lift.rs`.
 - [0061: margin-scaled leftover search](experiments/0061-margin-scaled-leftover-search.md) spends extra first-round / LNS / relabel tickets only on well-below-anchor incumbents. Dev **0.843358** (−3.00 bip vs tip 0.843658). First-round `max_s` on a successful first round loses.
@@ -205,5 +219,3 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.
-
-- [0064: terminal completion watcher](experiments/0064-terminal-completion-watcher.md) — bounded redundant-fill deletion after the finished pipeline; direct official evaluation, no local score claimed.

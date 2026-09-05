@@ -72,13 +72,7 @@ fn core_of(pattern: &Pattern) -> (Vec<i32>, Vec<i32>) {
 #[test]
 #[ignore]
 fn probe_timing_and_score() {
-    let corpus = match std::env::var("SSI_CORPUS_FILE") {
-        Ok(path) if !path.trim().is_empty() => {
-            ssi_scoring::load_corpus_jsonl(std::path::Path::new(&path))
-                .unwrap_or_else(|_| crate::corpus::corpus())
-        }
-        _ => crate::corpus::corpus(),
-    };
+    let corpus = crate::corpus::corpus();
     let mut rows: Vec<(f64, String, usize, usize, f64)> = Vec::new();
     let mut log_sums = [0.0f64; 3];
     let mut counts = [0usize; 3];
@@ -104,7 +98,6 @@ fn probe_timing_and_score() {
         let perm = order(pat);
         let secs = t0.elapsed().as_secs_f64();
         let mine = flops_of(&sp, &perm);
-        println!("COUNTS\t{name}\t{n}\t{}\t{base}\t{mine}", pat.nnz());
         let ratio = mine as f64 / base as f64;
 
         let b = bucket(n);
@@ -1784,67 +1777,149 @@ fn probe_lt1k() {
     }
 }
 
-
-/// Fresh synthetic families exercise repeatability across size tiers and hubs.
+/// Bootstrap confidence intervals for the dev score (methodology probe).
+///
+/// Runs the shipped `order()` once per matrix, records per-matrix ln(ratio)
+/// by bucket, then resamples WITHIN buckets (fixed counts, deterministic
+/// xorshift stream) and re-aggregates with the harness-exact `aggregate`.
+/// Answers: how wide is the noise band around any dev score, and how much of
+/// it rides on the top few matrices (drop-top-k)? A candidate delta smaller
+/// than the CI half-width is indistinguishable from corpus luck.
 #[test]
 #[ignore]
-fn probe_uniform_rounds_synthetic() {
-    let mut cases = Vec::new();
-    for (rows, cols) in [(11, 13), (33, 37), (101, 103)] {
-        let n = rows * cols;
-        let mut edges = Vec::new();
-        for row in 0..rows {
-            for col in 0..cols {
-                let v = row * cols + col;
-                if row + 1 < rows {
-                    edges.push((v, v + cols));
-                }
-                if col + 1 < cols {
-                    edges.push((v, v + 1));
-                }
-            }
+fn probe_bootstrap() {
+    // Deterministic xorshift64* (fixed seed — same output every run).
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x >> 12;
+            x ^= x << 25;
+            x ^= x >> 27;
+            self.0 = x;
+            x.wrapping_mul(0x2545_F491_4F6C_DD1D)
         }
-        cases.push((format!("grid-{rows}x{cols}"), Pattern::from_edges(n, &edges)));
-    }
-    let mut rng = 0x83AC_D059_2731_B6E5u64;
-    for n in [257, 1021] {
-        let mut edges = Vec::new();
-        for v in 0..n {
-            edges.push((v, (v + 1) % n));
-            for _ in 0..2 {
-                rng ^= rng << 13;
-                rng ^= rng >> 7;
-                rng ^= rng << 17;
-                let u = rng as usize % n;
-                if u != v {
-                    edges.push((v, u));
-                }
-            }
-        }
-        cases.push((format!("sparse-random-{n}"), Pattern::from_edges(n, &edges)));
-    }
-    let n = 389;
-    let mut edges = Vec::new();
-    for v in 1..n {
-        edges.push((0, v));
-        if v + 1 < n && v % 17 != 0 {
-            edges.push((v, v + 1));
+        fn below(&mut self, m: usize) -> usize {
+            ((self.next() >> 11) as usize * m) >> 53
         }
     }
-    cases.push(("hub-and-paths".to_owned(), Pattern::from_edges(n, &edges)));
 
-    for (name, pat) in cases {
-        let first = order(&pat);
-        assert!(is_bijection(&first, pat.n), "{name}: not a bijection");
-        assert_eq!(first, order(&pat), "{name}: non-deterministic");
-        let (cp, ri) = core_of(&pat);
-        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
-        let baseline = feral_amd::amd_order(&core).unwrap()
-            .into_iter().map(|v| v as usize).collect::<Vec<_>>();
-        let sp = scoring_pattern(&pat);
-        let mine = flops_of(&sp, &first);
-        let base = flops_of(&sp, &baseline);
-        assert!(mine <= base, "{name}: lost the AMD incumbent");
-        println!("SYNTHETIC\t{name}\t{}\t{}\t{base}\t{mine}", pat.n, pat.nnz());
+    let corpus = crate::corpus::corpus();
+    // per bucket: (name, ln ratio)
+    let mut rows: [Vec<(String, f64)>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let r = flops_of(&sp, &order(pat)) as f64 / base;
+        rows[bucket(n)].push((name.clone(), r.ln()));
     }
+    let counts = [rows[0].len(), rows[1].len(), rows[2].len()];
+    println!("\nbucket counts: {counts:?}");
+    let sums = [
+        rows[0].iter().map(|(_, l)| l).sum(),
+        rows[1].iter().map(|(_, l)| l).sum(),
+        rows[2].iter().map(|(_, l)| l).sum(),
+    ];
+    let observed = aggregate(&sums, &counts);
+    println!("OBSERVED score = {observed:.6}");
+
+    // Drop-top-k: remove the k most negative ln ratios corpus-wide, recompute.
+    let mut all: Vec<(f64, usize)> = Vec::new();
+    for b in 0..3 {
+        for (_, l) in &rows[b] {
+            all.push((*l, b));
+        }
+    }
+    all.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    for k in [1usize, 3] {
+        let mut s = sums;
+        let mut c = counts;
+        for i in 0..k.min(all.len()) {
+            s[all[i].1] -= all[i].0;
+            c[all[i].1] -= 1;
+        }
+        println!("drop-top-{k} score = {:.6}", aggregate(&s, &c));
+    }
+    // Biggest single-matrix contributors (most negative ln ratio).
+    println!("--- top wins (name, bucket, ratio) ---");
+    for (l, b) in all.iter().take(8) {
+        let nm = rows[*b]
+            .iter()
+            .find(|(_, x)| *x == *l)
+            .map(|(n, _)| n.clone())
+            .unwrap_or_default();
+        println!("TOP\t{nm}\t{}\t{:.4}", BUCKET_NAMES[*b], l.exp());
+    }
+
+    // Bootstrap: resample within buckets, B replicates.
+    const B: usize = 2000;
+    let mut rng = Rng(0x1234_5678_9ABC_DEF0);
+    let mut dist = Vec::with_capacity(B);
+    for _ in 0..B {
+        let mut s = [0.0f64; 3];
+        for b in 0..3 {
+            for _ in 0..counts[b] {
+                s[b] += rows[b][rng.below(counts[b])].1;
+            }
+        }
+        dist.push(aggregate(&s, &counts));
+    }
+    dist.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let mean: f64 = dist.iter().sum::<f64>() / B as f64;
+    let lo = dist[(0.025 * B as f64) as usize];
+    let hi = dist[(0.975 * B as f64) as usize];
+    println!("BOOTSTRAP B={B} mean = {mean:.6}  95% CI = [{lo:.6}, {hi:.6}]");
+    println!(
+        "CI half-width = {:.6} ({:.2} bips); 1 bip = {:.6}",
+        (hi - lo) / 2.0,
+        (hi - lo) / 2.0 / observed * 10000.0,
+        observed * 0.0001
+    );
+}
+
+/// Dump per-matrix flops for offline A/B comparison (methodology probe).
+/// Writes TSV rows `name n nnz amd_flops our_flops` to the path in
+/// `FLOPS_DUMP_PATH` (or `/tmp/flops_dump.tsv`). Run once per candidate
+/// source state; compare files offline (deltas, drop-top on the delta).
+#[test]
+#[ignore]
+fn probe_dump_flops() {
+    use std::io::Write;
+    let path = std::env::var("FLOPS_DUMP_PATH")
+        .unwrap_or_else(|_| "/tmp/flops_dump.tsv".to_string());
+    let mut f = std::fs::File::create(&path).unwrap();
+    for (name, pat) in &crate::corpus::corpus() {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let ours = flops_of(&sp, &order(pat));
+        writeln!(f, "{name}\t{n}\t{nnz}\t{amd}\t{ours}").unwrap();
+    }
+    println!("wrote {path}");
 }

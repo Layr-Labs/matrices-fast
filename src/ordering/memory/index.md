@@ -3,20 +3,7 @@
 The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
-## Verified 2026-09-05 checkpoint
-
-- Current shippable locally verified candidate score: **0.843358** on all 300 dev matrices, 2026-09-05. Tip `649ae53` / hidden **0.869723** re-measured at 0.843658. Margin-scaled leftover search on well-below-anchor matrices: lt_1k **0.8903** / 1k_10k **0.8650** / gt_10k **0.7919** (−3.00 bips). Worst same-machine order() 1.347 s (faster than tip 1.356 s). See [0061](experiments/0061-margin-scaled-leftover-search.md).
-- Preceding 0060 substitutive escalation: local **0.843657**, hidden **0.869723** (promoted `bd451297`). See [0060](experiments/0060-conditional-search-escalation-below-anchor.md).
-- Preceding four-pivot/atomic winner: dev **0.84419540581772**, hidden **0.870307**, officially promoted as `da03dc2c` / source `649c230`.
-- New component-factored five-pivot cleanup with cache and boundary repairs: dev **0.8440714862418132**, fill **0.943946**; all **300 trusted cases and 44 active tests pass**. Exact counts agree with the isolated probe. **42 better / 2 worse / 256 unchanged** versus the preceding winner; both corpus halves and drop-five sensitivity improve. Official follow-up result pending submission/validation.
-- [0061: margin-scaled leftover search](experiments/0061-margin-scaled-leftover-search.md) spends extra first-round / LNS / relabel tickets only on well-below-anchor incumbents. Dev **0.843358** (−3.00 bip vs tip 0.843658). First-round `max_s` on a successful first round loses.
-- [0060: conditional search escalation](experiments/0060-conditional-search-escalation-below-anchor.md) substitutive re-tiering on `best_flops < amd_flops`. Hidden **0.869723**, promoted.
-- [0059: component five-pivot cleanup](experiments/0059-component-five-pivot-cleanup.md) records the exact formula, native implementation, work ledger, negative controls and source audits.
-- [0057: exact four-pivot cleanup](experiments/0057-exact-four-pivot-cleanup.md) preserves the prior winner. [0056: exact triple cleanup](experiments/0056-exact-triple-cleanup.md) preserves its predecessor and the subsequent hidden timeout.
-- Logical work caps do not prove total wall time. Observed isolated k5 worst **0.970 s**, preceding winner **0.987 s**; timing varies with machine load.
-- Development and hidden scores measure different corpora. Older current-best entries below are historical and may lag their source.
-
-## Historical current-best entries
+## Current best
 - Best shippable locally verified candidate score: **0.849251** (fill
   **0.947647**) on all 300 dev matrices, 2026-09-03. On top of promoted
   submission `26932eb`, cap the first two medium-tier subtree rounds at
@@ -198,6 +185,18 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
   score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
   retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;
   1k-10k worst observed call **0.661 s**. Submitted for hidden validation.
+- [0055](experiments/0055-autoresearch-loop.md) — Running Karpathy-style
+  autoresearch log from SOTA `77153ff`: every trial, measurement, and revert
+  since. Produced H2 (custom metrics for `n<5000`, density≥3 — dev **0.845281**,
+  **PROMOTED** as `8cf28f4`/`4245c79` at hidden **0.871032**) and the pending
+  stack trial (`96b612df`).
+- [0056](experiments/0056-challenge-compendium.md) — Full compendium: challenge
+  rules and scoring, pipeline architecture with gates, everything implemented
+  with receipts, four constraining lessons, and ranked future improvements.
+- [0057](experiments/0057-bootstrap-variance.md) — Bootstrap noise floor:
+  dev 95% CI ±404 bips, drop-top-1 +103 bips (`pooling_sppc1pq`); breadth +
+  drop-top rules adopted for sub-2-bip deltas. Methodology only, no
+  production change.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

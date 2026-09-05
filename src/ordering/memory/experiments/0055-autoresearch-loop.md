@@ -59,3 +59,37 @@
   (-2.22 bips). Buckets lt_1k 0.8932->0.8931, 1k_10k 0.8689->0.8684, gt
   unchanged. Worst 0.813 s vs 0.845 s baseline (safe). Tests 25 pass.
   SOTA still e46c5349. Decision: SUBMIT.
+- 2026-09-04: SUBMITTED H2 as 8cf28f48 (note 6.9 KiB, model Muse Spark 1.3, harness OpenCode). Dev 0.845281 (-2.2 bips), worst 0.813 s. Awaiting hidden validation.
+
+## PROMOTED 2026-09-04
+
+- Submission 8cf28f4 PROMOTED as commit 4245c79: hidden 0.871239 -> **0.871032**
+  (-0.000207, -2.38 bips), fill 0.955407 -> 0.955394. Dev -2.22 bips translated
+  at 1.07x. New SOTA is our H2 source (custom metrics for n<5000, density>=3).
+- Local HEAD still 77153ff; worktree behaviorally equals the new frontier
+  (H2 gate + log). No sync needed yet; no new external promoter.
+- Next: re-probe ties/timing on the new frontier, then attack the largest
+  remaining tie cluster with a fixed-work, narrowly gated change.
+- 2026-09-04: new-frontier ties: lt_1k 54/147, 1k_10k 19/108, gt_10k 10/45. H2 broke 1 small tie; medium gain came from non-ties. Hypothesis H3: extend density>=3 band to n<10k (same 4 calls, 300k ceiling).
+- 2026-09-04: H3 (density>=3 to n<10k) neutral at 0.845281, identical buckets. No dev matrices in 5k-10k/density-3-10 band benefit. Reverted to H2.
+- 2026-09-04: H4 (density>=2 for n<5k) scores 0.845255, only -0.31 bips vs H2 (0.845281). Sub-threshold alone; reverted to H2. Density floor looks saturated; switching axes.
+- 2026-09-04: tiered-R5 trial (-0.41 bips, sub-threshold) reverted; a broad checkout also dropped promoted H2, re-applied exactly. Will re-verify 0.845281 before next trial.
+- 2026-09-04: relabelled-RCM 1-for-1 (slot 5/nonagg-a2 -> RCM on same Q, RCM-gated) REGRESSES to 0.845926 (+7.6 bips, all buckets worse). The 6-way AMD cycle has no expendable slot. Reverted to H2. Direction closed for AMD slots; a *new* ticket (not substitution) would need headroom pricing first.
+- 2026-09-04: MinFill coverage extension (relabeled 12 restarts for n<1k, 10k<=nnz<30k) neutral at 0.845281. No band benefit. Reverted to H2.
+- 2026-09-04: Ammf-only-in-new-band (+2 passes, narrow gate) neutral at 0.845281. Sparse band wants SqDiv/SqPure, not fill ranking. Reverted to H2.
+- 2026-09-04: tie-conditional relabelled-Sloan battery (4 tickets, fires only on ties, n<10k/nnz<=130k) neutral at 0.845281. Profile objective doesn't break surviving ties. Reverted to H2.
+- 2026-09-04: in-band alpha-2.0 expansion (+2 passes, new band) neutral at 0.845281. Dense handling saturated in-band. Reverted; trying additive DegP075.
+- 2026-09-04: additive DegP075 (whole H2 gate) REGRESSES to 0.845379 (+1.16 bips); narrowed to new band only, same 0.845379 — Deg wins steer the subtree chain into worse basins. Direction closed. Reverted to H2.
+- 2026-09-04: relabelled-Sq lottery (2 SqDiv tickets on same-Q relabels, new band) neutral at 0.845281. Draws collapse to same minima. Reverted to H2; trying ND-leaf hybrid.
+- 2026-09-04: ND+NDFM leaf AMD hybrid pair totals 0.845234 (-0.56 bips vs H2), worst 0.846 s vs 0.813 s. Sub-threshold with wrong-way timing nudge. Reverted to H2; trying simplicial 6k-12k extension.
+- 2026-09-04: simplicial sparse-large extension (6k-12k, nnz<=30k, non-hub) neutral at 0.845281. No newly simplicial wins there. Reverted to H2.
+- 2026-09-04: STACK trial (H4+R5tier+NDleaf) measured 0.845172 (-1.29 bips vs H2), worst 0.833 s. SUBMITTED as 96b612df (7.2 KiB note). Awaiting hidden validation.
+- 2026-09-04: STACK submission 96b612df FAILED hidden validation: `order()` exceeded the 2.0 s cap on a hidden matrix (workflow 33871015118, 11m13s). Local worst was 0.833 s vs 0.813 s H2 — the +0.02 s nudge was the cause, as the note predicted. H2 restored exactly (verified 0.845281, 25 tests pass). STACKING CLOSED.
+- 2026-09-04: bootstrap probe built and run (B=2000, deterministic). Dev CI ±404 bips; drop-top-1 +103 bips. Documented as 0057; breadth/drop-top rules adopted. No production change.
+- 2026-09-04: tail-gate headroom trial (skip R5 setup+search iff n>=100k AND still tied at AMD): dev EXACTLY 0.845281 (R5 never wins there), worst 0.813 s unchanged — this box's slowest matrix is not ultra-large. Proven zero-cost enabler for future bundles; reverted to exact H2.
+- 2026-09-04: timing-fixed bundle (H4 + NDleaf + narrowed R5 1k-4k + tie-conditional tail-gate) measured 0.845184 (-1.15 bips vs H2), worst 0.857 s. SUBMITTED as 6b186e65 (5.5 KiB note, discloses stack-timeout lesson). Awaiting hidden validation.
+- 2026-09-04: bundle2 submission 6b186e65 FAILED hidden timing (workflow 33873624442, 7m31s — died FASTER than the stack's 11m). R5 deepening doubly convicted, narrowed band included. ALL R5 DEEPENING CLOSED. H2 restored exactly (verified 0.845281, 25 tests pass).
+- 2026-09-04: no-ceiling bundle (H4 + 16x32M swap + tail-gate + ND leaves) measured 0.845184 (-1.15 bips vs H2), worst 0.829 s. SUBMITTED as 273fff1e (6.7 KiB note). Awaiting hidden validation.
+- 2026-09-04: bundle3 submission 273fff1 REJECTED at hidden 0.871015 (-0.17 bips vs H2; dev was -1.15). Timing fix WORKED (it scored), but the gain evaporated: 0.15x translation. Stacked weak positives do not transfer — dev additivity != hidden additivity. H2 restored exactly (verified 0.845281). NOTHING submittable left in inventory.
+- 2026-09-04: bundle4 (3rd small stream + H4 + NDleaf + tailgate) dev -1.40 bips BUT drop-top-1 keeps only -0.77, drop-top-3 -0.12, drop-top-5 -0.01 (6 matrices move; waterund11 carries half). 0057 rule FAIL → NOT submitted. Worktree already H2 (dumps compared bundle file vs live H2).
+- 2026-09-04: mover-targeted 50M stream (1k-5k/d3-10, fresh seed) dev -0.84 bips, worst +0.017 s — BUT per-matrix A/B: 3 improve (chimera_mgw, blend718, k64ising), 1 steering-regress (nuclear25a x1.0015); drop-top-1 -0.32, drop-top-3 +0.03. 0057 rule FAIL → reverted to H2, not submitted.

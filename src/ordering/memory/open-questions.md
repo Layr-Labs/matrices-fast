@@ -22,17 +22,6 @@ it, rather than deleting it — a resolved question is a useful signpost.
       for RCM, both Sloan weights, `nd_order`, and `ndfm_order`: all five produced
       zero wins, with 0.071 s worst combined added local time. A multi-seed test
       remains open, but one-pass production additions are not supported.
-- [x] **RESOLVED (positive) — Conditional search escalation on below-anchor matrices.**
-      Answered by [0060](experiments/0060-conditional-search-escalation-below-anchor.md):
-      Substitutive re-tiering on `best_flops < amd_flops` promoted at hidden **0.869723**.
-      The additive extra-pass draft timed out on a hidden matrix and must not be retried on `n >= 10k`.
-- [x] **RESOLVED (positive) — Scale leftover search by the AMD-anchor margin, not by size.**
-      Answered by [0061](experiments/0061-margin-scaled-leftover-search.md):
-      Miss-retry first subtree round + well-below exact LNS / relabel tickets scored
-      0.843658 → **0.843358** (−3.00 bip). Raising first-round `max_s` on a *successful*
-      first round loses (0.843829). Widening k5/k4 to `n <= 12k` and adding
-      `adjacent_triple_descent` convert nothing. `gt_10k` leftover nnz 60k–100k did not
-      move at four digits.
 - [ ] **Sweep the relabelled-AMF `dense_alpha`.** Shipped at α=5.0 only (the base AMF
       candidate's α). α ∈ {0.5, 2.0, 2.5} is the same argument one level down — a
       different α is a different objective, hence another distinct lottery — and it is

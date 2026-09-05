@@ -1801,6 +1801,12 @@ fn minfill_order(pattern: &Pattern) -> Vec<i32> {
     let mut eliminated: Vec<bool> = vec![false; n];
     let mut order: Vec<usize> = Vec::with_capacity(n);
 
+    // Cached deficiency per vertex; `-1` means "dirty, must be recomputed".
+    // Invalidated only on the 2-hop neighbourhood of each eliminated vertex,
+    // which is exactly the set whose deficiency can change (see the doc above),
+    // so the selection sequence is identical to a full rescan.
+    let mut def_cache: Vec<i64> = vec![-1; n];
+
     // Hard pair-check budget: caps total deficiency-scan work so the running
     // time is bounded regardless of input structure.
     let mut budget: i64 = 40_000_000;
@@ -1822,19 +1828,25 @@ fn minfill_order(pattern: &Pattern) -> Vec<i32> {
             if eliminated[v] {
                 continue;
             }
-            let nb = &adj[v];
-            let deg = nb.len();
-            let mut def: i64 = 0;
-            for a in 0..deg {
-                let base = nb[a] * n;
-                for b in (a + 1)..deg {
-                    if !adjm[base + nb[b]] {
-                        def += 1;
+            let deg = adj[v].len();
+            if def_cache[v] < 0 {
+                let nb = &adj[v];
+                let mut def: i64 = 0;
+                for a in 0..deg {
+                    let base = nb[a] * n;
+                    for b in (a + 1)..deg {
+                        if !adjm[base + nb[b]] {
+                            def += 1;
+                        }
                     }
                 }
+                // Charge the inner pair work against the budget.
+                budget -= (deg as i64 * deg as i64) / 2;
+                def_cache[v] = def;
             }
-            // Charge the inner pair work against the budget.
-            budget -= (deg as i64 * deg as i64) / 2 + 1;
+            // Charge the scan itself, cached or not.
+            budget -= 1;
+            let def = def_cache[v];
             if def < best_def || (def == best_def && deg < best_deg) {
                 best_def = def;
                 best_deg = deg;
@@ -1871,15 +1883,69 @@ fn minfill_order(pattern: &Pattern) -> Vec<i32> {
                 adj[x].swap_remove(pos);
             }
         }
+
+        // Invalidate exactly the 2-hop neighbourhood of `best` — the only
+        // vertices whose deficiency can have moved. `adj[x]` is already the
+        // post-fill list here, so this is a superset of the pre-fill 2-hop set
+        // and therefore conservative. The sweep is charged against the budget so
+        // the hard bound still covers all the work this function does.
+        def_cache[best] = -1;
+        for &x in &nbrs {
+            def_cache[x] = -1;
+            budget -= adj[x].len() as i64;
+            for &y in &adj[x] {
+                def_cache[y] = -1;
+            }
+        }
     }
 
     if fell_back {
-        // Budget exhausted: append remaining live vertices in ascending
-        // current-degree order (ties by index) → still a valid bijection.
-        let mut rest: Vec<usize> = (0..n).filter(|&v| !eliminated[v]).collect();
-        rest.sort_by(|&a, &b| adj[a].len().cmp(&adj[b].len()).then_with(|| a.cmp(&b)));
-        for v in rest {
-            order.push(v);
+        // Budget exhausted: the leftover live vertices are an induced
+        // subgraph. The promoted tip already replaced ND/NDFM degree-sort
+        // leaves with AMD on that subgraph; do the same here instead of
+        // appending by current degree. Degree-sort remains the fallback.
+        let rest: Vec<usize> = (0..n).filter(|&v| !eliminated[v]).collect();
+        let sz = rest.len();
+        let mut filled = false;
+        if (2..=80_000).contains(&sz) {
+            let mut local = vec![usize::MAX; n];
+            for (i, &u) in rest.iter().enumerate() {
+                local[u] = i;
+            }
+            let mut col_ptr: Vec<i32> = Vec::with_capacity(sz + 1);
+            let mut row_idx: Vec<i32> = Vec::new();
+            col_ptr.push(0);
+            for &u in &rest {
+                let start = row_idx.len();
+                for &w in &adj[u] {
+                    if eliminated[w] {
+                        continue;
+                    }
+                    let lw = local[w];
+                    if lw != usize::MAX && lw != local[u] {
+                        row_idx.push(lw as i32);
+                    }
+                }
+                row_idx[start..].sort_unstable();
+                col_ptr.push(row_idx.len() as i32);
+            }
+            if let Some(csub) = feral_ordering_core::CscPattern::new(sz, &col_ptr, &row_idx) {
+                if let Ok(sub) = feral_amd::amd_order(&csub) {
+                    if sub.len() == sz {
+                        for &li in &sub {
+                            order.push(rest[li as usize]);
+                        }
+                        filled = true;
+                    }
+                }
+            }
+        }
+        if !filled {
+            let mut rest = rest;
+            rest.sort_by(|&a, &b| adj[a].len().cmp(&adj[b].len()).then_with(|| a.cmp(&b)));
+            for v in rest {
+                order.push(v);
+            }
         }
     }
 
@@ -3246,4 +3312,135 @@ mod tests {
             assert!(requested_budget <= TERMINAL_SUBTREE_SEARCH_WORK_LIMIT);
         }
     }
+}
+
+#[cfg(test)]
+mod recovered_minfill_tests {
+use super::*;
+fn minfill_reference_order(pattern: &Pattern) -> Vec<i32> {
+    let n = pattern.n;
+
+    // Symmetric adjacency lists + O(1) membership matrix (self-loops excluded,
+    // duplicates suppressed via the membership check).
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut adjm: Vec<bool> = vec![false; n * n];
+    for j in 0..n {
+        let start = pattern.col_ptr[j];
+        let end = pattern.col_ptr[j + 1];
+        for &i in &pattern.row_idx[start..end] {
+            if i != j && i < n && !adjm[j * n + i] {
+                adjm[j * n + i] = true;
+                adjm[i * n + j] = true;
+                adj[j].push(i);
+                adj[i].push(j);
+            }
+        }
+    }
+
+    let mut eliminated: Vec<bool> = vec![false; n];
+    let mut order: Vec<usize> = Vec::with_capacity(n);
+
+    // Hard pair-check budget: caps total deficiency-scan work so the running
+    // time is bounded regardless of input structure.
+    let mut budget: i64 = 40_000_000;
+    let mut fell_back = false;
+
+    for _ in 0..n {
+        if budget < 0 {
+            fell_back = true;
+            break;
+        }
+
+        // Find the live vertex of minimum deficiency (ties → min degree → min
+        // index). Scanning `0..n` ascending with strict-improvement replacement
+        // keeps the lowest-index winner → deterministic.
+        let mut best = usize::MAX;
+        let mut best_def = i64::MAX;
+        let mut best_deg = usize::MAX;
+        for v in 0..n {
+            if eliminated[v] {
+                continue;
+            }
+            let nb = &adj[v];
+            let deg = nb.len();
+            let mut def: i64 = 0;
+            for a in 0..deg {
+                let base = nb[a] * n;
+                for b in (a + 1)..deg {
+                    if !adjm[base + nb[b]] {
+                        def += 1;
+                    }
+                }
+            }
+            // Charge the inner pair work against the budget.
+            budget -= (deg as i64 * deg as i64) / 2 + 1;
+            if def < best_def || (def == best_def && deg < best_deg) {
+                best_def = def;
+                best_deg = deg;
+                best = v;
+            }
+        }
+
+        if best == usize::MAX {
+            break; // no live vertices left
+        }
+
+        // Eliminate `best`: clique its neighborhood (insert new fill edges),
+        // then unlink it from every neighbor.
+        order.push(best);
+        eliminated[best] = true;
+        let nbrs = std::mem::take(&mut adj[best]);
+
+        for a in 0..nbrs.len() {
+            let x = nbrs[a];
+            for b in (a + 1)..nbrs.len() {
+                let y = nbrs[b];
+                if !adjm[x * n + y] {
+                    adjm[x * n + y] = true;
+                    adjm[y * n + x] = true;
+                    adj[x].push(y);
+                    adj[y].push(x);
+                }
+            }
+        }
+        for &x in &nbrs {
+            adjm[x * n + best] = false;
+            adjm[best * n + x] = false;
+            if let Some(pos) = adj[x].iter().position(|&z| z == best) {
+                adj[x].swap_remove(pos);
+            }
+        }
+    }
+
+    if fell_back {
+        // Budget exhausted: append remaining live vertices in ascending
+        // current-degree order (ties by index) → still a valid bijection.
+        let mut rest: Vec<usize> = (0..n).filter(|&v| !eliminated[v]).collect();
+        rest.sort_by(|&a, &b| adj[a].len().cmp(&adj[b].len()).then_with(|| a.cmp(&b)));
+        for v in rest {
+            order.push(v);
+        }
+    }
+
+    order.into_iter().map(|x| x as i32).collect()
+}
+#[test]
+fn cached_minfill_matches_rescan_before_budget_exhaustion() {
+    let mut state = 7919u64;
+    for n in [0, 1, 2, 7, 16, 32, 64] {
+        for threshold in [0, 2, 8, 24, 64] {
+            for _ in 0..4 {
+                let mut edges = Vec::new();
+                for u in 0..n {
+                    for v in u+1..n {
+                        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                        if state % 64 < threshold { edges.push((u,v)); }
+                    }
+                }
+                let pattern = Pattern::from_edges(n, &edges);
+                assert_eq!(minfill_order(&pattern), minfill_reference_order(&pattern), "n={n}, threshold={threshold}");
+            }
+        }
+    }
+}
 }

@@ -3,16 +3,7 @@
 The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
 
-## Verified 2026-09-05 checkpoint
-
-- Preceding four-pivot/atomic winner: dev **0.84419540581772**, hidden **0.870307**, officially promoted as `da03dc2c` / source `649c230`.
-- New component-factored five-pivot cleanup with cache and boundary repairs: dev **0.8440714862418132**, fill **0.943946**; all **300 trusted cases and 44 active tests pass**. Exact counts agree with the isolated probe. **42 better / 2 worse / 256 unchanged** versus the preceding winner; both corpus halves and drop-five sensitivity improve. Official follow-up result pending submission/validation.
-- [0059: component five-pivot cleanup](experiments/0059-component-five-pivot-cleanup.md) records the exact formula, native implementation, work ledger, negative controls and source audits.
-- [0057: exact four-pivot cleanup](experiments/0057-exact-four-pivot-cleanup.md) preserves the prior winner. [0056: exact triple cleanup](experiments/0056-exact-triple-cleanup.md) preserves its predecessor and the subsequent hidden timeout.
-- Logical work caps do not prove total wall time. Observed isolated k5 worst **0.970 s**, preceding winner **0.987 s**; timing varies with machine load.
-- Development and hidden scores measure different corpora. Older current-best entries below are historical and may lag their source.
-
-## Historical current-best entries
+## Current best
 - Best shippable locally verified candidate score: **0.849251** (fill
   **0.947647**) on all 300 dev matrices, 2026-09-03. On top of promoted
   submission `26932eb`, cap the first two medium-tier subtree rounds at
@@ -193,7 +184,13 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0053](experiments/0053-selective-lower-medium-round4-depth.md) — Reclaim the
   score-positive part of 0052 by using 64M only for `1,000 <= n < 6,000` and
   retaining hidden-proven 32M elsewhere. Dev **0.845469**, fill **0.944729**;
-  1k-10k worst observed call **0.661 s**. Submitted for hidden validation.
+  1k-10k worst observed call **0.661 s**. **PROMOTED TO #1** as `e46c5349` /
+  `77153ff`, hidden **0.871239**, fill **0.955407**.
+- [0054](experiments/0054-tiered-medium-round4-depth.md) — On the accepted
+  0053 source, use 128M below 6k and 64M from 6k to 10k while preserving 32M
+  outside the medium bucket. Dev **0.845355**, fill **0.944744**, worst medium
+  call **0.814 s**. Submission `bf35c66a` **FAILED hidden timing**; raw depth
+  beyond 0053 is closed.
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.

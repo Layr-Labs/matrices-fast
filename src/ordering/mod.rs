@@ -1718,15 +1718,22 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if pair_descent_gate {
+        // Bound terminal cleanup separately from the earlier pair passes.
+        let terminal_ops_budget = pair_descent_ops_budget / 2;
         for _ in 0..2 {
             let mut round_improved = false;
             if n >= 5 {
-                if let Some(cand) = rgreedy::adjacent_five_descent(
+                let window_descent = if n >= 6 {
+                    rgreedy::adjacent_six_descent
+                } else {
+                    rgreedy::adjacent_five_descent
+                };
+                if let Some(cand) = window_descent(
                     n,
                     &pattern.col_ptr,
                     &pattern.row_idx,
                     &best_perm,
-                    pair_descent_ops_budget,
+                    terminal_ops_budget,
                 ) {
                     let f = flops_of(&scoring_pat, &cand);
                     if f < best_flops {
@@ -1741,7 +1748,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 &pattern.col_ptr,
                 &pattern.row_idx,
                 &best_perm,
-                pair_descent_ops_budget,
+                terminal_ops_budget,
             ) {
                 let f = flops_of(&scoring_pat, &cand);
                 if f < best_flops {

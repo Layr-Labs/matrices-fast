@@ -7,6 +7,53 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Active
 
+- [x] **RESOLVED (partly negative) — Should search budget be scaled by the AMD
+      anchor margin `best_flops / amd_flops`?** Answered by
+      [0060](experiments/0060-ledger-gated-terminal-escalation.md): margin
+      *describes* where gain lives (conversion 41.7% below margin 0.50 versus
+      4.8% at ties; mean gain among movers 6.5e-3 versus 1.0e-3 in the middle
+      bands) but is the **wrong variable to gate on**, because the binding
+      constraint is time and margin does not predict time. The three matrices
+      that break the cap first are all deep below the anchor, so margin-scaled
+      escalation spends most exactly where it can least afford to. Every
+      margin-keyed depth policy tested scored strictly worse than a uniform
+      depth under the same cost gate. **The variable that works is a requested-
+      work ledger.**
+- [x] **RESOLVED (negative) — Can `(n, nnz)` gate an expensive terminal stage?**
+      No. 216 `(n, nnz)`-keyed gates crossed with margin-scaled depths produced
+      zero configurations under the timing bar
+      ([0060](experiments/0060-ledger-gated-terminal-escalation.md)). The chain
+      rounds are conditional on one another, so size does not predict pipeline
+      cost: `crudeoil_lee1_07` (n=3670) costs 1.14 s while `batchs121208m` costs
+      a fifth of that. Use `work_spent` instead — it is a pure function of the
+      pattern and its upper envelope is clean (every matrix below 2.0e9 finishes
+      in ≤ 0.713 s).
+- [x] **RESOLVED (against the received wisdom) — Are matrices tied at 1.0000
+      dead?** Not entirely. The prior note's claim that no search converts them
+      is correct for the elimination-game LNS and **wrong for subtree
+      refinement**: 3 of 83 eligible ties move, and because all three are
+      `gt_10k` they are worth ~5.3 bip
+      ([0060](experiments/0060-ledger-gated-terminal-escalation.md);
+      `gasprod_sarawak81` 5.53%, `popdynm200` 3.32%). Only 3.6% convert, so ties
+      remain a bad *target* — but excluding them from a monotone pass costs
+      3.0–4.3 bip. Do not aim at ties; do not exclude them either.
+- [x] **RESOLVED (negative) — Buy extra search trajectories with `streams`?** No.
+      Setup is not the cost (median 0.0003 s, max 0.052 s); the search is, so
+      streams cost linearly. At ~4× cost, 4 streams return 2.14× the log-gain of
+      1 stream while 4 *rounds* return 3.07×, because re-postordering gives a new
+      block decomposition and extra streams only re-roll the same one
+      ([0060](experiments/0060-ledger-gated-terminal-escalation.md)).
+- [ ] **Give the ledger-excluded matrices a SMALLER escalation.** The 75 matrices
+      above the 2.0e9 ceiling hold roughly half the remaining time-feasible gain
+      (the oracle bound is −19.11 bip; 0060 ships −7.47). The way in is not a
+      higher ceiling — that admits the 1.38 s matrices — but a cheaper round for
+      them, e.g. 8M × 8 blocks instead of 32M × 32. The ledger already identifies
+      exactly which matrices those are.
+- [ ] **Make the ledger count work ISSUED, not requested.** `subtree_refine`
+      knows how many word-ops it actually consumed. Returning that would turn the
+      ledger from a safe upper envelope into a cost estimator
+      (`corr(log10 ledger, secs)` is only 0.399 today) and would let the ceiling
+      sit much closer to the cap.
 - [ ] **Relabel the OTHER numbering-sensitive routines (top lead).**
       [0005](experiments/0005-relabelled-amf-multistart.md) established the general
       form: *any* ordering routine whose output depends on the input vertex numbering
@@ -59,6 +106,16 @@ it, rather than deleting it — a resolved question is a useful signpost.
       one significant figure. Nothing in the harness output exposes grader
       timing. Until it does, the only defensible rule is comparative — stay at or
       below the worst case of a revision known to have passed.
+- [~] **PARTLY ANSWERED — How much of the remaining headroom is even measurable
+      on 300 matrices?** [0060](experiments/0060-ledger-gated-terminal-escalation.md)
+      ran the bootstrap this question asks for (2000 resamples with replacement,
+      re-aggregated) on a −7.47 bip change: mean −9.76 bip, 95% interval
+      **[−20.92, −2.10]**. So a 7 bip dev win is worth "somewhere between 2 and
+      20 bip" on a fresh corpus — the point estimate is nearly meaningless and
+      only the sign is safe, and only because the mechanism is monotone. Still
+      open: fold the bootstrap into a probe rather than a one-off script over
+      `probe_timing_and_score` output, and re-run it over the past promotions to
+      see which were real.
 - [ ] **How much of the remaining headroom is even measurable on 300 matrices?**
       [0004](experiments/0004-structured-relabelings.md) showed that one `gt_10k`
       matrix is worth ≈0.002 of score, so any change smaller than that is

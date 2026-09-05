@@ -1848,3 +1848,238 @@ fn probe_uniform_rounds_synthetic() {
         println!("SYNTHETIC\t{name}\t{}\t{}\t{base}\t{mine}", pat.n, pat.nnz());
     }
 }
+
+/// The escalation CASCADE curve: how much does a chain of extra subtree passes
+/// keep converting, and what does each one cost?
+///
+/// Emits one row per matrix with the AMD anchor, the shipped incumbent, and then
+/// the running (flops, seconds) after each additional pass. Aggregation — score
+/// per cascade depth, and score under any margin gate — is done offline from
+/// these rows, so one run answers the whole family of gating questions.
+#[test]
+#[ignore]
+fn probe_margin_cascade() {
+    let corpus = crate::corpus::corpus();
+    let depth: usize = std::env::var("PROBE_CASCADE_DEPTH")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(6);
+
+    // (max_s, max_blocks, budget) per cascade step. Cycled if depth exceeds it.
+    let steps: [(usize, usize, i64); 6] = [
+        (768, 32, 32_000_000),
+        (768, 32, 32_000_000),
+        (1_200, 16, 32_000_000),
+        (384, 32, 32_000_000),
+        (768, 32, 32_000_000),
+        (1_200, 16, 32_000_000),
+    ];
+
+    println!("CASCADE_HEADER\tname\tbucket\tn\tnnz\tamd\tinc\tinc_s\t[f_k\tt_k]*{depth}");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+
+        let t_order = Instant::now();
+        let mut best: Vec<usize> = order(pat);
+        let inc_secs = t_order.elapsed().as_secs_f64();
+        let inc_flops = flops_of(&sp, &best);
+        let mut cur_flops = inc_flops;
+
+        let mut row = format!(
+            "CASCADE\t{name}\t{}\t{n}\t{nnz}\t{amd_flops}\t{inc_flops}\t{inc_secs:.4}",
+            BUCKET_NAMES[bucket(n)]
+        );
+        let eligible = (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n) && nnz <= 1_500_000;
+        for k in 0..depth {
+            let t0 = Instant::now();
+            if eligible {
+                let (maxs, blocks, budget) = steps[k % steps.len()];
+                let permuted = permute_pattern(&sp, &best);
+                let etree = EliminationTree::from_pattern(&permuted);
+                let post = etree.postorder();
+                let mut cand: Vec<usize> = post.iter().map(|&j| best[j]).collect();
+                let post_pattern = permute_pattern(&sp, &cand);
+                let post_etree = EliminationTree::from_pattern(&post_pattern);
+                let ccounts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+                    .into_iter()
+                    .map(|c| c as u32)
+                    .collect();
+                let parent: Vec<i32> = post_etree
+                    .parent
+                    .iter()
+                    .map(|p| p.map_or(-1, |j| j as i32))
+                    .collect();
+                let mut cfg = SUBTREE_CFG;
+                cfg.round = 10 + k;
+                cfg.min_s = 16;
+                cfg.max_s = maxs;
+                cfg.max_blocks = blocks;
+                cfg.budget = budget;
+                let improved = rgreedy::subtree_refine(
+                    n,
+                    &pat.col_ptr,
+                    &pat.row_idx,
+                    &mut cand,
+                    &ccounts,
+                    &parent,
+                    cfg,
+                );
+                if improved > 0 && is_bijection(&cand, n) {
+                    let f = flops_of(&sp, &cand);
+                    if f < cur_flops {
+                        cur_flops = f;
+                        best = cand;
+                    }
+                }
+            }
+            row.push_str(&format!("\t{cur_flops}\t{:.4}", t0.elapsed().as_secs_f64()));
+        }
+        println!("{row}");
+    }
+}
+
+/// Split one escalated pass into its SETUP cost (permute + etree + column
+/// counts + rescore, all O(nnz)) and its SEARCH cost, and measure what extra
+/// streams per block buy. Streams reuse a single setup, so if setup dominates
+/// they are a strictly cheaper axis than another cascade round.
+#[test]
+#[ignore]
+fn probe_stream_axis() {
+    let corpus = crate::corpus::corpus();
+    println!("STREAMS\tname\tbucket\tn\tnnz\tamd\tinc\tinc_s\tsetup_s\t[gain_k\tsearch_s]*4");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let t_order = Instant::now();
+        let inc = order(pat);
+        let inc_secs = t_order.elapsed().as_secs_f64();
+        let inc_flops = flops_of(&sp, &inc);
+
+        if !((SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n) && nnz <= 1_500_000) {
+            continue;
+        }
+        // ── setup, timed once ────────────────────────────────────────────────
+        let t_setup = Instant::now();
+        let permuted = permute_pattern(&sp, &inc);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let base_cand: Vec<usize> = post.iter().map(|&j| inc[j]).collect();
+        let post_pattern = permute_pattern(&sp, &base_cand);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let ccounts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let setup_secs = t_setup.elapsed().as_secs_f64();
+
+        let mut row = format!(
+            "STREAMS\t{name}\t{}\t{n}\t{nnz}\t{amd_flops}\t{inc_flops}\t{inc_secs:.4}\t{setup_secs:.4}",
+            BUCKET_NAMES[bucket(n)]
+        );
+        for streams in [1usize, 2, 3, 4] {
+            let mut cand = base_cand.clone();
+            let mut cfg = SUBTREE_CFG;
+            cfg.round = 10;
+            cfg.min_s = 16;
+            cfg.max_s = 768;
+            cfg.max_blocks = 32;
+            cfg.budget = 32_000_000;
+            cfg.streams = streams;
+            let t0 = Instant::now();
+            let improved = rgreedy::subtree_refine(
+                n,
+                &pat.col_ptr,
+                &pat.row_idx,
+                &mut cand,
+                &ccounts,
+                &parent,
+                cfg,
+            );
+            let search_secs = t0.elapsed().as_secs_f64();
+            let mut f_out = inc_flops;
+            if improved > 0 && is_bijection(&cand, n) {
+                let f = flops_of(&sp, &cand);
+                if f < f_out {
+                    f_out = f;
+                }
+            }
+            row.push_str(&format!("\t{f_out}\t{search_secs:.4}"));
+        }
+        println!("{row}");
+    }
+}
+
+/// Does the requested-work ledger predict `order()` wall-clock cost?
+///
+/// `(n, nnz)` demonstrably does not: the chain rounds are conditional on one
+/// another, so two same-sized matrices can differ by 10x. The ledger counts what
+/// the exact-search stages ASKED for, which is a pure function of the pattern.
+/// This prints both so the correlation can be checked before anything is gated
+/// on it.
+#[test]
+#[ignore]
+fn probe_work_ledger() {
+    let corpus = crate::corpus::corpus();
+    println!("LEDGER\tname\tbucket\tn\tnnz\tmargin\tledger\tsecs");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd_flops = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let t0 = Instant::now();
+        let perm = order(pat);
+        let secs = t0.elapsed().as_secs_f64();
+        let ledger = LAST_WORK_SPENT.with(|c| c.get());
+        let margin = flops_of(&sp, &perm) as f64 / amd_flops as f64;
+        println!(
+            "LEDGER\t{name}\t{}\t{n}\t{}\t{margin:.4}\t{ledger}\t{secs:.4}",
+            BUCKET_NAMES[bucket(n)],
+            pat.nnz()
+        );
+    }
+}

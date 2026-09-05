@@ -1718,6 +1718,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if pair_descent_gate {
+        // Bound terminal cleanup separately from the earlier pair passes.
+        let terminal_ops_budget = pair_descent_ops_budget / 2;
         for _ in 0..2 {
             let mut round_improved = false;
             if n >= 5 {
@@ -1726,7 +1728,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     &pattern.col_ptr,
                     &pattern.row_idx,
                     &best_perm,
-                    pair_descent_ops_budget,
+                    terminal_ops_budget,
                 ) {
                     let f = flops_of(&scoring_pat, &cand);
                     if f < best_flops {
@@ -1741,7 +1743,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 &pattern.col_ptr,
                 &pattern.row_idx,
                 &best_perm,
-                pair_descent_ops_budget,
+                terminal_ops_budget,
             ) {
                 let f = flops_of(&scoring_pat, &cand);
                 if f < best_flops {

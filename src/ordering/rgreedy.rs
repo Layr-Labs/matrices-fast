@@ -1905,10 +1905,10 @@ impl FiveWindow {
     }
 }
 
-/// One complete five-offset, stride-five terminal cycle under the inherited
-/// single cleanup allowance. Finished strict gains and untouched suffixes
-/// survive either metadata/scan refusal or replay exhaustion. Windows shorter
-/// than five, including n=4 previously handled by the four-pivot pass, do nothing.
+/// One left-to-right sliding five-pivot sweep under a single cleanup allowance.
+/// Finalize one pivot after each window, retaining the live elimination state
+/// for the next overlapping window. Finished gains survive budget exhaustion.
+/// Windows shorter than five do nothing.
 pub(crate) fn adjacent_five_descent(
     n: usize,
     col_ptr: &[usize],
@@ -1962,38 +1962,24 @@ pub(crate) fn adjacent_five_descent(
         .saturating_mul(n)
         .saturating_mul(words)
         .saturating_add(8usize.saturating_mul(n));
-    for offset in 0..5 {
-        if offset + 5 > n {
-            break;
-        }
-        if !work.charge(reset) {
+    if !work.charge(reset) {
+        return None;
+    }
+    game.reset();
+    for k in 0..n - 4 {
+        let window = [cur[k], cur[k + 1], cur[k + 2], cur[k + 3], cur[k + 4]];
+        let Some(kernel) = FiveWindow::new(&game, window, &mut work) else {
             return changed.then_some(cur);
+        };
+        let (order, best, incumbent) = kernel.solve();
+        if best < incumbent {
+            cur[k..k + 5].copy_from_slice(&order.map(|i| window[i]));
+            changed = true;
         }
-        game.reset();
-        for &v in cur.iter().take(offset) {
-            if !work.eliminate(&mut game, v) {
-                return changed.then_some(cur);
-            }
-        }
-        let mut k = offset;
-        while k + 4 < n {
-            let window = [cur[k], cur[k + 1], cur[k + 2], cur[k + 3], cur[k + 4]];
-            let Some(kernel) = FiveWindow::new(&game, window, &mut work) else {
-                return changed.then_some(cur);
-            };
-            let (order, best, incumbent) = kernel.solve();
-            if best < incumbent {
-                cur[k..k + 5].copy_from_slice(&order.map(|i| window[i]));
-                changed = true;
-            }
-            k += 5;
-            if k + 4 < n {
-                for &v in &cur[k - 5..k] {
-                    if !work.eliminate(&mut game, v) {
-                        return changed.then_some(cur);
-                    }
-                }
-            }
+        // Later windows never touch this pivot. Replay its accepted identity,
+        // not the seed identity, before inspecting the next live window.
+        if k + 5 < n && !work.eliminate(&mut game, cur[k]) {
+            return changed.then_some(cur);
         }
     }
     changed.then_some(cur)
@@ -3516,6 +3502,21 @@ mod five_window_tests {
             adjacent_five_descent(4, &small.col_ptr, &small.row_idx, &[0, 1, 2, 3], i64::MAX)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn sliding_five_window_carries_hub_across_overlapping_windows() {
+        for n in 5..=12 {
+            let edges: Vec<_> = (1..n).map(|v| (0, v)).collect();
+            let pat = Pattern::from_edges(n, &edges);
+            let seed: Vec<_> = (0..n).collect();
+            let candidate = adjacent_five_descent(
+                n, &pat.col_ptr, &pat.row_idx, &seed, 1_000_000,
+            ).expect("star admits a strict leaf-first improvement");
+            assert!(is_bijection(&candidate, n));
+            assert!(candidate.iter().position(|&v| v == 0).unwrap() >= n - 2);
+            assert!(canonical(&pat, &candidate) < canonical(&pat, &seed));
+        }
     }
 
     #[test]

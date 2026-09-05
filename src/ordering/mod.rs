@@ -440,6 +440,29 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
     cfg
 }
 
+/// Skip subtree-chain round 5 on gt_10k once earlier rounds have already
+/// requested this much work. Medium matrices keep round 5 — a global skip
+/// regressed 23 dev matrices in 0063 ablation.
+const CHAIN_TAIL_SPENT_CEILING: i64 = 2_000_000_000;
+
+/// Below-anchor terminal escalation after pair descent. Two rounds only
+/// (0064's three-round combo failed hidden timing at 0061 scale).
+const ESCALATION_MAX_NNZ: usize = 50_000;
+const ESCALATION_ROUND_BASE: usize = 10;
+const ESCALATION_ROUNDS: [(usize, usize, i64); 2] = [
+    (384, 8, 8_000_000),
+    (768, 8, 8_000_000),
+];
+const ESCALATION_SMALL_ROUND: (usize, usize, i64) = (384, 8, 8_000_000);
+
+/// Requested word-ops for one [`rgreedy::subtree_refine`] call.
+#[inline]
+fn sub_cfg_work(cfg: &rgreedy::SubCfg) -> i64 {
+    cfg.budget
+        .saturating_mul(cfg.max_blocks as i64)
+        .saturating_mul(cfg.streams as i64)
+}
+
 fn terminal_deep_subtree_cfg(n: usize, nnz: usize, best_flops: u64, amd_flops: u64) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     cfg.min_s = 16;
@@ -597,6 +620,9 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     let mut best_perm: Vec<usize> = amd.into_iter().map(|x| x as usize).collect();
     let mut best_flops: u64 = flops_of(&scoring_pat, &best_perm);
     let amd_flops = best_flops;
+
+    // Requested-work ledger for exact search and subtree-chain rounds.
+    let mut work_spent: i64 = 0;
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
     let nnz = pattern.nnz();
@@ -1352,6 +1378,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             ]
         };
         for &(budget, rng_seed) in small_streams {
+            work_spent += budget;
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -1396,6 +1423,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             ]
         };
         for &(budget, seed) in budgets {
+            work_spent += budget;
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -1458,6 +1486,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
         let mut cfg1 = subtree_cfg_for(n, nnz);
+        work_spent += sub_cfg_work(&cfg1);
         let mut improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
@@ -1487,6 +1516,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             } else {
                 cfg1.max_s = 512;
             }
+            work_spent += sub_cfg_work(&cfg1);
             improved = rgreedy::subtree_refine(
                 n,
                 &pattern.col_ptr,
@@ -1533,6 +1563,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 if best_flops < amd_flops && (1_000..10_000).contains(&n) {
                     cfg2.max_s = 256;
                 }
+                work_spent += sub_cfg_work(&cfg2);
                 let improved2 = rgreedy::subtree_refine(
 
                     n,
@@ -1582,6 +1613,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         cfg3.min_s = 16;
                         cfg3.max_s = 512;
                         cfg3.budget = 8_000_000;
+                        work_spent += sub_cfg_work(&cfg3);
                         let improved3 = rgreedy::subtree_refine(
                             n,
                             &pattern.col_ptr,
@@ -1633,6 +1665,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 } else {
                                     32_000_000
                                 };
+                                work_spent += sub_cfg_work(&cfg4);
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,
@@ -1671,7 +1704,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                             .collect();
                                         let mut cfg5 = subtree_cfg_for(n, nnz);
                                         cfg5.round = 4;
-                                        if n < 100_000 || best_flops != amd_flops {
+                                        let skip_round5 =
+                                            work_spent >= CHAIN_TAIL_SPENT_CEILING && n >= 10_000;
+                                        if !skip_round5
+                                            && (n < 100_000 || best_flops != amd_flops)
+                                        {
                                             if (1_000..4_000).contains(&n) {
                                                 cfg5.max_blocks = 16;
                                                 cfg5.budget = 32_000_000;
@@ -1679,7 +1716,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                                 cfg5.max_blocks = 32;
                                                 cfg5.budget = 16_000_000;
                                             }
-                                            let improved5 = rgreedy::subtree_refine(
+                                            work_spent += sub_cfg_work(&cfg5);
+                                            let _improved5 = rgreedy::subtree_refine(
                                                 n,
                                                 &pattern.col_ptr,
                                                 &pattern.row_idx,
@@ -1688,7 +1726,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                                 &parent5,
                                                 cfg5,
                                             );
-                                            if improved5 > 0 && is_bijection(&candidate5, n) {
+                                            if is_bijection(&candidate5, n) {
                                                 let f = flops_of(&scoring_pat, &candidate5);
                                                 if f < best_flops {
                                                     best_flops = f;
@@ -1729,16 +1767,18 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             .iter()
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
-        let improved = rgreedy::subtree_refine(
+        let tcfg1 = terminal_deep_subtree_cfg(n, nnz, best_flops, amd_flops);
+        work_spent += sub_cfg_work(&tcfg1);
+        let _improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,
             &mut candidate,
             &counts,
             &parent,
-            terminal_deep_subtree_cfg(n, nnz, best_flops, amd_flops),
+            tcfg1,
         );
-        if improved > 0 && is_bijection(&candidate, n) {
+        if is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
             if f < incumbent_flops {
                 best_flops = f;
@@ -1772,7 +1812,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     cfg2.max_s = if n >= 10_000 { 512 } else { 384 };
                     cfg2.max_blocks = if best_flops < amd_flops { 4 } else { 2 };
                     cfg2.budget = 4_000_000;
-                    let improved2 = rgreedy::subtree_refine(
+                    work_spent += sub_cfg_work(&cfg2);
+                    let _improved2 = rgreedy::subtree_refine(
                         n,
                         &pattern.col_ptr,
                         &pattern.row_idx,
@@ -1781,7 +1822,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         &parent2,
                         cfg2,
                     );
-                    if improved2 > 0 && is_bijection(&candidate2, n) {
+                    if is_bijection(&candidate2, n) {
                         let f2 = flops_of(&scoring_pat, &candidate2);
                         if f2 < f {
                             best_flops = f2;
@@ -1813,7 +1854,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 cfg3.max_s = if n >= 10_000 { 512 } else { 384 };
                                 cfg3.max_blocks = if best_flops < amd_flops { 4 } else { 2 };
                                 cfg3.budget = 4_000_000;
-                                let improved3 = rgreedy::subtree_refine(
+                                work_spent += sub_cfg_work(&cfg3);
+                                let _improved3 = rgreedy::subtree_refine(
                                     n,
                                     &pattern.col_ptr,
                                     &pattern.row_idx,
@@ -1822,7 +1864,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     &parent3,
                                     cfg3,
                                 );
-                                if improved3 > 0 && is_bijection(&candidate3, n) {
+                                if is_bijection(&candidate3, n) {
                                     let f3 = flops_of(&scoring_pat, &candidate3);
                                     if f3 < f2 {
                                         best_flops = f3;
@@ -1862,7 +1904,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         extra.max_blocks = 4;
         extra.budget = 4_000_000;
         extra.round = 8;
-        let improved = rgreedy::subtree_refine(
+        work_spent += sub_cfg_work(&extra);
+        let _improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,
@@ -1871,7 +1914,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             &parent,
             extra,
         );
-        if improved > 0 && is_bijection(&candidate, n) {
+        if is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
             if f < best_flops {
                 best_flops = f;
@@ -1942,6 +1985,105 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+
+    // Below-anchor terminal escalation: two unconditional postordered rounds
+    // after all cleanup. Accept on flops only — `subtree_refine`'s improved
+    // counter can be zero even when the incumbent permutation improves.
+    if best_flops < amd_flops
+        && (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n)
+        && nnz <= ESCALATION_MAX_NNZ
+    {
+        for (k, &(max_s, max_blocks, budget)) in ESCALATION_ROUNDS.iter().enumerate() {
+            let permuted = permute_pattern(&scoring_pat, &best_perm);
+            let etree = EliminationTree::from_pattern(&permuted);
+            let post = etree.postorder();
+            let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+            let post_pattern = permute_pattern(&scoring_pat, &candidate);
+            let post_etree = EliminationTree::from_pattern(&post_pattern);
+            let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+                .into_iter()
+                .map(|c| c as u32)
+                .collect();
+            let parent: Vec<i32> = post_etree
+                .parent
+                .iter()
+                .map(|p| p.map_or(-1, |j| j as i32))
+                .collect();
+
+            let mut cfg = SUBTREE_CFG;
+            cfg.round = ESCALATION_ROUND_BASE + k;
+            cfg.min_s = 8;
+            cfg.max_s = max_s;
+            cfg.max_blocks = max_blocks;
+            cfg.budget = budget;
+            work_spent += sub_cfg_work(&cfg);
+
+            let _improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate,
+                &counts,
+                &parent,
+                cfg,
+            );
+            if is_bijection(&candidate, n) {
+                let f = flops_of(&scoring_pat, &candidate);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = candidate;
+                }
+            }
+        }
+
+        if n < 10_000 && nnz <= 30_000 {
+            let (max_s, max_blocks, budget) = ESCALATION_SMALL_ROUND;
+            let permuted = permute_pattern(&scoring_pat, &best_perm);
+            let etree = EliminationTree::from_pattern(&permuted);
+            let post = etree.postorder();
+            let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+            let post_pattern = permute_pattern(&scoring_pat, &candidate);
+            let post_etree = EliminationTree::from_pattern(&post_pattern);
+            let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+                .into_iter()
+                .map(|c| c as u32)
+                .collect();
+            let parent: Vec<i32> = post_etree
+                .parent
+                .iter()
+                .map(|p| p.map_or(-1, |j| j as i32))
+                .collect();
+
+            let mut cfg = SUBTREE_CFG;
+            cfg.round = ESCALATION_ROUND_BASE + ESCALATION_ROUNDS.len();
+            cfg.min_s = 8;
+            cfg.max_s = max_s;
+            cfg.max_blocks = max_blocks;
+            cfg.budget = budget;
+            work_spent += sub_cfg_work(&cfg);
+
+            let _improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate,
+                &counts,
+                &parent,
+                cfg,
+            );
+            if is_bijection(&candidate, n) {
+                let f = flops_of(&scoring_pat, &candidate);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = candidate;
+                }
+            }
+        }
+    }
+
+    let _ = work_spent;
 
     best_perm
 }

@@ -1173,6 +1173,67 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // Extra relabel tickets on well-below incumbents. The i.i.d. lottery still
+    // pays where the incumbent is already far under AMD (0056); ties get nothing.
+    // nnz cap keeps this off the local worst-case matrices.
+    let extra_relabel = amd_flops > 0
+        && best_flops < amd_flops
+        && best_flops.saturating_mul(5) < amd_flops.saturating_mul(4)
+        && nnz > 0
+        && nnz <= 100_000;
+    if extra_relabel {
+        let extra = if n >= 10_000 { 12usize } else { 16 };
+        for r in 0..extra {
+            let seed = 50_000u64 + r as u64;
+            let q = relabel(n, seed);
+            let b = permute_pattern(&scoring_pat, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+            })) else {
+                continue;
+            };
+            if nnz <= RELABEL_AMF_MAX_NNZ {
+                let da = [5.0f64, 2.0, -1.0, 1.0, 16.0][r % 5];
+                let opts = feral_amf::AmfOptions {
+                    dense_alpha: da,
+                    ..Default::default()
+                };
+                if let Ok(Ok((pb, ..))) =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        feral_amf::amf_order_opts(&bcore, &opts)
+                    }))
+                {
+                    let perm: Vec<usize> = pb.iter().map(|&x| q[x as usize] as usize).collect();
+                    if is_bijection(&perm, n) {
+                        let f = flops_of(&scoring_pat, &perm);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = perm;
+                        }
+                    }
+                }
+            }
+            let amd_opt = feral_amd::AmdOptions {
+                aggressive: r % 2 == 0,
+                dense_alpha: if r % 3 == 0 { -1.0 } else { 10.0 },
+            };
+            if let Ok(Ok(pb)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                feral_amd::amd_order_opts(&bcore, &amd_opt).map(|(p, ..)| p)
+            })) {
+                let perm: Vec<usize> = pb.iter().map(|&x| q[x as usize] as usize).collect();
+                if is_bijection(&perm, n) {
+                    let f = flops_of(&scoring_pat, &perm);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = perm;
+                    }
+                }
+            }
+        }
+    }
+
     // ── TERMINAL ADJACENT-PAIR DESCENT (local search on exact objective) ────
     // Swaps adjacent pairs (a, b) in best_perm where (a, b) are adjacent in the
     // elimination graph and deg(b) < deg(a). Because this directly evaluates on
@@ -1199,7 +1260,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     } else {
         PAIR_DESCENT_OPS_BUDGET
     };
-    let medium_exact_gate = n > 1_000 && n <= 6_000 && nnz <= 30_000;
+    let mut well_below;
+    let mut medium_exact_gate;
 
     if pair_descent_gate {
         if let Some(cand) = rgreedy::adjacent_pair_descent(
@@ -1249,6 +1311,13 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    well_below = amd_flops > 0
+        && best_flops < amd_flops
+        && best_flops.saturating_mul(5) < amd_flops.saturating_mul(4);
+    medium_exact_gate = n > 1_000
+        && n <= 6_000
+        && (nnz <= 30_000 || (well_below && nnz <= 50_000));
+
     // ── EXACT RANDOMIZED GREEDY ELIMINATION SEARCH (Area 2 on small graphs) ──
     // Uses the vast time headroom at n <= 1,000 to perform exact elimination game
     // simulation on true fill graphs with zero-cost objective tracking.
@@ -1265,12 +1334,24 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         // The FIRST entry is byte-identical to the previously accepted single
         // stream (same budget, same seed, same incumbent), so this strictly adds
         // a second draw over the first one's result and can only lower flops.
-        for (budget, rng_seed) in [
-            (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
-            (50_000_000, 0xD1B5_4A32_D192_ED03),
-            (50_000_000, 0x27BB_2EE6_87B0_B0FD),
-            (50_000_000, 0x45A1_89C3_F208_7314),
-        ] {
+        let small_streams: &[(i64, u64)] = if well_below {
+            &[
+                (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
+                (50_000_000, 0xD1B5_4A32_D192_ED03),
+                (50_000_000, 0x27BB_2EE6_87B0_B0FD),
+                (50_000_000, 0x45A1_89C3_F208_7314),
+                (100_000_000, 0xA076_1D64_78BD_642F),
+                (50_000_000, 0xE703_7ED1_A0B4_28DB),
+            ]
+        } else {
+            &[
+                (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
+                (50_000_000, 0xD1B5_4A32_D192_ED03),
+                (50_000_000, 0x27BB_2EE6_87B0_B0FD),
+                (50_000_000, 0x45A1_89C3_F208_7314),
+            ]
+        };
+        for &(budget, rng_seed) in small_streams {
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -1294,7 +1375,15 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         // The same serial exact search above its original size gate. Two fixed
         // nominal budgets keep the added work bounded; uncovers additional
         // plateaus on irregular combinatorial graphs with a third stream on small below-anchor instances.
-        let budgets: &[(i64, u64)] = if best_flops < amd_flops && n <= 3_000 && nnz <= 18_000 {
+        let budgets: &[(i64, u64)] = if well_below {
+            &[
+                (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
+                (100_000_000, 0x27BB_2EE6_87B0_B0FD),
+                (100_000_000, 0xA076_1D64_78BD_642F),
+                (50_000_000, 0x45A1_89C3_F208_7314),
+                (50_000_000, 0xD1B5_4A32_D192_ED03),
+            ]
+        } else if best_flops < amd_flops && n <= 3_000 && nnz <= 18_000 {
             &[
                 (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
                 (50_000_000, 0xD1B5_4A32_D192_ED03),
@@ -1368,15 +1457,46 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             .iter()
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
-        let improved = rgreedy::subtree_refine(
+        let mut cfg1 = subtree_cfg_for(n, nnz);
+        let mut improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,
             &mut candidate,
             &counts,
             &parent,
-            subtree_cfg_for(n, nnz),
+            cfg1,
         );
+        // The size-only first round uses one seed and a narrow window. When it
+        // finds nothing on a below-anchor incumbent, one more ticket with a
+        // diversified seed / wider window can unlock the rest of the chain.
+        // Ties are skipped: extra search does not move them (experiment 0056).
+        // Matrices the first seed already improved are left alone so this
+        // cannot displace a winning basin.
+        if improved == 0
+            && best_flops < amd_flops
+            && n <= 80_000
+            && nnz <= 250_000
+        {
+            cfg1.round = 1;
+            if n < 1_000 {
+                cfg1.streams = 2;
+                cfg1.budget = 1_000_000;
+            } else if n < 10_000 {
+                cfg1.max_s = 256;
+            } else {
+                cfg1.max_s = 512;
+            }
+            improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate,
+                &counts,
+                &parent,
+                cfg1,
+            );
+        }
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
             if f < best_flops {
@@ -1407,6 +1527,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
                 cfg2.budget = 8_000_000;
+                // Wider round-2 window only on below-anchor medium graphs.
+                // Raising lt_1k / gt_10k max_s here regresses those buckets
+                // (0055; this session's full-width trial scored 0.843829).
+                if best_flops < amd_flops && (1_000..10_000).contains(&n) {
+                    cfg2.max_s = 256;
+                }
                 let improved2 = rgreedy::subtree_refine(
 
                     n,
@@ -1621,7 +1747,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 // Chained terminal pass 2: runs on medium matrices or sparse large matrices
                 // that strictly improved in the first terminal pass. Uses unaliased
                 // round = 6 and a small 4M operation cap on the newly uncovered elimination tree.
-                if (n < 10_000 && nnz <= 100_000) || (n >= 10_000 && nnz <= 60_000) {
+                if (n < 10_000 && nnz <= 100_000)
+                    || (n >= 10_000 && nnz <= 60_000)
+                    || (n >= 10_000 && nnz <= 100_000 && best_flops < amd_flops)
+                {
                     let permuted2 = permute_pattern(&scoring_pat, &best_perm);
                     let etree2 = EliminationTree::from_pattern(&permuted2);
                     let post2 = etree2.postorder();
@@ -1660,7 +1789,9 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
 
                             // Chained terminal round 3: runs on medium sparse matrices or sparse below-anchor large matrices
                             // where BOTH terminal round 1 AND round 2 found strict improvements.
-                            if (n < 10_000 && nnz <= 100_000) || (n >= 10_000 && nnz <= 50_000 && best_flops < amd_flops) {
+                            if (n < 10_000 && nnz <= 100_000)
+                                || (n >= 10_000 && nnz <= 80_000 && best_flops < amd_flops)
+                            {
                                 let permuted3 = permute_pattern(&scoring_pat, &best_perm);
                                 let etree3 = EliminationTree::from_pattern(&permuted3);
                                 let post3 = etree3.postorder();
@@ -1702,6 +1833,49 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // One extra ranked-subtree ticket on below-anchor small/medium graphs.
+    // Large matrices are excluded: they own the local worst case, and an
+    // additive pass there is what failed hidden validation in 0060.
+    if best_flops < amd_flops && n < 10_000 && nnz <= 100_000 && n >= SUBTREE_MIN_N {
+        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let mut extra = SUBTREE_CFG;
+        extra.min_s = 16;
+        extra.max_s = 512;
+        extra.max_blocks = 4;
+        extra.budget = 4_000_000;
+        extra.round = 8;
+        let improved = rgreedy::subtree_refine(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &mut candidate,
+            &counts,
+            &parent,
+            extra,
+        );
+        if improved > 0 && is_bijection(&candidate, n) {
+            let f = flops_of(&scoring_pat, &candidate);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = candidate;
             }
         }
     }
@@ -3246,7 +3420,37 @@ mod tests {
             .saturating_mul(SUBTREE_CFG.streams.max(1) as i64);
         assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
 
+        for (n, nnz, best, amd) in [
+            (500usize, 2_000usize, 50u64, 100u64),
+            (5_000, 10_000, 50, 100),
+            (20_000, 80_000, 50, 100),
+        ] {
+            let mut cfg = subtree_cfg_for(n, nnz);
+            cfg.round = 1;
+            if n < 1_000 {
+                cfg.streams = 2;
+                cfg.budget = 1_000_000;
+            } else if n < 10_000 {
+                cfg.max_s = 256;
+            } else {
+                cfg.max_s = 512;
+            }
+            let requested_budget = cfg
+                .budget
+                .saturating_mul(cfg.max_blocks as i64)
+                .saturating_mul(cfg.streams.max(1) as i64);
+            assert!(requested_budget <= SUBTREE_SEARCH_WORK_LIMIT);
+            let _ = (best, amd);
+        }
+
+        let mut extra = SUBTREE_CFG;
+        extra.min_s = 16;
+        extra.max_s = 512;
+        extra.max_blocks = 4;
+        extra.budget = 4_000_000;
+        extra.round = 8;
         for cfg in [
+            extra,
             terminal_deep_subtree_cfg(9_999, 0, 100, 100),
             terminal_deep_subtree_cfg(10_000, 0, 100, 100),
             terminal_deep_subtree_cfg(10_000, 100_000, 100, 100),

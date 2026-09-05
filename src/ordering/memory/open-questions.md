@@ -22,6 +22,12 @@ it, rather than deleting it — a resolved question is a useful signpost.
       for RCM, both Sloan weights, `nd_order`, and `ndfm_order`: all five produced
       zero wins, with 0.071 s worst combined added local time. A multi-seed test
       remains open, but one-pass production additions are not supported.
+- [x] **RESOLVED (positive) — Conditional search escalation on below-anchor matrices.**
+      Answered by [0060](experiments/0060-conditional-search-escalation-below-anchor.md):
+      Escalating subtree refinement budget and streams conditionally on `best_flops < amd_flops`
+      and scaled by the margin `best_flops / amd_flops` yielded −7.52 bips across the dev corpus
+      (0.843978 → 0.843226), improving all three buckets (`gt_10k` −6.68 bips, `1k_10k` −11.49 bips,
+      `lt_1k` −4.66 bips) while keeping worst-case time safely within budget (1.395 s).
 - [ ] **Sweep the relabelled-AMF `dense_alpha`.** Shipped at α=5.0 only (the base AMF
       candidate's α). α ∈ {0.5, 2.0, 2.5} is the same argument one level down — a
       different α is a different objective, hence another distinct lottery — and it is

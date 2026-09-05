@@ -1717,6 +1717,135 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── CONDITIONAL SEARCH ESCALATION ON BELOW-ANCHOR MATRICES ──────────────
+    // Matrices tied with AMD (best_flops == amd_flops) have zero unexploited
+    // headroom for elimination-game local search (experiment 0056). Conversely,
+    // matrices already below the AMD anchor (best_flops < amd_flops) have proven
+    // receptive to elimination-tree reordering, with headroom proportional to
+    // the distance below the anchor.
+    //
+    // We conditionally escalate subtree refinement specifically for below-anchor
+    // matrices, scaling the block count, budget, and search streams by the margin:
+    //   - Deep margin (ratio <= 0.70): 48 blocks, 16M budget, 2 streams, max_s 768
+    //   - Mid margin (0.70 < ratio <= 0.90): 32 blocks, 16M budget, 2 streams, max_s 512
+    //   - Near margin (ratio > 0.90): 24 blocks, 8M budget, 1 stream, max_s 384
+    // Heavy slow-tier matrices (high nnz or known slow graphs) are throttled to a
+    // conservative 1-stream budget to preserve a generous margin under the 2s cap.
+    if best_flops < amd_flops && (SUBTREE_MIN_N..=SUBTREE_MAX_N).contains(&n) && nnz <= 1_500_000 {
+        let is_slow_tier = (nnz > 100_000 && n >= 10_000)
+            || (max_deg * 50 > n && nnz >= 50_000)
+            || (n >= 1_000 && nnz >= 75_000);
+        let ratio_scaled = (best_flops as u128 * 100) / amd_flops as u128;
+
+        let max_sub = if n >= 10_000 && nnz <= 500_000 {
+            2_400
+        } else {
+            1_600
+        };
+
+        let (blocks, budget, max_s, streams) = if is_slow_tier {
+            (24, 8_000_000i64, 512usize, 1usize)
+        } else if ratio_scaled <= 70 {
+            (48, 16_000_000i64, 768usize, 2usize)
+        } else if ratio_scaled <= 90 {
+            (32, 16_000_000i64, 512usize, 2usize)
+        } else {
+            (24, 8_000_000i64, 384usize, 2usize)
+        };
+
+        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+
+        let cfg = rgreedy::SubCfg {
+            min_s: 16,
+            max_s,
+            max_sub,
+            max_blocks: blocks,
+            budget,
+            streams,
+            rank_blocks: true,
+            round: 8,
+        };
+        let improved = rgreedy::subtree_refine(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &mut candidate,
+            &counts,
+            &parent,
+            cfg,
+        );
+        if improved > 0 && is_bijection(&candidate, n) {
+            let f = flops_of(&scoring_pat, &candidate);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = candidate;
+
+                // Chained escalation pass: only for matrices with strict improvement
+                // and substantial margin (ratio <= 0.90) outside the slow tier
+                if !is_slow_tier && ratio_scaled <= 90 {
+                    let permuted2 = permute_pattern(&scoring_pat, &best_perm);
+                    let etree2 = EliminationTree::from_pattern(&permuted2);
+                    let post2 = etree2.postorder();
+                    let mut candidate2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
+
+                    let post_pattern2 = permute_pattern(&scoring_pat, &candidate2);
+                    let post_etree2 = EliminationTree::from_pattern(&post_pattern2);
+                    let counts2: Vec<u32> = column_counts_gnp(&post_pattern2, &post_etree2)
+                        .into_iter()
+                        .map(|c| c as u32)
+                        .collect();
+                    let parent2: Vec<i32> = post_etree2
+                        .parent
+                        .iter()
+                        .map(|p| p.map_or(-1, |j| j as i32))
+                        .collect();
+
+                    let cfg2 = rgreedy::SubCfg {
+                        min_s: 16,
+                        max_s: max_s.min(512),
+                        max_sub,
+                        max_blocks: blocks.min(32),
+                        budget: 8_000_000,
+                        streams: 1,
+                        rank_blocks: true,
+                        round: 9,
+                    };
+                    let improved2 = rgreedy::subtree_refine(
+                        n,
+                        &pattern.col_ptr,
+                        &pattern.row_idx,
+                        &mut candidate2,
+                        &counts2,
+                        &parent2,
+                        cfg2,
+                    );
+                    if improved2 > 0 && is_bijection(&candidate2, n) {
+                        let f2 = flops_of(&scoring_pat, &candidate2);
+                        if f2 < best_flops {
+                            best_flops = f2;
+                            best_perm = candidate2;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if pair_descent_gate {
         for _ in 0..2 {
             let mut round_improved = false;

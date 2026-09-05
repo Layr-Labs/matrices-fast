@@ -1718,22 +1718,40 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if pair_descent_gate {
-        // Preserve the four-pivot cleanup when a five-pivot window cannot fit.
-        let cleanup = if n < 5 {
-            rgreedy::adjacent_four_descent
-        } else {
-            rgreedy::adjacent_five_descent
-        };
-        if let Some(cand) = cleanup(
-            n,
-            &pattern.col_ptr,
-            &pattern.row_idx,
-            &best_perm,
-            pair_descent_ops_budget,
-        ) {
-            let f = flops_of(&scoring_pat, &cand);
-            if f < best_flops {
-                best_perm = cand;
+        for _ in 0..2 {
+            let mut round_improved = false;
+            if n >= 5 {
+                if let Some(cand) = rgreedy::adjacent_five_descent(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    pair_descent_ops_budget,
+                ) {
+                    let f = flops_of(&scoring_pat, &cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                        round_improved = true;
+                    }
+                }
+            }
+            if let Some(cand) = rgreedy::adjacent_four_descent(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                pair_descent_ops_budget,
+            ) {
+                let f = flops_of(&scoring_pat, &cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                    round_improved = true;
+                }
+            }
+            if !round_improved {
+                break;
             }
         }
     }

@@ -176,6 +176,16 @@ const REDUCE_MAX_CORE_N: usize = 60_000;
 const REDUCE_MAX_CORE_EDGES: usize = 3_000_000;
 const REDUCE_MAX_CORE_NNZ: usize = 1_500_000;
 const REDUCE_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
+/// MULTI-DEPTH prefixes (matrices_mage 0064): the shipped K=3 core first, then the extra depths
+/// as DISTINCT cores only (a depth whose core has the same size as one already tried is skipped).
+/// The extra reductions are independent pure functions of the pattern, so they run CONCURRENTLY
+/// (wall cost of one reduction, not four) and are then processed in a fixed order; each deeper
+/// reduction runs under a clique-pair-check budget (fails closed); extra depths run only below
+/// REDUCE_EXTRA_MAX_NNZ; all depths share one per-matrix work ledger in core CSC entries.
+const REDUCE_EXTRA_DEPTHS: [usize; 4] = [4, 5, 2, 6];
+const REDUCE_EXTRA_MAX_NNZ: usize = 600_000;
+const REDUCE_PAIR_BUDGET: u64 = 1_000_000;
+const REDUCE_TOTAL_CORE_NNZ: usize = 1_500_000;
 
 /// Medium-size envelope for the *extra* tuned candidates (α-5/α-2 AMD, default
 /// AMF, α-2 AMF). A few extra AMD/AMF passes are trivially cheap in this region;
@@ -751,7 +761,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             aggressive: false,
             dense_alpha: 5.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_robust5).map(|(p, ..)| p));
+        if nnz <= 150_000 { consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_robust5).map(|(p, ..)| p)); }
 
         // Non-aggressive with tight dense handling — a third distinct ordering
         // for dense-ish small/medium structures. Still AMD-speed and below the
@@ -760,7 +770,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             aggressive: false,
             dense_alpha: 2.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_robust2).map(|(p, ..)| p));
+        if nnz <= 150_000 { consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_robust2).map(|(p, ..)| p)); }
 
         // Dense-detection FULLY DISABLED (dense_alpha < 0): AMD treats no row as
         // "dense", so it never defers high-degree coupling rows. On the KKT/saddle
@@ -774,12 +784,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             aggressive: false,
             dense_alpha: -1.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_nodense).map(|(p, ..)| p));
+        if nnz <= 150_000 { consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_nodense).map(|(p, ..)| p)); }
         let amd_nodense_agg = feral_amd::AmdOptions {
             aggressive: true,
             dense_alpha: -1.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_nodense_agg).map(|(p, ..)| p));
+        if nnz <= 150_000 { consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_nodense_agg).map(|(p, ..)| p)); }
     }
 
     // Reverse Cuthill–McKee — a pure-Rust, O(nnz) ordering from a family
@@ -1972,20 +1982,20 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
-    // ── REDUCE-THEN-AMF, TERMINAL (matrices_mage) ───────────────────────────
-    // Peel pendants and eliminate every vertex of live degree <= REDUCE_ROW_DEG
-    // EXACTLY (each elimination closes its live neighbourhood into a clique, so
-    // the residual is the exact fill graph after the prefix and Σ c_j² splits
-    // into a FIXED prefix term plus a term computed on the core alone). Run the
-    // AMF alpha grid and AMD on the residual core, rank the core orderings on
-    // the core graph (exact by the split), splice the argmin behind the prefix
-    // and admit it through the trusted scorer with strict `<` against the
-    // finished pipeline. Placed LAST on purpose: as a portfolio candidate it
-    // displaces the pool argmin and re-seeds the descent phases (non-monotone);
-    // here the pipeline above is byte-identical and this can only lower the
-    // result. Gated on (n, nnz) and the core size only — never on identity.
+    // ── REDUCE-THEN-AMF, TERMINAL, MULTI-DEPTH (matrices_mage 0062/0064) ──
+    // Peel pendants and eliminate every vertex of live degree <= K EXACTLY (each
+    // elimination closes its live neighbourhood into a clique, so the residual is
+    // the exact fill graph after the prefix and the objective splits into a FIXED
+    // prefix term plus a term computed on the core alone). Order the core five
+    // ways (AMF alpha grid + AMD), rank on the core graph (exact by the split),
+    // splice the argmin behind the prefix and admit it through the trusted scorer
+    // with strict less-than against the finished pipeline. K=3 first (as shipped),
+    // then the extra depths - reduced concurrently, processed in a fixed order,
+    // distinct cores only, one ledger. Placed LAST on purpose (monotone by
+    // construction); gated on (n, nnz, core size) and work ledgers - never identity.
     if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
-        let lifted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut lifts: Vec<(usize, Option<core_lift::CoreLift>)> = Vec::new();
+        let lifted3 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             core_lift::reduce(
                 &scoring_pat,
                 REDUCE_ROW_DEG,
@@ -1993,63 +2003,120 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 REDUCE_MAX_CORE_EDGES,
             )
         }));
-        if let Ok(Some(cl)) = lifted {
-            let cn = cl.core_n();
-            if cn > 0 && cn < n && cl.core_nnz() <= REDUCE_MAX_CORE_NNZ {
-                let core_pat = ScoringPattern {
-                    n: cn,
-                    col_ptr: cl.core_col_ptr.clone(),
-                    row_idx: cl.core_row_idx.clone(),
-                };
-                let ccp: Vec<i32> = cl.core_col_ptr.iter().map(|&x| x as i32).collect();
-                let cri: Vec<i32> = cl.core_row_idx.iter().map(|&x| x as i32).collect();
-                // Four AMF alphas + AMD, each an independent pure function of
-                // the core; results are merged by task index, so thread timing
-                // never reaches the output.
-                let results: Vec<Option<(u64, Vec<usize>)>> = std::thread::scope(|sc| {
-                    let handles: Vec<_> = (0..=REDUCE_ALPHAS.len())
-                        .map(|k| {
-                            let (ccp, cri, core_pat) = (&ccp, &cri, &core_pat);
-                            sc.spawn(move || -> Option<(u64, Vec<usize>)> {
-                                let ccore =
-                                    feral_ordering_core::CscPattern::new(cn, ccp, cri)?;
-                                let p: Vec<i32> = if k < REDUCE_ALPHAS.len() {
-                                    let o = feral_amf::AmfOptions {
-                                        dense_alpha: REDUCE_ALPHAS[k],
-                                        ..Default::default()
-                                    };
-                                    feral_amf::amf_order_opts(&ccore, &o).ok()?.0
+        lifts.push((REDUCE_ROW_DEG, lifted3.ok().flatten()));
+        if nnz <= REDUCE_EXTRA_MAX_NNZ {
+            // Independent reductions of the same pattern: compute them side by side.
+            // Results are collected by depth index, so thread timing never
+            // reaches the output.
+            let extras: Vec<Option<core_lift::CoreLift>> = std::thread::scope(|sc| {
+                let handles: Vec<_> = REDUCE_EXTRA_DEPTHS
+                    .iter()
+                    .map(|&depth| {
+                        let sp = &scoring_pat;
+                        sc.spawn(move || -> Option<core_lift::CoreLift> {
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                if depth <= REDUCE_ROW_DEG {
+                                    core_lift::reduce(sp, depth, REDUCE_MAX_CORE_N, REDUCE_MAX_CORE_EDGES)
                                 } else {
-                                    feral_amd::amd_order(&ccore).ok()?
-                                };
-                                let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
-                                if !is_bijection(&cp, cn) {
-                                    return None;
+                                    core_lift::reduce_checked(
+                                        sp,
+                                        depth,
+                                        REDUCE_MAX_CORE_N,
+                                        REDUCE_MAX_CORE_EDGES,
+                                        REDUCE_PAIR_BUDGET,
+                                    )
                                 }
-                                let f = flops_of(core_pat, &cp);
-                                Some((f, cp))
-                            })
+                            }))
+                            .ok()
+                            .flatten()
                         })
-                        .collect();
-                    handles.into_iter().map(|h| h.join().ok().flatten()).collect()
-                });
-                let mut pick: Option<(u64, usize)> = None;
-                for (k, r) in results.iter().enumerate() {
-                    if let Some((f, _)) = r {
-                        if pick.map_or(true, |(bf, _)| *f < bf) {
-                            pick = Some((*f, k));
-                        }
+                    })
+                    .collect();
+                handles.into_iter().map(|h| h.join().ok().flatten()).collect()
+            });
+            for (&depth, cl) in REDUCE_EXTRA_DEPTHS.iter().zip(extras) {
+                lifts.push((depth, cl));
+            }
+        }
+
+        let mut seen_core_n: Vec<usize> = Vec::new();
+        let mut core_work: usize = 0;
+        // Per-matrix ledger of core work: at most twice the input's own size (capped).
+        let ledger = nnz.saturating_mul(2).min(REDUCE_TOTAL_CORE_NNZ);
+        for (depth, lifted) in lifts {
+            let Some(cl) = lifted else { continue };
+            let cn = cl.core_n();
+            // A deeper depth must shrink the core by >= 10% below every core already
+            // ordered (a core within 10% of one seen is the same basin at the same
+            // cost); the shallow K=2 must eliminate >= 10% of the graph.
+            let min_seen = seen_core_n.iter().copied().min().unwrap_or(n);
+            let fresh = if depth == REDUCE_ROW_DEG {
+                cn > 0 && cn < n
+            } else if depth < REDUCE_ROW_DEG {
+                cn > 0 && cn * 10 < n * 9 && !seen_core_n.contains(&cn)
+            } else {
+                cn > 0 && cn * 10 <= min_seen * 9
+            };
+            if !(fresh
+                && cl.core_nnz() <= REDUCE_MAX_CORE_NNZ
+                && core_work + cl.core_nnz() <= ledger)
+            {
+                continue;
+            }
+            seen_core_n.push(cn);
+            core_work += cl.core_nnz();
+            let core_pat = ScoringPattern {
+                n: cn,
+                col_ptr: cl.core_col_ptr.clone(),
+                row_idx: cl.core_row_idx.clone(),
+            };
+            let ccp: Vec<i32> = cl.core_col_ptr.iter().map(|&x| x as i32).collect();
+            let cri: Vec<i32> = cl.core_row_idx.iter().map(|&x| x as i32).collect();
+            // Four AMF alphas + AMD, each an independent pure function of the
+            // core; results are merged by task index, so thread timing never
+            // reaches the output.
+            let results: Vec<Option<(u64, Vec<usize>)>> = std::thread::scope(|sc| {
+                let handles: Vec<_> = (0..=REDUCE_ALPHAS.len())
+                    .map(|k| {
+                        let (ccp, cri, core_pat) = (&ccp, &cri, &core_pat);
+                        sc.spawn(move || -> Option<(u64, Vec<usize>)> {
+                            let ccore = feral_ordering_core::CscPattern::new(cn, ccp, cri)?;
+                            let p: Vec<i32> = if k < REDUCE_ALPHAS.len() {
+                                let o = feral_amf::AmfOptions {
+                                    dense_alpha: REDUCE_ALPHAS[k],
+                                    ..Default::default()
+                                };
+                                feral_amf::amf_order_opts(&ccore, &o).ok()?.0
+                            } else {
+                                feral_amd::amd_order(&ccore).ok()?
+                            };
+                            let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                            if !is_bijection(&cp, cn) {
+                                return None;
+                            }
+                            let f = flops_of(core_pat, &cp);
+                            Some((f, cp))
+                        })
+                    })
+                    .collect();
+                handles.into_iter().map(|h| h.join().ok().flatten()).collect()
+            });
+            let mut pick: Option<(u64, usize)> = None;
+            for (k, r) in results.iter().enumerate() {
+                if let Some((f, _)) = r {
+                    if pick.map_or(true, |(bf, _)| *f < bf) {
+                        pick = Some((*f, k));
                     }
                 }
-                if let Some((_, k)) = pick {
-                    if let Some((_, cp)) = &results[k] {
-                        let cand = core_lift::splice(&cl, cp);
-                        if is_bijection(&cand, n) {
-                            let f = flops_of(&scoring_pat, &cand);
-                            if f < best_flops {
-                                best_flops = f;
-                                best_perm = cand;
-                            }
+            }
+            if let Some((_, k)) = pick {
+                if let Some((_, cp)) = &results[k] {
+                    let cand = core_lift::splice(&cl, cp);
+                    if is_bijection(&cand, n) {
+                        let f = flops_of(&scoring_pat, &cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
                         }
                     }
                 }

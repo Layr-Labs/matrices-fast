@@ -152,8 +152,6 @@ mod probe;
 
 pub mod rgreedy;
 pub mod custom_metrics;
-/// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
-mod core_lift;
 
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
@@ -165,17 +163,6 @@ use feral::symbolic::column_counts_gnp;
 /// gt_10k wins (e.g. pooling_*). This is the SAME envelope as the prior safe run.
 const AMF_MAX_N: usize = 250_000;
 const AMF_MAX_NNZ: usize = 1_500_000;
-
-/// REDUCE-THEN-AMF gates (matrices_mage). Row-degree bound for the exact
-/// prefix, the largest residual core the AMF grid is asked to order, and the
-/// (n, nnz) envelope of the whole terminal phase. Structural only.
-const REDUCE_MIN_N: usize = 50;
-const REDUCE_MAX_NNZ: usize = 1_500_000;
-const REDUCE_ROW_DEG: usize = 3;
-const REDUCE_MAX_CORE_N: usize = 60_000;
-const REDUCE_MAX_CORE_EDGES: usize = 3_000_000;
-const REDUCE_MAX_CORE_NNZ: usize = 1_500_000;
-const REDUCE_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
 
 /// Medium-size envelope for the *extra* tuned candidates (α-5/α-2 AMD, default
 /// AMF, α-2 AMF). A few extra AMD/AMF passes are trivially cheap in this region;
@@ -214,7 +201,7 @@ const ROBUST_MAX_NNZ: usize = 600_000;
 /// cap keeps it STRICTLY below the slow tier (`nnz ≥ 163816`), so it cannot move
 /// the worst case; the generous `n` cap lets it reach the large-but-sparse
 /// gt_10k ties. Best-of floor makes it zero-downside.
-const RCM_MAX_N: usize = 1_000;
+const RCM_MAX_N: usize = 150_000;
 const RCM_MAX_NNZ: usize = 130_000;
 
 /// Sloan profile/wavefront-reduction envelope. Sloan is pure Rust, O(nnz log n)
@@ -224,7 +211,7 @@ const RCM_MAX_NNZ: usize = 130_000;
 /// large-but-sparse gt_10k ties. Sloan targets exactly the mesh/grid structures
 /// (`watercontamination*`, `transswitch0300p`) that the minimum-degree and ND
 /// families leave tied at AMD. Best-of floor makes it zero-downside.
-const SLOAN_MAX_N: usize = 1_000;
+const SLOAN_MAX_N: usize = 150_000;
 const SLOAN_MAX_NNZ: usize = 130_000;
 
 /// Hand-rolled NESTED-DISSECTION envelope. Our own pure-Rust recursive graph
@@ -235,7 +222,7 @@ const SLOAN_MAX_NNZ: usize = 130_000;
 /// `watercontamination0303r`) that library METIS is gated out of on the larger
 /// instances. Deterministic (fixed seeding, deterministic partition ordering).
 /// Best-of floor makes it zero-downside.
-const ND_MAX_N: usize = 1_000;
+const ND_MAX_N: usize = 150_000;
 const ND_MAX_NNZ: usize = 130_000;
 
 /// GGGP (greedy graph-growing) recursive-bisection envelope. A SECOND,
@@ -246,7 +233,7 @@ const ND_MAX_NNZ: usize = 130_000;
 /// it STRICTLY below the slow tier (`nnz ≥ 163816`), so it cannot move the worst
 /// case; the generous `n` cap lets it reach the large-but-sparse gt_10k mesh/grid
 /// ties. Deterministic. Best-of → zero-downside.
-const NDFM_MAX_N: usize = 1_000;
+const NDFM_MAX_N: usize = 150_000;
 const NDFM_MAX_NNZ: usize = 130_000;
 
 /// MINIMUM-FILL (minimum-deficiency) envelope. This is the NET-NEW method: a
@@ -381,12 +368,6 @@ const RELABEL_MAX_RESTARTS: usize = 24;
 /// a huge sparse one is cheap), so an `n` cutoff would bound the wrong quantity.
 const RELABEL_AMF_MAX_NNZ: usize = 200_000;
 
-/// Structural window for the 0061 extra well-below relabel tickets (matrices_mage r6):
-/// on both corpora every conversion sat at n <= 5315 / nnz <= 42228 and none at n >= 6000
-/// or nnz > 50000, where the tickets cost 0.04-0.33 s per row for a bit-identical result.
-const EXTRA_RELABEL_MAX_N: usize = 6_000;
-const EXTRA_RELABEL_MAX_NNZ: usize = 50_000;
-
 #[cfg(test)]
 const SUBTREE_SEARCH_WORK_LIMIT: i64 = 32_000_000;
 #[cfg(test)]
@@ -424,9 +405,9 @@ const SUBTREE_MAX_N: usize = 250_000;
 const MID_MAX_S: usize = 128;
 const LARGE_MAX_S: usize = 384;
 const MID_BLOCKS: usize = 16;
-const MID_BUDGET: i64 = 1_000_000;
+const MID_BUDGET: i64 = 2_000_000;
 const LARGE_BLOCKS: usize = 16;
-const LARGE_BUDGET: i64 = 1_000_000;
+const LARGE_BUDGET: i64 = 2_000_000;
 
 /// Per-matrix base config for one chain round. On a short elimination tree the
 /// default `min_s = 32` admits almost no blocks, so drop the block floor to 16
@@ -437,12 +418,12 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
         cfg.min_s = 8;
         cfg.max_s = 32;
         cfg.max_blocks = 8;
-        cfg.budget = 1_000_000; if n >= 1_000 { cfg.budget /= 2; }
-    } else if n < 1_000 {
-        cfg.min_s = 16;
+        cfg.budget = 1_000_000;
+    } else if n <= 1_000 {
+        cfg.min_s = 8;
         cfg.max_s = 256;
         cfg.max_blocks = 16;
-        cfg.budget = 2_000_000; if n >= 1_000 { cfg.budget /= 2; }
+        cfg.budget = 2_000_000;
     } else if n >= 10_000 {
         cfg.max_s = LARGE_MAX_S;
         cfg.max_blocks = LARGE_BLOCKS;
@@ -467,11 +448,11 @@ fn terminal_deep_subtree_cfg(n: usize, nnz: usize, best_flops: u64, amd_flops: u
     if n < 10_000 {
         cfg.max_blocks = 4;
         cfg.max_s = 768;
-        cfg.budget = 4_000_000; if n >= 1_000 { cfg.budget /= 2; }
+        cfg.budget = 4_000_000;
     } else {
         cfg.max_blocks = 8;
         cfg.max_s = if is_below && nnz <= 50_000 { 768 } else { 1_200 };
-        cfg.budget = 2_000_000; if n >= 1_000 { cfg.budget /= 2; }
+        cfg.budget = 2_000_000;
         if nnz <= n * 10 && nnz <= 150_000 {
             cfg.max_sub = 1_600;
         }
@@ -630,10 +611,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // Try a candidate produced by `f`; keep it if it is a valid bijection with
     // strictly fewer flops. `catch_unwind` guards against a candidate panicking
     // (which would otherwise crash the worker and FAIL the whole run).
-    let consider =
-        |best_flops: &mut u64,
-         best_perm: &mut Vec<usize>,
-         produce: &dyn Fn() -> Result<Vec<i32>, feral_ordering_core::OrderingError>| {
+    let mut consider =
+        |produce: &dyn Fn() -> Result<Vec<i32>, feral_ordering_core::OrderingError>| {
             let produced =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(produce));
             let Ok(Ok(perm_i32)) = produced else {
@@ -644,9 +623,9 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 return;
             }
             let f = flops_of(&scoring_pat, &perm);
-            if f < *best_flops {
-                *best_flops = f;
-                *best_perm = perm;
+            if f < best_flops {
+                best_flops = f;
+                best_perm = perm;
             }
         };
 
@@ -658,7 +637,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             dense_alpha: 5.0,
             ..Default::default()
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amf::amf_order_opts(&core, &opts).map(|(p, ..)| p));
+        consider(&|| feral_amf::amf_order_opts(&core, &opts).map(|(p, ..)| p));
     }
 
     // Medium-size extras: cheap here, pure upside layered over the AMD floor.
@@ -669,7 +648,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             aggressive: true,
             dense_alpha: 5.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_opts5).map(|(p, ..)| p));
+        consider(&|| feral_amd::amd_order_opts(&core, &amd_opts5).map(|(p, ..)| p));
 
         // Even tighter dense handling — catches dense-ish mediums the α5/α10
         // variants miss. Trivially cheap in this size regime.
@@ -677,10 +656,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             aggressive: true,
             dense_alpha: 2.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_opts2).map(|(p, ..)| p));
+        consider(&|| feral_amd::amd_order_opts(&core, &amd_opts2).map(|(p, ..)| p));
 
         // Default-α AMF, complementing the α5 AMF above.
-        consider(&mut best_flops, &mut best_perm, &|| feral_amf::amf_order(&core));
+        consider(&|| feral_amf::amf_order(&core));
 
         // Tighter-dense AMF (α2) — a distinct AMF ordering for dense-ish mediums
         // that the α5/α10 AMF variants miss. Time-trivial at this size.
@@ -688,7 +667,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             dense_alpha: 2.0,
             ..Default::default()
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amf::amf_order_opts(&core, &amf_opts2).map(|(p, ..)| p));
+        consider(&|| feral_amf::amf_order_opts(&core, &amf_opts2).map(|(p, ..)| p));
 
         // Aggressive AMD α1 and α16 — the two sweep-found AMD variants that still
         // add unique wins beyond the existing α{-1,2,5,10} set. Gated to genuinely
@@ -698,9 +677,9 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         // (measured 2.46 s at 5×). At nnz < 150k each AMD pass is a few ms.
         if nnz < SWEEP_EXTRA_MAX_NNZ {
             let amd_opts1 = feral_amd::AmdOptions { aggressive: true, dense_alpha: 1.0 };
-            consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_opts1).map(|(p, ..)| p));
+            consider(&|| feral_amd::amd_order_opts(&core, &amd_opts1).map(|(p, ..)| p));
             let amd_opts16 = feral_amd::AmdOptions { aggressive: true, dense_alpha: 16.0 };
-            consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_opts16).map(|(p, ..)| p));
+            consider(&|| feral_amd::amd_order_opts(&core, &amd_opts16).map(|(p, ..)| p));
         }
     }
 
@@ -725,11 +704,11 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     if n < AMF_SWEEP_MAX_N && nnz < 130_000 {
         for da in [1.0f64, 16.0, -1.0] {
             let amf_a = feral_amf::AmfOptions { dense_alpha: da, ..Default::default() };
-            consider(&mut best_flops, &mut best_perm, &|| feral_amf::amf_order_opts(&core, &amf_a).map(|(p, ..)| p));
+            consider(&|| feral_amf::amf_order_opts(&core, &amf_a).map(|(p, ..)| p));
         }
     } else if n < AMF_SWEEP_MAX_N && nnz >= 400_000 && nnz < AMF_SWEEP_MAX_NNZ {
         let amf_nd = feral_amf::AmfOptions { dense_alpha: -1.0, ..Default::default() };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amf::amf_order_opts(&core, &amf_nd).map(|(p, ..)| p));
+        consider(&|| feral_amf::amf_order_opts(&core, &amf_nd).map(|(p, ..)| p));
     }
 
     // NON-AGGRESSIVE AMD — a genuinely DIFFERENT elimination order from every
@@ -739,19 +718,19 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // eligible matrix STRICTLY below the slowest tier (`nnz ≥ 163 k`), where a
     // few AMD passes are milliseconds — so the worst-case time is held
     // byte-for-byte. Best-of floor makes all three variants pure upside.
-    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ {
+    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ && (nnz <= 12 * n || nnz <= 150_000) {
         let amd_robust = feral_amd::AmdOptions {
             aggressive: false,
             dense_alpha: 10.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_robust).map(|(p, ..)| p));
+        consider(&|| feral_amd::amd_order_opts(&core, &amd_robust).map(|(p, ..)| p));
 
         // Non-aggressive with moderate dense handling.
         let amd_robust5 = feral_amd::AmdOptions {
             aggressive: false,
             dense_alpha: 5.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_robust5).map(|(p, ..)| p));
+        consider(&|| feral_amd::amd_order_opts(&core, &amd_robust5).map(|(p, ..)| p));
 
         // Non-aggressive with tight dense handling — a third distinct ordering
         // for dense-ish small/medium structures. Still AMD-speed and below the
@@ -760,7 +739,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             aggressive: false,
             dense_alpha: 2.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_robust2).map(|(p, ..)| p));
+        consider(&|| feral_amd::amd_order_opts(&core, &amd_robust2).map(|(p, ..)| p));
 
         // Dense-detection FULLY DISABLED (dense_alpha < 0): AMD treats no row as
         // "dense", so it never defers high-degree coupling rows. On the KKT/saddle
@@ -774,12 +753,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             aggressive: false,
             dense_alpha: -1.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_nodense).map(|(p, ..)| p));
+        consider(&|| feral_amd::amd_order_opts(&core, &amd_nodense).map(|(p, ..)| p));
         let amd_nodense_agg = feral_amd::AmdOptions {
             aggressive: true,
             dense_alpha: -1.0,
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_amd::amd_order_opts(&core, &amd_nodense_agg).map(|(p, ..)| p));
+        consider(&|| feral_amd::amd_order_opts(&core, &amd_nodense_agg).map(|(p, ..)| p));
     }
 
     // Reverse Cuthill–McKee — a pure-Rust, O(nnz) ordering from a family
@@ -790,7 +769,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // worst case; deterministic (stable within-level degree sort, fixed BFS
     // seeding). Best-of floor makes it zero-downside.
     if n < RCM_MAX_N && nnz < RCM_MAX_NNZ {
-        consider(&mut best_flops, &mut best_perm, &|| {
+        consider(&|| {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(rcm_order(pattern))
         });
     }
@@ -806,10 +785,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // priorities-only monotone max-heap with a fixed tie-break). Best-of floor →
     // zero downside.
     if n < SLOAN_MAX_N && nnz < SLOAN_MAX_NNZ {
-        consider(&mut best_flops, &mut best_perm, &|| {
+        consider(&|| {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(sloan_order(pattern, 2, 1))
         });
-        consider(&mut best_flops, &mut best_perm, &|| {
+        consider(&|| {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(sloan_order(pattern, 1, 2))
         });
     }
@@ -824,7 +803,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // overflow nor move the worst case. Deterministic. Best-of floor →
     // zero-downside.
     if n < ND_MAX_N && nnz < ND_MAX_NNZ {
-        consider(&mut best_flops, &mut best_perm, &|| {
+        consider(&|| {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(nd_order(pattern))
         });
     }
@@ -841,7 +820,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // below the slow tier) so its few-ms cost cannot move the worst case.
     // Deterministic. Best-of floor → zero-downside.
     if n < NDFM_MAX_N && nnz < NDFM_MAX_NNZ {
-        consider(&mut best_flops, &mut best_perm, &|| {
+        consider(&|| {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(ndfm_order(pattern))
         });
     }
@@ -862,7 +841,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // `wastepaper6`, `syn*`, `tln2`). Deterministic (fixed
     // `(deficiency, degree, index)` tie-break). Best-of floor → zero-downside.
     if n < MINFILL_MAX_N && nnz < MINFILL_MAX_NNZ {
-        consider(&mut best_flops, &mut best_perm, &|| {
+        consider(&|| {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(minfill_order(pattern))
         });
         if n < 2_000 && nnz < 10_000 {
@@ -875,7 +854,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     col_ptr: b.col_ptr,
                     row_idx: b.row_idx,
                 };
-                consider(&mut best_flops, &mut best_perm, &|| {
+                consider(&|| {
                     let pb = minfill_order(&b_pat);
                     Ok(pb.into_iter().map(|x| q[x as usize] as i32).collect())
                 });
@@ -894,7 +873,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             custom_metrics::ScoreVariant::SqPure,
         ] {
             for &alpha in &[1.0, 10.0] {
-                consider(&mut best_flops, &mut best_perm, &|| {
+                consider(&|| {
                     custom_metrics::order_variant(&core, alpha, true, variant)
                 });
             }
@@ -904,18 +883,12 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // METIS nested dissection — bounded by nnz primarily (its cost driver) plus
     // an n cap; `seed = 1` (via default) keeps it deterministic. Gate held fixed
     // so the worst-case time does not move.
-    // PARTITIONER CASCADE (matrices_mage): the expensive separator variants run only
-    // below n = 1000 (where every candidate is cheap) or after a base separator
-    // (default METIS / Scotch / KaHIP) has already beaten the min-degree incumbent -
-    // values both graded runs compute from the pattern alone.
-    let flops_before_part = best_flops;
     if n < METIS_MAX_N && nnz < METIS_MAX_NNZ {
-        consider(&mut best_flops, &mut best_perm, &|| {
+        consider(&|| {
             feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
                 .map(|(p, _, _)| p)
         });
     }
-    let part_extra = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
 
     // A second, TUNED METIS (more initial partitionings + FM refinement). The
     // gate reaches sparse gt_10k ties (wide n) while the tight nnz cap keeps it
@@ -923,13 +896,13 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // matrix — so the worst-case time is untouched. More trials frequently find
     // a better separator than default METIS; the best-of floor makes it
     // zero-downside.
-    if part_extra && n < METIS_TUNED_MAX_N && nnz < METIS_TUNED_MAX_NNZ {
+    if n < METIS_TUNED_MAX_N && nnz < METIS_TUNED_MAX_NNZ {
         let metis_tuned = feral_metis::MetisOptions {
             niparts: 16,
             fm_passes: 20,
             ..Default::default()
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_metis::metis_order_full(&core, &metis_tuned).map(|(p, _, _)| p));
+        consider(&|| feral_metis::metis_order_full(&core, &metis_tuned).map(|(p, _, _)| p));
     }
 
     // A third, HIGH-TRIAL METIS on tiny/small matrices only — many initial
@@ -937,31 +910,31 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // slow tier, so it cannot move the worst case. Frequently improves on the
     // default/tuned separators for small structures. `seed = 1` (default) keeps
     // it deterministic.
-    if part_extra && n < METIS_HITRIAL_MAX_N && nnz < METIS_HITRIAL_MAX_NNZ {
+    if n < METIS_HITRIAL_MAX_N && nnz < METIS_HITRIAL_MAX_NNZ {
         let metis_hitrial = feral_metis::MetisOptions {
             niparts: 32,
             fm_passes: 30,
             ..Default::default()
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_metis::metis_order_full(&core, &metis_hitrial).map(|(p, _, _)| p));
+        consider(&|| feral_metis::metis_order_full(&core, &metis_hitrial).map(|(p, _, _)| p));
     }
 
     // Scotch — extra candidate on small/medium matrices (time-trivial there),
     // covering the whole 1k_10k bucket to break more ties. Fixed seed via default
     // keeps it deterministic.
     if n < SCOTCH_MAX_N && nnz < SCOTCH_MAX_NNZ {
-        consider(&mut best_flops, &mut best_perm, &|| feral_scotch::scotch_order(&core));
+        consider(&|| feral_scotch::scotch_order(&core));
     }
 
     // A second, TUNED Scotch (more separator trials), widened to cover more of
     // the 1k_10k bucket — a distinct ordering attempt; still tens of ms at this
     // size and far below the slow tier.
-    if part_extra && n < SCOTCH_TUNED_MAX_N && nnz < SCOTCH_TUNED_MAX_NNZ {
+    if n < SCOTCH_TUNED_MAX_N && nnz < SCOTCH_TUNED_MAX_NNZ {
         let scotch_tuned = feral_scotch::ScotchOptions {
             n_sep_trials: 10,
             ..Default::default()
         };
-        consider(&mut best_flops, &mut best_perm, &|| {
+        consider(&|| {
             feral_scotch::scotch_order_full(&core, &scotch_tuned).map(|(p, _, _)| p)
         });
     }
@@ -970,9 +943,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // widened in n to target the large count of lt_1k / lower-1k_10k ties (incl.
     // dense tiny like qap) while nnz stays tight. `seed = 1` (default) deterministic.
     if n < KAHIP_MAX_N && nnz < KAHIP_MAX_NNZ {
-        consider(&mut best_flops, &mut best_perm, &|| feral_kahip::kahip_order(&core));
+        consider(&|| feral_kahip::kahip_order(&core));
     }
-    let part_extra2 = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
 
     // METIS PARAMETER variants. Every METIS candidate above varies only the
     // amount of WORK (initial partitionings, FM passes); these vary the SHAPE of
@@ -997,26 +969,26 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // multiplants_mtg1b 0.782→0.775). Each costs ≤ 0.068 s inside this
     // envelope. Deterministic (fixed seeds, fixed parameters). Best-of floor →
     // zero-downside.
-    if part_extra2 && n < METIS_VAR_MAX_N && nnz < METIS_VAR_MAX_NNZ {
+    if n < METIS_VAR_MAX_N && nnz < METIS_VAR_MAX_NNZ {
         for imb in [0.05f64, 0.10] {
             let opts = feral_metis::MetisOptions {
                 max_imbalance: imb,
                 ..Default::default()
             };
-            consider(&mut best_flops, &mut best_perm, &|| feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
+            consider(&|| feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
         }
         for sw in [100u32, 400] {
             let opts = feral_metis::MetisOptions {
                 nd_to_amd_switch: sw,
                 ..Default::default()
             };
-            consider(&mut best_flops, &mut best_perm, &|| feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
+            consider(&|| feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
         }
         let opts_seed = feral_metis::MetisOptions {
             seed: 21,
             ..Default::default()
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_metis::metis_order_full(&core, &opts_seed).map(|(p, _, _)| p));
+        consider(&|| feral_metis::metis_order_full(&core, &opts_seed).map(|(p, _, _)| p));
     }
 
     // STRONGER KaHIP: a second seed and the Eco quality mode. KaHIP's default
@@ -1032,18 +1004,18 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // KAHIP_MULTI_MAX_N/NNZ) — drawn just above the three wins, which caps the
     // added cost at ~0.31 s and leaves the global worst case unmoved.
     // `seed`/`mode` are fixed → deterministic. Best-of floor → zero-downside.
-    if part_extra2 && n < KAHIP_MULTI_MAX_N && nnz < KAHIP_MULTI_MAX_NNZ {
+    if n < KAHIP_MULTI_MAX_N && nnz < KAHIP_MULTI_MAX_NNZ {
         let kahip_seed2 = feral_kahip::KahipOptions {
             seed: 2,
             ..Default::default()
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_kahip::kahip_order_full(&core, &kahip_seed2).map(|(p, _, _)| p));
+        consider(&|| feral_kahip::kahip_order_full(&core, &kahip_seed2).map(|(p, _, _)| p));
 
         let kahip_eco = feral_kahip::KahipOptions {
             mode: feral_kahip::KahipMode::Eco,
             ..Default::default()
         };
-        consider(&mut best_flops, &mut best_perm, &|| feral_kahip::kahip_order_full(&core, &kahip_eco).map(|(p, _, _)| p));
+        consider(&|| feral_kahip::kahip_order_full(&core, &kahip_eco).map(|(p, _, _)| p));
     }
 
     // RELABELLED-AMD MULTI-START — a randomized-restart minimum degree, for free.
@@ -1116,7 +1088,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             feral_amd::AmdOptions { aggressive: false, dense_alpha: 2.0 },
         ];
         let amd_opt = &amd_configs[r % amd_configs.len()];
-        consider(&mut best_flops, &mut best_perm, &|| {
+        consider(&|| {
             let pb = feral_amd::amd_order_opts(&bcore, amd_opt).map(|(p, ..)| p)?;
             // Compose back: `q[k]` is the original vertex that B numbers `k`.
             Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
@@ -1160,11 +1132,16 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // a ratio, never raise it — and TIME is the only thing at stake. See
     // `RELABEL_AMF_MAX_NNZ` for how that is bounded.
     if nnz <= RELABEL_AMF_MAX_NNZ {
+        let amf_restarts = if n >= 10_000 && nnz >= 100_000 {
+            restarts.min(4)
+        } else {
+            restarts
+        };
         let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
         let num_passes: usize = if nnz <= 80_000 { 2 } else { 1 };
         for pass in 0..num_passes {
             let seed_offset = pass as u64 * 1000;
-            for r in 0..restarts {
+            for r in 0..amf_restarts {
                 let seed = seed_offset + r as u64 + 1;
                 let da = amf_alphas[(r + pass) % amf_alphas.len()];
                 let amf_relabel_opts = feral_amf::AmfOptions {
@@ -1181,7 +1158,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     continue;
                 };
 
-                consider(&mut best_flops, &mut best_perm, &|| {
+                consider(&|| {
                     let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_relabel_opts)?;
                     // Compose back: `q[k]` is the original vertex that B numbers `k`.
                     Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
@@ -1192,7 +1169,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         dense_alpha: -1.0,
                         ..Default::default()
                     };
-                    consider(&mut best_flops, &mut best_perm, &|| {
+                    consider(&|| {
                         let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_nd_opts)?;
                         Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
                     });
@@ -1208,10 +1185,9 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         && best_flops < amd_flops
         && best_flops.saturating_mul(5) < amd_flops.saturating_mul(4)
         && nnz > 0
-        && n < EXTRA_RELABEL_MAX_N
-        && nnz <= EXTRA_RELABEL_MAX_NNZ;
+        && nnz <= 100_000;
     if extra_relabel {
-        let extra = 16usize;
+        let extra = if n >= 10_000 { 4usize } else { 16 };
         for r in 0..extra {
             let seed = 50_000u64 + r as u64;
             let q = relabel(n, seed);
@@ -1289,8 +1265,8 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     } else {
         PAIR_DESCENT_OPS_BUDGET
     };
-    let mut well_below;
-    let mut medium_exact_gate;
+    let well_below;
+    let medium_exact_gate;
 
     if pair_descent_gate {
         if let Some(cand) = rgreedy::adjacent_pair_descent(
@@ -1510,7 +1486,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             cfg1.round = 1;
             if n < 1_000 {
                 cfg1.streams = 2;
-                cfg1.budget = 1_000_000; if n >= 1_000 { cfg1.budget /= 2; }
+                cfg1.budget = 1_000_000;
             } else if n < 10_000 {
                 cfg1.max_s = 256;
             } else {
@@ -1555,7 +1531,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 cfg2.round = 1;
                 cfg2.max_blocks = 32;
                 cfg2.min_s = 16;
-                cfg2.budget = 8_000_000; if n >= 1_000 { cfg2.budget /= 2; }
+                cfg2.budget = 8_000_000;
                 // Wider round-2 window only on below-anchor medium graphs.
                 // Raising lt_1k / gt_10k max_s here regresses those buckets
                 // (0055; this session's full-width trial scored 0.843829).
@@ -1610,7 +1586,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                         cfg3.max_blocks = 32;
                         cfg3.min_s = 16;
                         cfg3.max_s = 512;
-                        cfg3.budget = 8_000_000; if n >= 1_000 { cfg3.budget /= 2; }
+                        cfg3.budget = 8_000_000;
                         let improved3 = rgreedy::subtree_refine(
                             n,
                             &pattern.col_ptr,
@@ -1661,7 +1637,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                     64_000_000
                                 } else {
                                     32_000_000
-                                }; if n >= 1_000 { cfg4.budget /= 2; }
+                                };
                                 let improved4 = rgreedy::subtree_refine(
                                      n,
                                      &pattern.col_ptr,
@@ -1703,10 +1679,10 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                         if n < 100_000 || best_flops != amd_flops {
                                             if (1_000..4_000).contains(&n) {
                                                 cfg5.max_blocks = 16;
-                                                cfg5.budget = 32_000_000; if n >= 1_000 { cfg5.budget /= 2; }
+                                                cfg5.budget = 32_000_000;
                                             } else {
                                                 cfg5.max_blocks = 32;
-                                                cfg5.budget = 16_000_000; if n >= 1_000 { cfg5.budget /= 2; }
+                                                cfg5.budget = 16_000_000;
                                             }
                                             let improved5 = rgreedy::subtree_refine(
                                                 n,
@@ -1800,7 +1776,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                     cfg2.min_s = 8;
                     cfg2.max_s = if n >= 10_000 { 512 } else { 384 };
                     cfg2.max_blocks = if best_flops < amd_flops { 4 } else { 2 };
-                    cfg2.budget = 4_000_000; if n >= 1_000 { cfg2.budget /= 2; }
+                    cfg2.budget = 4_000_000;
                     let improved2 = rgreedy::subtree_refine(
                         n,
                         &pattern.col_ptr,
@@ -1841,7 +1817,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                                 cfg3.min_s = 8;
                                 cfg3.max_s = if n >= 10_000 { 512 } else { 384 };
                                 cfg3.max_blocks = if best_flops < amd_flops { 4 } else { 2 };
-                                cfg3.budget = 4_000_000; if n >= 1_000 { cfg3.budget /= 2; }
+                                cfg3.budget = 4_000_000;
                                 let improved3 = rgreedy::subtree_refine(
                                     n,
                                     &pattern.col_ptr,
@@ -1889,7 +1865,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         extra.min_s = 16;
         extra.max_s = 512;
         extra.max_blocks = 4;
-        extra.budget = 4_000_000; if n >= 1_000 { extra.budget /= 2; }
+        extra.budget = 4_000_000;
         extra.round = 8;
         let improved = rgreedy::subtree_refine(
             n,
@@ -1968,91 +1944,6 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
             }
             if !round_improved {
                 break;
-            }
-        }
-    }
-
-    // ── REDUCE-THEN-AMF, TERMINAL (matrices_mage) ───────────────────────────
-    // Peel pendants and eliminate every vertex of live degree <= REDUCE_ROW_DEG
-    // EXACTLY (each elimination closes its live neighbourhood into a clique, so
-    // the residual is the exact fill graph after the prefix and Σ c_j² splits
-    // into a FIXED prefix term plus a term computed on the core alone). Run the
-    // AMF alpha grid and AMD on the residual core, rank the core orderings on
-    // the core graph (exact by the split), splice the argmin behind the prefix
-    // and admit it through the trusted scorer with strict `<` against the
-    // finished pipeline. Placed LAST on purpose: as a portfolio candidate it
-    // displaces the pool argmin and re-seeds the descent phases (non-monotone);
-    // here the pipeline above is byte-identical and this can only lower the
-    // result. Gated on (n, nnz) and the core size only — never on identity.
-    if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
-        let lifted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            core_lift::reduce(
-                &scoring_pat,
-                REDUCE_ROW_DEG,
-                REDUCE_MAX_CORE_N,
-                REDUCE_MAX_CORE_EDGES,
-            )
-        }));
-        if let Ok(Some(cl)) = lifted {
-            let cn = cl.core_n();
-            if cn > 0 && cn < n && cl.core_nnz() <= REDUCE_MAX_CORE_NNZ {
-                let core_pat = ScoringPattern {
-                    n: cn,
-                    col_ptr: cl.core_col_ptr.clone(),
-                    row_idx: cl.core_row_idx.clone(),
-                };
-                let ccp: Vec<i32> = cl.core_col_ptr.iter().map(|&x| x as i32).collect();
-                let cri: Vec<i32> = cl.core_row_idx.iter().map(|&x| x as i32).collect();
-                // Four AMF alphas + AMD, each an independent pure function of
-                // the core; results are merged by task index, so thread timing
-                // never reaches the output.
-                let results: Vec<Option<(u64, Vec<usize>)>> = std::thread::scope(|sc| {
-                    let handles: Vec<_> = (0..=REDUCE_ALPHAS.len())
-                        .map(|k| {
-                            let (ccp, cri, core_pat) = (&ccp, &cri, &core_pat);
-                            sc.spawn(move || -> Option<(u64, Vec<usize>)> {
-                                let ccore =
-                                    feral_ordering_core::CscPattern::new(cn, ccp, cri)?;
-                                let p: Vec<i32> = if k < REDUCE_ALPHAS.len() {
-                                    let o = feral_amf::AmfOptions {
-                                        dense_alpha: REDUCE_ALPHAS[k],
-                                        ..Default::default()
-                                    };
-                                    feral_amf::amf_order_opts(&ccore, &o).ok()?.0
-                                } else {
-                                    feral_amd::amd_order(&ccore).ok()?
-                                };
-                                let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
-                                if !is_bijection(&cp, cn) {
-                                    return None;
-                                }
-                                let f = flops_of(core_pat, &cp);
-                                Some((f, cp))
-                            })
-                        })
-                        .collect();
-                    handles.into_iter().map(|h| h.join().ok().flatten()).collect()
-                });
-                let mut pick: Option<(u64, usize)> = None;
-                for (k, r) in results.iter().enumerate() {
-                    if let Some((f, _)) = r {
-                        if pick.map_or(true, |(bf, _)| *f < bf) {
-                            pick = Some((*f, k));
-                        }
-                    }
-                }
-                if let Some((_, k)) = pick {
-                    if let Some((_, cp)) = &results[k] {
-                        let cand = core_lift::splice(&cl, cp);
-                        if is_bijection(&cand, n) {
-                            let f = flops_of(&scoring_pat, &cand);
-                            if f < best_flops {
-                                best_flops = f;
-                                best_perm = cand;
-                            }
-                        }
-                    }
-                }
             }
         }
     }

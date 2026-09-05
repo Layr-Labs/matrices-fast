@@ -60,20 +60,34 @@ fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) ->
     product
 }
 
-pub(crate) fn rank_alpha_three_quarters_cmp(
+/// Compare candidate elimination-tree subtrees by estimated efficiency density
+/// (`delta_flops / size^1.5`).
+///
+/// Squaring both sides yields `delta_flops^2 / size^3`. Cross-multiplying yields:
+/// `b.2^2 * len_a^3` vs `a.2^2 * len_b^3`.
+/// Deterministic tie-breaking falls back to larger flop contribution (`b.2.cmp(&a.2)`),
+/// then larger root position (`b.1.cmp(&a.1)`).
+pub(crate) fn rank_efficiency_density_cmp(
     a: &(usize, usize, u64),
     b: &(usize, usize, u64),
 ) -> std::cmp::Ordering {
     let len_a = a.1 + 1 - a.0;
     let len_b = b.1 + 1 - b.0;
-    let b_cross = rank_product(b.2, 4, len_a, 3);
-    let a_cross = rank_product(a.2, 4, len_b, 3);
+    let b_cross = rank_product(b.2, 2, len_a, 3);
+    let a_cross = rank_product(a.2, 2, len_b, 3);
     b_cross
         .iter()
         .rev()
         .cmp(a_cross.iter().rev())
         .then_with(|| b.2.cmp(&a.2))
         .then_with(|| b.1.cmp(&a.1))
+}
+
+pub(crate) fn rank_alpha_three_quarters_cmp(
+    a: &(usize, usize, u64),
+    b: &(usize, usize, u64),
+) -> std::cmp::Ordering {
+    rank_efficiency_density_cmp(a, b)
 }
 
 /// Largest `n` this module will allocate for. Memory is `2 · n · ⌈n/64⌉ · 8`
@@ -818,8 +832,8 @@ pub(crate) fn search_with_nelim(
         let pol = pols[it % pols.len()];
         let wi = it % nwalk;
         it += 1;
-        let thresh = best + best / par.accept_den * par.accept_num;
-        let bound = if thresh > cur_f[wi] { thresh } else { cur_f[wi] } + 1;
+        let thresh = best.saturating_add(best / par.accept_den * par.accept_num);
+        let bound = if thresh > cur_f[wi] { thresh } else { cur_f[wi] }.saturating_add(1);
         let taken = std::mem::take(&mut cur[wi]);
         let r = g.run(&taken[..p.min(taken.len())], pol, &mut rng, bound, hard_cap, &mut out);
         cur[wi] = taken;
@@ -1649,14 +1663,20 @@ pub(crate) fn adjacent_four_descent(
         }
         let mut k = offset;
         while k + 3 < n {
-            if !work.charge(four_window_work(words)) {
-                return changed.then_some(cur);
-            }
             let window = [cur[k], cur[k + 1], cur[k + 2], cur[k + 3]];
-            let (order, best, incumbent) = FourWindow::new(&game, window).solve();
-            if best < incumbent {
-                cur[k..k + 4].copy_from_slice(&order.map(|i| window[i]));
-                changed = true;
+            let d0 = game.deg[window[0]];
+            let d1 = game.deg[window[1]];
+            let d2 = game.deg[window[2]];
+            let d3 = game.deg[window[3]];
+            if !(d0 <= d1 && d1 <= d2 && d2 <= d3) {
+                if !work.charge(four_window_work(words)) {
+                    return changed.then_some(cur);
+                }
+                let (order, best, incumbent) = FourWindow::new(&game, window).solve();
+                if best < incumbent {
+                    cur[k..k + 4].copy_from_slice(&order.map(|i| window[i]));
+                    changed = true;
+                }
             }
             k += 4;
             if k + 3 < n {
@@ -2004,10 +2024,11 @@ pub(crate) fn adjacent_five_descent(
 /// Ost, Schulz, and Strash (arXiv:2004.11315) prove that a simplicial vertex is
 /// safe to eliminate immediately. At each exact elimination state, this pass
 /// looks 2..=16 positions ahead of the planned pivot `x`. A future simplicial
-/// neighbor with smaller current degree is moved in front of `x`; the minimum
-/// `(degree, position, vertex id)` wins and every other vertex keeps its relative
-/// order. The caller still re-scores the completed candidate with the canonical
-/// symbolic scorer and accepts strict improvements only.
+/// neighbor with smaller current degree is moved in front of `x`; ties between
+/// multiple simplicial vertices are broken by degree descending to prioritize
+/// large cliques (then position and vertex id ascending). Every other vertex
+/// keeps its relative order. The caller still re-scores the completed candidate
+/// with the canonical symbolic scorer and accepts strict improvements only.
 ///
 /// Every potentially expensive operation is charged *before* it runs. If the
 /// deterministic budget cannot cover validation, graph construction, a
@@ -2109,7 +2130,7 @@ pub(crate) fn simplicial_promotion(
         let x = cur[k];
         let x_degree = game.deg[x];
         let last = (k + MAX_DISTANCE).min(n - 1);
-        let mut best: Option<(u32, usize, usize)> = None;
+        let mut best: Option<(std::cmp::Reverse<u32>, usize, usize)> = None;
 
         for (j, &v) in cur.iter().enumerate().take(last + 1).skip(k + 2) {
             // Position/id reads, degree comparison, and adjacency membership.
@@ -2129,7 +2150,7 @@ pub(crate) fn simplicial_promotion(
                 return None;
             }
             if game.deficiency(v) == 0 {
-                let key = (degree, j, v);
+                let key = (std::cmp::Reverse(degree), j, v);
                 if best.is_none_or(|old| key < old) {
                     best = Some(key);
                 }
@@ -2297,17 +2318,17 @@ pub(crate) fn subtree_refine(
         let mut ranked: Vec<(usize, usize, u64)> = blocks
             .drain(..)
             .map(|(a, b)| {
-                let contribution = counts[a..=b]
+                let delta_flops = counts[a..=b]
                     .iter()
                     .map(|&c| {
                         let c = c as u64;
                         c * c
                     })
                     .sum();
-                (a, b, contribution)
+                (a, b, delta_flops)
             })
             .collect();
-        ranked.sort_by(rank_alpha_three_quarters_cmp);
+        ranked.sort_by(rank_efficiency_density_cmp);
         let ranked_limit = if split_ranked_streams {
             96
         } else {
@@ -2343,6 +2364,9 @@ pub(crate) fn subtree_refine(
                     let mut touched: Vec<usize> = Vec::new();
                     let mut verts: Vec<usize> = Vec::new();
                     let mut got: Vec<(usize, Vec<usize>)> = Vec::new();
+                    let max_sub_bound = cfg.max_sub.min(MAX_N);
+                    let max_adj_words = max_sub_bound.saturating_mul(max_sub_bound.div_ceil(64));
+                    let mut adj0: Vec<u64> = vec![0u64; max_adj_words];
                     let mut bi = t;
                     while bi < blocks_ro.len() {
                         let block_rank = bi;
@@ -2364,7 +2388,11 @@ pub(crate) fn subtree_refine(
 
                         // Induced adjacency over S u boundary, as bitsets.
                         let w = m.div_ceil(64);
-                        let mut adj0 = vec![0u64; m * w];
+                        let needed = m * w;
+                        if adj0.len() < needed {
+                            adj0.resize(needed, 0);
+                        }
+                        adj0[..needed].fill(0);
                         for (li, &v) in verts.iter().enumerate() {
                             for &u in &row_idx[col_ptr[v]..col_ptr[v + 1]] {
                                 if u >= n {
@@ -2418,7 +2446,7 @@ pub(crate) fn subtree_refine(
                             }
                             let r = search_with_nelim(
                                 m,
-                                &adj0,
+                                &adj0[..needed],
                                 ssz,
                                 &seed,
                                 seed_flops,
@@ -2475,8 +2503,7 @@ pub(crate) struct SubCfg {
     /// Streams per block (sequential here; the caller parallelises over
     /// blocks, which is the coarser and cheaper axis).
     pub(crate) streams: usize,
-    /// Select blocks by exact incumbent objective contribution divided by
-    /// subtree size to the three-quarter power.
+    /// Select blocks by estimated efficiency density (delta_flops / size^1.5).
     pub(crate) rank_blocks: bool,
     /// Zero-based outer RGSUB round, used only to diversify an equal-work seed.
     pub(crate) round: usize,
@@ -2580,6 +2607,118 @@ mod subtree_preparation_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn subtree_refine_preallocated_bitset_deterministic_and_valid() {
+        use feral::ordering::amd::permute_pattern;
+        use feral::ordering::elimination_tree::EliminationTree;
+        use feral::symbolic::column_counts_gnp;
+
+        let n = 80;
+        let mut edges = Vec::new();
+        for i in 0..n {
+            if i + 1 < n {
+                edges.push((i, i + 1));
+            }
+            if i + 2 < n {
+                edges.push((i, i + 2));
+            }
+            if i + 5 < n {
+                edges.push((i, i + 5));
+            }
+        }
+        let pat = Pattern::from_edges(n, &edges);
+        let scoring_pat = super::super::ScoringPattern {
+            n: pat.n,
+            col_ptr: pat.col_ptr.clone(),
+            row_idx: pat.row_idx.clone(),
+        };
+        let perm: Vec<usize> = (0..n).collect();
+        let permuted = permute_pattern(&scoring_pat, &perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let candidate: Vec<usize> = post.iter().map(|&j| perm[j]).collect();
+        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let cfg = SubCfg {
+            min_s: 4,
+            max_s: 32,
+            max_sub: 64,
+            max_blocks: 16,
+            budget: 10_000,
+            streams: 1,
+            rank_blocks: true,
+            round: 0,
+        };
+        let mut cand1 = candidate.clone();
+        let mut cand2 = candidate.clone();
+        let imp1 = subtree_refine(n, &pat.col_ptr, &pat.row_idx, &mut cand1, &counts, &parent, cfg);
+        let imp2 = subtree_refine(n, &pat.col_ptr, &pat.row_idx, &mut cand2, &counts, &parent, cfg);
+        assert_eq!(imp1, imp2);
+        assert_eq!(cand1, cand2);
+        assert!(super::super::is_bijection(&cand1, n));
+    }
+}
+
+#[cfg(test)]
+mod efficiency_density_ranking_tests {
+    use super::*;
+
+    #[test]
+    fn ranks_by_efficiency_density_not_raw_flops() {
+        // Block A: size = 4, delta_flops = 16. density = 16 / 4^1.5 = 16 / 8 = 2.0 (density^2 = 4.0)
+        // Block B: size = 8, delta_flops = 45. density = 45 / 8^1.5 ≈ 1.9888 (density^2 = 3.955)
+        // Raw flops: B (45) > A (16).
+        // Efficiency density: A (2.0) > B (1.9888).
+        let block_a = (0, 3, 16);
+        let block_b = (4, 11, 45);
+
+        let mut blocks = vec![block_b, block_a];
+        blocks.sort_by(rank_efficiency_density_cmp);
+        assert_eq!(blocks, vec![block_a, block_b]);
+    }
+
+    #[test]
+    fn tie_breaking_prefers_larger_delta_flops_then_root_position() {
+        // Equal density:
+        // C: size = 1, delta_flops = 10, root = 0. density = 10.0 (density^2 = 100)
+        // D: size = 4, delta_flops = 80, root = 4. density = 80 / 8 = 10.0 (density^2 = 100)
+        // Raw flops tie-break: D (80) > C (10).
+        let block_c = (0, 0, 10);
+        let block_d = (1, 4, 80);
+        let mut blocks1 = vec![block_c, block_d];
+        blocks1.sort_by(rank_efficiency_density_cmp);
+        assert_eq!(blocks1, vec![block_d, block_c]);
+
+        // Equal density AND equal delta_flops:
+        // E: range 0..=3 (size = 4, root = 3), delta_flops = 16
+        // F: range 4..=7 (size = 4, root = 7), delta_flops = 16
+        // Root position tie-break: F (root = 7) > E (root = 3).
+        let block_e = (0, 3, 16);
+        let block_f = (4, 7, 16);
+        let mut blocks2 = vec![block_e, block_f];
+        blocks2.sort_by(rank_efficiency_density_cmp);
+        assert_eq!(blocks2, vec![block_f, block_e]);
+    }
+
+    #[test]
+    fn legacy_comparator_alias_matches_efficiency_density() {
+        let block_a = (0, 3, 16);
+        let block_b = (4, 11, 45);
+        assert_eq!(
+            rank_alpha_three_quarters_cmp(&block_a, &block_b),
+            rank_efficiency_density_cmp(&block_a, &block_b)
+        );
     }
 }
 
@@ -3238,6 +3377,21 @@ mod four_window_tests {
         assert!(improvements > 0);
         println!("FOUR_CANONICAL improving_cases={improvements}");
     }
+
+    #[test]
+    fn four_window_degree_precheck_rejects_monotonic_window() {
+        let mut edges = vec![(1, 2), (2, 3), (1, 3)];
+        for v in 5..8 {
+            edges.push((4, v));
+        }
+        let pat = Pattern::from_edges(8, &edges);
+        let seed: Vec<_> = (0..8).collect();
+        let candidate = adjacent_four_descent(8, &pat.col_ptr, &pat.row_idx, &seed, 4900)
+            .expect("second window improves because monotonic first window bypassed evaluation charge");
+        assert_eq!(&candidate[..4], &seed[..4]);
+        assert_ne!(&candidate[4..], &seed[4..]);
+        assert!(canonical(&pat, &candidate) < canonical(&pat, &seed));
+    }
 }
 
 #[cfg(test)]
@@ -3548,5 +3702,25 @@ mod five_window_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod simplicial_promotion_tests {
+    use super::super::Pattern;
+    use super::*;
+
+    #[test]
+    fn simplicial_promotion_prioritizes_higher_degree_cliques() {
+        let n = 6;
+        let edges = [(0, 1), (0, 2), (0, 3), (0, 4), (2, 3)];
+        let pat = Pattern::from_edges(n, &edges);
+        let seed = vec![0, 5, 1, 2, 3, 4];
+        let promoted = simplicial_promotion(n, &pat.col_ptr, &pat.row_idx, &seed, 1_000_000)
+            .expect("simplicial promotion should succeed");
+        assert_eq!(
+            promoted[0], 2,
+            "Higher degree simplicial vertex (v=2, deg=2) must be promoted over lower degree (v=1, deg=1)"
+        );
     }
 }

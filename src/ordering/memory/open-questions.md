@@ -7,7 +7,6 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Active
 
-- [ ] **Work the residual core, not the full matrix (0062 substrate).** After the exact degree-<=3 prefix the core is ~n/3 with the same objective. Untested on the core: relabelled AMF/AMD multistart (tickets ~3x cheaper), multi-depth prefixes K in {2,4,5} (distinct cores only), and the late phases run on the core under a per-call WORK budget as a REPLACEMENT of a late phase (never additive on rows >= 0.8 s). See [0062](experiments/0062-reduce-then-amf-terminal.md).
 - [ ] **Relabel the OTHER numbering-sensitive routines (top lead).**
       [0005](experiments/0005-relabelled-amf-multistart.md) established the general
       form: *any* ordering routine whose output depends on the input vertex numbering

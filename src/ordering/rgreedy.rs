@@ -2109,7 +2109,7 @@ pub(crate) fn simplicial_promotion(
         let x = cur[k];
         let x_degree = game.deg[x];
         let last = (k + MAX_DISTANCE).min(n - 1);
-        let mut best: Option<(u32, usize, usize)> = None;
+        let mut best: Option<(std::cmp::Reverse<u32>, usize, usize)> = None;
 
         for (j, &v) in cur.iter().enumerate().take(last + 1).skip(k + 2) {
             // Position/id reads, degree comparison, and adjacency membership.
@@ -2129,7 +2129,7 @@ pub(crate) fn simplicial_promotion(
                 return None;
             }
             if game.deficiency(v) == 0 {
-                let key = (degree, j, v);
+                let key = (std::cmp::Reverse(degree), j, v);
                 if best.is_none_or(|old| key < old) {
                     best = Some(key);
                 }
@@ -2343,6 +2343,9 @@ pub(crate) fn subtree_refine(
                     let mut touched: Vec<usize> = Vec::new();
                     let mut verts: Vec<usize> = Vec::new();
                     let mut got: Vec<(usize, Vec<usize>)> = Vec::new();
+                    let max_sub_bound = cfg.max_sub.min(MAX_N);
+                    let max_adj_words = max_sub_bound.saturating_mul(max_sub_bound.div_ceil(64));
+                    let mut adj0: Vec<u64> = vec![0u64; max_adj_words];
                     let mut bi = t;
                     while bi < blocks_ro.len() {
                         let block_rank = bi;
@@ -2364,7 +2367,11 @@ pub(crate) fn subtree_refine(
 
                         // Induced adjacency over S u boundary, as bitsets.
                         let w = m.div_ceil(64);
-                        let mut adj0 = vec![0u64; m * w];
+                        let needed = m * w;
+                        if adj0.len() < needed {
+                            adj0.resize(needed, 0);
+                        }
+                        adj0[..needed].fill(0);
                         for (li, &v) in verts.iter().enumerate() {
                             for &u in &row_idx[col_ptr[v]..col_ptr[v + 1]] {
                                 if u >= n {
@@ -2418,7 +2425,7 @@ pub(crate) fn subtree_refine(
                             }
                             let r = search_with_nelim(
                                 m,
-                                &adj0,
+                                &adj0[..needed],
                                 ssz,
                                 &seed,
                                 seed_flops,

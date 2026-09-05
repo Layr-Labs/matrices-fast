@@ -1905,10 +1905,112 @@ impl FiveWindow {
     }
 }
 
-/// One complete five-offset, stride-five terminal cycle under the inherited
-/// single cleanup allowance. Finished strict gains and untouched suffixes
-/// survive either metadata/scan refusal or replay exhaustion. Windows shorter
-/// than five, including n=4 previously handled by the four-pivot pass, do nothing.
+/// Exact six-pivot subset DP. A pivot's width depends only on its connected
+/// component within the eliminated subset plus that pivot, not on path order.
+struct SixWindow {
+    internal_union: [u8; 64],
+    component_width: [u32; 64],
+}
+
+impl SixWindow {
+    fn new(game: &Game<'_>, verts: [usize; 6], work: &mut TripleWork) -> Option<Self> {
+        // Precharge topology, closure walks, 192 DP transitions, reconstruction,
+        // and per-word subset unions. This is a logical allowance, not timing.
+        if !work.charge(32_768usize.saturating_add(1024usize.saturating_mul(game.w))) {
+            return None;
+        }
+        let rows = verts.map(|v| &game.adj[v * game.w..(v + 1) * game.w]);
+        let mut inside = [0u8; 6];
+        for i in 0..6 {
+            for j in 0..6 {
+                if rows[i][verts[j] >> 6] & (1u64 << (verts[j] & 63)) != 0 {
+                    inside[i] |= 1 << j;
+                }
+            }
+        }
+        let mut internal_union = [0u8; 64];
+        let mut connected = [false; 64];
+        for mask in 1usize..64 {
+            internal_union[mask] = internal_union[mask & (mask - 1)]
+                | inside[mask.trailing_zeros() as usize];
+        }
+        for mask in 1usize..64 {
+            let mut component = 1u8 << mask.trailing_zeros();
+            loop {
+                let expanded = component | (internal_union[component as usize] & mask as u8);
+                if expanded == component { break; }
+                component = expanded;
+            }
+            connected[mask] = component as usize == mask;
+        }
+        let mut component_width = [0u32; 64];
+        for word in 0..game.w {
+            let mut unions = [0u64; 64];
+            for mask in 1usize..64 {
+                unions[mask] = unions[mask & (mask - 1)]
+                    | rows[mask.trailing_zeros() as usize][word];
+                if connected[mask] && mask.count_ones() > 1 {
+                    component_width[mask] += unions[mask].count_ones();
+                }
+            }
+        }
+        for mask in 1usize..64 {
+            if mask.count_ones() == 1 {
+                component_width[mask] = game.deg[verts[mask.trailing_zeros() as usize]] + 1;
+            } else if connected[mask] {
+                component_width[mask] -= mask.count_ones() - 1;
+            }
+        }
+        Some(Self { internal_union, component_width })
+    }
+
+    fn width(&self, eliminated: u8, pivot: usize) -> u64 {
+        let mut component = 1u8 << pivot;
+        loop {
+            let expanded = component | (self.internal_union[component as usize] & eliminated);
+            if expanded == component { break; }
+            component = expanded;
+        }
+        self.component_width[component as usize] as u64
+    }
+
+    fn solve(&self) -> ([usize; 6], u64, u64) {
+        let mut best = [u64::MAX; 64];
+        // Six base-eight digits need 18 bits, so the five-pivot u16 is too small.
+        let mut path = [u32::MAX; 64];
+        best[0] = 0;
+        path[0] = 0;
+        for mask in 0usize..63 {
+            for pivot in 0..6 {
+                let bit = 1usize << pivot;
+                if mask & bit != 0 { continue; }
+                let width = self.width(mask as u8, pivot);
+                let cost = best[mask] + width * width;
+                let code = (path[mask] << 3) | pivot as u32;
+                let next = mask | bit;
+                if cost < best[next] || (cost == best[next] && code < path[next]) {
+                    best[next] = cost;
+                    path[next] = code;
+                }
+            }
+        }
+        let incumbent = (0..6).map(|pivot| {
+            let width = self.width((1 << pivot) - 1, pivot);
+            width * width
+        }).sum();
+        let order = if best[63] < incumbent {
+            [15, 12, 9, 6, 3, 0].map(|shift| ((path[63] >> shift) & 7) as usize)
+        } else {
+            [0, 1, 2, 3, 4, 5]
+        };
+        (order, best[63], incumbent)
+    }
+}
+
+/// One left-to-right sliding five-pivot sweep under a single cleanup allowance.
+/// Finalize one pivot after each window, retaining the live elimination state
+/// for the next overlapping window. Finished gains survive budget exhaustion.
+/// Windows shorter than five do nothing.
 pub(crate) fn adjacent_five_descent(
     n: usize,
     col_ptr: &[usize],
@@ -1916,7 +2018,29 @@ pub(crate) fn adjacent_five_descent(
     seed: &[usize],
     budget: i64,
 ) -> Option<Vec<usize>> {
-    if n < 5 || n > MAX_N || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
+    sliding_window_descent(n, col_ptr, row_idx, seed, budget, 5)
+}
+
+pub(crate) fn adjacent_six_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    budget: i64,
+) -> Option<Vec<usize>> {
+    sliding_window_descent(n, col_ptr, row_idx, seed, budget, 6)
+}
+
+fn sliding_window_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    budget: i64,
+    width: usize,
+) -> Option<Vec<usize>> {
+    if !(5..=6).contains(&width) || n < width || n > MAX_N || budget <= 0
+        || seed.len() != n || col_ptr.len() != n + 1 {
         return None;
     }
     let mut work = TripleWork { remaining: budget };
@@ -1962,21 +2086,22 @@ pub(crate) fn adjacent_five_descent(
         .saturating_mul(n)
         .saturating_mul(words)
         .saturating_add(8usize.saturating_mul(n));
-    for offset in 0..5 {
-        if offset + 5 > n {
-            break;
-        }
-        if !work.charge(reset) {
-            return changed.then_some(cur);
-        }
-        game.reset();
-        for &v in cur.iter().take(offset) {
-            if !work.eliminate(&mut game, v) {
+    if !work.charge(reset) {
+        return None;
+    }
+    game.reset();
+    for k in 0..=n - width {
+        if width == 6 {
+            let window = [cur[k], cur[k + 1], cur[k + 2], cur[k + 3], cur[k + 4], cur[k + 5]];
+            let Some(kernel) = SixWindow::new(&game, window, &mut work) else {
                 return changed.then_some(cur);
+            };
+            let (order, best, incumbent) = kernel.solve();
+            if best < incumbent {
+                cur[k..k + 6].copy_from_slice(&order.map(|i| window[i]));
+                changed = true;
             }
-        }
-        let mut k = offset;
-        while k + 4 < n {
+        } else {
             let window = [cur[k], cur[k + 1], cur[k + 2], cur[k + 3], cur[k + 4]];
             let Some(kernel) = FiveWindow::new(&game, window, &mut work) else {
                 return changed.then_some(cur);
@@ -1986,14 +2111,11 @@ pub(crate) fn adjacent_five_descent(
                 cur[k..k + 5].copy_from_slice(&order.map(|i| window[i]));
                 changed = true;
             }
-            k += 5;
-            if k + 4 < n {
-                for &v in &cur[k - 5..k] {
-                    if !work.eliminate(&mut game, v) {
-                        return changed.then_some(cur);
-                    }
-                }
-            }
+        }
+        // Later windows never touch this pivot. Replay its accepted identity,
+        // not the seed identity, before inspecting the next live window.
+        if k + width < n && !work.eliminate(&mut game, cur[k]) {
+            return changed.then_some(cur);
         }
     }
     changed.then_some(cur)
@@ -3516,6 +3638,94 @@ mod five_window_tests {
             adjacent_five_descent(4, &small.col_ptr, &small.row_idx, &[0, 1, 2, 3], i64::MAX)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn sliding_five_window_carries_hub_across_overlapping_windows() {
+        for n in 5..=12 {
+            let edges: Vec<_> = (1..n).map(|v| (0, v)).collect();
+            let pat = Pattern::from_edges(n, &edges);
+            let seed: Vec<_> = (0..n).collect();
+            let candidate = adjacent_five_descent(
+                n, &pat.col_ptr, &pat.row_idx, &seed, 1_000_000,
+            ).expect("star admits a strict leaf-first improvement");
+            assert!(is_bijection(&candidate, n));
+            assert!(candidate.iter().position(|&v| v == 0).unwrap() >= n - 2);
+            assert!(canonical(&pat, &candidate) < canonical(&pat, &seed));
+        }
+    }
+
+    #[test]
+    fn six_window_matches_explicit_elimination_oracle() {
+        fn enumerate(graph: Vec<Vec<bool>>, used: u8, cost: u64, best: &mut u64) {
+            if used == 63 {
+                *best = (*best).min(cost);
+                return;
+            }
+            for p in 0..6 {
+                if used & (1 << p) == 0 {
+                    let mut next = graph.clone();
+                    let width = oracle_eliminate(&mut next, p + 2);
+                    enumerate(next, used | (1 << p), cost + width * width, best);
+                }
+            }
+        }
+        let mut rng = 0x34A8_7112_984E_6B09;
+        for sample in 0..16 {
+            let n = 10;
+            let mut edges = Vec::new();
+            let mut graph = vec![vec![false; n]; n];
+            for u in 0..n {
+                for v in u + 1..n {
+                    if xs64(&mut rng) % 16 <= sample {
+                        edges.push((u, v));
+                        graph[u][v] = true;
+                        graph[v][u] = true;
+                    }
+                }
+            }
+            let pat = Pattern::from_edges(n, &edges);
+            let adj = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
+            let mut game = Game::new(n, &adj).unwrap();
+            game.reset();
+            for v in 0..2 {
+                game.eliminate(v);
+                oracle_eliminate(&mut graph, v);
+            }
+            let mut work = TripleWork { remaining: 1_000_000 };
+            let kernel = SixWindow::new(&game, [2, 3, 4, 5, 6, 7], &mut work).unwrap();
+            for mask in 0u8..64 {
+                let mut residual = graph.clone();
+                for p in 0..6 {
+                    if mask & (1 << p) != 0 { oracle_eliminate(&mut residual, p + 2); }
+                }
+                for p in 0..6 {
+                    if mask & (1 << p) == 0 {
+                        let width = residual[p + 2].iter().filter(|&&edge| edge).count() as u64 + 1;
+                        assert_eq!(kernel.width(mask, p), width);
+                    }
+                }
+            }
+            let mut optimum = u64::MAX;
+            enumerate(graph.clone(), 0, 0, &mut optimum);
+            let (order, cost, incumbent) = kernel.solve();
+            assert_eq!(cost, optimum);
+            assert!(is_bijection(&order, 6));
+            let mut residual = graph.clone();
+            let realized: u64 = order.into_iter().map(|p| {
+                let width = oracle_eliminate(&mut residual, p + 2);
+                width * width
+            }).sum();
+            assert_eq!(realized, optimum);
+            let original: u64 = (2..8).map(|p| {
+                let width = oracle_eliminate(&mut graph, p);
+                width * width
+            }).sum();
+            assert_eq!(incumbent, original);
+            if cost == incumbent { assert_eq!(order, [0, 1, 2, 3, 4, 5]); }
+            let mut denied = TripleWork { remaining: 0 };
+            assert!(SixWindow::new(&game, [2, 3, 4, 5, 6, 7], &mut denied).is_none());
+        }
     }
 
     #[test]

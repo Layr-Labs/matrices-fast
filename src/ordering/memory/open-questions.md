@@ -33,6 +33,17 @@ it, rather than deleting it — a resolved question is a useful signpost.
       first round loses (0.843829). Widening k5/k4 to `n <= 12k` and adding
       `adjacent_triple_descent` convert nothing. `gt_10k` leftover nnz 60k–100k did not
       move at four digits.
+- [x] **RESOLVED (negative, hidden timeout) — Widen leftover well-below from 0.80 to 0.90 on large extra relabel.**
+      Answered by [0062](experiments/0062-wider-margin-and-second-miss-retry.md):
+      Local 0.843358 → **0.842991** (−3.67 bip), but submission `395313f1` failed
+      the hidden 2 s cap. Extra relabel at 0.90 on `n >= 10k` is closed.
+      Isolated second miss-retry −2.10 bip (almost all `pooling_sppa9tp`).
+      Third miss-retry and extra well-below pass 9 add no movers. `gt_10k` nnz ~120k
+      still cannot be opened (crudeoil vs ringpack). See [0063](experiments/0063-drop-large-090-extra-relabel.md).
+- [x] **RESOLVED (pending hidden) — Keep 0062 leftover tickets off large graphs.**
+      Answered by [0063](experiments/0063-drop-large-090-extra-relabel.md):
+      Large extra relabel stays on the 0061 `ratio < 0.80` gate. 0.90 LNS and the
+      second miss-retry stay (`n < 10k`). Local movers were all `n < 10k`.
 - [ ] **Sweep the relabelled-AMF `dense_alpha`.** Shipped at α=5.0 only (the base AMF
       candidate's α). α ∈ {0.5, 2.0, 2.5} is the same argument one level down — a
       different α is a different objective, hence another distinct lottery — and it is

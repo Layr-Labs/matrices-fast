@@ -1962,9 +1962,11 @@ pub(crate) fn adjacent_five_descent(
         .saturating_mul(n)
         .saturating_mul(words)
         .saturating_add(8usize.saturating_mul(n));
-    for offset in 0..5 {
+    // Interleave boundary offsets so neighboring sweeps do not always inherit
+    // the immediately preceding alignment. Preserve all five bounded sweeps.
+    for offset in [0, 2, 4, 1, 3] {
         if offset + 5 > n {
-            break;
+            continue;
         }
         if !work.charge(reset) {
             return changed.then_some(cur);

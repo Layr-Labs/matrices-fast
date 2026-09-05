@@ -5,12 +5,9 @@ first; keep it current whenever you add, rename, or retire a page.
 
 ## Verified 2026-09-05 checkpoint
 
-- Current shippable locally verified candidate score: **0.843358** on all 300 dev matrices, 2026-09-05. Tip `649ae53` / hidden **0.869723** re-measured at 0.843658. Margin-scaled leftover search on well-below-anchor matrices: lt_1k **0.8903** / 1k_10k **0.8650** / gt_10k **0.7919** (−3.00 bips). Worst same-machine order() 1.347 s (faster than tip 1.356 s). See [0061](experiments/0061-margin-scaled-leftover-search.md).
-- Preceding 0060 substitutive escalation: local **0.843657**, hidden **0.869723** (promoted `bd451297`). See [0060](experiments/0060-conditional-search-escalation-below-anchor.md).
+- Current shippable locally verified candidate score: **0.843657** (fill **0.943813**) on all 300 dev matrices, 2026-09-05. Base `ea67ff8` score 0.843978. Conditional search escalation on below-anchor matrices: lt_1k **0.890328** / 1k_10k **0.865965** / gt_10k **0.791924** (−3.21 bips gain). Worst same-machine order() 1.352 s (faster than base 1.358 s). See [0060](experiments/0060-conditional-search-escalation-below-anchor.md).
 - Preceding four-pivot/atomic winner: dev **0.84419540581772**, hidden **0.870307**, officially promoted as `da03dc2c` / source `649c230`.
 - New component-factored five-pivot cleanup with cache and boundary repairs: dev **0.8440714862418132**, fill **0.943946**; all **300 trusted cases and 44 active tests pass**. Exact counts agree with the isolated probe. **42 better / 2 worse / 256 unchanged** versus the preceding winner; both corpus halves and drop-five sensitivity improve. Official follow-up result pending submission/validation.
-- [0061: margin-scaled leftover search](experiments/0061-margin-scaled-leftover-search.md) spends extra first-round / LNS / relabel tickets only on well-below-anchor incumbents. Dev **0.843358** (−3.00 bip vs tip 0.843658). First-round `max_s` on a successful first round loses.
-- [0060: conditional search escalation](experiments/0060-conditional-search-escalation-below-anchor.md) substitutive re-tiering on `best_flops < amd_flops`. Hidden **0.869723**, promoted.
 - [0059: component five-pivot cleanup](experiments/0059-component-five-pivot-cleanup.md) records the exact formula, native implementation, work ledger, negative controls and source audits.
 - [0057: exact four-pivot cleanup](experiments/0057-exact-four-pivot-cleanup.md) preserves the prior winner. [0056: exact triple cleanup](experiments/0056-exact-triple-cleanup.md) preserves its predecessor and the subsequent hidden timeout.
 - Logical work caps do not prove total wall time. Observed isolated k5 worst **0.970 s**, preceding winner **0.987 s**; timing varies with machine load.

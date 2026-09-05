@@ -818,8 +818,12 @@ pub(crate) fn search_with_nelim(
         let pol = pols[it % pols.len()];
         let wi = it % nwalk;
         it += 1;
-        let thresh = best + best / par.accept_den * par.accept_num;
-        let bound = if thresh > cur_f[wi] { thresh } else { cur_f[wi] } + 1;
+        let thresh = if best == u64::MAX {
+            u64::MAX
+        } else {
+            best.saturating_add((best / par.accept_den).saturating_mul(par.accept_num))
+        };
+        let bound = (if thresh > cur_f[wi] { thresh } else { cur_f[wi] }).saturating_add(1);
         let taken = std::mem::take(&mut cur[wi]);
         let r = g.run(&taken[..p.min(taken.len())], pol, &mut rng, bound, hard_cap, &mut out);
         cur[wi] = taken;
@@ -1289,6 +1293,17 @@ impl TripleWork {
         game.eliminate(v);
         true
     }
+}
+
+/// A fast 3-pivot adjacent transposition descent sweep (3-pivot window descent).
+pub(crate) fn adjacent_three_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    budget: i64,
+) -> Option<Vec<usize>> {
+    adjacent_triple_descent(n, col_ptr, row_idx, seed, 1, budget)
 }
 
 /// Exact local descent over disjoint triples, with offset shifted each sweep.
@@ -2743,6 +2758,19 @@ mod triple_tests {
         }
         assert!(improvements > 0);
         println!("TRIPLE_CANONICAL improving_cases={improvements}");
+    }
+
+    #[test]
+    fn three_descent_is_monotone_and_deterministic() {
+        let pat = Pattern::from_edges(6, &[(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (0, 5)]);
+        let seed = vec![2, 1, 0, 5, 4, 3];
+        let res1 = adjacent_three_descent(6, &pat.col_ptr, &pat.row_idx, &seed, 100_000);
+        let res2 = adjacent_three_descent(6, &pat.col_ptr, &pat.row_idx, &seed, 100_000);
+        assert_eq!(res1, res2);
+        if let Some(cand) = res1 {
+            assert!(is_bijection(&cand, 6));
+            assert!(canonical(&pat, &cand) <= canonical(&pat, &seed));
+        }
     }
 }
 

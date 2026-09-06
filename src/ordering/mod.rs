@@ -1150,6 +1150,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // strictly fewer flops. `catch_unwind` guards against a candidate panicking
     // (which would otherwise crash the worker and FAIL the whole run).
     let runner_up: std::cell::RefCell<Vec<(u64, Vec<usize>)>> = std::cell::RefCell::new(Vec::new());
+    // A strong ordering that lost is still a distinct place to start the terminal
+    // chain from, and the chain lands on a different minimal triangulation from a
+    // different start. The reduction and relabel stages build exactly such
+    // orderings and today drop the ones that fail to take the lead.
+    let keep_seed = |f: u64, p: Vec<usize>| {
+        let mut r = runner_up.borrow_mut();
+        r.push((f, p));
+        r.sort_by_key(|(s, _)| *s);
+        r.dedup_by_key(|(s, _)| *s);
+        r.truncate(PEO_ALT_SEEDS);
+    };
     let consider =
         |best_flops: &mut u64,
          best_perm: &mut Vec<usize>,
@@ -2768,6 +2779,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     if f < best_flops {
                         best_flops = f;
                         best_perm = p;
+                    } else {
+                        keep_seed(f, p);
                     }
                 }
             }
@@ -2821,6 +2834,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f < best_flops {
                     best_flops = f;
                     best_perm = p;
+                } else {
+                    keep_seed(f, p);
                 }
             }
         }
@@ -2867,7 +2882,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if f < best_flops { best_perm = p; }
+            if f < best_flops { best_perm = p; } else { keep_seed(f, p); }
+        } else {
+            keep_seed(f, p);
         }
     }
     if n >= 12 && n <= 300 && pattern.nnz() <= 3_000 {

@@ -181,7 +181,11 @@ const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
 /// the allowance is set in measured time: 4M units is about 140 ms on the dev host.
 const PEO_ALT_LEDGER: u64 = 4_000_000;
 const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
-const PEO_ALT_SEEDS: usize = 4;
+// Six retained seeds (was 4): the 2-seed variant of this mechanism scored 1.74
+// of the 4-seed 4.1 bip, so seeds are the paying axis. Extra seeds only spend
+// ledger on rounds that run (stalled seeds cost one round each); the shared
+// 4M cap and the entry-fee skip are unchanged, so worst-case time cannot move.
+const PEO_ALT_SEEDS: usize = 6;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 

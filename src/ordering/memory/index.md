@@ -229,4 +229,6 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0070: terminal core relabels on df6e3f0](experiments/0070-terminal-core-relabels-on-df6e3f0.md): freshly measured dev 0.832566 -> 0.832277; 2/0/298; official pending.
 
 - [0077: bounded terminal PEO re-extraction](experiments/0077-terminal-peo-re-extraction.md): a07cc9c public 0.8317720492495939 -> 0.8300471638388927; 18 wins / 0 losses; 68 tests and 300 trusted cases pass. Two rounds maximum, second conditional on strict gain; official pending.
+- [0080: PEO re-extraction above the gate](experiments/0080-peo-re-extraction-above-the-gate.md): the terminal chain extended to rows outside 16..30k / 180k under a work ledger of 5*(n+nnz)+Lnnz; dev 0.829057 -> 0.827794, held-out 0.852396 -> 0.852280, 5 wins / 0 losses per corpus, worst call below the base; official pending.
+
 - [Tarjan-Yannakakis MCS background](literature/tarjan-yannakakis-1984-mcs.md): inspected primary abstract and independent completion-containment derivation.

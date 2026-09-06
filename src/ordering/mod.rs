@@ -167,6 +167,15 @@ use feral::symbolic::column_counts_gnp;
 /// AMF cost is a smooth ~1.4x of AMD's with no observed structural blow-up, so
 /// its α-5 variant runs on all but the very largest problems, preserving the big
 /// gt_10k wins (e.g. pooling_*). This is the SAME envelope as the prior safe run.
+/// Terminal PEO re-extraction for rows above the 16..30k / 180k gate. The chain is the
+/// same one, under a per-matrix work ledger: per-round cost is linear in the reconstruction,
+/// two MCS passes and two exact scores, so charging each round against a fixed allowance
+/// bounds the added time by structure alone.
+const PEO_LARGE_MAX_NNZ: usize = 1_500_000;
+const PEO_LARGE_MAX_LNNZ: usize = 20_000_000;
+const PEO_LARGE_ROUNDS: usize = 8;
+const PEO_LARGE_LEDGER: u64 = 2_500_000;
+
 const AMF_MAX_N: usize = 250_000;
 const AMF_MAX_NNZ: usize = 1_500_000;
 
@@ -2857,6 +2866,36 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             ) else { break; };
             // Earlier terminal stages can change best_perm without updating
             // best_flops, so derive the incumbent's exact score afresh.
+            let incumbent_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+            let mut final_flops = incumbent_flops;
+            for candidate in candidates {
+                let f = score(&candidate);
+                if f < final_flops { final_flops = f; best_perm = candidate; }
+            }
+            if final_flops == incumbent_flops { break; }
+        }
+    } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ {
+        // Above the gate the incumbent completion has had no cleanup at all: neither the
+        // bounded watcher nor the re-extraction above reaches these rows. The same strict-gain
+        // chain applies, since a PEO of the incumbent's completion H eliminates the original
+        // graph into a completion contained in H and so is never worse. Cost, not correctness,
+        // is what stopped at the gate, so cost is what the ledger bounds.
+        let mut ledger: u64 = 0;
+        for _ in 0..PEO_LARGE_ROUNDS {
+            let pp = permute_pattern(&scoring_pat, &best_perm);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
+            let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
+            if lnnz > PEO_LARGE_MAX_LNNZ as u64 { break; }
+            // Pay for the round before running it. The chain works on a non-increasing
+            // graph, so a round the ledger cannot cover ends it.
+            let cost = 5 * (n as u64 + nnz as u64) + lnnz;
+            if ledger + cost > PEO_LARGE_LEDGER { break; }
+            ledger += cost;
+            let Some(candidates) = peo_extract::candidates_bounded(
+                n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
+                usize::MAX, usize::MAX, PEO_LARGE_MAX_LNNZ,
+            ) else { break; };
             let incumbent_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
             let mut final_flops = incumbent_flops;
             for candidate in candidates {

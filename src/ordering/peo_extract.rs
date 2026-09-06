@@ -15,7 +15,23 @@ pub(super) fn candidates(
     counts: &[usize],
     incumbent: &[usize],
 ) -> Option<[Vec<usize>; 2]> {
-    let adj = reconstruct(n, cp, ri, parent, counts, incumbent)?;
+    candidates_bounded(n, cp, ri, parent, counts, incumbent, MAX_N, MAX_INPUT_NNZ, MAX_LNNZ)
+}
+
+/// The same two MCS extractions under caller-supplied structural limits (dimension,
+/// input nonzeros, factor nonzeros). Limits are structure, never identity.
+pub(super) fn candidates_bounded(
+    n: usize,
+    cp: &[usize],
+    ri: &[usize],
+    parent: &[Option<usize>],
+    counts: &[usize],
+    incumbent: &[usize],
+    max_n: usize,
+    max_nnz: usize,
+    max_lnnz: usize,
+) -> Option<[Vec<usize>; 2]> {
+    let adj = reconstruct(n, cp, ri, parent, counts, incumbent, max_n, max_nnz, max_lnnz)?;
     let forward = mcs_peo(&adj, incumbent, false);
     let reverse = mcs_peo(&adj, incumbent, true);
     if !super::is_bijection(&forward, n) || !super::is_bijection(&reverse, n) {
@@ -31,8 +47,11 @@ fn reconstruct(
     parent: &[Option<usize>],
     counts: &[usize],
     incumbent: &[usize],
+    max_n: usize,
+    max_nnz: usize,
+    max_lnnz: usize,
 ) -> Option<Vec<Vec<u32>>> {
-    if n == 0 || n > MAX_N || ri.len() > MAX_INPUT_NNZ
+    if n == 0 || n > max_n || ri.len() > max_nnz
         || cp.len() != n + 1 || parent.len() != n || counts.len() != n
         || cp.first().copied() != Some(0) || cp.last().copied() != Some(ri.len())
         || !super::is_bijection(incumbent, n)
@@ -45,7 +64,7 @@ fn reconstruct(
     let lnnz = counts.iter().enumerate().try_fold(0usize, |sum, (j, &c)| {
         if c == 0 || c > n - j { None } else { sum.checked_add(c) }
     })?;
-    if lnnz > MAX_LNNZ { return None; }
+    if lnnz > max_lnnz { return None; }
 
     let mut children = vec![Vec::<usize>::new(); n];
     for (j, &p) in parent.iter().enumerate() {
@@ -80,7 +99,7 @@ fn reconstruct(
         // scanned at most once again, at its unique elimination-tree parent.
         if reach.len().checked_add(1)? != counts[j] { return None; }
         total = total.checked_add(reach.len())?;
-        if total > MAX_LNNZ - n { return None; }
+        if total > max_lnnz.saturating_sub(n) { return None; }
         let v = incumbent[j];
         for &i in &reach {
             let w = incumbent[i as usize];
@@ -200,7 +219,7 @@ mod tests {
                     let et = EliminationTree::from_pattern(&pp);
                     let counts = column_counts_gnp(&pp, &et);
                     let filled = complete(&graph, &incumbent);
-                    let reconstructed = reconstruct(n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &incumbent).unwrap();
+                    let reconstructed = reconstruct(n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &incumbent, MAX_N, MAX_INPUT_NNZ, MAX_LNNZ).unwrap();
                     for v in 0..n {
                         let mut row = vec![false; n];
                         for &u in &reconstructed[v] { assert!(!row[u as usize]); row[u as usize] = true; }

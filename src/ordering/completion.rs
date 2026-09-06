@@ -21,7 +21,7 @@ pub(super) fn refine(
 ) -> Option<Vec<usize>> {
     const MAX_LNNZ: usize = 300_000;
     const MAX_FILL: usize = 100_000;
-    const OPS: i64 = 5_000_000;
+    const OPS: i64 = 8_000_000;
     if n == 0 || n > 30_000 || counts.len() != n {
         return None;
     }

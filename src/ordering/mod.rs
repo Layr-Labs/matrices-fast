@@ -626,47 +626,56 @@ fn refine_core(
     }
 
     if (5..=4_096).contains(&cn) && core_nnz <= 65_536 {
-        if let Some(cand) = rgreedy::simplicial_promotion(
-            cn,
-            core_col_ptr,
-            core_row_idx,
-            &p_cur,
-            8_000_000,
-        ) {
-            let f = flops_of(core_pat, &cand);
-            if f < f_cur {
-                f_cur = f;
-                p_cur = cand;
-            }
-        }
-        if let Some(cand) = rgreedy::adjacent_five_descent(
-            cn,
-            core_col_ptr,
-            core_row_idx,
-            &p_cur,
-            8_000_000,
-        ) {
-            if is_bijection(&cand, cn) {
+        for _ in 0..2 {
+            let mut round_improved = false;
+            if let Some(cand) = rgreedy::simplicial_promotion(
+                cn,
+                core_col_ptr,
+                core_row_idx,
+                &p_cur,
+                8_000_000,
+            ) {
                 let f = flops_of(core_pat, &cand);
                 if f < f_cur {
                     f_cur = f;
                     p_cur = cand;
+                    round_improved = true;
                 }
             }
-        }
-        if let Some(cand) = rgreedy::adjacent_four_descent(
-            cn,
-            core_col_ptr,
-            core_row_idx,
-            &p_cur,
-            8_000_000,
-        ) {
-            if is_bijection(&cand, cn) {
-                let f = flops_of(core_pat, &cand);
-                if f < f_cur {
-                    f_cur = f;
-                    p_cur = cand;
+            if let Some(cand) = rgreedy::adjacent_five_descent(
+                cn,
+                core_col_ptr,
+                core_row_idx,
+                &p_cur,
+                8_000_000,
+            ) {
+                if is_bijection(&cand, cn) {
+                    let f = flops_of(core_pat, &cand);
+                    if f < f_cur {
+                        f_cur = f;
+                        p_cur = cand;
+                        round_improved = true;
+                    }
                 }
+            }
+            if let Some(cand) = rgreedy::adjacent_four_descent(
+                cn,
+                core_col_ptr,
+                core_row_idx,
+                &p_cur,
+                8_000_000,
+            ) {
+                if is_bijection(&cand, cn) {
+                    let f = flops_of(core_pat, &cand);
+                    if f < f_cur {
+                        f_cur = f;
+                        p_cur = cand;
+                        round_improved = true;
+                    }
+                }
+            }
+            if !round_improved {
+                break;
             }
         }
     }

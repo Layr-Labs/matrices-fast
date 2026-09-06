@@ -1,8 +1,17 @@
-//! Bounded terminal chordal-completion cleanup.
+//! Bounded terminal chordal-completion cleanup (Blair, Heggernes & Telle 2000).
 //!
-//! All graph work uses standard-library containers. The caller supplies the
-//! incumbent's permuted pattern, elimination tree and exact column counts.
-//! The watcher implementation is retained from this workspace's earlier work.
+//! For any chordal completion $H = (V, E)$ with $|V| = n$, $|E| = m$, and $t$
+//! triangles, the Cholesky factorization flop objective is invariant under
+//! any perfect elimination ordering (PEO) and evaluates to:
+//!
+//! $$\sum_{j=1}^n c_j^2 = \sum_{j=1}^n (1 + d_j^+)^2 = n + 3m + 2t$$
+//!
+//! Removing certified redundant fill edges without destroying chordality
+//! strictly decreases $m$ and $t$, thereby monotonically improving the exact
+//! Cholesky column-count objective.
+//!
+//! All graph operations use standard-library containers. The caller supplies
+//! the incumbent's permuted pattern, elimination tree, and exact column counts.
 
 use super::minl_watch::watcher_minimalize;
 
@@ -19,9 +28,9 @@ pub(super) fn refine(
     counts: &[usize],
     perm: &[usize],
 ) -> Option<Vec<usize>> {
-    const MAX_LNNZ: usize = 400_000;
-    const MAX_FILL: usize = 145_000;
-    const OPS: i64 = 20_000_000;
+    const MAX_LNNZ: usize = 300_000;
+    const MAX_FILL: usize = 100_000;
+    const OPS: i64 = 8_000_000;
     if n == 0 || n > 30_000 || counts.len() != n {
         return None;
     }

@@ -1,23 +1,17 @@
-//! Event-driven chordal completion minimalization (Blair, Heggernes & Telle 2000).
+//! Event-driven completion minimalization.
 //!
-//! For a chordal graph $H$ with $n$ vertices, $m$ edges, and $t$ triangles, the
-//! Cholesky column-count objective satisfies:
+//! The existing MINL pass revisits every surviving fill edge for a fixed
+//! number of rounds. This sibling pass records *why* a fill edge could not
+//! be deleted. For a chordal graph `H`, a fill edge `uv` is not deletable
+//! exactly when two vertices `x,y` in `N_H(u) ∩ N_H(v)` are nonadjacent.
+//! The four-cycle `u-x-v-y-u` then has `uv` as its unique chord. That witness
+//! remains valid until one of its four supporting fill edges is deleted, so
+//! only that event needs to put `uv` back on the work queue.
 //!
-//! $$\sum_{j=1}^n c_j^2 = n + 3m + 2t$$
-//!
-//! Eliminating redundant fill edges while preserving chordality strictly decreases
-//! $m$ and $t$, provably reducing the objective.
-//!
-//! A fill edge `uv` is not deletable without introducing chordless cycles iff there
-//! exist $x, y \in N_H(u) \cap N_H(v)$ that are nonadjacent in $H$, forming a 4-cycle
-//! `u-x-v-y-u` with `uv` as its unique chord (the chordality witness). That witness
-//! remains valid until one of its four supporting fill edges is deleted, so only
-//! that event requires requeuing `uv`.
-//!
-//! Four intrusive watcher nodes per fill edge keep auxiliary memory linear in the
-//! number of fill edges ($O(|E_{\text{fill}}|)$). All limits fail closed: stopping
-//! early yields a chordal supergraph of the input, and the caller validates and
-//! scores the resulting PEO with the exact oracle.
+//! Four intrusive watcher nodes per fill edge keep the auxiliary memory
+//! linear in the number of fill edges. All limits fail closed: stopping
+//! early leaves a chordal supergraph of the original pattern, and the caller
+//! still validates/scores the resulting PEO with the exact oracle.
 
 use std::collections::VecDeque;
 

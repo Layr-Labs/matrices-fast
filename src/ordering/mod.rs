@@ -757,6 +757,36 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
 
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
+    let best = leader_order(pattern);
+    if (12..=300).contains(&pattern.n) && pattern.row_idx.len() <= 3000 {
+        paired_swap_refine(pattern, best)
+    } else { best }
+}
+
+// Coordinated four-vertex moves: intermediate single swaps need not improve.
+fn paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
+    let n = best.len();
+    if n < 4 { return best; }
+    let scoring = ScoringPattern { n, col_ptr: pattern.col_ptr.clone(), row_idx: pattern.row_idx.clone() };
+    let mut best_f = flops_of(&scoring, &best);
+    let mut state = 0x917ad73u64;
+    for _ in 0..512 {
+        let mut positions = [0usize; 4];
+        for p in &mut positions {
+            state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+            *p = state as usize % n;
+        }
+        if (0..4).any(|i| (i+1..4).any(|j| positions[i] == positions[j])) { continue; }
+        let mut candidate = best.clone();
+        candidate.swap(positions[0], positions[1]);
+        candidate.swap(positions[2], positions[3]);
+        let f = flops_of(&scoring, &candidate);
+        if f < best_f { best_f = f; best = candidate; }
+    }
+    best
+}
+
+fn leader_order(pattern: &Pattern) -> Vec<usize> {
     let n = pattern.n;
     if n == 0 {
         return Vec::new();
@@ -3394,6 +3424,26 @@ fn is_bijection(perm: &[usize], n: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn coordinated_swaps_real_corpus() {
+        let mut cases=0; let mut wins=0; let mut logs=0.0f64; let mut us=0u128;
+        for (name,p) in crate::corpus::corpus() {
+            if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 { continue; }
+            let base=leader_order(&p);
+            let t=std::time::Instant::now();
+            let cand=paired_swap_refine(&p,base.clone());
+            us+=t.elapsed().as_micros();
+            assert!(is_bijection(&cand,p.n));
+            assert_eq!(cand,paired_swap_refine(&p,base.clone()));
+            let scoring=ScoringPattern {n:p.n,col_ptr:p.col_ptr.clone(),row_idx:p.row_idx.clone()};
+            let b=flops_of(&scoring,&base); let c=flops_of(&scoring,&cand);
+            assert!(c<=b); cases+=1; wins+=usize::from(c<b); logs+=(c as f64/b as f64).ln();
+            println!("PAIR {name} n={} base={b} candidate={c}",p.n);
+        }
+        assert!(cases>0);
+        println!("SUMMARY cases={cases} wins={wins} losses=0 ties={} geomean={} extra_us={us}",cases-wins,(logs/cases as f64).exp());
+    }
+
 
     /// Bind `dense_deferred_count` to the vendored crate's OWN counter.
     ///

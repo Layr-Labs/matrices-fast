@@ -40,6 +40,33 @@ pub(super) fn candidates_bounded(
     Some([forward, reverse])
 }
 
+pub(super) fn reversed_root_candidates(
+    n: usize,
+    cp: &[usize],
+    ri: &[usize],
+    parent: &[Option<usize>],
+    counts: &[usize],
+    incumbent: &[usize],
+) -> Option<[Vec<usize>; 4]> {
+    let adj = reconstruct(n, cp, ri, parent, counts, incumbent, MAX_N, MAX_INPUT_NNZ, MAX_LNNZ)?;
+    let reverse_seed: Vec<_> = incumbent.iter().rev().copied().collect();
+    let mut high_seed = incumbent.to_vec();
+    let root = (0..n).max_by_key(|&i| (adj[incumbent[i]].len(), i)).unwrap_or(0);
+    high_seed.swap(0, root);
+    let c0 = mcs_peo(&adj, &reverse_seed, false);
+    let c1 = mcs_peo(&adj, &reverse_seed, true);
+    let c2 = mcs_peo(&adj, &high_seed, false);
+    let c3 = mcs_peo(&adj, &high_seed, true);
+    if !super::is_bijection(&c0, n)
+        || !super::is_bijection(&c1, n)
+        || !super::is_bijection(&c2, n)
+        || !super::is_bijection(&c3, n)
+    {
+        return None;
+    }
+    Some([c0, c1, c2, c3])
+}
+
 fn reconstruct(
     n: usize,
     cp: &[usize],

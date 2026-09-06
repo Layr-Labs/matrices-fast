@@ -2638,7 +2638,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if recurse && (1_000..10_000).contains(&n) && nnz <= 50_000
                 && (8..=4000).contains(&cn) && cl.core_nnz() <= 30_000 {
                 let mut degree_order: Vec<usize> = (0..cn).collect();
-                degree_order.sort_unstable_by_key(|&v| (cl.core_col_ptr[v+1] - cl.core_col_ptr[v], v));
+                let mut best_core: Option<(u64, Vec<usize>)> = None;
                 for q in [(0..cn).rev().collect::<Vec<_>>(), degree_order] {
                     let relabeled = permute_pattern(&core_pat, &q);
                     let rp: Vec<i32> = relabeled.col_ptr.iter().map(|&v| v as i32).collect();
@@ -2649,9 +2649,40 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
                             let cp: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
                             if !is_bijection(&cp, cn) { continue; }
-                            let score = cl.prefix_flops + flops_of(&core_pat, &cp);
-                            if terminal_core_candidate.as_ref().map_or(true, |(f, _)| score < *f) {
-                                terminal_core_candidate = Some((score, core_lift::splice(cl, &cp)));
+                            let raw_core_flops = flops_of(&core_pat, &cp);
+                            if best_core.as_ref().map_or(true, |(bf, _)| raw_core_flops < *bf) {
+                                best_core = Some((raw_core_flops, cp));
+                            }
+                        }
+                    }
+                }
+                if let Some((raw_core_flops, cp)) = best_core {
+                    let best_flops = incumbent;
+                    if cl.prefix_flops + raw_core_flops < best_flops {
+                        let (final_cp, final_core_flops) = if cn <= 1_200 && cl.core_nnz() <= 10_000 {
+                            if let Ok(Some((f_refined, p_refined))) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                refine_core(
+                                    cn,
+                                    &cl.core_col_ptr,
+                                    &cl.core_row_idx,
+                                    &core_pat,
+                                    &cp,
+                                    raw_core_flops,
+                                    raw_core_flops,
+                                )
+                            })) {
+                                (p_refined, f_refined)
+                            } else {
+                                (cp, raw_core_flops)
+                            }
+                        } else {
+                            (cp, raw_core_flops)
+                        };
+                        let score = cl.prefix_flops + final_core_flops;
+                        if terminal_core_candidate.as_ref().map_or(true, |(f, _)| score < *f) {
+                            let spliced = core_lift::splice(cl, &final_cp);
+                            if is_bijection(&spliced, n) {
+                                terminal_core_candidate = Some((score, spliced));
                             }
                         }
                     }

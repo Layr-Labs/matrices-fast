@@ -175,6 +175,13 @@ const PEO_LARGE_MAX_NNZ: usize = 1_500_000;
 const PEO_LARGE_MAX_LNNZ: usize = 20_000_000;
 const PEO_LARGE_ROUNDS: usize = 8;
 const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
+/// Alternate-seed chains. Timing 528 chain rounds on this corpus gives 0.034 us per
+/// (n + nnz) against 0.039 us per Lnnz, i.e. the two terms cost the same per unit -
+/// not the 5:1 the above-gate ledger assumes - so this law charges them equally and
+/// the allowance is set in measured time: 4M units is about 140 ms on the dev host.
+const PEO_ALT_LEDGER: u64 = 4_000_000;
+const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
+const PEO_ALT_SEEDS: usize = 4;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 
@@ -1142,6 +1149,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Try a candidate produced by `f`; keep it if it is a valid bijection with
     // strictly fewer flops. `catch_unwind` guards against a candidate panicking
     // (which would otherwise crash the worker and FAIL the whole run).
+    let runner_up: std::cell::RefCell<Vec<(u64, Vec<usize>)>> = std::cell::RefCell::new(Vec::new());
     let consider =
         |best_flops: &mut u64,
          best_perm: &mut Vec<usize>,
@@ -1156,6 +1164,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 return;
             }
             let f = score(&perm);
+            {
+                // Retain the best few displaced orderings. A chain started from a
+                // different ordering converges to a different minimal triangulation,
+                // and the leader's is not always the cheapest one.
+                let mut r = runner_up.borrow_mut();
+                if f < *best_flops { r.push((*best_flops, best_perm.clone())); } else { r.push((f, perm.clone())); }
+                r.sort_by_key(|(s, _)| *s);
+                r.dedup_by_key(|(s, _)| *s);
+                r.truncate(PEO_ALT_SEEDS);
+            }
             if f < *best_flops {
                 *best_flops = f;
                 *best_perm = perm;
@@ -2926,6 +2944,41 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
             if final_flops == incumbent_flops { break; }
+        }
+    }
+    // A stalled chain has reached a minimal triangulation, so more cleanup cannot help;
+    // a different starting ordering can, because it converges somewhere else. The seeds
+    // are orderings the portfolio already built and discarded, so only the rounds cost
+    // anything, and they are charged against one shared allowance under the measured law.
+    if n >= 16 && (n as u64 + nnz as u64) < PEO_ALT_LEDGER {
+        let seeds = runner_up.borrow().clone();
+        if !seeds.is_empty() {
+            let mut ledger: u64 = 0;
+            let mut leader_flops = score(&best_perm);
+            for (_, seed) in seeds {
+                let mut cur = seed;
+                let mut cur_flops = u64::MAX;
+                for _ in 0..8 {
+                    let pp = permute_pattern(&scoring_pat, &cur);
+                    let et = EliminationTree::from_pattern(&pp);
+                    let counts = column_counts_gnp(&pp, &et);
+                    let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
+                    let cost = n as u64 + nnz as u64 + lnnz;
+                    if ledger + cost > PEO_ALT_LEDGER { break; }
+                    ledger += cost;
+                    let Some(cands) = peo_extract::candidates_bounded(
+                        n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &cur,
+                        usize::MAX, usize::MAX, PEO_ALT_MAX_LNNZ,
+                    ) else { break; };
+                    let inc: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+                    let mut fin = inc;
+                    for c in cands { let f = score(&c); if f < fin { fin = f; cur = c; } }
+                    cur_flops = fin;
+                    if fin == inc { break; }
+                }
+                if cur_flops < leader_flops { leader_flops = cur_flops; best_perm = cur; }
+                if ledger >= PEO_ALT_LEDGER { break; }
+            }
         }
     }
     best_perm

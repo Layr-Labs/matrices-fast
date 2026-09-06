@@ -1447,6 +1447,20 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // MCS on the original graph (Tarjan–Yannakakis). Cheap O(n+nnz) bucket
+    // walk; the reverse visit order is a perfect elimination order of some
+    // chordal supergraph of G, hence a valid fill-reducing candidate that is
+    // not a min-degree or separator ordering. Two adjacency-scan directions
+    // match the PEO extractor. Best-of floor → zero-downside.
+    if n >= 16 && n < 80_000 && nnz < 200_000 {
+        consider(&mut best_flops, &mut best_perm, &|| {
+            Ok::<Vec<i32>, feral_ordering_core::OrderingError>(mcs_graph_order(pattern, false))
+        });
+        consider(&mut best_flops, &mut best_perm, &|| {
+            Ok::<Vec<i32>, feral_ordering_core::OrderingError>(mcs_graph_order(pattern, true))
+        });
+    }
+
     // Custom quotient-graph metrics (SqDiv / SqPure) on medium/dense networks.
     // SqDiv evaluates deg² / (nv + 1), directly predicting each elimination's
     // contribution to the exact sum of squared column counts Σ cⱼ².
@@ -2982,6 +2996,59 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
     best_perm
+}
+
+/// Maximum Cardinality Search on the original pattern. Reverse of the visit
+/// order is a PEO of some chordal supergraph (Tarjan–Yannakakis). Deterministic
+/// LIFO buckets; unvisited weight-0 vertices are popped in increasing index
+/// (the initial bucket is filled high-to-low). `reverse_adj` only changes the
+/// neighbour scan direction, matching `peo_extract::mcs_peo`.
+fn mcs_graph_order(pattern: &Pattern, reverse_adj: bool) -> Vec<i32> {
+    let n = pattern.n;
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut weight = vec![0usize; n];
+    let mut visited = vec![false; n];
+    let mut buckets: Vec<Vec<u32>> = vec![(0..n as u32).rev().collect()];
+    let mut max_weight = 0usize;
+    let mut visit = Vec::with_capacity(n);
+    while visit.len() < n {
+        let Some(v) = buckets[max_weight].pop() else {
+            if max_weight == 0 {
+                break;
+            }
+            max_weight -= 1;
+            continue;
+        };
+        let v = v as usize;
+        if visited[v] || weight[v] != max_weight {
+            continue;
+        }
+        visited[v] = true;
+        visit.push(v);
+        let nbrs = &pattern.row_idx[pattern.col_ptr[v]..pattern.col_ptr[v + 1]];
+        for offset in 0..nbrs.len() {
+            let u = nbrs[if reverse_adj { nbrs.len() - 1 - offset } else { offset }];
+            if u >= n || visited[u] {
+                continue;
+            }
+            weight[u] += 1;
+            let nw = weight[u];
+            if nw >= buckets.len() {
+                buckets.resize_with(nw + 1, Vec::new);
+            }
+            buckets[nw].push(u as u32);
+            max_weight = max_weight.max(nw);
+        }
+    }
+    for v in 0..n {
+        if !visited[v] {
+            visit.push(v);
+        }
+    }
+    visit.reverse();
+    visit.into_iter().map(|x| x as i32).collect()
 }
 
 /// Minimum-FILL (minimum-deficiency) ordering (pure Rust, hard work budget).

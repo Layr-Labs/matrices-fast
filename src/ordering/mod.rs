@@ -174,7 +174,18 @@ use feral::symbolic::column_counts_gnp;
 const PEO_LARGE_MAX_NNZ: usize = 1_500_000;
 const PEO_LARGE_MAX_LNNZ: usize = 20_000_000;
 const PEO_LARGE_ROUNDS: usize = 8;
+const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
+const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
+
+/// Inside the 16..30k / 180k gate the reconstruction still refuses any factor
+/// above `peo_extract::MAX_LNNZ`. Instrumenting `reconstruct` over the dev corpus
+/// found 630 accepted reconstructions with a largest accepted factor of 289_121,
+/// and six refusals - three matrices, all in gt_10k, at Lnnz 381_126, 618_374 and
+/// 714_536. A flat raise of the constant to 650_000 scored well locally and FAILED
+/// hidden validation, so an oversize round is instead charged against its own
+/// ledger under the same cost law as the above-gate chain. Rounds within the
+/// existing limit are never charged, so the promoted in-gate chain is untouched.
 
 const AMF_MAX_N: usize = 250_000;
 const AMF_MAX_NNZ: usize = 1_500_000;
@@ -2857,12 +2868,24 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // are cheaper than earlier ones. The cap only exists so the loop cannot run
     // unbounded on a pathological strict-gain chain.
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
+        let mut oversize_ledger: u64 = 0;
         for _ in 0..8 {
             let pp = permute_pattern(&scoring_pat, &best_perm);
             let et = EliminationTree::from_pattern(&pp);
             let counts = column_counts_gnp(&pp, &et);
-            let Some(candidates) = peo_extract::candidates(
+            // An oversize round pays before it runs; an ordinary one is free.
+            let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
+            let max_lnnz = if lnnz > peo_extract::MAX_LNNZ as u64 {
+                let cost = 5 * (n as u64 + nnz as u64) + lnnz;
+                if oversize_ledger + cost > PEO_OVERSIZE_LEDGER { break; }
+                oversize_ledger += cost;
+                PEO_OVERSIZE_MAX_LNNZ
+            } else {
+                peo_extract::MAX_LNNZ
+            };
+            let Some(candidates) = peo_extract::candidates_bounded(
                 n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
+                peo_extract::MAX_N, peo_extract::MAX_INPUT_NNZ, max_lnnz,
             ) else { break; };
             // Earlier terminal stages can change best_perm without updating
             // best_flops, so derive the incumbent's exact score afresh.

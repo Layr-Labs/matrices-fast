@@ -3,9 +3,9 @@
 //! This is a sibling of the terminal fill-edge watcher: it never erases edges
 //! or changes the watcher's candidate, tie order, or work allowance.
 
-const MAX_N: usize = 30_000;
-const MAX_INPUT_NNZ: usize = 180_000;
-const MAX_LNNZ: usize = 300_000;
+pub(super) const MAX_N: usize = 30_000;
+pub(super) const MAX_INPUT_NNZ: usize = 180_000;
+pub(super) const MAX_LNNZ: usize = 300_000;
 
 pub(super) fn candidates(
     n: usize,

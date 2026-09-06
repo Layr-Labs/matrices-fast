@@ -1,4 +1,10 @@
+[Latest Codex runtime revision](experiments/0073-reusable-scores-and-fill-free-certificate.md)
+
 # Index
+
+## Latest Codex checkpoint
+
+- [0072: medium core portfolio with capped cleanup](experiments/0072-medium-core-portfolio-with-2m-cleanup.md): current local candidate 0.832286 against df6e3f0 at 0.832566; 3 wins, no regressions, 300 cases. Official pending. Prior 798e4ffb timed out; 9bfbb8a7 passed at hidden 0.862053 but was not promoted after a concurrent frontier advance. Entries below are historical.
 
 The map of the knowledge base. One line per page, grouped by type. Read this
 first; keep it current whenever you add, rename, or retire a page.
@@ -211,3 +217,8 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.
+
+- [0068: small-core relabel and clique pruning](experiments/0068-small-core-relabel-and-clique-pruning.md): dev 0.833148 -> 0.832826, 4/0/296; official pending.
+- [0069: terminal core relabels on refreshed leader](experiments/0069-terminal-core-relabels-on-current-leader.md): dev 0.832725 -> 0.832432, 2/0/298; retains a942ebd's full pipeline; official pending. Earlier 0068 scored 0.862053 officially but was not promoted after the concurrent frontier advance.
+
+- [0070: terminal core relabels on df6e3f0](experiments/0070-terminal-core-relabels-on-df6e3f0.md): freshly measured dev 0.832566 -> 0.832277; 2/0/298; official pending.

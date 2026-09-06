@@ -86,3 +86,5 @@ round, so note the round if you know it.
 2026-09-06 | 33ae43a dev 0.830047 -> 0.829057 | terminal PEO re-extraction round cap 2 -> 8; loop already breaks on the first non-improving round, so deeper rounds are only paid for where they win (0079) | 9 wins/0 losses/291 ties, gain concentrated in gt_10k 0.760220 -> 0.757769; 68 tests pass; worst probe row 1.3558 s vs 1.3499 s tip; official pending. Extra-depth core MinFill line abandoned after 23af3f88 and d713f925 both FAILED hidden validation.
 
 2026-09-06 | 386b89b dev 0.829057 -> 0.827794 | terminal PEO re-extraction above the 30k/180k gate under a work ledger (5*(n+nnz)+Lnnz, 2.5M units) | 300 cases pass; 5 better / 0 worse on dev and on 591 held-out rows; interleaved min-of-3 on the 32 slowest rows worst 1.061 -> 1.047 s with no row slower by > 0.05 s; 68 tests; official pending (0080).
+
+2026-09-06 | 0503cf6 dev 0.827794 -> 0.827354 | second allowance (one round, 14M units) for the class above nnz 400k where the mid-size machinery is gated off | 300 cases pass; 5 better / 0 worse dev and 7 / 0 on 591 held-out rows; interleaved min-of-3 worst 1.078 -> 1.054 s; 68 tests; official pending (0081).

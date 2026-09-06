@@ -183,6 +183,19 @@ cascading funnel incurs zero overhead on the slowest matrices while safely
 extending deep local search to ultra-sparse large matrices, breaking the 0.8760
 leaderboard barrier to reach 0.875942.
 
+## The residual core is a second small graph — run the small-graph tools on it
+
+After the exact degree-≤3 prefix ([0062](../experiments/0062-reduce-then-amf-terminal.md)) the residual
+core is a few hundred vertices for most `lt_1k` / `1k_10k` rows, and the objective splits exactly, so any
+exact search on the core is an exact improvement of the spliced ordering. The exact randomized LNS
+(`rgreedy::search`) that the pipeline spends 350–400M ops on for every n ≤ 1000 FULL graph had never been
+pointed at the core; two chained 30M streams there are worth −6.1 bips on dev at ≤ 0.04 s per row, with
+movers of 3–7 % on rows the full-graph LNS had converged on
+([0076](../experiments/0076-core-lns-on-the-residual-core.md)). The transferable rule: a bounded exact
+search costs by the size of the instance it is run on, so run it on the smallest exact instance available.
+Measured in the same pass and NOT worth it: relabelled MinFill on the core (0–1 movers, 0.2–0.35 s per
+row), the 8-ticket AMF portfolio on the K = 5/4/2/6 cores (2 movers), and every core family on n ≥ 10k rows.
+
 ## Links
 - [amd.md](amd.md) — the anchor, and why it is hard to beat here.
 - [nested-dissection.md](nested-dissection.md) — the separator family in the portfolio.
@@ -193,4 +206,5 @@ leaderboard barrier to reach 0.875942.
 - [experiments/0020](../experiments/0020-medium-exact-search.md) — bounded exact search in the medium sparse tier.
 - [experiments/0025](../experiments/0025-adaptive-terminal-deep-subtree-search.md) — adaptive deep allocation for a terminal subtree pass.
 - [experiments/0035](../experiments/0035-chained-terminal-subtree-refinement.md) — chained terminal refinement conditioned on primary pass improvement.
+- [experiments/0076](../experiments/0076-core-lns-on-the-residual-core.md) — exact LNS on the residual core.
 - [experiments/0036](../experiments/0036-multiround-cascading-terminal-subtree-refinement.md) — multi-round cascading terminal subtree refinement with sparsity-gated large tier.

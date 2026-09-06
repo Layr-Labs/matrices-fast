@@ -191,6 +191,25 @@ const REDUCE_RECURSE_MAX_NNZ: usize = 150_000;
 const REDUCE_RECURSE_MARGIN: (u64, u64) = (11, 10);
 const REDUCE_RECURSE_DEEP_MAX_CORE_N: usize = 80_000;
 const REDUCE_RECURSE_DEEP_MAX_CORE_NNZ: usize = 250_000;
+/// CORE-LNS: the exact randomized elimination-game search (`rgreedy::search`,
+/// the small-graph LNS) run ON THE RESIDUAL CORE inside `refine_core`. The
+/// core is the exact fill graph after the low-degree prefix, i.e. a different
+/// instance from the full graph whose basins the full-graph LNS never visits;
+/// by the objective split every core improvement is an exact improvement of the
+/// spliced ordering. Cost is bounded by the core size (bitset words), not by n:
+/// measured <= 0.06 s per row at these caps on the 2-core pin. Structural only.
+const CORE_LNS_MIN_N: usize = 8;
+const CORE_LNS_MAX_N: usize = 1_000;
+const CORE_LNS_MAX_NNZ: usize = 60_000;
+const CORE_LNS_STREAMS: [(i64, u64); 2] = [
+    (30_000_000, 0x5EED_0001),
+    (30_000_000, 0x5EED_0002),
+];
+/// Margin for calling `refine_core` on an LNS-eligible (cheap) K = 3 core. The
+/// generic 11/10 gate exists to avoid polishing a core that cannot win; the LNS
+/// moves a core by several percent (measured: a raw splice at 1.37x the
+/// incumbent finished 4.3 % below it), so cheap cores are polished within 2x.
+const CORE_LNS_RECURSE_MARGIN: (u64, u64) = (2, 1);
 /// EXTRA DEPTHS (matrices_mage 0064), bounded and SEQUENTIAL so the cost is identical on a
 /// 2-vCPU grader and a 16-core bench: after the shipped K=3 pass, depths are attempted in order
 /// while the reduce-work budget (attempts x nnz, in CSC entries) remains; a deeper core is
@@ -622,6 +641,31 @@ fn refine_core(
             if f3 < f_cur {
                 f_cur = f3;
                 p_cur = cand3;
+            }
+        }
+    }
+
+    // CORE-LNS (see `CORE_LNS_*`): chained exact LNS streams on the core from
+    // the refined incumbent; each stream starts from the best reached so far and
+    // is admitted only on a strict decrease of the exact core objective.
+    if (CORE_LNS_MIN_N..=CORE_LNS_MAX_N).contains(&cn) && core_nnz <= CORE_LNS_MAX_NNZ {
+        for &(budget, rng_seed) in CORE_LNS_STREAMS.iter() {
+            if let Some((cand, _)) = rgreedy::search(
+                cn,
+                core_col_ptr,
+                core_row_idx,
+                &p_cur,
+                f_cur,
+                budget,
+                rng_seed,
+            ) {
+                if is_bijection(&cand, cn) {
+                    let f = flops_of(core_pat, &cand);
+                    if f < f_cur {
+                        f_cur = f;
+                        p_cur = cand;
+                    }
+                }
             }
         }
     }
@@ -2583,9 +2627,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             let refined: Option<Vec<usize>> = if recurse && nnz < REDUCE_RECURSE_MAX_NNZ {
                 let f_amd_core = results[alphas.len()].as_ref().map_or(u64::MAX, |(f, _)| *f);
                 let raw = cl.prefix_flops.saturating_add(f_core);
-                if raw.saturating_mul(REDUCE_RECURSE_MARGIN.1)
-                    <= incumbent.saturating_mul(REDUCE_RECURSE_MARGIN.0)
-                {
+                let lns_eligible = (CORE_LNS_MIN_N..=CORE_LNS_MAX_N).contains(&cn)
+                    && cl.core_nnz() <= CORE_LNS_MAX_NNZ;
+                let margin = if lns_eligible { CORE_LNS_RECURSE_MARGIN } else { REDUCE_RECURSE_MARGIN };
+                if raw.saturating_mul(margin.1) <= incumbent.saturating_mul(margin.0) {
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         refine_core(
                             cn,

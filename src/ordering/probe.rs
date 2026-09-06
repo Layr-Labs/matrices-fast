@@ -2117,3 +2117,532 @@ fn probe_uniform_rounds_synthetic() {
         println!("SYNTHETIC\t{name}\t{}\t{}\t{base}\t{mine}", pat.n, pat.nnz());
     }
 }
+
+/// Core-based candidate families measured as INCREMENTS over the finished
+/// `order()` incumbent (so a family's value is what it adds to the shipped
+/// pipeline, not what it would score alone). Every family works on the exact
+/// residual core of `core_lift::reduce` and is ranked by the exact objective
+/// split `prefix_flops + flops_of(core)`. Reports per-family score-if-admitted,
+/// movers, total / max wall time, and the two-halves / drop-1 robustness of the
+/// union. Structural gates only.
+#[test]
+#[ignore]
+fn probe_core_families() {
+    const FAM: [&str; 6] = [
+        "mf_relabel",      // MinFill on relabelled K=3 core, seeds 0..=7 (0 = identity), cn <= 1200
+        "core_lns30x2",    // rgreedy::search on the K=3 core from the 5-pass argmin, 2 x 30M
+        "core_lns100",     // same, one 100M stream (budget sensitivity)
+        "extra_tickets",   // medium band: 8 tickets + MinFill on the K=5/4/2/6 cores
+        "large_tickets",   // n >= 10k: 8 tickets + MinFill on the K=3 core (cn <= 4000, core_nnz <= 30k)
+        "large_lns",       // n >= 10k: core LNS 30M on the K=3 core, cn <= 1000
+    ];
+    let nf = FAM.len();
+    let corpus = crate::corpus::corpus();
+    let mut names: Vec<String> = Vec::new();
+    let mut ns: Vec<usize> = Vec::new();
+    let mut bases: Vec<u64> = Vec::new();
+    let mut currents: Vec<u64> = Vec::new();
+    let mut fam_best: Vec<Vec<u64>> = Vec::new();
+    let mut fam_secs = vec![0.0f64; nf];
+    let mut fam_max_secs = vec![0.0f64; nf];
+    let mut fam_max_row: Vec<String> = vec![String::new(); nf];
+    let mut fam_rows = vec![0usize; nf];
+
+    let five = |core_pat: &ScoringPattern, cl: &core_lift::CoreLift| -> Option<(u64, Vec<usize>)> {
+        let cn = cl.core_n();
+        let ccp: Vec<i32> = cl.core_col_ptr.iter().map(|&x| x as i32).collect();
+        let cri: Vec<i32> = cl.core_row_idx.iter().map(|&x| x as i32).collect();
+        let ccore = feral_ordering_core::CscPattern::new(cn, &ccp, &cri)?;
+        let mut best: Option<(u64, Vec<usize>)> = None;
+        for k in 0..=REDUCE_ALPHAS.len() {
+            let p: Vec<i32> = if k < REDUCE_ALPHAS.len() {
+                let o = feral_amf::AmfOptions { dense_alpha: REDUCE_ALPHAS[k], ..Default::default() };
+                feral_amf::amf_order_opts(&ccore, &o).ok()?.0
+            } else {
+                feral_amd::amd_order_opts(&ccore, &feral_amd::AmdOptions::default()).ok()?.0
+            };
+            let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+            if !is_bijection(&cp, cn) { continue; }
+            let f = flops_of(core_pat, &cp);
+            if best.as_ref().map_or(true, |(bf, _)| f < *bf) { best = Some((f, cp)); }
+        }
+        best
+    };
+    // The shipped medium-band 8-ticket portfolio + MinFill, exact-ranked on the core.
+    let tickets = |core_pat: &ScoringPattern, cl: &core_lift::CoreLift| -> Option<(u64, Vec<usize>)> {
+        let cn = cl.core_n();
+        let mut best: Option<(u64, Vec<usize>)> = None;
+        let mut degree_order: Vec<usize> = (0..cn).collect();
+        degree_order.sort_unstable_by_key(|&v| (cl.core_col_ptr[v + 1] - cl.core_col_ptr[v], v));
+        for q in [(0..cn).rev().collect::<Vec<_>>(), degree_order] {
+            let relabeled = permute_pattern(core_pat, &q);
+            let rp: Vec<i32> = relabeled.col_ptr.iter().map(|&v| v as i32).collect();
+            let ri: Vec<i32> = relabeled.row_idx.iter().map(|&v| v as i32).collect();
+            let rc = feral_ordering_core::CscPattern::new(cn, &rp, &ri)?;
+            for alpha in [2.5, 10.0, 0.5, 5.0] {
+                let options = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
+                if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
+                    let cp: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
+                    if !is_bijection(&cp, cn) { continue; }
+                    let f = flops_of(core_pat, &cp);
+                    if best.as_ref().map_or(true, |(bf, _)| f < *bf) { best = Some((f, cp)); }
+                }
+            }
+        }
+        if cn <= 1_000 {
+            let core_pattern = Pattern { n: cn, col_ptr: cl.core_col_ptr.clone(), row_idx: cl.core_row_idx.clone() };
+            let mf: Vec<usize> = minfill_order(&core_pattern).into_iter().map(|v| v as usize).collect();
+            if is_bijection(&mf, cn) {
+                let f = flops_of(core_pat, &mf);
+                if best.as_ref().map_or(true, |(bf, _)| f < *bf) { best = Some((f, mf)); }
+            }
+        }
+        best
+    };
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 { continue; }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(&sp, &feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect::<Vec<_>>());
+        let t0 = Instant::now();
+        let current = order(pat);
+        let cur_secs = t0.elapsed().as_secs_f64();
+        let current_flops = flops_of(&sp, &current);
+        let mut best = vec![current_flops; nf];
+
+        if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
+            if let Some(cl3) = core_lift::reduce(&sp, REDUCE_ROW_DEG, REDUCE_MAX_CORE_N, REDUCE_MAX_CORE_EDGES) {
+                let cn = cl3.core_n();
+                if cn > 0 && cn < n && cl3.core_nnz() <= REDUCE_MAX_CORE_NNZ {
+                    let core_pat = ScoringPattern { n: cn, col_ptr: cl3.core_col_ptr.clone(), row_idx: cl3.core_row_idx.clone() };
+                    let seed = five(&core_pat, &cl3);
+                    let mut charge = |f: usize, t: Instant, name: &str| {
+                        let s = t.elapsed().as_secs_f64();
+                        fam_secs[f] += s;
+                        fam_rows[f] += 1;
+                        if s > fam_max_secs[f] { fam_max_secs[f] = s; fam_max_row[f] = name.to_owned(); }
+                    };
+                    // F0: MinFill on relabelled core.
+                    if cn <= 1_200 && cn >= 8 {
+                        let t = Instant::now();
+                        for s in 0..8u64 {
+                            let q: Vec<usize> = if s == 0 { (0..cn).collect() } else { relabel(cn, 7_000 + s) };
+                            let relabeled = permute_pattern(&core_pat, &q);
+                            let core_pattern = Pattern { n: cn, col_ptr: relabeled.col_ptr, row_idx: relabeled.row_idx };
+                            let mf: Vec<usize> = minfill_order(&core_pattern).into_iter().map(|v| q[v as usize]).collect();
+                            if is_bijection(&mf, cn) {
+                                let f = cl3.prefix_flops + flops_of(&core_pat, &mf);
+                                best[0] = best[0].min(f);
+                            }
+                        }
+                        charge(0, t, name);
+                    }
+                    // F1/F2: LNS on the core from the 5-pass argmin.
+                    if let Some((sf, sperm)) = seed.as_ref() {
+                        if cn <= 1_000 && cn >= 8 && cl3.core_nnz() <= 60_000 && n < 10_000 {
+                            let t = Instant::now();
+                            let mut cur_p = sperm.clone();
+                            let mut cur_f = *sf;
+                            for (budget, rs) in [(30_000_000i64, 0x5EED_0001u64), (30_000_000, 0x5EED_0002)] {
+                                if let Some((c, _)) = rgreedy::search(cn, &cl3.core_col_ptr, &cl3.core_row_idx, &cur_p, cur_f, budget, rs) {
+                                    if is_bijection(&c, cn) {
+                                        let f = flops_of(&core_pat, &c);
+                                        if f < cur_f { cur_f = f; cur_p = c; }
+                                    }
+                                }
+                            }
+                            best[1] = best[1].min(cl3.prefix_flops + cur_f);
+                            charge(1, t, name);
+                            let t = Instant::now();
+                            if let Some((c, _)) = rgreedy::search(cn, &cl3.core_col_ptr, &cl3.core_row_idx, sperm, *sf, 100_000_000, 0x5EED_0003) {
+                                if is_bijection(&c, cn) {
+                                    let f = flops_of(&core_pat, &c);
+                                    best[2] = best[2].min(cl3.prefix_flops + f);
+                                }
+                            }
+                            charge(2, t, name);
+                        }
+                        // F5: large rows, core LNS.
+                        if n >= 10_000 && cn <= 1_000 && cn >= 8 && cl3.core_nnz() <= 60_000 {
+                            let t = Instant::now();
+                            if let Some((c, _)) = rgreedy::search(cn, &cl3.core_col_ptr, &cl3.core_row_idx, sperm, *sf, 30_000_000, 0x5EED_0001) {
+                                if is_bijection(&c, cn) {
+                                    let f = flops_of(&core_pat, &c);
+                                    best[5] = best[5].min(cl3.prefix_flops + f);
+                                }
+                            }
+                            charge(5, t, name);
+                        }
+                    }
+                    // F4: large rows, the medium-band ticket portfolio.
+                    if n >= 10_000 && (8..=4_000).contains(&cn) && cl3.core_nnz() <= 30_000 {
+                        let t = Instant::now();
+                        if let Some((f, _)) = tickets(&core_pat, &cl3) {
+                            best[4] = best[4].min(cl3.prefix_flops + f);
+                        }
+                        charge(4, t, name);
+                    }
+                    // F3: medium band, extra-depth cores with the ticket portfolio.
+                    if (1_000..10_000).contains(&n) && nnz <= 50_000 {
+                        let t = Instant::now();
+                        let mut seen: Vec<usize> = vec![cn];
+                        for &depth in REDUCE_EXTRA_DEPTHS.iter() {
+                            let lifted = if depth <= REDUCE_ROW_DEG {
+                                core_lift::reduce(&sp, depth, REDUCE_MAX_CORE_N, REDUCE_MAX_CORE_EDGES)
+                            } else {
+                                core_lift::reduce_checked(&sp, depth, REDUCE_MAX_CORE_N, REDUCE_MAX_CORE_EDGES, REDUCE_PAIR_BUDGET)
+                            };
+                            let Some(cl) = lifted else { continue };
+                            let dcn = cl.core_n();
+                            let min_seen = seen.iter().copied().min().unwrap_or(n);
+                            let fresh = if depth < REDUCE_ROW_DEG {
+                                dcn > 0 && dcn * 10 < n * 9 && !seen.contains(&dcn)
+                            } else {
+                                dcn > 0 && dcn * 10 <= min_seen * 9
+                            };
+                            if !fresh || !(8..=4_000).contains(&dcn) || cl.core_nnz() > 30_000 { continue; }
+                            seen.push(dcn);
+                            let dpat = ScoringPattern { n: dcn, col_ptr: cl.core_col_ptr.clone(), row_idx: cl.core_row_idx.clone() };
+                            if let Some((f, _)) = five(&dpat, &cl) { best[3] = best[3].min(cl.prefix_flops + f); }
+                            if let Some((f, _)) = tickets(&dpat, &cl) { best[3] = best[3].min(cl.prefix_flops + f); }
+                        }
+                        charge(3, t, name);
+                    }
+                }
+            }
+        }
+
+        let all = *best.iter().min().unwrap();
+        if all < current_flops {
+            let mut tags = String::new();
+            for f in 0..nf { if best[f] < current_flops { tags.push_str(FAM[f]); tags.push(':'); tags.push_str(&format!("{:.4} ", best[f] as f64 / base as f64)); } }
+            println!("MOVE\t{name}\t{n}\t{nnz}\t{}\tcur={:.4}\tall={:.4}\tcur_s={cur_secs:.3}\t{tags}", BUCKET_NAMES[bucket(n)], current_flops as f64 / base as f64, all as f64 / base as f64);
+        }
+        names.push(name.clone());
+        ns.push(n);
+        bases.push(base);
+        currents.push(current_flops);
+        fam_best.push(best);
+    }
+
+    let score_of = |pick: &dyn Fn(usize) -> u64, skip: Option<usize>, half: Option<usize>| -> f64 {
+        let mut logs = [0.0f64; 3];
+        let mut counts = [0usize; 3];
+        for i in 0..names.len() {
+            if Some(i) == skip { continue; }
+            if let Some(h) = half { if i % 2 != h { continue; } }
+            let b = bucket(ns[i]);
+            logs[b] += (pick(i) as f64 / bases[i] as f64).ln();
+            counts[b] += 1;
+        }
+        aggregate(&logs, &counts)
+    };
+    let cur_score = score_of(&|i| currents[i], None, None);
+    println!("\n--- core families: score if admitted (current = {cur_score:.6}) ---");
+    println!("family\tscore\tdelta_bips\tmovers\trows\tsecs_total\tsecs_max\tmax_row");
+    for f in 0..nf {
+        let s = score_of(&|i| fam_best[i][f], None, None);
+        let movers = (0..names.len()).filter(|&i| fam_best[i][f] < currents[i]).count();
+        println!("{}\t{s:.6}\t{:+.2}\t{movers}\t{}\t{:.2}\t{:.3}\t{}", FAM[f], (s - cur_score) / cur_score * 1e4, fam_rows[f], fam_secs[f], fam_max_secs[f], fam_max_row[f]);
+    }
+    let all_pick = |i: usize| *fam_best[i].iter().min().unwrap();
+    let all_score = score_of(&all_pick, None, None);
+    println!("ALL\t{all_score:.6}\t{:+.2}\tmovers={}", (all_score - cur_score) / cur_score * 1e4, (0..names.len()).filter(|&i| all_pick(i) < currents[i]).count());
+    for h in 0..2 {
+        let c = score_of(&|i| currents[i], None, Some(h));
+        let a = score_of(&all_pick, None, Some(h));
+        println!("HALF{h}\tcurrent={c:.6}\tall={a:.6}\tdelta_bips={:+.2}", (a - c) / c * 1e4);
+    }
+    // drop-1: remove the single mover whose removal hurts the union most.
+    let mut worst = f64::NEG_INFINITY;
+    let mut worst_name = String::new();
+    for i in 0..names.len() {
+        if all_pick(i) >= currents[i] { continue; }
+        let c = score_of(&|j| currents[j], Some(i), None);
+        let a = score_of(&all_pick, Some(i), None);
+        let d = (a - c) / c * 1e4;
+        if d > worst { worst = d; worst_name = names[i].clone(); }
+    }
+    println!("DROP1\tdelta_bips={worst:+.2}\tdropped={worst_name}");
+}
+
+/// For every row still tied at the AMD anchor, compare the anchor's exact flops
+/// with the graph-theoretic lower bound `n + 3|E| + 2*triangles(G)` (a fill-free
+/// completion attains it; any completion H ⊇ G costs `n + 3|E(H)| + 2 tri(H)`).
+/// `gap = 1 - LB/AMD` bounds the best possible relative gain on that row: rows
+/// with a tiny gap are (near-)optimal and not targets; rows with a large gap are
+/// where a new candidate family could still pay.
+#[test]
+#[ignore]
+fn probe_tie_floor() {
+    let corpus = crate::corpus::corpus();
+    println!("matrix\tbucket\tn\tnnz\tamd_flops\tlower_bound\tLB/AMD\tsecs");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 { continue; }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(&sp, &feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect::<Vec<_>>());
+        let t0 = Instant::now();
+        let mine = flops_of(&sp, &order(pat));
+        let secs = t0.elapsed().as_secs_f64();
+        if mine < base { continue; }
+        // triangles: for each edge (u,v) u<v, count common neighbours w > v via sorted-list merge.
+        let mut adj: Vec<Vec<u32>> = vec![Vec::new(); n];
+        for j in 0..n {
+            for &i in &pat.row_idx[pat.col_ptr[j]..pat.col_ptr[j + 1]] {
+                if i != j { adj[j].push(i as u32); }
+            }
+        }
+        let mut edges = 0u64;
+        for a in adj.iter_mut() { a.sort_unstable(); a.dedup(); edges += a.len() as u64; }
+        let edges = edges / 2;
+        let mut tri = 0u64;
+        for u in 0..n {
+            for &v in &adj[u] {
+                let v = v as usize;
+                if v <= u { continue; }
+                let (a, b) = (&adj[u], &adj[v]);
+                let (mut i, mut j) = (0usize, 0usize);
+                while i < a.len() && j < b.len() {
+                    if a[i] == b[j] { if (a[i] as usize) > v { tri += 1; } i += 1; j += 1; }
+                    else if a[i] < b[j] { i += 1 } else { j += 1 }
+                }
+            }
+        }
+        let lb = n as u64 + 3 * edges + 2 * tri;
+        println!("{name}\t{}\t{n}\t{}\t{base}\t{lb}\t{:.4}\t{secs:.3}", BUCKET_NAMES[bucket(n)], pat.nnz(), lb as f64 / base as f64);
+    }
+}
+
+/// Design probe for the core-LNS family found by `probe_core_families`: on every
+/// row whose K = 3 residual core is small (8 <= cn <= 1000, core_nnz <= 60k),
+/// compare LNS budgets / seeding / chaining, report the raw-seed margin against
+/// the finished incumbent (decides whether the 11/10 `refine_core` gate must be
+/// widened), and price relabelled core MinFill by core-size band.
+#[test]
+#[ignore]
+fn probe_core_lns_design() {
+    const V: [&str; 9] = [
+        "lns30x2", "lns50x2", "lns100", "lns30x2+100", "pool_lns30x2",
+        "mf_rel_cn300", "mf_rel_cn600", "lns30x2+desc", "lns30x2_large",
+    ];
+    let nv = V.len();
+    let corpus = crate::corpus::corpus();
+    let mut ns: Vec<usize> = Vec::new();
+    let mut bases: Vec<u64> = Vec::new();
+    let mut currents: Vec<u64> = Vec::new();
+    let mut vbest: Vec<Vec<u64>> = Vec::new();
+    let mut vsecs = vec![0.0f64; nv];
+    let mut vmax = vec![0.0f64; nv];
+    let mut vmaxrow = vec![String::new(); nv];
+    let mut vrows = vec![0usize; nv];
+
+    let five = |core_pat: &ScoringPattern, cl: &core_lift::CoreLift| -> Option<(u64, Vec<usize>)> {
+        let cn = cl.core_n();
+        let ccp: Vec<i32> = cl.core_col_ptr.iter().map(|&x| x as i32).collect();
+        let cri: Vec<i32> = cl.core_row_idx.iter().map(|&x| x as i32).collect();
+        let ccore = feral_ordering_core::CscPattern::new(cn, &ccp, &cri)?;
+        let mut best: Option<(u64, Vec<usize>)> = None;
+        for k in 0..=REDUCE_ALPHAS.len() {
+            let p: Vec<i32> = if k < REDUCE_ALPHAS.len() {
+                let o = feral_amf::AmfOptions { dense_alpha: REDUCE_ALPHAS[k], ..Default::default() };
+                feral_amf::amf_order_opts(&ccore, &o).ok()?.0
+            } else {
+                feral_amd::amd_order_opts(&ccore, &feral_amd::AmdOptions::default()).ok()?.0
+            };
+            let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+            if !is_bijection(&cp, cn) { continue; }
+            let f = flops_of(core_pat, &cp);
+            if best.as_ref().map_or(true, |(bf, _)| f < *bf) { best = Some((f, cp)); }
+        }
+        best
+    };
+    let tickets = |core_pat: &ScoringPattern, cl: &core_lift::CoreLift| -> Option<(u64, Vec<usize>)> {
+        let cn = cl.core_n();
+        let mut best: Option<(u64, Vec<usize>)> = None;
+        let mut degree_order: Vec<usize> = (0..cn).collect();
+        degree_order.sort_unstable_by_key(|&v| (cl.core_col_ptr[v + 1] - cl.core_col_ptr[v], v));
+        for q in [(0..cn).rev().collect::<Vec<_>>(), degree_order] {
+            let relabeled = permute_pattern(core_pat, &q);
+            let rp: Vec<i32> = relabeled.col_ptr.iter().map(|&v| v as i32).collect();
+            let ri: Vec<i32> = relabeled.row_idx.iter().map(|&v| v as i32).collect();
+            let rc = feral_ordering_core::CscPattern::new(cn, &rp, &ri)?;
+            for alpha in [2.5, 10.0, 0.5, 5.0] {
+                let options = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
+                if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
+                    let cp: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
+                    if !is_bijection(&cp, cn) { continue; }
+                    let f = flops_of(core_pat, &cp);
+                    if best.as_ref().map_or(true, |(bf, _)| f < *bf) { best = Some((f, cp)); }
+                }
+            }
+        }
+        if cn <= 1_000 {
+            let core_pattern = Pattern { n: cn, col_ptr: cl.core_col_ptr.clone(), row_idx: cl.core_row_idx.clone() };
+            let mf: Vec<usize> = minfill_order(&core_pattern).into_iter().map(|v| v as usize).collect();
+            if is_bijection(&mf, cn) {
+                let f = flops_of(core_pat, &mf);
+                if best.as_ref().map_or(true, |(bf, _)| f < *bf) { best = Some((f, mf)); }
+            }
+        }
+        best
+    };
+    // Chained LNS streams on the core; returns the best (f, perm) reached.
+    let lns = |cl: &core_lift::CoreLift, core_pat: &ScoringPattern, start: &(u64, Vec<usize>), streams: &[(i64, u64)]| -> (u64, Vec<usize>) {
+        let cn = cl.core_n();
+        let (mut f_cur, mut p_cur) = (start.0, start.1.clone());
+        for &(budget, rs) in streams {
+            if let Some((c, _)) = rgreedy::search(cn, &cl.core_col_ptr, &cl.core_row_idx, &p_cur, f_cur, budget, rs) {
+                if is_bijection(&c, cn) {
+                    let f = flops_of(core_pat, &c);
+                    if f < f_cur { f_cur = f; p_cur = c; }
+                }
+            }
+        }
+        (f_cur, p_cur)
+    };
+    let mf_relabel = |cl: &core_lift::CoreLift, core_pat: &ScoringPattern| -> u64 {
+        let cn = cl.core_n();
+        let mut best = u64::MAX;
+        for s in 0..8u64 {
+            let q: Vec<usize> = if s == 0 { (0..cn).collect() } else { relabel(cn, 7_000 + s) };
+            let relabeled = permute_pattern(core_pat, &q);
+            let core_pattern = Pattern { n: cn, col_ptr: relabeled.col_ptr, row_idx: relabeled.row_idx };
+            let mf: Vec<usize> = minfill_order(&core_pattern).into_iter().map(|v| q[v as usize]).collect();
+            if is_bijection(&mf, cn) { best = best.min(flops_of(core_pat, &mf)); }
+        }
+        best
+    };
+
+    println!("ROW\tmatrix\tbucket\tn\tnnz\tcn\tcore_nnz\tcur_s\tcur\tseed\tpool\tlns30x2\tlns30x2_s");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 { continue; }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(&sp, &feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect::<Vec<_>>());
+        let t0 = Instant::now();
+        let current = order(pat);
+        let cur_secs = t0.elapsed().as_secs_f64();
+        let current_flops = flops_of(&sp, &current);
+        let mut best = vec![current_flops; nv];
+        let mut charge = |v: usize, t: Instant, name: &str| -> f64 {
+            let s = t.elapsed().as_secs_f64();
+            vsecs[v] += s; vrows[v] += 1;
+            if s > vmax[v] { vmax[v] = s; vmaxrow[v] = name.to_owned(); }
+            s
+        };
+        if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
+            if let Some(cl3) = core_lift::reduce(&sp, REDUCE_ROW_DEG, REDUCE_MAX_CORE_N, REDUCE_MAX_CORE_EDGES) {
+                let cn = cl3.core_n();
+                let cnnz = cl3.core_nnz();
+                if (8..=1_000).contains(&cn) && cn < n && cnnz <= 60_000 {
+                    let core_pat = ScoringPattern { n: cn, col_ptr: cl3.core_col_ptr.clone(), row_idx: cl3.core_row_idx.clone() };
+                    if let Some(seed5) = five(&core_pat, &cl3) {
+                        let pf = cl3.prefix_flops;
+                        let in_medium_gate = (1_000..10_000).contains(&n) && nnz <= 50_000 && cnnz <= 30_000;
+                        let pooled: (u64, Vec<usize>) = if in_medium_gate {
+                            match tickets(&core_pat, &cl3) { Some(t) if t.0 < seed5.0 => t, _ => seed5.clone() }
+                        } else { seed5.clone() };
+                        let large = n >= 10_000;
+                        let mut lns30_s = 0.0;
+                        if !large {
+                            let t = Instant::now();
+                            let r = lns(&cl3, &core_pat, &seed5, &[(30_000_000, 0x5EED_0001), (30_000_000, 0x5EED_0002)]);
+                            best[0] = best[0].min(pf + r.0);
+                            lns30_s = charge(0, t, name);
+                            // + descents on the core after LNS
+                            let t = Instant::now();
+                            let (mut f_cur, mut p_cur) = (r.0, r.1.clone());
+                            for _ in 0..2 {
+                                let mut imp = false;
+                                if let Some(c) = rgreedy::adjacent_five_descent(cn, &cl3.core_col_ptr, &cl3.core_row_idx, &p_cur, 8_000_000) {
+                                    if is_bijection(&c, cn) { let f = flops_of(&core_pat, &c); if f < f_cur { f_cur = f; p_cur = c; imp = true; } }
+                                }
+                                if let Some(c) = rgreedy::adjacent_four_descent(cn, &cl3.core_col_ptr, &cl3.core_row_idx, &p_cur, 8_000_000) {
+                                    if is_bijection(&c, cn) { let f = flops_of(&core_pat, &c); if f < f_cur { f_cur = f; p_cur = c; imp = true; } }
+                                }
+                                if !imp { break; }
+                            }
+                            best[7] = best[7].min(pf + f_cur);
+                            charge(7, t, name);
+                            let t = Instant::now();
+                            let r = lns(&cl3, &core_pat, &seed5, &[(50_000_000, 0x5EED_0001), (50_000_000, 0x5EED_0002)]);
+                            best[1] = best[1].min(pf + r.0);
+                            charge(1, t, name);
+                            let t = Instant::now();
+                            let r = lns(&cl3, &core_pat, &seed5, &[(100_000_000, 0x5EED_0003)]);
+                            best[2] = best[2].min(pf + r.0);
+                            charge(2, t, name);
+                            let t = Instant::now();
+                            let r = lns(&cl3, &core_pat, &seed5, &[(30_000_000, 0x5EED_0001), (30_000_000, 0x5EED_0002), (100_000_000, 0x5EED_0003)]);
+                            best[3] = best[3].min(pf + r.0);
+                            charge(3, t, name);
+                            let t = Instant::now();
+                            let r = lns(&cl3, &core_pat, &pooled, &[(30_000_000, 0x5EED_0001), (30_000_000, 0x5EED_0002)]);
+                            best[4] = best[4].min(pf + r.0);
+                            charge(4, t, name);
+                            if cn <= 600 {
+                                let t = Instant::now();
+                                let f = mf_relabel(&cl3, &core_pat);
+                                if f != u64::MAX { best[6] = best[6].min(pf + f); if cn <= 300 { best[5] = best[5].min(pf + f); } }
+                                let s = charge(6, t, name);
+                                if cn <= 300 { vsecs[5] += s; vrows[5] += 1; if s > vmax[5] { vmax[5] = s; vmaxrow[5] = name.clone(); } }
+                            }
+                        } else {
+                            let t = Instant::now();
+                            let r = lns(&cl3, &core_pat, &seed5, &[(30_000_000, 0x5EED_0001), (30_000_000, 0x5EED_0002)]);
+                            best[8] = best[8].min(pf + r.0);
+                            lns30_s = charge(8, t, name);
+                        }
+                        println!("ROW\t{name}\t{}\t{n}\t{nnz}\t{cn}\t{cnnz}\t{cur_secs:.3}\t{:.4}\t{:.4}\t{:.4}\t{:.4}\t{lns30_s:.3}",
+                            BUCKET_NAMES[bucket(n)], current_flops as f64 / base as f64, (pf + seed5.0) as f64 / base as f64,
+                            (pf + pooled.0) as f64 / base as f64, best[if large { 8 } else { 0 }] as f64 / base as f64);
+                    }
+                }
+            }
+        }
+        ns.push(n); bases.push(base); currents.push(current_flops); vbest.push(best);
+    }
+    let score_of = |pick: &dyn Fn(usize) -> u64, skip: Option<usize>, half: Option<usize>| -> f64 {
+        let mut logs = [0.0f64; 3];
+        let mut counts = [0usize; 3];
+        for i in 0..ns.len() {
+            if Some(i) == skip { continue; }
+            if let Some(h) = half { if i % 2 != h { continue; } }
+            let b = bucket(ns[i]);
+            logs[b] += (pick(i) as f64 / bases[i] as f64).ln();
+            counts[b] += 1;
+        }
+        aggregate(&logs, &counts)
+    };
+    let cur_score = score_of(&|i| currents[i], None, None);
+    println!("\n--- core LNS design: score if admitted (current = {cur_score:.6}) ---");
+    println!("variant\tscore\tdelta_bips\tmovers\trows\tsecs_total\tsecs_max\tmax_row\thalf0_bips\thalf1_bips\tdrop1_bips");
+    for v in 0..nv {
+        let s = score_of(&|i| vbest[i][v], None, None);
+        let movers = (0..ns.len()).filter(|&i| vbest[i][v] < currents[i]).count();
+        let mut halves = [0.0f64; 2];
+        for h in 0..2 {
+            let c = score_of(&|i| currents[i], None, Some(h));
+            let a = score_of(&|i| vbest[i][v], None, Some(h));
+            halves[h] = (a - c) / c * 1e4;
+        }
+        let mut worst = f64::NEG_INFINITY;
+        for i in 0..ns.len() {
+            if vbest[i][v] >= currents[i] { continue; }
+            let c = score_of(&|j| currents[j], Some(i), None);
+            let a = score_of(&|j| vbest[j][v], Some(i), None);
+            worst = worst.max((a - c) / c * 1e4);
+        }
+        println!("{}\t{s:.6}\t{:+.2}\t{movers}\t{}\t{:.2}\t{:.3}\t{}\t{:+.2}\t{:+.2}\t{:+.2}", V[v], (s - cur_score) / cur_score * 1e4, vrows[v], vsecs[v], vmax[v], vmaxrow[v], halves[0], halves[1], worst);
+    }
+}

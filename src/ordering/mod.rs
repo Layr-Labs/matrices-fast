@@ -418,6 +418,11 @@ const RELABEL_AMF_MAX_NNZ: usize = 200_000;
 const EXTRA_RELABEL_MAX_N: usize = 6_000;
 const EXTRA_RELABEL_MAX_NNZ: usize = 50_000;
 
+/// Fixed AMD relabel-ticket floor for heavy `gt_10k` matrices (nnz > 350k), where
+/// `RELABEL_BUDGET / nnz` would otherwise buy 0 or 1 restarts. Sized by measured
+/// slack, not by the work model: see the heavy branch in `relabel_restarts_tuned`.
+const HEAVY_GT10K_TICKETS: usize = 1;
+
 #[cfg(test)]
 const SUBTREE_SEARCH_WORK_LIMIT: i64 = 32_000_000;
 #[cfg(test)]
@@ -805,6 +810,21 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
         } else {
             base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
         }
+    } else if n >= 10_000 && nnz > 350_000 && max_deg * 1_000 <= n {
+        // HEAVY gt_10k floor. `budget / nnz` floors to 0 or 1 above ~350k nnz, so
+        // the highest-leverage bucket (weight 0.40 over 45 matrices) is the one
+        // getting the FEWEST relabel tickets — the opposite of what the weights
+        // say. Measured per-matrix `order()` time (probe_gt10k) shows these are
+        // also the CHEAPEST large matrices in wall-clock terms, precisely because
+        // the budget starves them: acopf_case9241pegase_qcqp 0.294 s and
+        // pooling_sppb5pq 0.310 s against a 1.302 s corpus worst on
+        // crudeoil_lee4_10 (nnz 120632, which the mid-band floor feeds 12
+        // restarts). Buying a small fixed number of AMD tickets here spends slack
+        // that exists only on these matrices and cannot move the worst case.
+        // Near-regular only (`max_deg * 1000 <= n`): high-degree heavy matrices
+        // (faclay75, max_deg 2777) cost ~0.87 s per ticket and win nothing.
+        // AMF is untouched: it stays capped at `RELABEL_AMF_MAX_NNZ`.
+        base_r.max(HEAVY_GT10K_TICKETS)
     } else {
         base_r
     }
@@ -1000,7 +1020,20 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     // eligible matrix STRICTLY below the slowest tier (`nnz ≥ 163 k`), where a
     // few AMD passes are milliseconds — so the worst-case time is held
     // byte-for-byte. Best-of floor makes all three variants pure upside.
-    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ {
+    // HEAVY NEAR-REGULAR EXTENSION. The caps above stop at `n < 150000 && nnz <
+    // 600000`, which excludes the very largest matrices entirely — and those are
+    // exactly where a tie costs the most (gt_10k carries weight 0.40 over 45
+    // matrices). Measured with `probe_heavy_variants`: on gabriel10 (n=244056,
+    // nnz=1148210) the alpha-10 non-aggressive pass costs 0.150 s plus 0.045 s to
+    // score and takes the ratio 1.000000 -> 0.975633; the aggressive variants all
+    // return the anchor. The reason the caps can be lifted HERE and not in
+    // general is `max_deg * 1000 <= n`: on a near-regular graph an AMD pass stays
+    // at anchor speed no matter how large the matrix, whereas the high-degree
+    // heavy matrices (faclay75, max_deg 2777) are the ones whose passes and
+    // symbolic scoring blow up. Only the alpha-10 variant is reachable for this
+    // class — the other four keep their `nnz <= 150000` gate.
+    let heavy_near_regular = n >= 10_000 && nnz > 350_000 && max_deg * 1_000 <= n;
+    if (n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ) || heavy_near_regular {
         let amd_robust = feral_amd::AmdOptions {
             aggressive: false,
             dense_alpha: 10.0,

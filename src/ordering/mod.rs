@@ -171,10 +171,10 @@ use feral::symbolic::column_counts_gnp;
 /// same one, under a per-matrix work ledger: per-round cost is linear in the reconstruction,
 /// two MCS passes and two exact scores, so charging each round against a fixed allowance
 /// bounds the added time by structure alone.
-const PEO_LARGE_MAX_NNZ: usize = 1_500_000;
-const PEO_LARGE_MAX_LNNZ: usize = 20_000_000;
-const PEO_LARGE_ROUNDS: usize = 8;
-const PEO_LARGE_LEDGER: u64 = 2_500_000;
+const PEO_LARGE_MAX_NNZ: usize = 800_000;
+const PEO_LARGE_MAX_LNNZ: usize = 5_000_000;
+const PEO_LARGE_ROUNDS: usize = 2;
+const PEO_LARGE_LEDGER: u64 = 2_200_000;
 
 const AMF_MAX_N: usize = 250_000;
 const AMF_MAX_NNZ: usize = 1_500_000;
@@ -2895,6 +2895,24 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             let Some(candidates) = peo_extract::candidates_bounded(
                 n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
                 usize::MAX, usize::MAX, PEO_LARGE_MAX_LNNZ,
+            ) else { break; };
+            let incumbent_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+            let mut final_flops = incumbent_flops;
+            for candidate in candidates {
+                let f = score(&candidate);
+                if f < final_flops { final_flops = f; best_perm = candidate; }
+            }
+            if final_flops == incumbent_flops { break; }
+        }
+    }
+    // Keep the complete frontier result as the seed for independent roots.
+    if n >= 1_000 && n <= 30_000 && nnz <= 180_000 {
+        for _ in 0..2 {
+            let pp = permute_pattern(&scoring_pat, &best_perm);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
+            let Some(candidates) = peo_extract::reversed_root_candidates(
+                n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
             ) else { break; };
             let incumbent_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
             let mut final_flops = incumbent_flops;

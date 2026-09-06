@@ -2663,7 +2663,33 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // inputs; applying it after the fixed prefix keeps this candidate
                 // inside the same structural envelope while the exact split makes
                 // its core score valid for the full ordering.
+                // Medium-core extension (0076): cores with 1000 < cn <= 2000 run
+                // the same fixed-budget MinFill, but only under a STRICTER
+                // core-nnz gate (<= 20k vs the outer 30k) so the added work is
+                // bounded by sparse-medium structure and stays inside the
+                // existing (n, nnz) envelope. Strict best-of admission keeps
+                // score risk structurally zero.
                 if cn <= 1_000 {
+                    let core_pattern = Pattern {
+                        n: cn,
+                        col_ptr: cl.core_col_ptr.clone(),
+                        row_idx: cl.core_row_idx.clone(),
+                    };
+                    let minfill: Vec<usize> = minfill_order(&core_pattern)
+                        .into_iter()
+                        .map(|v| v as usize)
+                        .collect();
+                    if is_bijection(&minfill, cn) {
+                        let score = cl.prefix_flops + flops_of(&core_pat, &minfill);
+                        if terminal_core_candidate
+                            .as_ref()
+                            .map_or(true, |(best, _)| score < *best)
+                        {
+                            terminal_core_candidate =
+                                Some((score, core_lift::splice(cl, &minfill)));
+                        }
+                    }
+                } else if cn <= 2_000 && cl.core_nnz() <= 20_000 {
                     let core_pattern = Pattern {
                         n: cn,
                         col_ptr: cl.core_col_ptr.clone(),

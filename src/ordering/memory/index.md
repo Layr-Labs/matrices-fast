@@ -1,3 +1,5 @@
+[Latest Codex calibrated MCS root refinement](experiments/0083-calibrated-sparse-mcs-root-refinement.md)
+
 [Latest Codex residual-core revision](experiments/0075-residual-core-minfill.md)
 
 [Latest Codex bounded-work revision](experiments/0074-shared-terminal-cleanup-budget.md)
@@ -232,3 +234,4 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0080: PEO re-extraction above the gate](experiments/0080-peo-re-extraction-above-the-gate.md): the terminal chain extended to rows outside 16..30k / 180k under a work ledger of 5*(n+nnz)+Lnnz; dev 0.829057 -> 0.827794, held-out 0.852396 -> 0.852280, 5 wins / 0 losses per corpus, worst call below the base; official pending.
 
 - [Tarjan-Yannakakis MCS background](literature/tarjan-yannakakis-1984-mcs.md): inspected primary abstract and independent completion-containment derivation.
+- [0082: calibrated very-sparse-large allowance](experiments/0082-calibrated-sparse-large-allowance.md): dev 0.827195 -> 0.826906 (-2.89 bips vs crown a2614af, -7.22 bips in gt_10k), 2 wins / 0 losses / 298 ties, all gates green; official crown submission.

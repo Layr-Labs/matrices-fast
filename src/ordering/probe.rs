@@ -1635,7 +1635,7 @@ fn probe_gt10k() {
     let mut worst = 0.0f64;
     let mut worst_name = String::new();
     let mut total_s = 0.0f64;
-    let mut rows: Vec<(String, f64)> = Vec::new();
+    let mut rows: Vec<(String, f64, f64, usize, usize)> = Vec::new();
 
     for (name, pat) in &corpus {
         if pat.n < 10_000 {
@@ -1660,7 +1660,7 @@ fn probe_gt10k() {
         let ratio = flops_of(&sp, &perm) as f64 / base;
         log_sum += ratio.ln();
         count += 1;
-        rows.push((name.clone(), ratio));
+        rows.push((name.clone(), ratio, secs, pat.n, pat.row_idx.len()));
         if secs > worst {
             worst = secs;
             worst_name = name.clone();
@@ -1672,9 +1672,135 @@ fn probe_gt10k() {
     println!("GT10K_WORST = {worst:.3} s on {worst_name}");
     println!("GT10K_TOTAL = {total_s:.1} s");
     println!("--- GT10K rows ---");
-    rows.sort_by(|a, b| a.0.cmp(&b.0));
-    for (name, ratio) in &rows {
-        println!("ROW\t{name}\t{ratio:.6}");
+    rows.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+    for (name, ratio, secs, n, nnz) in &rows {
+        println!("ROW\t{name}\t{ratio:.6}\t{secs:.3}\t{n}\t{nnz}");
+    }
+}
+
+#[test]
+#[ignore]
+fn probe_heavy_cost() {
+    let corpus = crate::corpus::corpus();
+    for (name, pat) in &corpus {
+        let nnz = pat.row_idx.len();
+        if pat.n < 10_000 || nnz <= 350_000 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let t0 = Instant::now();
+        let p0 = feral_amd::amd_order(&core).unwrap();
+        let amd_s = t0.elapsed().as_secs_f64();
+        let perm: Vec<usize> = p0.into_iter().map(|x| x as usize).collect();
+        let f = flops_of(&sp, &perm) as f64;
+        let mut max_deg = 0usize;
+        for j in 0..pat.n {
+            let d = pat.col_ptr[j + 1] - pat.col_ptr[j];
+            if d > max_deg {
+                max_deg = d;
+            }
+        }
+        println!(
+            "HEAVY\t{name}\t{n}\t{nnz}\t{max_deg}\t{amd_s:.3}\t{f:.4e}",
+            n = pat.n
+        );
+    }
+}
+
+#[test]
+#[ignore]
+fn probe_heavy_two() {
+    let corpus = crate::corpus::corpus();
+    for (name, pat) in &corpus {
+        let nnz = pat.row_idx.len();
+        if pat.n < 10_000 || nnz <= 350_000 {
+            continue;
+        }
+        let mut max_deg = 0usize;
+        for j in 0..pat.n {
+            let d = pat.col_ptr[j + 1] - pat.col_ptr[j];
+            if d > max_deg {
+                max_deg = d;
+            }
+        }
+        if max_deg * 1_000 > pat.n {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let t0 = Instant::now();
+        let perm = order(pat);
+        let secs = t0.elapsed().as_secs_f64();
+        let ratio = flops_of(&sp, &perm) as f64 / base;
+        println!("TWO\t{name}\t{ratio:.6}\t{secs:.3}");
+    }
+}
+
+#[test]
+#[ignore]
+fn probe_heavy_variants() {
+    let corpus = crate::corpus::corpus();
+    for (name, pat) in &corpus {
+        let nnz = pat.row_idx.len();
+        if pat.n < 10_000 || nnz <= 350_000 {
+            continue;
+        }
+        let mut max_deg = 0usize;
+        for j in 0..pat.n {
+            let d = pat.col_ptr[j + 1] - pat.col_ptr[j];
+            if d > max_deg {
+                max_deg = d;
+            }
+        }
+        if max_deg * 1_000 > pat.n {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let cfgs = [
+            (true, 10.0f64),
+            (false, 10.0),
+            (true, -1.0),
+            (false, -1.0),
+            (true, 5.0),
+            (false, 2.0),
+        ];
+        for (i, (agg, da)) in cfgs.iter().enumerate() {
+            let opts = feral_amd::AmdOptions { aggressive: *agg, dense_alpha: *da };
+            let t0 = Instant::now();
+            let r = feral_amd::amd_order_opts(&core, &opts);
+            let secs = t0.elapsed().as_secs_f64();
+            match r {
+                Ok((p, ..)) => {
+                    let perm: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                    let t1 = Instant::now();
+                    let f = flops_of(&sp, &perm) as f64;
+                    let score_s = t1.elapsed().as_secs_f64();
+                    println!("VAR\t{name}\t{i}\t{agg}\t{da}\t{ratio:.6}\t{secs:.3}\t{score_s:.3}", ratio = f / base);
+                }
+                Err(_) => println!("VAR\t{name}\t{i}\tERR"),
+            }
+        }
     }
 }
 

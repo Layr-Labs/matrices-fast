@@ -7,6 +7,7 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Active
 
+- [x] **RESOLVED (positive) — the residual core is where the small-graph LNS pays.** [0076](experiments/0076-core-lns-on-the-residual-core.md): two chained 30M exact LNS streams on the K = 3 core (cn ≤ 1000) are worth −6.1 bips on dev at ≤ 0.04 s per row additively (failed the hidden cap) and −3.8 bips when paid for by trimming the same ops from the full-graph LNS; relabelled core MinFill and the ticket portfolio on deeper cores are not worth their time. Still open: LNS on the K = 5/4/2/6 cores when they are eligible but not winners (needs a time offset on n ≤ 1000 rows).
 - [ ] **Work the residual core, not the full matrix (0062 substrate).** [0075](experiments/0075-residual-core-minfill.md) tested four-seed residual-core AMF/AMD relabels (no movers) and exact MinFill for `cn <= 1,000` (7 movers, now shipped). Still untested: multi-depth prefixes K in {2,4,5} (distinct cores only), and late phases run on the core under a per-call WORK budget as a REPLACEMENT of a late phase (never additive on rows >= 0.8 s). See [0062](experiments/0062-reduce-then-amf-terminal.md).
 - [ ] **Relabel the OTHER numbering-sensitive routines (top lead).**
       [0005](experiments/0005-relabelled-amf-multistart.md) established the general

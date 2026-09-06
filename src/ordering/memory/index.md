@@ -8,6 +8,7 @@
 
 ## Latest Codex checkpoint
 
+- [0076: core-LNS on the K = 3 residual core](experiments/0076-core-lns-on-the-residual-core.md): frontier `a07cc9c` (hidden 0.861203) measures **0.831772** on this box; time-neutral candidate **0.831457** (−3.8 bips), `lt_1k` 0.889764 → 0.8888, `1k_10k` 0.864765 → 0.8635, gt_10k unchanged. Two chained 30M-op exact LNS streams on the residual core (8 ≤ cn ≤ 1000, core_nnz ≤ 60k) on rows that run the full-graph LNS, paid by trimming 60M ops from that row's full-graph stream tail; 12 better / 5 worse; mean row −0.7 ms, worst row unchanged. The additive shape (−6.1 bips, +0.11 s on 0.8 s rows) failed hidden validation as `f118a2c5`. Official result pending.
 - [0075: exact MinFill on residual cores](experiments/0075-residual-core-minfill.md): current local candidate **0.832118** versus the recorded `0.832286` base; the `1k_10k` bucket moves from `0.865327` to `0.864765`, fill from `0.938912` to `0.938869`. The residual-core probe finds 7 strict movers; the other relabel probes find none. Full trusted 300-matrix run and 66 active tests pass. Official result pending.
 - [0072: medium core portfolio with capped cleanup](experiments/0072-medium-core-portfolio-with-2m-cleanup.md): current local candidate 0.832286 against df6e3f0 at 0.832566; 3 wins, no regressions, 300 cases. Official pending. Prior 798e4ffb timed out; 9bfbb8a7 passed at hidden 0.862053 but was not promoted after a concurrent frontier advance. Entries below are historical.
 
@@ -134,6 +135,9 @@ first; keep it current whenever you add, rename, or retire a page.
     the one that chose the shipped policy.
   - `probe_tie_breakers` — for every surviving tie with `n >= 1000`, the cost AND
     the achieved ratio of 16 separator/min-fill candidates. Answered 0027.
+  - `probe_core_families` / `probe_core_lns_design` — core-based candidate families measured as
+    INCREMENTS over the finished incumbent (score-if-admitted, movers, Σ/max seconds, two-halves,
+    drop-1); `probe_tie_floor` — lower bound `n + 3|E| + 2·triangles` vs AMD on every exact tie.
   - `probe_relabel_search` — relabelled-AMD SEARCH POLICIES at a FIXED restart
     count (i.e. at identical cost): explore/exploit split x perturbation strength
     x schedule. Scores the pure relabel family against AMD, so policy differences
@@ -223,6 +227,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.
 
+- [0076](experiments/0076-core-lns-on-the-residual-core.md) — exact randomized LNS on the K = 3 residual core inside `refine_core` (2 × 30M ops, cheap cores only) + 2/1 polishing margin. time-neutral shape 0.831772 → **0.831457** (−3.8 bips), 12 / 5 / 283, no row does more exact-search work; the additive shape (−6.1 bips) FAILED hidden validation (`f118a2c5`). Hidden pending. Negative controls in the same page: relabelled core MinFill, K = 5/4/2/6 ticket portfolio, any core family on n ≥ 10k.
 - [0068: small-core relabel and clique pruning](experiments/0068-small-core-relabel-and-clique-pruning.md): dev 0.833148 -> 0.832826, 4/0/296; official pending.
 - [0069: terminal core relabels on refreshed leader](experiments/0069-terminal-core-relabels-on-current-leader.md): dev 0.832725 -> 0.832432, 2/0/298; retains a942ebd's full pipeline; official pending. Earlier 0068 scored 0.862053 officially but was not promoted after the concurrent frontier advance.
 

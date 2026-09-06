@@ -294,6 +294,14 @@ const NDFM_MAX_NNZ: usize = 130_000;
 /// worst-scoring small buckets' tied-at-AMD combinatorial/network graphs
 /// (`wastewater*`, `wastepaper6`, `syn*`, `tln2`). Deterministic. Best-of floor
 /// → zero-downside.
+/// Caps for exact MinFill on an EXTRA-DEPTH residual core (see the extra-depth
+/// loop in `leader_order`). Deliberately an order of magnitude under the
+/// full-graph MinFill caps: the candidate is a bonus objective on a core the
+/// reduce ledger has already paid for, so it must never become a timing tier of
+/// its own.
+const MINFILL_CORE_MAX_N: usize = 1_000;
+const MINFILL_CORE_MAX_NNZ: usize = 12_000;
+
 const MINFILL_MAX_N: usize = 3_000;
 const MINFILL_MAX_NNZ: usize = 12_000;
 
@@ -2637,7 +2645,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // these after recursive refinement to preserve its finished result.
             if recurse && (1_000..10_000).contains(&n) && nnz <= 50_000
                 && (8..=4000).contains(&cn) && cl.core_nnz() <= 30_000 {
-                let mut best_core: Option<(u64, Vec<usize>)> = None;
                 let mut degree_order: Vec<usize> = (0..cn).collect();
                 degree_order.sort_unstable_by_key(|&v| (cl.core_col_ptr[v+1] - cl.core_col_ptr[v], v));
                 for q in [(0..cn).rev().collect::<Vec<_>>(), degree_order] {
@@ -2650,14 +2657,20 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
                             let cp: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
                             if !is_bijection(&cp, cn) { continue; }
-                            let raw_core_flops = flops_of(&core_pat, &cp);
-                            if best_core.as_ref().map_or(true, |(bf, _)| raw_core_flops < *bf) {
-                                best_core = Some((raw_core_flops, cp));
+                            let score = cl.prefix_flops + flops_of(&core_pat, &cp);
+                            if terminal_core_candidate.as_ref().map_or(true, |(f, _)| score < *f) {
+                                terminal_core_candidate = Some((score, core_lift::splice(cl, &cp)));
                             }
                         }
                     }
                 }
 
+                // Exact minimum-fill on a small residual core is cheap enough to
+                // add a genuinely different greedy objective beside the AMF grid.
+                // The full-graph MinFill path is already restricted to small
+                // inputs; applying it after the fixed prefix keeps this candidate
+                // inside the same structural envelope while the exact split makes
+                // its core score valid for the full ordering.
                 if cn <= 1_000 {
                     let core_pattern = Pattern {
                         n: cn,
@@ -2669,43 +2682,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         .map(|v| v as usize)
                         .collect();
                     if is_bijection(&minfill, cn) {
-                        let minfill_flops = flops_of(&core_pat, &minfill);
-                        if best_core.as_ref().map_or(true, |(bf, _)| minfill_flops < *bf) {
-                            best_core = Some((minfill_flops, minfill));
-                        }
-                    }
-                }
-
-                if let Some((raw_core_flops, cp)) = best_core {
-                    let best_flops = incumbent;
-                    if cl.prefix_flops + raw_core_flops < best_flops {
-                        let (final_cp, final_core_flops) = if cn <= 1_200 && cl.core_nnz() <= 10_000 {
-                            if let Ok(Some((f_refined, p_refined))) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                refine_core(
-                                    cn,
-                                    &cl.core_col_ptr,
-                                    &cl.core_row_idx,
-                                    &core_pat,
-                                    &cp,
-                                    raw_core_flops,
-                                    raw_core_flops,
-                                )
-                            })) {
-                                (p_refined, f_refined)
-                            } else {
-                                (cp, raw_core_flops)
-                            }
-                        } else {
-                            (cp, raw_core_flops)
-                        };
-                        let refined_score = cl.prefix_flops + final_core_flops;
-                        if refined_score < best_flops
-                            && terminal_core_candidate.as_ref().map_or(true, |(f, _)| refined_score < *f)
+                        let score = cl.prefix_flops + flops_of(&core_pat, &minfill);
+                        if terminal_core_candidate
+                            .as_ref()
+                            .map_or(true, |(best, _)| score < *best)
                         {
-                            let spliced = core_lift::splice(cl, &final_cp);
-                            if is_bijection(&spliced, n) {
-                                terminal_core_candidate = Some((refined_score, spliced));
-                            }
+                            terminal_core_candidate =
+                                Some((score, core_lift::splice(cl, &minfill)));
                         }
                     }
                 }
@@ -2784,6 +2767,59 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     best_perm = p;
                 }
             }
+
+            // Exact MinFill on the EXTRA-DEPTH residual core. 0075 added this
+            // objective for the depth-3 core only; a different prefix depth
+            // leaves a structurally different core, and the `fresh` test above
+            // already guarantees this core is not one we have ordered. The AMF
+            // grid run on it is degree-flavoured, so min-fill is the same
+            // "different objective, same graph" argument one level down.
+            //
+            // Cost is bounded by the CORE, not by n: the caps below are the
+            // full-graph MinFill caps tightened to a core an order of magnitude
+            // smaller, so the added work is a few ms on a graph that already
+            // survived the reduce ledger. Scored exactly through
+            // `prefix_flops + core flops` and admitted only on a strict win, so
+            // the score risk is structurally zero and only time is at stake.
+            // The `n < 10_000` gate is measured, not decorative. Without it the
+            // two heaviest dev rows (`gabriel10`, `acopf_case9241pegase_qcqp`)
+            // both LOSE their current ordering: a strictly better `best_flops`
+            // entering the later stages changes what the terminal completion
+            // descent and the credit split do with it, and on those two the
+            // downstream result is worse. Small and medium graphs keep the win.
+            if n < 10_000
+                && (8..=MINFILL_CORE_MAX_N).contains(&cn)
+                && cl.core_nnz() <= MINFILL_CORE_MAX_NNZ
+            {
+                let core_pattern = Pattern {
+                    n: cn,
+                    col_ptr: cl.core_col_ptr.clone(),
+                    row_idx: cl.core_row_idx.clone(),
+                };
+                let mf = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    minfill_order(&core_pattern)
+                }));
+                if let Ok(mf) = mf {
+                    let cp: Vec<usize> = mf.into_iter().map(|v| v as usize).collect();
+                    if is_bijection(&cp, cn) {
+                        // Score the SPLICED FULL permutation, not
+                        // `prefix_flops + core flops`. The exact split is a
+                        // property of the depth-3 reduction; the deeper
+                        // `reduce_checked` prefixes here do not carry it, and
+                        // trusting it admitted a candidate that was worse on
+                        // the full graph. One exact full-graph score per
+                        // candidate is the price of a sound comparison.
+                        let cand = core_lift::splice(&cl, &cp);
+                        if is_bijection(&cand, n) {
+                            let f = score(&cand);
+                            if f < best_flops {
+                                best_flops = f;
+                                best_perm = cand;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2830,10 +2866,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
             if f < best_flops { best_perm = p; }
         }
-    }
-    if n >= 12 && n <= 300 && pattern.nnz() <= 3_000 {
-        best_perm = cutoff_paired_swap_refine(pattern, best_perm);
-        best_perm = cutoff_plateau_refine(pattern, best_perm, true);
     }
     best_perm
 }

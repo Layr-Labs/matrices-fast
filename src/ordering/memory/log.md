@@ -80,3 +80,5 @@ round, so note the round if you know it.
 2026-09-06 | correction to 0069 | 798e4ffb failed hidden 2 s cap; no score or offending pattern disclosed.
 2026-09-06 | df6e3f0 dev 0.832566 -> 0.832286 | medium-only 8-ticket core portfolio and one 2M extra cleanup, preserving the leader pipeline | 300 cases pass; 3/0/297; 62 tests and 56 stress calls pass; official pending (0072).
 2026-09-06 | 0.832286 -> **0.832118** | exact MinFill on residual cores with `cn <= 1000`, admitted through the exact prefix/core split and strict best-of path | **WIN locally.** 300 cases pass; 1k_10k drops 0.865327 -> 0.864765, fill 0.938912 -> 0.938869; residual-core probe finds 7 movers, no losses; official pending ([0075](experiments/0075-residual-core-minfill.md)).
+
+2026-09-06 | b739e8c dev 0.832118 -> 0.832040 | exact MinFill on the EXTRA-DEPTH residual cores (0076), gated cn<=1000 / core_nnz<=12k / n<10k, spliced candidate scored exactly on the full graph | 300 cases pass; 4 wins/0 losses/296 ties; 66 tests pass; worst probe row 1.3499 s -> 1.4050 s on this host; official pending

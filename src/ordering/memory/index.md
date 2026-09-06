@@ -211,3 +211,5 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 
 ## Open questions
 - [open-questions.md](open-questions.md) — the research queue.
+
+- [0068: small-core relabel and clique pruning](experiments/0068-small-core-relabel-and-clique-pruning.md): dev 0.833148 -> 0.832826, 4/0/296; official pending.

@@ -294,6 +294,14 @@ const NDFM_MAX_NNZ: usize = 130_000;
 /// worst-scoring small buckets' tied-at-AMD combinatorial/network graphs
 /// (`wastewater*`, `wastepaper6`, `syn*`, `tln2`). Deterministic. Best-of floor
 /// → zero-downside.
+/// Caps for exact MinFill + subtree refinement on an EXTRA-DEPTH residual core
+/// (see the extra-depth loop in `leader_order`). Deliberately an order of
+/// magnitude under the full-graph MinFill caps: the candidate is a bonus
+/// objective on a core the reduce ledger has already paid for, so it must never
+/// become a timing tier of its own.
+const MINFILL_CORE_MAX_N: usize = 1_000;
+const MINFILL_CORE_MAX_NNZ: usize = 12_000;
+
 const MINFILL_MAX_N: usize = 3_000;
 const MINFILL_MAX_NNZ: usize = 12_000;
 
@@ -2782,6 +2790,73 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f < best_flops {
                     best_flops = f;
                     best_perm = p;
+                }
+            }
+
+            // Exact MinFill, then subtree refinement, on the EXTRA-DEPTH core.
+            // The depth-3 core gets both; the extra-depth cores get a two-alpha
+            // AMF grid and nothing else, even though a deeper exact prefix
+            // leaves a structurally different graph the `fresh` test has
+            // already proven we have not ordered. MinFill is a different greedy
+            // objective on that graph, and `refine_core` applies the pipeline's
+            // own subtree laws to whatever it produces.
+            //
+            // An earlier version of this block (submission e167e575) shipped
+            // the MinFill half alone against the previous tip: hidden
+            // 0.861364 -> 0.861322, so the candidate is real but small. The
+            // refinement half is what the current tip just added one level up.
+            //
+            // Cost is bounded by the CORE, not by n, and both caps sit an order
+            // of magnitude under the full-graph MinFill caps. Scored on the
+            // SPLICED FULL permutation with the exact scorer — the prefix/core
+            // split is a property of the depth-3 reduction and these deeper
+            // prefixes come from `reduce_checked`, so we do not lean on it —
+            // and admitted only on a strict win. Score risk is therefore
+            // structurally zero; only time is at stake.
+            if n < 10_000
+                && (8..=MINFILL_CORE_MAX_N).contains(&cn)
+                && cl.core_nnz() <= MINFILL_CORE_MAX_NNZ
+            {
+                let core_pattern = Pattern {
+                    n: cn,
+                    col_ptr: cl.core_col_ptr.clone(),
+                    row_idx: cl.core_row_idx.clone(),
+                };
+                let core_sp = ScoringPattern {
+                    n: cn,
+                    col_ptr: cl.core_col_ptr.clone(),
+                    row_idx: cl.core_row_idx.clone(),
+                };
+                let mf = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    minfill_order(&core_pattern)
+                }));
+                if let Ok(mf) = mf {
+                    let cp: Vec<usize> = mf.into_iter().map(|v| v as usize).collect();
+                    if is_bijection(&cp, cn) {
+                        let raw_core_flops = flops_of(&core_sp, &cp);
+                        let cp = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            refine_core(
+                                cn,
+                                &cl.core_col_ptr,
+                                &cl.core_row_idx,
+                                &core_sp,
+                                &cp,
+                                raw_core_flops,
+                                raw_core_flops,
+                            )
+                        })) {
+                            Ok(Some((f_ref, p_ref))) if f_ref < raw_core_flops && is_bijection(&p_ref, cn) => p_ref,
+                            _ => cp,
+                        };
+                        let cand = core_lift::splice(&cl, &cp);
+                        if is_bijection(&cand, n) {
+                            let f = score(&cand);
+                            if f < best_flops {
+                                best_flops = f;
+                                best_perm = cand;
+                            }
+                        }
+                    }
                 }
             }
         }

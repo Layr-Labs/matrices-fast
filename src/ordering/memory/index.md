@@ -1,3 +1,5 @@
+[Codex: independent MCS roots after the complete frontier](experiments/0081-independent-mcs-root-seeds.md)
+
 [Latest Codex residual-core revision](experiments/0075-residual-core-minfill.md)
 
 [Latest Codex bounded-work revision](experiments/0074-shared-terminal-cleanup-budget.md)

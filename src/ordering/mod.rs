@@ -2656,6 +2656,34 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         }
                     }
                 }
+
+                // Exact minimum-fill on a small residual core is cheap enough to
+                // add a genuinely different greedy objective beside the AMF grid.
+                // The full-graph MinFill path is already restricted to small
+                // inputs; applying it after the fixed prefix keeps this candidate
+                // inside the same structural envelope while the exact split makes
+                // its core score valid for the full ordering.
+                if cn <= 1_000 {
+                    let core_pattern = Pattern {
+                        n: cn,
+                        col_ptr: cl.core_col_ptr.clone(),
+                        row_idx: cl.core_row_idx.clone(),
+                    };
+                    let minfill: Vec<usize> = minfill_order(&core_pattern)
+                        .into_iter()
+                        .map(|v| v as usize)
+                        .collect();
+                    if is_bijection(&minfill, cn) {
+                        let score = cl.prefix_flops + flops_of(&core_pat, &minfill);
+                        if terminal_core_candidate
+                            .as_ref()
+                            .map_or(true, |(best, _)| score < *best)
+                        {
+                            terminal_core_candidate =
+                                Some((score, core_lift::splice(cl, &minfill)));
+                        }
+                    }
+                }
             }
             Some((f, cand))
         };

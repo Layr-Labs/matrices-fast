@@ -658,6 +658,275 @@ fn probe_family() {
     }
 }
 
+/// Measure multi-start relabelings for the hand-rolled numbering-sensitive
+/// routines that have only had a single relabel tested so far. The production
+/// gates are deliberately reused: this prices the exact candidate family that
+/// could be added without widening the current cost envelope.
+#[test]
+#[ignore]
+fn probe_relabel_other() {
+    const SEEDS: [u64; 8] = [1, 2, 3, 5, 8, 13, 21, 34];
+    const FAMILY_NAMES: [&str; 5] = ["rcm", "sloan21", "sloan12", "nd", "ndfm"];
+
+    let corpus = crate::corpus::corpus();
+    let mut current_logs = [0.0f64; 3];
+    let mut family_logs = [[0.0f64; 3]; 5];
+    let mut counts = [0usize; 3];
+    let mut family_wins = [0usize; 5];
+    let mut all_wins = 0usize;
+    let mut total_family_secs = [0.0f64; 5];
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let current = order(pat);
+        let current_flops = flops_of(&sp, &current);
+        let mut family_best = [current_flops; 5];
+
+        if n < RCM_MAX_N && nnz < RCM_MAX_NNZ {
+            for &seed in &SEEDS {
+                let q = relabel(n, seed);
+                let b = permute_pattern(&sp, &q);
+                let b_pat = Pattern {
+                    n,
+                    col_ptr: b.col_ptr,
+                    row_idx: b.row_idx,
+                };
+                for family in 0..FAMILY_NAMES.len() {
+                    let started = Instant::now();
+                    let candidate = match family {
+                        0 => rcm_order(&b_pat),
+                        1 => sloan_order(&b_pat, 2, 1),
+                        2 => sloan_order(&b_pat, 1, 2),
+                        3 => nd_order(&b_pat),
+                        4 => ndfm_order(&b_pat),
+                        _ => unreachable!(),
+                    };
+                    total_family_secs[family] += started.elapsed().as_secs_f64();
+                    let candidate: Vec<usize> = candidate
+                        .into_iter()
+                        .map(|x| q[x as usize] as usize)
+                        .collect();
+                    if is_bijection(&candidate, n) {
+                        let f = flops_of(&sp, &candidate);
+                        if f < family_best[family] {
+                            family_best[family] = f;
+                        }
+                    }
+                }
+            }
+        }
+
+        let bucket = bucket(n);
+        counts[bucket] += 1;
+        let current_ratio = current_flops as f64 / base as f64;
+        current_logs[bucket] += current_ratio.ln();
+        let mut all_best = current_flops;
+        for family in 0..FAMILY_NAMES.len() {
+            let ratio = family_best[family] as f64 / base as f64;
+            family_logs[family][bucket] += ratio.ln();
+            if family_best[family] < current_flops {
+                family_wins[family] += 1;
+            }
+            all_best = all_best.min(family_best[family]);
+        }
+        if all_best < current_flops {
+            all_wins += 1;
+        }
+
+        if all_best < current_flops {
+            println!(
+                "MOVE\t{name}\t{n}\t{nnz}\t{current_ratio:.4}\t{:.4}",
+                all_best as f64 / base as f64
+            );
+        }
+    }
+
+    println!("\n--- relabelled other-family summary ---");
+    let current_score = aggregate(&current_logs, &counts);
+    println!("CURRENT\t{current_score:.6}");
+    for family in 0..FAMILY_NAMES.len() {
+        let score = aggregate(&family_logs[family], &counts);
+        println!(
+            "{}\t{score:.6}\twins={}\tsecs={:.3}",
+            FAMILY_NAMES[family], family_wins[family], total_family_secs[family]
+        );
+    }
+    println!("ALL\twins={all_wins}");
+}
+
+/// Measure randomized AMD/AMF passes on the exact residual core used by the
+/// terminal core portfolio. This is separate from full-graph relabeling: the
+/// degree-<=3 prefix is fixed, so only the core permutation changes and the
+/// candidate can be ranked by the exact core objective.
+#[test]
+#[ignore]
+fn probe_relabel_core() {
+    const SEEDS: [u64; 4] = [101, 211, 307, 401];
+    const METHODS: [&str; 4] = ["amf05", "amf5", "amd", "minfill"];
+
+    let corpus = crate::corpus::corpus();
+    let mut current_logs = [0.0f64; 3];
+    let mut method_logs = [[0.0f64; 3]; 4];
+    let mut counts = [0usize; 3];
+    let mut method_wins = [0usize; 4];
+    let mut all_wins = 0usize;
+    let mut method_secs = [0.0f64; 4];
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let current = order(pat);
+        let current_flops = flops_of(&sp, &current);
+        let mut method_best = [current_flops; 4];
+
+        if (1_000..10_000).contains(&n) && nnz <= 50_000 {
+            if let Some(cl) = core_lift::reduce(
+                &sp,
+                REDUCE_ROW_DEG,
+                REDUCE_MAX_CORE_N,
+                REDUCE_MAX_CORE_EDGES,
+            ) {
+                let cn = cl.core_n();
+                if (8..=4_000).contains(&cn) && cl.core_nnz() <= 30_000 {
+                    let core_pat = ScoringPattern {
+                        n: cn,
+                        col_ptr: cl.core_col_ptr.clone(),
+                        row_idx: cl.core_row_idx.clone(),
+                    };
+                    for &seed in &SEEDS {
+                        let q = relabel(cn, seed);
+                        let relabeled = permute_pattern(&core_pat, &q);
+                        let rp: Vec<i32> = relabeled.col_ptr.iter().map(|&v| v as i32).collect();
+                        let ri: Vec<i32> = relabeled.row_idx.iter().map(|&v| v as i32).collect();
+                        let Some(rcore) = feral_ordering_core::CscPattern::new(cn, &rp, &ri) else {
+                            continue;
+                        };
+                        for method in 0..METHODS.len() {
+                            if method == 3 {
+                                continue;
+                            }
+                            let started = Instant::now();
+                            let result = match method {
+                                    0 => feral_amf::amf_order_opts(
+                                        &rcore,
+                                        &feral_amf::AmfOptions {
+                                            dense_alpha: 0.5,
+                                            ..Default::default()
+                                        },
+                                    )
+                                    .ok()
+                                    .map(|(p, ..)| p),
+                                    1 => feral_amf::amf_order_opts(
+                                        &rcore,
+                                        &feral_amf::AmfOptions {
+                                            dense_alpha: 5.0,
+                                            ..Default::default()
+                                        },
+                                    )
+                                    .ok()
+                                    .map(|(p, ..)| p),
+                                    2 => feral_amd::amd_order(&rcore).ok(),
+                                    _ => unreachable!(),
+                                };
+                                method_secs[method] += started.elapsed().as_secs_f64();
+                            let Some(result) = result else { continue };
+                            let core_perm: Vec<usize> = result
+                                .into_iter()
+                                .map(|v| q[v as usize] as usize)
+                                .collect();
+                            if !is_bijection(&core_perm, cn) {
+                                continue;
+                            }
+                            let candidate = core_lift::splice(&cl, &core_perm);
+                            let f = flops_of(&sp, &candidate);
+                            method_best[method] = method_best[method].min(f);
+                        }
+                    }
+                    if cn <= 1_000 {
+                        let core_pattern = Pattern {
+                            n: cn,
+                            col_ptr: cl.core_col_ptr.clone(),
+                            row_idx: cl.core_row_idx.clone(),
+                        };
+                        let started = Instant::now();
+                        let result = minfill_order(&core_pattern);
+                        method_secs[3] += started.elapsed().as_secs_f64();
+                        let core_perm: Vec<usize> = result
+                            .into_iter()
+                            .map(|v| v as usize)
+                            .collect();
+                        if is_bijection(&core_perm, cn) {
+                            let candidate = core_lift::splice(&cl, &core_perm);
+                            method_best[3] = flops_of(&sp, &candidate);
+                        }
+                    }
+                }
+            }
+        }
+
+        let b = bucket(n);
+        counts[b] += 1;
+        current_logs[b] += (current_flops as f64 / base as f64).ln();
+        let mut all_best = current_flops;
+        for method in 0..METHODS.len() {
+            method_logs[method][b] += (method_best[method] as f64 / base as f64).ln();
+            if method_best[method] < current_flops {
+                method_wins[method] += 1;
+            }
+            all_best = all_best.min(method_best[method]);
+        }
+        if all_best < current_flops {
+            all_wins += 1;
+            println!(
+                "MOVE\t{name}\t{n}\t{nnz}\t{:.4}\t{:.4}",
+                current_flops as f64 / base as f64,
+                all_best as f64 / base as f64
+            );
+        }
+    }
+
+    println!("\n--- relabelled residual-core summary ---");
+    let current_score = aggregate(&current_logs, &counts);
+    println!("CURRENT\t{current_score:.6}");
+    for method in 0..METHODS.len() {
+        let score = aggregate(&method_logs[method], &counts);
+        println!(
+            "{}\t{score:.6}\twins={}\tsecs={:.3}",
+            METHODS[method], method_wins[method], method_secs[method]
+        );
+    }
+    println!("ALL\twins={all_wins}");
+}
+
 /// Labels for the variants measured by [`probe_family`], in index order.
 const FAMILY_LABELS: [&str; 12] = [
     "kahip_fast2",

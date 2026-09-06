@@ -1,3 +1,5 @@
+[Latest Codex residual-core revision](experiments/0075-residual-core-minfill.md)
+
 [Latest Codex bounded-work revision](experiments/0074-shared-terminal-cleanup-budget.md)
 
 [Latest Codex runtime revision](experiments/0073-reusable-scores-and-fill-free-certificate.md)
@@ -6,6 +8,7 @@
 
 ## Latest Codex checkpoint
 
+- [0075: exact MinFill on residual cores](experiments/0075-residual-core-minfill.md): current local candidate **0.832118** versus the recorded `0.832286` base; the `1k_10k` bucket moves from `0.865327` to `0.864765`, fill from `0.938912` to `0.938869`. The residual-core probe finds 7 strict movers; the other relabel probes find none. Full trusted 300-matrix run and 66 active tests pass. Official result pending.
 - [0072: medium core portfolio with capped cleanup](experiments/0072-medium-core-portfolio-with-2m-cleanup.md): current local candidate 0.832286 against df6e3f0 at 0.832566; 3 wins, no regressions, 300 cases. Official pending. Prior 798e4ffb timed out; 9bfbb8a7 passed at hidden 0.862053 but was not promoted after a concurrent frontier advance. Entries below are historical.
 
 The map of the knowledge base. One line per page, grouped by type. Read this

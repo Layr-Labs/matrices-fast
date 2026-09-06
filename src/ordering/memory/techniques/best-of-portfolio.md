@@ -126,6 +126,13 @@ routines in this file have never been relabelled — RCM, Sloan, the ND separato
 choices, MinFill — and each is a candidate second lottery. Prefer the ones whose
 objective differs most from min-degree, since that difference is the whole mechanism.
 
+Experiment [0075](../experiments/0075-residual-core-minfill.md) tested a related
+variant: exact MinFill on the reduced core after the fixed degree-<=3 prefix,
+without relabelling. It produced 7 medium-bucket movers for a local score gain
+of 0.000168; four-seed residual-core AMF/AMD relabels and eight-seed RCM/Sloan/ND/
+NDFM relabels produced no additional movers. The MinFill candidate is now bounded
+to `cn <= 1,000` and admitted only through exact strict best-of scoring.
+
 That experiment also added a discipline this corpus needs. The score is a
 size-bucketed geomean over 300 matrices with a **heavy tail** — `gt_10k` is 45
 matrices at weight 0.40, so one 20% win there is worth ≈0.002 of score on its own,

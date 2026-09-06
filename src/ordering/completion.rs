@@ -19,9 +19,23 @@ pub(super) fn refine(
     counts: &[usize],
     perm: &[usize],
 ) -> Option<Vec<usize>> {
+    refine_limited(n, original_cp, original_ri, permuted_cp, permuted_ri,
+        parent, counts, perm, 8_000_000)
+}
+
+pub(super) fn refine_limited(
+    n: usize,
+    original_cp: &[usize],
+    original_ri: &[usize],
+    permuted_cp: &[usize],
+    permuted_ri: &[usize],
+    parent: &[Option<usize>],
+    counts: &[usize],
+    perm: &[usize],
+    ops: i64,
+) -> Option<Vec<usize>> {
     const MAX_LNNZ: usize = 300_000;
     const MAX_FILL: usize = 100_000;
-    const OPS: i64 = 8_000_000;
     if n == 0 || n > 30_000 || counts.len() != n {
         return None;
     }
@@ -87,7 +101,7 @@ pub(super) fn refine(
         let (u,v) = fill[id as usize];
         (adj[u as usize].len()+adj[v as usize].len(),id)
     });
-    let result = watcher_minimalize(&mut adj,&fill,&ids,OPS,1024);
+    let result = watcher_minimalize(&mut adj,&fill,&ids,ops,1024);
     if result.removed == 0 { return None; }
     Some(minl_mcs_peo(n,&adj))
 }

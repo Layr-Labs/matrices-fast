@@ -136,3 +136,28 @@ it, rather than deleting it — a resolved question is a useful signpost.
       Every absolute second in `memory/` is box-relative. A revision judged safe on
       a fast box can be at 85% of the cap on a slow one — which is the most likely
       mechanism behind the three hidden-cap failures in 0025.
+
+- [x] **"Is stage 6's small-graph polish at a local optimum?"** No - it was at a local
+      optimum of 1536 FIXED position tuples. Thirty-two independent stream pairs,
+      best-of, are worth 0.86 dev bips through `lt_1k`; sets 129-256 win nothing, so
+      the move class itself is now closed ([0085](experiments/0085-stage6-move-sampling-metered-by-fill.md)).
+- [x] **"Does `PEO_ALT_SEEDS` want to be larger than 4?"** Yes, 8. Sixteen adds exactly
+      zero and thirty-two buys 0.20 bips for +49 ms on the corpus maximum. The pool is
+      monotone in the constant and shares the UNCHANGED 4M ledger, so the work envelope
+      does not move ([0085](experiments/0085-stage6-move-sampling-metered-by-fill.md)).
+- [ ] **An `(n, nnz)` gate is not an absolute-constant work bound whenever the cost is
+      driven by the FACTOR.** A `SmallScore` pass costs `words * (n + fill)` and `fill`
+      is bounded only by `n(n+1)/2`; dropping stage 6's `nnz <= 3000` half took
+      `graphpart_clique-70` to 1.771 s against the 2 s cap while scoring +0.18 bips.
+      Audit every other gated path the same way: is the quantity that sets its cost an
+      input the gate can bound, or an output the input chooses?
+- [ ] **`0084`'s seed-source widening, tested as diversity rather than as quantity.**
+      The stages that assign `best_perm` directly are still not represented in the
+      alternate-seed pool. But 8x more seeds from the existing source bought 0.20 bips,
+      so the pool is not starved for entries - what would pay is seeds from a different
+      LINEAGE. Keep the shipped seeds first so the result stays monotone.
+- [ ] **Re-fit the dev-to-hidden translation per bucket, not per family.** `0084` reads
+      0.64 (dev 4.11 bips -> hidden 2.61 relative bips) against 0.10-0.15 for the three
+      `gt_10k`-only ledger steps before it. If the translation really is bucket-shaped,
+      one dev bip in `lt_1k`/`1k_10k` is worth several in `gt_10k` and the whole
+      ranking of open work changes.

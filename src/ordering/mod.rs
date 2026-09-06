@@ -326,7 +326,7 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
         cfg.max_blocks = 8;
         cfg.budget = 1_000_000; if n >= 1_000 { cfg.budget /= 2; }
     } else if n < 1_000 {
-        cfg.min_s = 16;
+        cfg.min_s = 8;
         cfg.max_s = 256;
         cfg.max_blocks = 16;
         cfg.budget = 2_000_000; if n >= 1_000 { cfg.budget /= 2; }
@@ -1659,15 +1659,14 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         if improved > 0 && is_bijection(&candidate, n) {
             let f = flops_of(&scoring_pat, &candidate);
             if f < incumbent_flops {
+                let delta_flops = incumbent_flops - f;
                 best_flops = f;
                 best_perm = candidate;
 
-                // Chained terminal pass 2: runs on medium matrices or sparse large matrices
-                // that strictly improved in the first terminal pass. Uses unaliased
-                // round = 6 and a small 4M operation cap on the newly uncovered elimination tree.
-                if (n < 10_000 && nnz <= 100_000)
+                if (delta_flops as f64) / (incumbent_flops as f64) >= 0.005
+                    && ((n < 10_000 && nnz <= 100_000)
                     || (n >= 10_000 && nnz <= 60_000)
-                    || (n >= 10_000 && nnz <= 100_000 && best_flops < amd_flops)
+                    || (n >= 10_000 && nnz <= 100_000 && best_flops < amd_flops))
                 {
                     let permuted2 = permute_pattern(&scoring_pat, &best_perm);
                     let etree2 = EliminationTree::from_pattern(&permuted2);

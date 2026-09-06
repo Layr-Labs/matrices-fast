@@ -38,42 +38,25 @@
 
 #![allow(dead_code)]
 
-fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
-    fn mul(words: &mut [u64; 6], factor: u64) {
-        let mut carry = 0u128;
-        for word in words.iter_mut() {
-            let product = *word as u128 * factor as u128 + carry;
-            *word = product as u64;
-            carry = product >> 64;
-        }
-        debug_assert_eq!(carry, 0);
-    }
-
-    let mut product = [0u64; 6];
-    product[0] = 1;
-    for _ in 0..value_power {
-        mul(&mut product, value);
-    }
-    for _ in 0..len_power {
-        mul(&mut product, len as u64);
-    }
-    product
+pub(crate) fn rank_density_cmp(
+    a: &(usize, usize, u64),
+    b: &(usize, usize, u64),
+) -> std::cmp::Ordering {
+    let len_a = a.1 + 1 - a.0;
+    let len_b = b.1 + 1 - b.0;
+    let b_cross = (b.2 as u128) * (len_a as u128);
+    let a_cross = (a.2 as u128) * (len_b as u128);
+    b_cross
+        .cmp(&a_cross)
+        .then_with(|| b.2.cmp(&a.2))
+        .then_with(|| b.1.cmp(&a.1))
 }
 
 pub(crate) fn rank_alpha_three_quarters_cmp(
     a: &(usize, usize, u64),
     b: &(usize, usize, u64),
 ) -> std::cmp::Ordering {
-    let len_a = a.1 + 1 - a.0;
-    let len_b = b.1 + 1 - b.0;
-    let b_cross = rank_product(b.2, 4, len_a, 3);
-    let a_cross = rank_product(a.2, 4, len_b, 3);
-    b_cross
-        .iter()
-        .rev()
-        .cmp(a_cross.iter().rev())
-        .then_with(|| b.2.cmp(&a.2))
-        .then_with(|| b.1.cmp(&a.1))
+    rank_density_cmp(a, b)
 }
 
 /// Largest `n` this module will allocate for. Memory is `2 · n · ⌈n/64⌉ · 8`
@@ -2307,7 +2290,7 @@ pub(crate) fn subtree_refine(
                 (a, b, contribution)
             })
             .collect();
-        ranked.sort_by(rank_alpha_three_quarters_cmp);
+        ranked.sort_by(rank_density_cmp);
         let ranked_limit = if split_ranked_streams {
             96
         } else {
@@ -2343,6 +2326,9 @@ pub(crate) fn subtree_refine(
                     let mut touched: Vec<usize> = Vec::new();
                     let mut verts: Vec<usize> = Vec::new();
                     let mut got: Vec<(usize, Vec<usize>)> = Vec::new();
+                    let max_sub_bound = cfg.max_sub.min(MAX_N);
+                    let max_adj_words = max_sub_bound.saturating_mul(max_sub_bound.div_ceil(64));
+                    let mut adj0: Vec<u64> = vec![0u64; max_adj_words];
                     let mut bi = t;
                     while bi < blocks_ro.len() {
                         let block_rank = bi;
@@ -2362,9 +2348,12 @@ pub(crate) fn subtree_refine(
                         }
                         let m = verts.len();
 
-                        // Induced adjacency over S u boundary, as bitsets.
                         let w = m.div_ceil(64);
-                        let mut adj0 = vec![0u64; m * w];
+                        let needed = m * w;
+                        if adj0.len() < needed {
+                            adj0.resize(needed, 0);
+                        }
+                        adj0[..needed].fill(0);
                         for (li, &v) in verts.iter().enumerate() {
                             for &u in &row_idx[col_ptr[v]..col_ptr[v + 1]] {
                                 if u >= n {
@@ -2418,7 +2407,7 @@ pub(crate) fn subtree_refine(
                             }
                             let r = search_with_nelim(
                                 m,
-                                &adj0,
+                                &adj0[..needed],
                                 ssz,
                                 &seed,
                                 seed_flops,

@@ -5,7 +5,14 @@
 
 const MAX_N: usize = 30_000;
 const MAX_INPUT_NNZ: usize = 180_000;
-const MAX_LNNZ: usize = 300_000;
+// Raised from 300_000 after counting refusals across the 300-matrix dev
+// corpus: reconstruction refused exactly three matrices, all in the
+// heaviest-weighted gt_10k bucket, at Lnnz 381_126, 618_374 and 714_536,
+// while the largest accepted completion was 289_121. The cap was cutting off
+// the big end of the bucket rather than pathological cases. 650_000 admits
+// the first two and still refuses the third, which bought the least and
+// cost the most time.
+const MAX_LNNZ: usize = 650_000;
 
 pub(super) fn candidates(
     n: usize,

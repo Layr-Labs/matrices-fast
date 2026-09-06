@@ -2400,7 +2400,32 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
 
-            Some((f, cand))
+            let (mut best_f, mut best_cand) = (f, cand);
+            if exact && nnz <= 40_000 && (8..=2_500).contains(&cn) && cl.core_nnz() <= 20_000 {
+                let mut degree_order: Vec<usize> = (0..cn).collect();
+                degree_order.sort_unstable_by_key(|&v| (cl.core_col_ptr[v + 1] - cl.core_col_ptr[v], v));
+                for q in [(0..cn).rev().collect::<Vec<_>>(), degree_order] {
+                    let relabeled = permute_pattern(&core_pat, &q);
+                    let rp: Vec<i32> = relabeled.col_ptr.iter().map(|&v| v as i32).collect();
+                    let ri: Vec<i32> = relabeled.row_idx.iter().map(|&v| v as i32).collect();
+                    if let Some(rc) = feral_ordering_core::CscPattern::new(cn, &rp, &ri) {
+                        for alpha in [2.5, 10.0] {
+                            let options = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
+                            if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
+                                let cp_trial: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
+                                if !is_bijection(&cp_trial, cn) { continue; }
+                                let score = cl.prefix_flops.saturating_add(flops_of(&core_pat, &cp_trial));
+                                if score < best_f {
+                                    best_f = score;
+                                    best_cand = core_lift::splice(cl, &cp_trial);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Some((best_f, best_cand))
         };
 
         let mut seen_core_n: Vec<usize> = Vec::new();

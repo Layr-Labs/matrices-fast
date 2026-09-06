@@ -156,7 +156,6 @@ mod minl_watch;
 pub mod custom_metrics;
 /// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
 mod core_lift;
-mod scoring_ws;
 
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
@@ -813,229 +812,6 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
 
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
-    if let Some(perm) = forest_certificate(pattern) { return perm; }
-    leader_order(pattern)
-}
-
-// Certificate fast path: only return when leaf peeling removes every vertex.
-fn forest_certificate(p: &Pattern) -> Option<Vec<usize>> {
-    let n = p.n;
-    if n > 0 && p.row_idx.len() / 2 >= n { return None; }
-    let mut degree: Vec<usize> = (0..n).map(|v| p.col_ptr[v+1]-p.col_ptr[v]).collect();
-    let mut queue: std::collections::VecDeque<usize> = (0..n).filter(|&v| degree[v]<=1).collect();
-    let mut removed=vec![false;n];
-    let mut perm=Vec::with_capacity(n);
-    while let Some(v)=queue.pop_front() {
-        if removed[v] {continue;}
-        removed[v]=true; perm.push(v);
-        for &u in &p.row_idx[p.col_ptr[v]..p.col_ptr[v+1]] {
-            if !removed[u] {
-                degree[u]-=1;
-                if degree[u]==1 {queue.push_back(u);}
-            }
-        }
-    }
-    if perm.len()==n {Some(perm)} else {None}
-}
-
-// Fixed-width exact elimination scorer for the <=300-vertex refinement gate.
-struct SmallScore { rows: Vec<[u64; 5]>, n: usize }
-impl SmallScore {
-    fn new(p: &Pattern) -> Self {
-        assert!(p.n <= 300);
-        let mut rows = vec![[0u64; 5]; p.n];
-        for c in 0..p.n {
-            for &r in &p.row_idx[p.col_ptr[c]..p.col_ptr[c+1]] {
-                if r != c { rows[c][r/64] |= 1 << (r%64); rows[r][c/64] |= 1 << (c%64); }
-            }
-        }
-        Self { rows, n: p.n }
-    }
-    fn flops(&self, perm: &[usize]) -> u64 {
-        let mut rows = self.rows.clone();
-        let words = (self.n+63)/64;
-        let mut total = 0;
-        for &v in perm {
-            let neighbors = rows[v];
-            let count = 1 + neighbors[..words].iter().map(|x| x.count_ones() as u64).sum::<u64>();
-            total += count*count;
-            for w in 0..words {
-                let mut bits = neighbors[w];
-                while bits != 0 {
-                    let u = w*64 + bits.trailing_zeros() as usize;
-                    bits &= bits-1;
-                    for k in 0..words { rows[u][k] |= neighbors[k]; }
-                    rows[u][u/64] &= !(1 << (u%64));
-                    rows[u][v/64] &= !(1 << (v%64));
-                }
-            }
-        }
-        total
-    }
-    fn flops_bounded(&self, perm: &[usize], bound: u64) -> u64 {
-        let mut rows = self.rows.clone();
-        let words = (self.n+63)/64;
-        let mut total = 0;
-        for (step, &v) in perm.iter().enumerate() {
-            let neighbors = rows[v];
-            let count = 1 + neighbors[..words].iter().map(|x| x.count_ones() as u64).sum::<u64>();
-            total += count*count;
-            // Eliminating v creates a clique on its d live neighbors. In any
-            // suffix order those vertices contribute at least d²,...,1²;
-            // every other remaining vertex contributes at least one. This
-            // bound is independent of how the suffix interleaves the clique.
-            let d = count - 1;
-            let suffix_floor = d * (d + 1) * (2 * d + 1) / 6
-                + (self.n - step - 1) as u64 - d;
-            if total + suffix_floor > bound { return bound.saturating_add(1); }
-            for w in 0..words {
-                let mut bits = neighbors[w];
-                while bits != 0 {
-                    let u = w*64 + bits.trailing_zeros() as usize;
-                    bits &= bits-1;
-                    for k in 0..words { rows[u][k] |= neighbors[k]; }
-                    rows[u][u/64] &= !(1 << (u%64));
-                    rows[u][v/64] &= !(1 << (v%64));
-                }
-            }
-        }
-        total
-    }
-}
-
-// Coordinated four-vertex moves: intermediate single swaps need not improve.
-fn paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
-    let n = best.len();
-    if n < 4 { return best; }
-    let scoring = SmallScore::new(pattern);
-    let mut best_f = scoring.flops(&best);
-    let mut state = 0x917ad73u64;
-    for _ in 0..512 {
-        let mut positions = [0usize; 4];
-        for p in &mut positions {
-            state ^= state << 13; state ^= state >> 7; state ^= state << 17;
-            *p = state as usize % n;
-        }
-        if (0..4).any(|i| (i+1..4).any(|j| positions[i] == positions[j])) { continue; }
-        let mut candidate = best.clone();
-        candidate.swap(positions[0], positions[1]);
-        candidate.swap(positions[2], positions[3]);
-        let f = scoring.flops(&candidate);
-        if f < best_f { best_f = f; best = candidate; }
-    }
-    best
-}
-
-// Walk score-neutral permutations, retaining strict-best output separately.
-fn plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<usize> {
-    let n=start.len();
-    if n<2 { return start; }
-    let scoring=SmallScore::new(pattern);
-    let mut best=start.clone(); let mut current=start;
-    let mut best_f=scoring.flops(&best);
-    let mut state=0xa839d37u64;
-    for _ in 0..1024 {
-        state^=state<<13; state^=state>>7; state^=state<<17; let a=state as usize%n;
-        state^=state<<13; state^=state>>7; state^=state<<17; let b=state as usize%n;
-        if a==b { continue; }
-        current.swap(a,b);
-        let f=scoring.flops(&current);
-        if f<best_f { best_f=f; best=current.clone(); }
-        else if f>best_f || !neutral { current.swap(a,b); }
-    }
-    best
-}
-
-fn cutoff_paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
-    let n = best.len();
-    if n < 4 { return best; }
-    let scoring = SmallScore::new(pattern);
-    let mut best_f = scoring.flops(&best);
-    let mut state = 0x917ad73u64;
-    for _ in 0..512 {
-        let mut positions = [0usize; 4];
-        for p in &mut positions {
-            state ^= state << 13; state ^= state >> 7; state ^= state << 17;
-            *p = state as usize % n;
-        }
-        if (0..4).any(|i| (i+1..4).any(|j| positions[i] == positions[j])) { continue; }
-        let mut candidate = best.clone();
-        candidate.swap(positions[0], positions[1]);
-        candidate.swap(positions[2], positions[3]);
-        let f = scoring.flops_bounded(&candidate,best_f);
-        if f < best_f { best_f = f; best = candidate; }
-    }
-    best
-}
-
-// Walk score-neutral permutations, retaining strict-best output separately.
-fn cutoff_plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<usize> {
-    let n=start.len();
-    if n<2 { return start; }
-    let scoring=SmallScore::new(pattern);
-    let mut best=start.clone(); let mut current=start;
-    let mut best_f=scoring.flops(&best);
-    let mut state=0xa839d37u64;
-    for _ in 0..1024 {
-        state^=state<<13; state^=state>>7; state^=state<<17; let a=state as usize%n;
-        state^=state<<13; state^=state>>7; state^=state<<17; let b=state as usize%n;
-        if a==b { continue; }
-        current.swap(a,b);
-        let f=scoring.flops_bounded(&current,best_f);
-        if f<best_f { best_f=f; best=current.clone(); }
-        else if f>best_f || !neutral { current.swap(a,b); }
-    }
-    best
-}
-
-
-// Coordinated four-vertex moves: intermediate single swaps need not improve.
-#[cfg(test)]
-fn reference_paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
-    let n = best.len();
-    if n < 4 { return best; }
-    let scoring = ScoringPattern { n, col_ptr: pattern.col_ptr.clone(), row_idx: pattern.row_idx.clone() };
-    let mut best_f = flops_of(&scoring, &best);
-    let mut state = 0x917ad73u64;
-    for _ in 0..512 {
-        let mut positions = [0usize; 4];
-        for p in &mut positions {
-            state ^= state << 13; state ^= state >> 7; state ^= state << 17;
-            *p = state as usize % n;
-        }
-        if (0..4).any(|i| (i+1..4).any(|j| positions[i] == positions[j])) { continue; }
-        let mut candidate = best.clone();
-        candidate.swap(positions[0], positions[1]);
-        candidate.swap(positions[2], positions[3]);
-        let f = flops_of(&scoring, &candidate);
-        if f < best_f { best_f = f; best = candidate; }
-    }
-    best
-}
-
-// Walk score-neutral permutations, retaining strict-best output separately.
-#[cfg(test)]
-fn reference_plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<usize> {
-    let n=start.len();
-    if n<2 { return start; }
-    let scoring=ScoringPattern { n, col_ptr:pattern.col_ptr.clone(), row_idx:pattern.row_idx.clone() };
-    let mut best=start.clone(); let mut current=start;
-    let mut best_f=flops_of(&scoring,&best);
-    let mut state=0xa839d37u64;
-    for _ in 0..1024 {
-        state^=state<<13; state^=state>>7; state^=state<<17; let a=state as usize%n;
-        state^=state<<13; state^=state>>7; state^=state<<17; let b=state as usize%n;
-        if a==b { continue; }
-        current.swap(a,b);
-        let f=flops_of(&scoring,&current);
-        if f<best_f { best_f=f; best=current.clone(); }
-        else if f>best_f || !neutral { current.swap(a,b); }
-    }
-    best
-}
-
-fn leader_order(pattern: &Pattern) -> Vec<usize> {
-    let mut terminal_core_candidate: Option<(u64, Vec<usize>)> = None;
     let n = pattern.n;
     if n == 0 {
         return Vec::new();
@@ -1062,10 +838,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         row_idx: pattern.row_idx.clone(),
     };
 
-    // One scratch arena serves all full-pattern scores in this invocation.
-    let score_workspace = std::cell::RefCell::new(scoring_ws::ScoreWorkspace::new(n, pattern.nnz()));
-    let score = |p: &[usize]| score_workspace.borrow_mut().flops(&scoring_pat, p);
-
     // ── The FLOOR: the grader's exact baseline ordering ──────────────────────
     // `amd_order` with library-default options IS the grader's baseline, so
     // anchoring on it guarantees ratio ≤ 1.0 on every matrix (no candidate can
@@ -1073,17 +845,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // the baseline, cannot itself time out.
     let amd = feral_amd::amd_order(&core).expect("feral AMD ordering failed");
     let mut best_perm: Vec<usize> = amd.into_iter().map(|x| x as usize).collect();
-    let mut best_flops: u64 = score(&best_perm);
-    // A fill-free ordering attains the graph's flop lower bound:
-    // n + 3*edges + 2*triangles. Any added fill can only increase it.
-    // Certify using exact column counts instead of enumerating triangles.
-    let original_edges: usize = (0..n).map(|j| {
-        pattern.row_idx[pattern.col_ptr[j]..pattern.col_ptr[j + 1]]
-            .iter().filter(|&&i| i > j).count()
-    }).sum();
-    if score_workspace.borrow().nnz_l() == (n + original_edges) as u64 {
-        return best_perm;
-    }
+    let mut best_flops: u64 = flops_of(&scoring_pat, &best_perm);
     let amd_flops = best_flops;
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
@@ -1134,7 +896,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if !is_bijection(&perm, n) {
                 return;
             }
-            let f = score(&perm);
+            let f = flops_of(&scoring_pat, &perm);
             if f < *best_flops {
                 *best_flops = f;
                 *best_perm = perm;
@@ -1770,7 +1532,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 {
                     let perm: Vec<usize> = pb.iter().map(|&x| q[x as usize] as usize).collect();
                     if is_bijection(&perm, n) {
-                        let f = score(&perm);
+                        let f = flops_of(&scoring_pat, &perm);
                         if f < best_flops {
                             best_flops = f;
                             best_perm = perm;
@@ -1787,7 +1549,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             })) {
                 let perm: Vec<usize> = pb.iter().map(|&x| q[x as usize] as usize).collect();
                 if is_bijection(&perm, n) {
-                    let f = score(&perm);
+                    let f = flops_of(&scoring_pat, &perm);
                     if f < best_flops {
                         best_flops = f;
                         best_perm = perm;
@@ -1835,7 +1597,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             PAIR_DESCENT_SWEEPS,
             pair_descent_ops_budget,
         ) {
-            let f = score(&cand);
+            let f = flops_of(&scoring_pat, &cand);
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
@@ -1866,7 +1628,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             &best_perm,
             SIMPLICIAL_PROMOTION_OPS_BUDGET,
         ) {
-            let f = score(&cand);
+            let f = flops_of(&scoring_pat, &cand);
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
@@ -1926,7 +1688,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 rng_seed,
             ) {
                 if is_bijection(&cand, n) {
-                    let f = score(&cand);
+                    let f = flops_of(&scoring_pat, &cand);
                     if f < best_flops {
                         best_flops = f;
                         best_perm = cand;
@@ -1970,7 +1732,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 seed,
             ) {
                 if is_bijection(&cand, n) {
-                    let f = score(&cand);
+                    let f = flops_of(&scoring_pat, &cand);
                     if f < best_flops {
                         best_flops = f;
                         best_perm = cand;
@@ -1990,7 +1752,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             PAIR_DESCENT_SWEEPS,
             pair_descent_ops_budget,
         ) {
-            let f = score(&cand);
+            let f = flops_of(&scoring_pat, &cand);
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
@@ -2062,7 +1824,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             );
         }
         if improved > 0 && is_bijection(&candidate, n) {
-            let f = score(&candidate);
+            let f = flops_of(&scoring_pat, &candidate);
             if f < best_flops {
                 best_flops = f;
                 best_perm = candidate;
@@ -2108,7 +1870,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     cfg2,
                 );
                 if improved2 > 0 && is_bijection(&candidate2, n) {
-                    let f2 = score(&candidate2);
+                    let f2 = flops_of(&scoring_pat, &candidate2);
                     if f2 < best_flops {
                         best_flops = f2;
                         best_perm = candidate2;
@@ -2156,7 +1918,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                             cfg3,
                         );
                         if improved3 > 0 && is_bijection(&candidate3, n) {
-                            let f3 = score(&candidate3);
+                            let f3 = flops_of(&scoring_pat, &candidate3);
                             if f3 < best_flops {
                                 best_flops = f3;
                                 best_perm = candidate3;
@@ -2207,7 +1969,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                      cfg4,
                                 );
                                 if improved4 > 0 && is_bijection(&candidate4, n) {
-                                    let f4 = score(&candidate4);
+                                    let f4 = flops_of(&scoring_pat, &candidate4);
                                     if f4 < best_flops {
                                         best_flops = f4;
                                         best_perm = candidate4;
@@ -2253,7 +2015,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                                 cfg5,
                                             );
                                             if improved5 > 0 && is_bijection(&candidate5, n) {
-                                                let f = score(&candidate5);
+                                                let f = flops_of(&scoring_pat, &candidate5);
                                                 if f < best_flops {
                                                     best_flops = f;
                                                     best_perm = candidate5;
@@ -2276,7 +2038,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // second used this narrow gate. Substitution makes total work lower than
     // the promoted frontier while retaining the stronger search allocation.
     if (SUBTREE_MIN_N..=80_000).contains(&n) && nnz <= 250_000 {
-        let incumbent_flops = score(&best_perm);
+        let incumbent_flops = flops_of(&scoring_pat, &best_perm);
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
@@ -2303,7 +2065,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             terminal_deep_subtree_cfg(n, nnz, best_flops, amd_flops),
         );
         if improved > 0 && is_bijection(&candidate, n) {
-            let f = score(&candidate);
+            let f = flops_of(&scoring_pat, &candidate);
             if f < incumbent_flops {
                 let delta_flops = incumbent_flops - f;
                 best_flops = f;
@@ -2347,7 +2109,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         cfg2,
                     );
                     if improved2 > 0 && is_bijection(&candidate2, n) {
-                        let f2 = score(&candidate2);
+                        let f2 = flops_of(&scoring_pat, &candidate2);
                         if f2 < f {
                             best_flops = f2;
                             best_perm = candidate2;
@@ -2388,7 +2150,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                     cfg3,
                                 );
                                 if improved3 > 0 && is_bijection(&candidate3, n) {
-                                    let f3 = score(&candidate3);
+                                    let f3 = flops_of(&scoring_pat, &candidate3);
                                     if f3 < f2 {
                                         best_flops = f3;
                                         best_perm = candidate3;
@@ -2437,7 +2199,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             extra,
         );
         if improved > 0 && is_bijection(&candidate, n) {
-            let f = score(&candidate);
+            let f = flops_of(&scoring_pat, &candidate);
             if f < best_flops {
                 best_flops = f;
                 best_perm = candidate;
@@ -2461,7 +2223,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             &best_perm,
             SIMPLICIAL_PROMOTION_OPS_BUDGET,
         ) {
-            let f = score(&cand);
+            let f = flops_of(&scoring_pat, &cand);
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
@@ -2480,7 +2242,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     &best_perm,
                     pair_descent_ops_budget,
                 ) {
-                    let f = score(&cand);
+                    let f = flops_of(&scoring_pat, &cand);
                     if f < best_flops {
                         best_flops = f;
                         best_perm = cand;
@@ -2495,7 +2257,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 &best_perm,
                 pair_descent_ops_budget,
             ) {
-                let f = score(&cand);
+                let f = flops_of(&scoring_pat, &cand);
                 if f < best_flops {
                     best_flops = f;
                     best_perm = cand;
@@ -2522,10 +2284,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // rank on the core graph and return the spliced argmin with its trusted
         // flops. `threads` = true runs the passes on scoped threads (the shipped
         // K=3 behaviour); false runs them sequentially (the bounded extras).
-        // Preserve the leader's degree-three exact ranking and extra-depth
-        // proxy ranking. Additional relabel candidates are held until the end
-        // of the complete inherited pipeline so they cannot change its seeds.
-        let mut order_core = |cl: &core_lift::CoreLift, alphas: &[f64], threads: bool, recurse: bool, incumbent: u64| -> Option<(u64, Vec<usize>)> {
+        // `exact` = rank the passes by the trusted scorer on the core (the shipped
+        // K=3 behaviour); false = rank by the elimination's own flop counters
+        // (`ndiv + nms_ldl`, exact for the ordering each pass produced) and pay for
+        // one trusted scoring only, on the spliced argmin.
+        let order_core = |cl: &core_lift::CoreLift, alphas: &[f64], threads: bool, exact: bool, incumbent: u64| -> Option<(u64, Vec<usize>)> {
             let cn = cl.core_n();
             let core_pat = ScoringPattern {
                 n: cn,
@@ -2548,7 +2311,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if !is_bijection(&cp, cn) {
                     return None;
                 }
-                let f = if recurse { flops_of(&core_pat, &cp) } else { proxy };
+                let f = if exact { flops_of(&core_pat, &cp) } else { proxy };
                 Some((f, cp))
             };
             // Results are merged by pass index, so thread timing never reaches
@@ -2580,7 +2343,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // exact-ranked K=3 argmin is the last word in the pipeline, so refine it on
             // the core graph with the pipeline's own subtree laws before splicing.
             // Exact by the objective split; strictly monotone; structurally gated.
-            let refined: Option<Vec<usize>> = if recurse && nnz < REDUCE_RECURSE_MAX_NNZ {
+            let refined: Option<Vec<usize>> = if exact && nnz < REDUCE_RECURSE_MAX_NNZ {
                 let f_amd_core = results[alphas.len()].as_ref().map_or(u64::MAX, |(f, _)| *f);
                 let raw = cl.prefix_flops.saturating_add(f_core);
                 if raw.saturating_mul(REDUCE_RECURSE_MARGIN.1)
@@ -2611,53 +2374,62 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if !is_bijection(&cand, n) {
                 return None;
             }
-            // The reduction records an exact fixed-prefix cost. Scoring only
-            // the residual core avoids rebuilding the full symbolic graph.
-            let mut f = cl.prefix_flops + if refined.is_some() || !recurse {
-                flops_of(&core_pat, core_perm)
-            } else {
-                f_core
-            };
-            if !recurse && f < incumbent && nnz < REDUCE_RECURSE_MAX_NNZ {
+            let mut f = flops_of(&scoring_pat, &cand);
+
+            if !exact && f < incumbent && nnz < REDUCE_RECURSE_MAX_NNZ {
                 let f_core_exact = flops_of(&core_pat, cp);
                 if let Ok(Some((_, p_better))) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    refine_core(cn, &cl.core_col_ptr, &cl.core_row_idx, &core_pat,
-                        cp, f_core_exact, f_core_exact)
+                    refine_core(
+                        cn,
+                        &cl.core_col_ptr,
+                        &cl.core_row_idx,
+                        &core_pat,
+                        cp,
+                        f_core_exact,
+                        f_core_exact,
+                    )
                 })) {
                     let cand_better = core_lift::splice(cl, &p_better);
                     if is_bijection(&cand_better, n) {
-                        let f_better = cl.prefix_flops + flops_of(&core_pat, &p_better);
-                        if f_better < f { f = f_better; cand = cand_better; }
+                        let f_better = flops_of(&scoring_pat, &cand_better);
+                        if f_better < f {
+                            f = f_better;
+                            cand = cand_better;
+                        }
                     }
                 }
             }
 
-            // Small residual cores permit a few independent tie-break orders
-            // at a fraction of the cost of ordering the original matrix. Add
-            // these after recursive refinement to preserve its finished result.
-            if recurse && (1_000..10_000).contains(&n) && nnz <= 50_000
-                && (8..=4000).contains(&cn) && cl.core_nnz() <= 30_000 {
-                let mut degree_order: Vec<usize> = (0..cn).collect();
-                degree_order.sort_unstable_by_key(|&v| (cl.core_col_ptr[v+1] - cl.core_col_ptr[v], v));
-                for q in [(0..cn).rev().collect::<Vec<_>>(), degree_order] {
-                    let relabeled = permute_pattern(&core_pat, &q);
-                    let rp: Vec<i32> = relabeled.col_ptr.iter().map(|&v| v as i32).collect();
-                    let ri: Vec<i32> = relabeled.row_idx.iter().map(|&v| v as i32).collect();
-                    let rc = feral_ordering_core::CscPattern::new(cn, &rp, &ri)?;
-                    for alpha in [2.5, 10.0, 0.5, 5.0] {
-                        let options = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
-                        if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
-                            let cp: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
-                            if !is_bijection(&cp, cn) { continue; }
-                            let score = cl.prefix_flops + flops_of(&core_pat, &cp);
-                            if terminal_core_candidate.as_ref().map_or(true, |(f, _)| score < *f) {
-                                terminal_core_candidate = Some((score, core_lift::splice(cl, &cp)));
+            let (mut best_f, mut best_cand) = (f, cand);
+            if exact
+                && n >= 4_000
+                && n <= 10_000
+                && nnz <= 35_000
+                && nnz * 10 <= 40 * n
+                && cn * 100 <= 16 * n
+                && (8..=1_000).contains(&cn)
+                && cl.core_nnz() <= 7_500
+            {
+                let q: Vec<usize> = (0..cn).rev().collect();
+                let relabeled = permute_pattern(&core_pat, &q);
+                let rp: Vec<i32> = relabeled.col_ptr.iter().map(|&v| v as i32).collect();
+                let ri: Vec<i32> = relabeled.row_idx.iter().map(|&v| v as i32).collect();
+                if let Some(rc) = feral_ordering_core::CscPattern::new(cn, &rp, &ri) {
+                    let options = feral_amf::AmfOptions { dense_alpha: 2.5, ..Default::default() };
+                    if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
+                        let cp_trial: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
+                        if is_bijection(&cp_trial, cn) {
+                            let score = cl.prefix_flops.saturating_add(flops_of(&core_pat, &cp_trial));
+                            if score < best_f {
+                                best_f = score;
+                                best_cand = core_lift::splice(cl, &cp_trial);
                             }
                         }
                     }
                 }
             }
-            Some((f, cand))
+
+            Some((best_f, best_cand))
         };
 
         let mut seen_core_n: Vec<usize> = Vec::new();
@@ -2740,44 +2512,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         let pp = permute_pattern(&scoring_pat, &best_perm);
         let et = EliminationTree::from_pattern(&pp);
         let counts = column_counts_gnp(&pp, &et);
-        // Reserve the independent candidate's 2M allowance from the existing
-        // 8M total, only when it can still win before this terminal cleanup.
-        let credits = if terminal_core_candidate.as_ref().map_or(false, |(f, _)| *f < best_flops) {
-            6_000_000
-        } else { 8_000_000 };
-        if let Some(candidate) = completion::refine_limited(
+        if let Some(candidate) = completion::refine(
             n, &pattern.col_ptr, &pattern.row_idx,
-            &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm, credits,
+            &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
         ) {
-            if is_bijection(&candidate, n) {
-                let f = score(&candidate);
-                if f < best_flops { best_flops = f; best_perm = candidate; }
+            if is_bijection(&candidate, n) && flops_of(&scoring_pat, &candidate) < best_flops {
+                best_perm = candidate;
             }
         }
     }
 
-    // Admit independent relabel candidates only after every inherited pass.
-    if let Some((mut f, mut p)) = terminal_core_candidate {
-        if f < best_flops {
-            // Give a strictly winning independent candidate the same bounded
-            // completion cleanup, without replacing any inherited search seed.
-            if n >= 16 && n <= 30_000 && nnz <= 180_000 {
-                let pp = permute_pattern(&scoring_pat, &p);
-                let et = EliminationTree::from_pattern(&pp);
-                let counts = column_counts_gnp(&pp, &et);
-                if let Some(q) = completion::refine_limited(
-                    n, &pattern.col_ptr, &pattern.row_idx,
-                    &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &p, 2_000_000,
-                ) {
-                    if is_bijection(&q, n) {
-                        let qf = score(&q);
-                        if qf < f { f = qf; p = q; }
-                    }
-                }
-            }
-            if f < best_flops { best_perm = p; }
-        }
-    }
     best_perm
 }
 
@@ -3760,132 +3504,6 @@ fn is_bijection(perm: &[usize], n: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn clique_cutoff_exhaustive_small_graphs() {
-        let n = 5;
-        let pairs: Vec<_> = (0..n).flat_map(|i| (i+1..n).map(move |j| (i,j))).collect();
-        for mask in 0..(1usize << pairs.len()) {
-            let mut adjacency = vec![Vec::new(); n];
-            for (bit, &(i,j)) in pairs.iter().enumerate() {
-                if mask & (1 << bit) != 0 { adjacency[i].push(j); adjacency[j].push(i); }
-            }
-            let mut col_ptr = vec![0];
-            let mut row_idx = Vec::new();
-            for row in adjacency { row_idx.extend(row); col_ptr.push(row_idx.len()); }
-            let p = Pattern { n, col_ptr, row_idx };
-            let scorer = SmallScore::new(&p);
-            let sp = ScoringPattern { n, col_ptr: p.col_ptr.clone(), row_idx: p.row_idx.clone() };
-            let mut perm: Vec<_> = (0..n).collect();
-            loop {
-                let exact = flops_of(&sp, &perm);
-                assert_eq!(scorer.flops_bounded(&perm, exact), exact);
-                assert_eq!(scorer.flops_bounded(&perm, exact + 1), exact);
-                assert!(scorer.flops_bounded(&perm, exact - 1) > exact - 1);
-                let Some(i) = (0..n-1).rev().find(|&i| perm[i] < perm[i+1]) else { break };
-                let j = (i+1..n).rev().find(|&j| perm[j] > perm[i]).unwrap();
-                perm.swap(i,j); perm[i+1..].reverse();
-            }
-        }
-    }
-
-    #[test]
-    fn cutoff_differential() {
-        let mut cases=0; let mut saved=0u128; let mut full=0u128; let mut wins=0;
-        for (name,p) in crate::corpus::corpus() {
-            if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 {continue;}
-            let scoring=SmallScore::new(&p); let base=leader_order(&p);
-            let bound=scoring.flops(&base);
-            for seed in 1..=64 {
-                let q=perturb(&base,1+seed as usize%16,seed);
-                let f=scoring.flops(&q); let c=scoring.flops_bounded(&q,bound);
-                assert_eq!(c<=bound,f<=bound,"{name}");
-                if f<=bound {assert_eq!(c,f);} else {assert!(c>bound);}
-            }
-            let t=std::time::Instant::now();
-            let expected=plateau_refine(&p,paired_swap_refine(&p,base.clone()),true);
-            full+=t.elapsed().as_micros();
-            let t=std::time::Instant::now();
-            let actual=cutoff_plateau_refine(&p,cutoff_paired_swap_refine(&p,base),true);
-            saved+=t.elapsed().as_micros();
-            assert_eq!(actual,expected,"{name}");
-            assert!(is_bijection(&actual,p.n));
-            if scoring.flops(&actual)<bound {wins+=1;}
-            cases+=1;
-        }
-        assert_eq!(cases,92);
-        println!("CUTOFF cases={cases} scores=5888 identical=92 wins_vs_leader={wins} full_us={full} bounded_us={saved}");
-    }
-
-    #[test]
-    fn bitset_score_differential() {
-        let mut cases=0; let mut checks=0; let mut ref_us=0; let mut new_us=0;
-        for (name,p) in crate::corpus::corpus() {
-            if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 {continue;}
-            let scoring=ScoringPattern {n:p.n,col_ptr:p.col_ptr.clone(),row_idx:p.row_idx.clone()};
-            let fast=SmallScore::new(&p);
-            let base=leader_order(&p);
-            for seed in 0..64 {
-                let perm=perturb(&base, 1+seed as usize%16, seed+1);
-                assert_eq!(fast.flops(&perm),flops_of(&scoring,&perm),"{name} seed={seed}"); checks+=1;
-            }
-            let t=std::time::Instant::now();
-            let reference=reference_plateau_refine(&p,reference_paired_swap_refine(&p,base.clone()),true);
-            let r=t.elapsed().as_micros(); ref_us+=r;
-            let t=std::time::Instant::now();
-            let candidate=plateau_refine(&p,paired_swap_refine(&p,base),true);
-            let c=t.elapsed().as_micros(); new_us+=c;
-            assert_eq!(reference,candidate,"{name}");
-            assert!(is_bijection(&candidate,p.n));
-            println!("BITSET {name} n={} ref_us={r} new_us={c}",p.n); cases+=1;
-        }
-        assert_eq!(cases,92);
-        println!("SUMMARY cases={cases} scores_checked={checks} identical_outputs={cases} ref_us={ref_us} new_us={new_us} ratio={}",new_us as f64/ref_us as f64);
-    }
-
-    #[test]
-    fn neutral_walk_corpus() {
-        let mut cases=0; let mut nw=0; let mut sw=0; let mut better=0; let mut worse=0;
-        let mut logs=0.0f64; let mut us=0u128;
-        for (name,p) in crate::corpus::corpus() {
-            if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 {continue;}
-            let base=paired_swap_refine(&p,leader_order(&p));
-            let t=std::time::Instant::now();
-            let cand=plateau_refine(&p,base.clone(),true);
-            us+=t.elapsed().as_micros();
-            let strict=plateau_refine(&p,base.clone(),false);
-            assert!(is_bijection(&cand,p.n));
-            assert_eq!(cand,plateau_refine(&p,base.clone(),true));
-            let scoring=ScoringPattern {n:p.n,col_ptr:p.col_ptr.clone(),row_idx:p.row_idx.clone()};
-            let b=flops_of(&scoring,&base); let c=flops_of(&scoring,&cand); let d=flops_of(&scoring,&strict);
-            assert!(c<=b && d<=b);
-            cases+=1; nw+=usize::from(c<b); sw+=usize::from(d<b);
-            better+=usize::from(c<d); worse+=usize::from(c>d);
-            logs+=(c as f64/b as f64).ln();
-            println!("NEUTRAL {name} base={b} neutral={c} strict={d}");
-        }
-        assert_eq!(cases,92);
-        println!("SUMMARY cases={cases} neutral_wins={nw} strict_wins={sw} neutral_better={better} neutral_worse={worse} ratio={} added_us={us}",(logs/cases as f64).exp());
-    }
-    #[test]
-    fn coordinated_swaps_real_corpus() {
-        let mut cases=0; let mut wins=0; let mut logs=0.0f64; let mut us=0u128;
-        for (name,p) in crate::corpus::corpus() {
-            if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 { continue; }
-            let base=leader_order(&p);
-            let t=std::time::Instant::now();
-            let cand=paired_swap_refine(&p,base.clone());
-            us+=t.elapsed().as_micros();
-            assert!(is_bijection(&cand,p.n));
-            assert_eq!(cand,paired_swap_refine(&p,base.clone()));
-            let scoring=ScoringPattern {n:p.n,col_ptr:p.col_ptr.clone(),row_idx:p.row_idx.clone()};
-            let b=flops_of(&scoring,&base); let c=flops_of(&scoring,&cand);
-            assert!(c<=b); cases+=1; wins+=usize::from(c<b); logs+=(c as f64/b as f64).ln();
-            println!("PAIR {name} n={} base={b} candidate={c}",p.n);
-        }
-        assert!(cases>0);
-        println!("SUMMARY cases={cases} wins={wins} losses=0 ties={} geomean={} extra_us={us}",cases-wins,(logs/cases as f64).exp());
-    }
-
 
     /// Bind `dense_deferred_count` to the vendored crate's OWN counter.
     ///
@@ -4079,33 +3697,6 @@ mod tests {
                 assert_eq!(fingerprint, expected, "{name}: {variant} reference permutation");
             }
         }
-    }
-
-    #[test]
-    fn forest_certificate_contract() {
-        for n in [0usize, 1, 12, 60, 300, 1000, 10000] {
-            for family in 0..4 {
-                let edges: Vec<_> = (1..n).filter(|&v| family != 3 || v % 7 != 0)
-                    .map(|v| (v, match family { 0 => v-1, 1 => 0, _ => (v-1)/2 })).collect();
-                let p = Pattern::from_edges(n, &edges);
-                let t = std::time::Instant::now();
-                let candidate = forest_certificate(&p).expect("forest certificate missing");
-                let fast_us=t.elapsed().as_micros();
-                assert_bijection(&candidate,n);
-                assert_eq!(candidate,forest_certificate(&p).unwrap());
-                let core=ScoringPattern {n:p.n,col_ptr:p.col_ptr.clone(),row_idx:p.row_idx.clone()};
-                let f=flops_of(&core,&candidate);
-                assert_eq!(f,(n+3*edges.len()) as u64);
-                let t=std::time::Instant::now();
-                let base=leader_order(&p);
-                let leader_us=t.elapsed().as_micros();
-                let bf=flops_of(&core,&base);
-                assert!(f<=bf);
-                println!("FOREST n={n} family={family} edges={} candidate_flops={f} leader_flops={bf} fast_us={fast_us} leader_us={leader_us}",edges.len());
-            }
-        }
-        let cycle=Pattern::from_edges(4,&[(0,1),(1,2),(2,0)]);
-        assert!(forest_certificate(&cycle).is_none());
     }
 
     fn assert_bijection(perm: &[usize], n: usize) {

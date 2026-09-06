@@ -24,6 +24,22 @@ pub(super) fn candidates(
     Some([forward, reverse])
 }
 
+/// Independent root reversal, evaluated only after inherited PEO chains finish.
+pub(super) fn reversed_root_candidates(
+    n: usize, cp: &[usize], ri: &[usize], parent: &[Option<usize>],
+    counts: &[usize], incumbent: &[usize],
+) -> Option<[Vec<usize>; 4]> {
+    let adj = reconstruct(n, cp, ri, parent, counts, incumbent)?;
+    let seed: Vec<usize> = incumbent.iter().rev().copied().collect();
+    let mut high_degree_seed = incumbent.to_vec();
+    let root = (0..n).max_by_key(|&i| (adj[incumbent[i]].len(), i))?;
+    high_degree_seed.swap(0, root);
+    let candidates = [mcs_peo(&adj, &seed, false), mcs_peo(&adj, &seed, true),
+        mcs_peo(&adj, &high_degree_seed, false), mcs_peo(&adj, &high_degree_seed, true)];
+    if candidates.iter().any(|p| !super::is_bijection(p, n)) { return None; }
+    Some(candidates)
+}
+
 fn reconstruct(
     n: usize,
     cp: &[usize],
@@ -208,8 +224,12 @@ mod tests {
                     }
                     let baseline = flops_of(&pat, &incumbent);
                     let mut best = baseline;
-                    for reverse in [false, true] {
-                        let candidate = mcs_peo(&reconstructed, &incumbent, reverse);
+                    let reverse_seed: Vec<_> = incumbent.iter().rev().copied().collect();
+                    let mut high_seed = incumbent.clone();
+                    let root = (0..n).max_by_key(|&i| (reconstructed[incumbent[i]].len(), i)).unwrap();
+                    high_seed.swap(0, root);
+                    for (seed, reverse) in [(&incumbent, false), (&incumbent, true), (&reverse_seed, false), (&reverse_seed, true), (&high_seed, false), (&high_seed, true)] {
+                        let candidate = mcs_peo(&reconstructed, seed, reverse);
                         assert!(is_peo(&filled, &candidate));
                         // Independent symbolic scorer, not MCS weights/counts.
                         let f = flops_of(&pat, &candidate);

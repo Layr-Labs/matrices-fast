@@ -2866,6 +2866,24 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if final_flops == incumbent_flops { break; }
         }
     }
+    // Keep the complete frontier result as the seed for independent roots.
+    if n >= 16 && n <= 30_000 && nnz <= 180_000 {
+        for _ in 0..4 {
+            let pp = permute_pattern(&scoring_pat, &best_perm);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
+            let Some(candidates) = peo_extract::reversed_root_candidates(
+                n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
+            ) else { break; };
+            let incumbent_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+            let mut final_flops = incumbent_flops;
+            for candidate in candidates {
+                let f = score(&candidate);
+                if f < final_flops { final_flops = f; best_perm = candidate; }
+            }
+            if final_flops == incumbent_flops { break; }
+        }
+    }
     best_perm
 }
 

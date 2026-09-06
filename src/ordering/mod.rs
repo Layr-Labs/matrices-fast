@@ -2649,9 +2649,32 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
                             let cp: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
                             if !is_bijection(&cp, cn) { continue; }
-                            let score = cl.prefix_flops + flops_of(&core_pat, &cp);
+                            let raw_core_flops = flops_of(&core_pat, &cp);
+                            let score = cl.prefix_flops + raw_core_flops;
                             if terminal_core_candidate.as_ref().map_or(true, |(f, _)| score < *f) {
-                                terminal_core_candidate = Some((score, core_lift::splice(cl, &cp)));
+                                let (best_cp, final_core_flops) = if raw_core_flops <= f_core.saturating_mul(11) / 10 {
+                                    if let Ok(Some((f_refined, p_refined))) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                        refine_core(
+                                            cn,
+                                            &cl.core_col_ptr,
+                                            &cl.core_row_idx,
+                                            &core_pat,
+                                            &cp,
+                                            raw_core_flops,
+                                            raw_core_flops,
+                                        )
+                                    })) {
+                                        (p_refined, f_refined)
+                                    } else {
+                                        (cp, raw_core_flops)
+                                    }
+                                } else {
+                                    (cp, raw_core_flops)
+                                };
+                                let refined_score = cl.prefix_flops + final_core_flops;
+                                if terminal_core_candidate.as_ref().map_or(true, |(f, _)| refined_score < *f) {
+                                    terminal_core_candidate = Some((refined_score, core_lift::splice(cl, &best_cp)));
+                                }
                             }
                         }
                     }

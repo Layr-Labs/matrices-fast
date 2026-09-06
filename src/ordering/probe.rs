@@ -2117,3 +2117,300 @@ fn probe_uniform_rounds_synthetic() {
         println!("SYNTHETIC\t{name}\t{}\t{}\t{base}\t{mine}", pat.n, pat.nnz());
     }
 }
+
+/// Stage-6 move sampling: does the small-graph bitset polish have headroom left
+/// beyond its two hardcoded xorshift streams?
+///
+/// The shipped stage draws 512 paired-swap position tuples at seed `0x917ad73`
+/// and 1024 neutral-walk tuples at `0xa839d37`, with iteration counts that do
+/// not scale with `n`. `cutoff_differential` already shows that a *second*
+/// application of the *same* streams wins on 0 of 92 in-gate rows, which is
+/// local optimality with respect to 1536 fixed tuples only. This probe replaces
+/// the streams instead of repeating them.
+///
+/// Two shapes, both admitted by `SmallScore` strict-`<` best-of so no row can
+/// regress:
+///   * RESTART  - k independent (paired, plateau) stream pairs, each started
+///                from the incumbent, best-of.
+///   * CHAIN    - the same k pairs, each started from the current best.
+///
+/// Post-hoc identity: the mechanism is appended after `order()` returns, so it
+/// sees exactly the incumbent permutation and exactly the admission test the
+/// shipped version would apply at `mod.rs`'s stage-6 call site. Because the
+/// shipped position is *before* stage 7, a shipped version can only do better
+/// than what this prints (a strictly better `best_perm` re-enters the PEO loop),
+/// so every number here is a lower bound. Integer-exact and deterministic.
+#[test]
+#[ignore]
+fn probe_small_move_seeds() {
+    let ks: Vec<usize> = std::env::var("MOVE_SEED_KS")
+        .unwrap_or_else(|_| "1,2,4,8,32".to_string())
+        .split(',').map(|s| s.trim().parse().unwrap()).collect();
+    #[allow(non_snake_case)] let KS = &ks[..];
+    let corpus = crate::corpus::corpus();
+    let in_gate: Vec<_> = corpus
+        .iter()
+        .filter(|(_, pat)| (12..=300).contains(&pat.n) && pat.nnz() <= 3_000)
+        .collect();
+    println!("MOVESEED in_gate_rows={}", in_gate.len());
+
+    // log-ratio sums, per variant: [restart_k..., chain_k...]
+    let n_var = 2 * KS.len();
+    let mut dlog = vec![0.0f64; n_var];
+    let mut wins = vec![0usize; n_var];
+    let mut us = vec![0u128; n_var];
+    let mut inc_log = 0.0f64;
+
+    for (name, pat) in &in_gate {
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let incumbent = order(pat);
+        let scoring = SmallScore::new(pat);
+        let inc_flops = scoring.flops(&incumbent);
+        // The bitset scorer must agree with the harness's symbolic analysis or
+        // nothing below means anything.
+        assert_eq!(inc_flops, flops_of(&sp, &incumbent), "{name}");
+        inc_log += (inc_flops as f64 / amd as f64).ln();
+
+        for (ki, &k) in KS.iter().enumerate() {
+            // RESTART
+            let t = Instant::now();
+            let mut best = incumbent.clone();
+            let mut best_f = inc_flops;
+            let mut state = CUTOFF_PAIRED_SEED ^ CUTOFF_PLATEAU_SEED;
+            for s in 0..k {
+                let (s1, s2) = if s == 0 {
+                    (CUTOFF_PAIRED_SEED, CUTOFF_PLATEAU_SEED)
+                } else {
+                    let mut a = splitmix64(&mut state);
+                    let mut b = splitmix64(&mut state);
+                    if a == 0 { a = 1; }
+                    if b == 0 { b = 1; }
+                    (a, b)
+                };
+                let c = cutoff_plateau_stream(
+                    &scoring,
+                    cutoff_paired_swap_stream(&scoring, incumbent.clone(), s1, CUTOFF_PAIRED_DRAWS),
+                    true, s2, CUTOFF_PLATEAU_DRAWS,
+                );
+                let f = scoring.flops(&c);
+                if f < best_f { best_f = f; best = c; }
+            }
+            us[ki] += t.elapsed().as_micros();
+            assert!(is_bijection(&best, n), "{name}");
+            assert_eq!(best_f, flops_of(&sp, &best), "{name}");
+            assert!(best_f <= inc_flops);
+            dlog[ki] += (best_f as f64 / amd as f64).ln() - (inc_flops as f64 / amd as f64).ln();
+            if best_f < inc_flops {
+                wins[ki] += 1;
+                if k == 32 {
+                    println!("MOVESEED_ROW\tRESTART32\t{name}\tn={n}\tnnz={}\t{:.6} -> {:.6}",
+                        pat.nnz(), inc_flops as f64 / amd as f64, best_f as f64 / amd as f64);
+                }
+            }
+
+            // CHAIN
+            let vi = KS.len() + ki;
+            let t = Instant::now();
+            let mut best = incumbent.clone();
+            let mut best_f = inc_flops;
+            let mut state = CUTOFF_PAIRED_SEED ^ CUTOFF_PLATEAU_SEED;
+            for s in 0..k {
+                let (s1, s2) = if s == 0 {
+                    (CUTOFF_PAIRED_SEED, CUTOFF_PLATEAU_SEED)
+                } else {
+                    let mut a = splitmix64(&mut state);
+                    let mut b = splitmix64(&mut state);
+                    if a == 0 { a = 1; }
+                    if b == 0 { b = 1; }
+                    (a, b)
+                };
+                let c = cutoff_plateau_stream(
+                    &scoring,
+                    cutoff_paired_swap_stream(&scoring, best.clone(), s1, CUTOFF_PAIRED_DRAWS),
+                    true, s2, CUTOFF_PLATEAU_DRAWS,
+                );
+                let f = scoring.flops(&c);
+                if f < best_f { best_f = f; best = c; }
+            }
+            us[vi] += t.elapsed().as_micros();
+            assert!(is_bijection(&best, n), "{name}");
+            assert_eq!(best_f, flops_of(&sp, &best), "{name}");
+            assert!(best_f <= inc_flops);
+            dlog[vi] += (best_f as f64 / amd as f64).ln() - (inc_flops as f64 / amd as f64).ln();
+            if best_f < inc_flops {
+                wins[vi] += 1;
+                if k == 32 {
+                    println!("MOVESEED_ROW\tCHAIN32\t{name}\tn={n}\tnnz={}\t{:.6} -> {:.6}",
+                        pat.nnz(), inc_flops as f64 / amd as f64, best_f as f64 / amd as f64);
+                }
+            }
+        }
+    }
+
+    let cnt = in_gate.len() as f64;
+    // Every in-gate row has n <= 300, so all of them live in the lt_1k bucket
+    // (147 dev rows). A bucket geomean moves by exp(dlog / 147); the dev score
+    // moves by 0.30 x that, since the other two buckets cannot change.
+    let lt1k_rows = corpus.iter().filter(|(_, p)| p.n > 0 && p.n < 1_000).count() as f64;
+    println!("MOVESEED lt1k_rows={lt1k_rows} in_gate_geomean_incumbent={:.6}", (inc_log / cnt).exp());
+    for (ki, &k) in KS.iter().enumerate() {
+        for (tag, vi) in [("RESTART", ki), ("CHAIN", KS.len() + ki)] {
+            let band = (dlog[vi] / cnt).exp();
+            let lt1k_factor = (dlog[vi] / lt1k_rows).exp();
+            println!(
+                "MOVESEED\t{tag}\tk={k}\twins={}\tdlog={:.8}\tband_factor={band:.6}\tlt1k_factor={lt1k_factor:.6}\tus={}",
+                wins[vi], dlog[vi], us[vi],
+            );
+        }
+    }
+    println!("MOVESEED note: dev delta = 0.30 x lt1k_geomean x (1 - lt1k_factor), in absolute score units");
+}
+
+/// Alternate-seed chain pool depth: does the 4M-unit chain ledger shipped at
+/// `4d86414` go unspent because the seed pool runs out?
+///
+/// `PEO_ALT_SEEDS` retains the 4 best displaced orderings and chains from each
+/// in turn, all charged against one shared `PEO_ALT_LEDGER` (4M units, about
+/// 140 ms on the dev host). The pool holds the k best DISTINCT scores seen so
+/// far, which is monotone in k: a larger pool's first 4 entries are exactly the
+/// shipped pool's, in the same order, so a larger k re-runs the shipped chains
+/// unchanged and then spends whatever ledger they left over. Score is therefore
+/// monotone non-worsening in k and total chain work is bounded by the SAME
+/// ledger; the only new term is the retention bookkeeping in `consider`.
+///
+/// Prints the exact harness score for each k, plus every row that moves.
+#[test]
+#[ignore]
+fn probe_alt_seed_pool() {
+    let ks: Vec<usize> = std::env::var("ALT_POOL_KS")
+        .unwrap_or_else(|_| "4,32".to_string())
+        .split(',')
+        .map(|s| s.trim().parse().unwrap())
+        .collect();
+    let corpus = crate::corpus::corpus();
+    let mut log_sums = vec![[0.0f64; 3]; ks.len()];
+    let mut counts = [0usize; 3];
+    let mut secs = vec![0.0f64; ks.len()];
+    let mut worst = vec![(0.0f64, String::new()); ks.len()];
+    let mut base_ratio: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+
+    for (name, pat) in &corpus {
+        if pat.n == 0 { continue; }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let b = bucket(pat.n);
+        counts[b] += 1;
+        let mut row_secs: Vec<f64> = Vec::new();
+        for (i, &k) in ks.iter().enumerate() {
+            let t0 = Instant::now();
+            let perm = match forest_certificate(pat) {
+                Some(p) => p,
+                None => leader_order_pool(pat, k),
+            };
+            let el = t0.elapsed().as_secs_f64();
+            secs[i] += el;
+            row_secs.push(el);
+            if el > worst[i].0 { worst[i] = (el, name.clone()); }
+            assert!(is_bijection(&perm, pat.n), "{name} k={k}");
+            let ratio = flops_of(&sp, &perm) as f64 / amd;
+            log_sums[i][b] += ratio.ln();
+            if i == 0 {
+                base_ratio.insert(name.clone(), ratio);
+            } else {
+                let b0 = base_ratio[name];
+                if (ratio - b0).abs() > 1e-12 {
+                    println!("ALTPOOL_ROW\tk={k}\t{name}\tn={}\tnnz={}\t{b0:.6} -> {ratio:.6}\t{:+.6}",
+                        pat.n, pat.nnz(), ratio - b0);
+                }
+            }
+        }
+        let dt = row_secs.iter().cloned().fold(f64::MIN, f64::max) - row_secs[0];
+        if dt.abs() > 0.005 {
+            print!("ALTPOOL_T\t{name}\tn={}\tnnz={}\tmax_dt={:+.3}", pat.n, pat.nnz(), dt);
+            for (i, &k) in ks.iter().enumerate() { print!("\tk{k}={:.3}", row_secs[i]); }
+            println!();
+        }
+    }
+
+    for (i, &k) in ks.iter().enumerate() {
+        let score = aggregate(&log_sums[i], &counts);
+        print!("ALTPOOL\tk={k}\tscore={score:.6}");
+        for b in 0..3 {
+            print!("\t{}={:.6}", BUCKET_NAMES[b], (log_sums[i][b] / counts[b] as f64).exp());
+        }
+        println!("\ttotal_s={:.1}\tworst={:.3}s on {}", secs[i], worst[i].0, worst[i].1);
+    }
+}
+
+/// Per-row cost model for the stage-6 stream sets.
+///
+/// One `SmallScore` pass clones `n * words` u64s and then ORs a `words`-wide row
+/// into each factor entry, so its cost is `words * (n + fill)` word operations,
+/// where `fill` is the incumbent's factor nonzero count. `nnz` does not appear:
+/// a sparse pattern whose elimination fills in completely costs exactly as much
+/// as a dense one. This prints the model input and the measured time per row so
+/// the stage's op budget can be calibrated against milliseconds rather than
+/// against what the dev corpus happens to contain.
+#[test]
+#[ignore]
+fn probe_stage6_cost() {
+    let corpus = crate::corpus::corpus();
+    let mut rows: Vec<(f64, String, usize, usize, u64, u64)> = Vec::new();
+    for (name, pat) in &corpus {
+        if !(12..=300).contains(&pat.n) || pat.nnz() > 3_000 { continue; }
+        let incumbent = order(pat);
+        let scoring = SmallScore::new(pat);
+        let (mut best_f, fill) = scoring.flops_and_fill(&incumbent);
+        let words = (pat.n + 63) / 64;
+        let units = words as u64 * (pat.n as u64 + fill);
+        let per_set = (units * (CUTOFF_PAIRED_DRAWS + CUTOFF_PLATEAU_DRAWS) as u64).max(1);
+        let sets = (CUTOFF_STREAM_UNITS / per_set).clamp(1, CUTOFF_STREAM_SETS as u64) as usize;
+        let t = Instant::now();
+        let mut best = incumbent.clone();
+        let mut state = CUTOFF_PAIRED_SEED ^ CUTOFF_PLATEAU_SEED;
+        for set in 0..sets {
+            let (a, b) = if set == 0 {
+                (CUTOFF_PAIRED_SEED, CUTOFF_PLATEAU_SEED)
+            } else {
+                (splitmix64(&mut state) | 1, splitmix64(&mut state) | 1)
+            };
+            let c = cutoff_plateau_stream(
+                &scoring,
+                cutoff_paired_swap_stream(&scoring, best.clone(), a, CUTOFF_PAIRED_DRAWS),
+                true, b, CUTOFF_PLATEAU_DRAWS,
+            );
+            let f = scoring.flops(&c);
+            if f < best_f { best_f = f; best = c; }
+        }
+        let ms = t.elapsed().as_secs_f64() * 1e3;
+        rows.push((ms, name.clone(), pat.n, pat.nnz(), fill, units * sets as u64));
+    }
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    println!("STAGE6COST rows={} sets={}", rows.len(), CUTOFF_STREAM_SETS);
+    for (ms, name, n, nnz, fill, units) in &rows {
+        println!("STAGE6COST\t{name}\tn={n}\tnnz={nnz}\tfill={fill}\tunits={units}\tms={ms:.1}\tns_per_unit={:.4}",
+            ms * 1e6 / (*units as f64 * (CUTOFF_PAIRED_DRAWS + CUTOFF_PLATEAU_DRAWS) as f64));
+    }
+    let tot: f64 = rows.iter().map(|r| r.0).sum();
+    println!("STAGE6COST total_ms={tot:.1} max_ms={:.1} on {}", rows[0].0, rows[0].1);
+}

@@ -34,7 +34,15 @@ pub(super) fn candidates_bounded(
     let adj = reconstruct(n, cp, ri, parent, counts, incumbent, max_n, max_nnz, max_lnnz)?;
     let forward = mcs_peo(&adj, incumbent, false);
     let reverse = mcs_peo(&adj, incumbent, true);
-    if !super::is_bijection(&forward, n) || !super::is_bijection(&reverse, n) {
+    // `mcs_peo` sets `visited[v]` before pushing `v` and never pushes a visited
+    // vertex, and every value it can push comes either from `incumbent` - which
+    // `reconstruct` has already checked to be a bijection of `0..n` - or from
+    // `adj`, whose entries `reconstruct` builds only from vertices `< n`. The
+    // pushed values are therefore distinct and in range, so `len() == n` already
+    // certifies a bijection and the two allocating O(n) `is_bijection` passes are
+    // redundant. (`mcs_peo` can stop early with `len() < n`, which is why the
+    // length is still checked.)
+    if forward.len() != n || reverse.len() != n {
         return None;
     }
     Some([forward, reverse])

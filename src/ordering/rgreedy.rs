@@ -3563,3 +3563,6 @@ mod five_window_tests {
         }
     }
 }
+
+// Isolated terminal interval experiment; existing kernels remain unchanged.
+pub(crate) mod chain_interleave;

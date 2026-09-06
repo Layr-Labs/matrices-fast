@@ -100,10 +100,22 @@ fn probe_timing_and_score() {
                 .collect::<Vec<_>>(),
         );
 
+        peo_tie::clear_last_search();
         let t0 = Instant::now();
         let perm = order(pat);
         let secs = t0.elapsed().as_secs_f64();
         let mine = flops_of(&sp, &perm);
+        let tie_search = peo_tie::take_last_search();
+        let stage_called = tie_search.is_some();
+        let tie = tie_search.unwrap_or_else(peo_tie::SearchTelemetry::gate);
+        println!("TIESEARCH\t{name}\t{n}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            pat.nnz(), tie.spent, tie.rounds, tie.tie_steps, tie.strict_steps,
+            tie.repeats_rejected, tie.output_changed, tie.stop.as_str(), stage_called);
+        if let Some(s) = rgreedy::chain_interleave::take_last_stats() {
+            println!("INTERLEAVE\t{name}\t{n}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:?}",
+                pat.nnz(), s.spent, s.reserved, s.reserve_unused,
+                s.windows, s.eligible, s.solved, s.wins, s.transitions, s.refusal);
+        }
         println!("COUNTS\t{name}\t{n}\t{}\t{base}\t{mine}", pat.nnz());
         let ratio = mine as f64 / base as f64;
 

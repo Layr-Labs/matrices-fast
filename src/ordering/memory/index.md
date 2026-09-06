@@ -232,3 +232,5 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0080: PEO re-extraction above the gate](experiments/0080-peo-re-extraction-above-the-gate.md): the terminal chain extended to rows outside 16..30k / 180k under a work ledger of 5*(n+nnz)+Lnnz; dev 0.829057 -> 0.827794, held-out 0.852396 -> 0.852280, 5 wins / 0 losses per corpus, worst call below the base; official pending.
 
 - [Tarjan-Yannakakis MCS background](literature/tarjan-yannakakis-1984-mcs.md): inspected primary abstract and independent completion-containment derivation.
+
+- [0085: bounded terminal PEO and local refinements](experiments/0085-bounded-terminal-peo-and-local-refinements.md): 4d86414 public 0.8267840479210953 -> 0.8267316877823669, 14 wins / 0 losses; 87 tests and 300 trusted cases pass. Extra strict PEO descent, optimized five cleanup, then exact three-free-pivot interval interleaving. Official outcome unknown at upload.

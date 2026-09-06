@@ -153,6 +153,7 @@ mod probe;
 pub mod rgreedy;
 mod completion;
 mod peo_extract;
+mod peo_tie;
 mod minl_watch;
 pub mod custom_metrics;
 /// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
@@ -2980,6 +2981,29 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if ledger >= PEO_ALT_LEDGER { break; }
             }
         }
+    }
+    // Continue from the fully finished incumbent; publish only a strict gain.
+    if let Some(candidate) = peo_tie::refine(&scoring_pat, &best_perm, &score) {
+        best_perm = candidate;
+    }
+    // A fresh bounded five-pivot cycle can repair the PEO seed before the
+    // broader interval neighborhood. Each helper owns its full allowance.
+    let mut five_stats = rgreedy::chain_interleave::Stats::default();
+    if let Some(win) = rgreedy::chain_interleave::refine_five(
+        n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8_000_000,
+        &mut five_stats,
+    ) {
+        if win.after < win.before { best_perm = win.order; }
+    }
+    // Optimize a bounded interval neighborhood only after every inherited
+    // completion chain and alternate seed has finished. Both full scores and
+    // final validation are paid inside the independent helper allowance.
+    let mut interleave_stats = rgreedy::chain_interleave::Stats::default();
+    if let Some(win) = rgreedy::chain_interleave::refine(
+        n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8_000_000,
+        &mut interleave_stats,
+    ) {
+        if win.after < win.before { best_perm = win.order; }
     }
     best_perm
 }

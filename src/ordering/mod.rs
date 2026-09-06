@@ -152,6 +152,7 @@ mod probe;
 
 pub mod rgreedy;
 mod completion;
+mod peo_extract;
 mod minl_watch;
 pub mod custom_metrics;
 /// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
@@ -2834,6 +2835,28 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n >= 12 && n <= 300 && pattern.nnz() <= 3_000 {
         best_perm = cutoff_paired_swap_refine(pattern, best_perm);
         best_perm = cutoff_plateau_refine(pattern, best_perm, true);
+    }
+    // Re-extract two PEOs from the fully finished result, then repeat only
+    // after a strict exact gain. Each round drops its reconstruction scratch.
+    // These alternatives cannot affect earlier seeds or watcher allocations.
+    if n >= 16 && n <= 30_000 && nnz <= 180_000 {
+        for _ in 0..2 {
+            let pp = permute_pattern(&scoring_pat, &best_perm);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
+            let Some(candidates) = peo_extract::candidates(
+                n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
+            ) else { break; };
+            // Earlier terminal stages can change best_perm without updating
+            // best_flops, so derive the incumbent's exact score afresh.
+            let incumbent_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+            let mut final_flops = incumbent_flops;
+            for candidate in candidates {
+                let f = score(&candidate);
+                if f < final_flops { final_flops = f; best_perm = candidate; }
+            }
+            if final_flops == incumbent_flops { break; }
+        }
     }
     best_perm
 }

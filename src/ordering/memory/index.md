@@ -227,3 +227,6 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0069: terminal core relabels on refreshed leader](experiments/0069-terminal-core-relabels-on-current-leader.md): dev 0.832725 -> 0.832432, 2/0/298; retains a942ebd's full pipeline; official pending. Earlier 0068 scored 0.862053 officially but was not promoted after the concurrent frontier advance.
 
 - [0070: terminal core relabels on df6e3f0](experiments/0070-terminal-core-relabels-on-df6e3f0.md): freshly measured dev 0.832566 -> 0.832277; 2/0/298; official pending.
+
+- [0077: bounded terminal PEO re-extraction](experiments/0077-terminal-peo-re-extraction.md): a07cc9c public 0.8317720492495939 -> 0.8300471638388927; 18 wins / 0 losses; 68 tests and 300 trusted cases pass. Two rounds maximum, second conditional on strict gain; official pending.
+- [Tarjan-Yannakakis MCS background](literature/tarjan-yannakakis-1984-mcs.md): inspected primary abstract and independent completion-containment derivation.

@@ -2839,8 +2839,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Re-extract two PEOs from the fully finished result, then repeat only
     // after a strict exact gain. Each round drops its reconstruction scratch.
     // These alternatives cannot affect earlier seeds or watcher allocations.
+    //
+    // The round cap is 8 rather than 2. The loop is self-limiting: a round that
+    // fails to strictly improve breaks immediately, so a round beyond the first
+    // is only ever paid for on a matrix that has already paid for itself. Each
+    // round reconstructs the induced completion of a strictly better
+    // permutation, so the graph it works on is non-increasing and later rounds
+    // are cheaper than earlier ones. The cap only exists so the loop cannot run
+    // unbounded on a pathological strict-gain chain.
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
-        for _ in 0..2 {
+        for _ in 0..8 {
             let pp = permute_pattern(&scoring_pat, &best_perm);
             let et = EliminationTree::from_pattern(&pp);
             let counts = column_counts_gnp(&pp, &et);

@@ -191,6 +191,31 @@ const REDUCE_RECURSE_MAX_NNZ: usize = 150_000;
 const REDUCE_RECURSE_MARGIN: (u64, u64) = (11, 10);
 const REDUCE_RECURSE_DEEP_MAX_CORE_N: usize = 80_000;
 const REDUCE_RECURSE_DEEP_MAX_CORE_NNZ: usize = 250_000;
+/// CORE-LNS (0076): the exact randomized elimination-game search
+/// (`rgreedy::search`, the small-graph LNS) run ON THE RESIDUAL CORE inside
+/// `refine_core`. The core is the exact fill graph after the low-degree prefix,
+/// a different instance whose basins the full-graph LNS never visits; by the
+/// objective split every core improvement is an exact improvement of the spliced
+/// ordering. TIME-NEUTRAL BY CONSTRUCTION: the walk runs only on rows that also
+/// run the full-graph LNS, and `CORE_LNS_TRIM` times its op budget is removed
+/// from the tail of that row's full-graph stream list first (an additive shape,
+/// +0.03-0.11 s on 0.8-1.2 s rows, failed hidden validation as `f118a2c5`).
+/// Structural gates only: core size and the existing LNS gates.
+const CORE_LNS_MIN_N: usize = 8;
+const CORE_LNS_MAX_N: usize = 1_000;
+const CORE_LNS_MAX_NNZ: usize = 60_000;
+const CORE_LNS_STREAMS: [(i64, u64); 2] = [
+    (30_000_000, 0x5EED_0001),
+    (30_000_000, 0x5EED_0002),
+];
+/// Ops removed from the full-graph LNS per op spent on the core (1:1; both
+/// searches use the same op accounting and the same 1.25x hard-cap rule).
+const CORE_LNS_TRIM: (i64, i64) = (1, 1);
+/// A K = 3 core whose raw splice is within this margin of the incumbent (but
+/// outside the 11/10 `REDUCE_RECURSE_MARGIN`) gets the LNS-only polish, not the
+/// full core subtree chain. Measured: a raw splice at 1.37x the incumbent
+/// finished 4.3 % below it after the walk.
+const CORE_LNS_POLISH_MARGIN: (u64, u64) = (2, 1);
 /// EXTRA DEPTHS (matrices_mage 0064), bounded and SEQUENTIAL so the cost is identical on a
 /// 2-vCPU grader and a 16-core bench: after the shipped K=3 pass, depths are attempted in order
 /// while the reduce-work budget (attempts x nnz, in CSC entries) remains; a deeper core is
@@ -529,10 +554,15 @@ fn refine_core(
     cp: &[usize],
     f_core: u64,
     f_amd_core: u64,
+    full: bool,
+    lns: bool,
 ) -> Option<(u64, Vec<usize>)> {
     let core_nnz = core_row_idx.len();
     let mut p_cur: Vec<usize> = cp.to_vec();
     let mut f_cur = f_core;
+    // `full` = the subtree chain + deep pass (the 0065 recursion); `lns` = the
+    // paid-for core walk (0076). Both feed the same cleanup below.
+    if full {
 
     let prep = |perm: &[usize]| -> (Vec<usize>, Vec<u32>, Vec<i32>) {
         let permuted = permute_pattern(core_pat, perm);
@@ -625,6 +655,32 @@ fn refine_core(
             }
         }
     }
+    } // full
+
+    // CORE-LNS (see `CORE_LNS_*`): chained exact LNS streams on the core from
+    // the incumbent reached so far; each stream is admitted only on a strict
+    // decrease of the exact core objective. Paid for by the caller's trim.
+    if lns && (CORE_LNS_MIN_N..=CORE_LNS_MAX_N).contains(&cn) && core_nnz <= CORE_LNS_MAX_NNZ {
+        for &(budget, rng_seed) in CORE_LNS_STREAMS.iter() {
+            if let Some((cand, _)) = rgreedy::search(
+                cn,
+                core_col_ptr,
+                core_row_idx,
+                &p_cur,
+                f_cur,
+                budget,
+                rng_seed,
+            ) {
+                if is_bijection(&cand, cn) {
+                    let f = flops_of(core_pat, &cand);
+                    if f < f_cur {
+                        f_cur = f;
+                        p_cur = cand;
+                    }
+                }
+            }
+        }
+    }
 
     if (5..=4_096).contains(&cn) && core_nnz <= 65_536 {
         for _ in 0..2 {
@@ -698,6 +754,23 @@ fn splitmix64(state: &mut u64) -> u64 {
 
 /// A relabeling of `0..n` derived from a fixed seed (Fisher-Yates over
 /// SplitMix64). Pure function of `(n, seed)` — no wall-clock, no entropy.
+/// Remove `cut` ops from the TAIL of an LNS stream list (whole streams first,
+/// then a partial cut of the last remaining one). Pure function of its inputs.
+fn trim_streams(streams: &[(i64, u64)], mut cut: i64) -> Vec<(i64, u64)> {
+    let mut out: Vec<(i64, u64)> = streams.to_vec();
+    while cut > 0 {
+        let Some(last) = out.last_mut() else { break };
+        if last.0 <= cut {
+            cut -= last.0;
+            out.pop();
+        } else {
+            last.0 -= cut;
+            cut = 0;
+        }
+    }
+    out
+}
+
 fn relabel(n: usize, seed: u64) -> Vec<usize> {
     let mut q: Vec<usize> = (0..n).collect();
     let mut s = seed
@@ -1881,6 +1954,37 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         && n <= 6_000
         && (nnz <= 30_000 || (well_below && nnz <= 50_000));
 
+    // ── CORE-LNS accounting (see `CORE_LNS_*`) ──────────────────────────────
+    // The terminal block's K = 3 reduction is computed HERE for n < 10k (same
+    // call, same result, reused below), so the row knows whether its core is
+    // LNS-eligible before the full-graph LNS runs. On rows that will run the
+    // core walk, `core_lns_cut` ops are removed from the tail of the full-graph
+    // stream list, so no row does more exact-search work than before.
+    let mut early_core: Option<core_lift::CoreLift> = None;
+    if n >= REDUCE_MIN_N && n < 10_000 && nnz <= REDUCE_MAX_NNZ {
+        if let Ok(cl) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            core_lift::reduce(&scoring_pat, REDUCE_ROW_DEG, REDUCE_MAX_CORE_N, REDUCE_MAX_CORE_EDGES)
+        })) {
+            early_core = cl;
+        }
+    }
+    let lns_eligible = early_core.as_ref().map_or(false, |cl| {
+        let cn = cl.core_n();
+        cn > 0
+            && cn < n
+            && (CORE_LNS_MIN_N..=CORE_LNS_MAX_N).contains(&cn)
+            && cl.core_nnz() <= CORE_LNS_MAX_NNZ
+            && cl.core_nnz() <= REDUCE_MAX_CORE_NNZ
+    });
+    // Small rows only: the medium-gate trade (60M off a 150M budget) was a wash on dev
+    // (5 better / 4 worse) and cost 1.2 bips on the hidden corpus (submission `35f129c9`).
+    let lns_paid = lns_eligible && n <= 1_000 && nnz <= 30_000;
+    let core_lns_cut: i64 = if lns_paid {
+        CORE_LNS_STREAMS.iter().map(|s| s.0).sum::<i64>() * CORE_LNS_TRIM.0 / CORE_LNS_TRIM.1
+    } else {
+        0
+    };
+
     // ── EXACT RANDOMIZED GREEDY ELIMINATION SEARCH (Area 2 on small graphs) ──
     // Uses the vast time headroom at n <= 1,000 to perform exact elimination game
     // simulation on true fill graphs with zero-cost objective tracking.
@@ -1915,7 +2019,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (100_000_000, 0xA076_1D64_78BD_642F),
             ]
         };
-        for &(budget, rng_seed) in small_streams {
+        let small_streams = trim_streams(small_streams, core_lns_cut);
+        for &(budget, rng_seed) in &small_streams {
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -1959,7 +2064,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0xD1B5_4A32_D192_ED03),
             ]
         };
-        for &(budget, seed) in budgets {
+        let budgets = trim_streams(budgets, core_lns_cut);
+        for &(budget, seed) in &budgets {
             if let Some((cand, _)) = rgreedy::search(
                 n,
                 &pattern.col_ptr,
@@ -2583,9 +2689,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             let refined: Option<Vec<usize>> = if recurse && nnz < REDUCE_RECURSE_MAX_NNZ {
                 let f_amd_core = results[alphas.len()].as_ref().map_or(u64::MAX, |(f, _)| *f);
                 let raw = cl.prefix_flops.saturating_add(f_core);
-                if raw.saturating_mul(REDUCE_RECURSE_MARGIN.1)
-                    <= incumbent.saturating_mul(REDUCE_RECURSE_MARGIN.0)
-                {
+                let within_full = raw.saturating_mul(REDUCE_RECURSE_MARGIN.1)
+                    <= incumbent.saturating_mul(REDUCE_RECURSE_MARGIN.0);
+                // LNS-only polish window for paid rows (0076): no core subtree
+                // chain, just the walk and the cheap cleanup.
+                let within_polish = lns_paid
+                    && raw.saturating_mul(CORE_LNS_POLISH_MARGIN.1)
+                        <= incumbent.saturating_mul(CORE_LNS_POLISH_MARGIN.0);
+                if within_full || within_polish {
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         refine_core(
                             cn,
@@ -2595,6 +2706,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                             cp,
                             f_core,
                             f_amd_core,
+                            within_full,
+                            lns_paid,
                         )
                     })) {
                         Ok(Some((_, p))) => Some(p),
@@ -2622,7 +2735,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f_core_exact = flops_of(&core_pat, cp);
                 if let Ok(Some((_, p_better))) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     refine_core(cn, &cl.core_col_ptr, &cl.core_row_idx, &core_pat,
-                        cp, f_core_exact, f_core_exact)
+                        cp, f_core_exact, f_core_exact, true, false)
                 })) {
                     let cand_better = core_lift::splice(cl, &p_better);
                     if is_bijection(&cand_better, n) {
@@ -2689,6 +2802,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                     &cp,
                                     raw_core_flops,
                                     raw_core_flops,
+                                    true,
+                                    false,
                                 )
                             })) {
                                 (p_refined, f_refined)
@@ -2714,14 +2829,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         };
 
         let mut seen_core_n: Vec<usize> = Vec::new();
-        let lifted3 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            core_lift::reduce(
-                &scoring_pat,
-                REDUCE_ROW_DEG,
-                REDUCE_MAX_CORE_N,
-                REDUCE_MAX_CORE_EDGES,
-            )
-        }));
+        let lifted3: Result<Option<core_lift::CoreLift>, _> = match early_core.take() {
+            Some(cl) => Ok(Some(cl)),
+            None => std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                core_lift::reduce(
+                    &scoring_pat,
+                    REDUCE_ROW_DEG,
+                    REDUCE_MAX_CORE_N,
+                    REDUCE_MAX_CORE_EDGES,
+                )
+            })),
+        };
         if let Ok(Some(cl3)) = lifted3 {
             if cl3.core_n() > 0 && cl3.core_n() < n && cl3.core_nnz() <= REDUCE_MAX_CORE_NNZ {
                 seen_core_n.push(cl3.core_n());
@@ -4710,6 +4828,8 @@ mod tests {
             &cp,
             f_core,
             f_core,
+            true,
+            true,
         );
         if let Some((f_refined, p_refined)) = refined {
             assert!(is_bijection(&p_refined, cn), "core ordering must be a bijection");

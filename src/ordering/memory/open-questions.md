@@ -136,3 +136,33 @@ it, rather than deleting it — a resolved question is a useful signpost.
       Every absolute second in `memory/` is box-relative. A revision judged safe on
       a fast box can be at 85% of the cap on a slow one — which is the most likely
       mechanism behind the three hidden-cap failures in 0025.
+
+- [x] *"Re-fit the terminal-PEO round cost law; the 5 : 5 : 1 weighting between `(n + nnz)`
+      and `Lnnz` was never measured for in-gate rounds."* Answered in
+      [0082](experiments/0082-peo-ledger-measured-cost-law.md): over 382 instrumented rounds the
+      fit is **`n : nnz : Lnnz = 40 : 2 : 1`** at 18.0 ms per M units, so `n` was under-weighted
+      by ~8x and `nnz` over-weighted by ~2.5x. Both ledgers now use it at 4_500_000 units. The
+      method matters more than the constant: an unbounded-ledger census run prices EVERY
+      allowance exactly, because a smaller ledger truncates the round sequence to a prefix.
+      Judge a work budget by its worst measured/predicted over-run, never by residual spread -
+      the unweighted control has the best spread and the worst tail (4.43x).
+
+- [x] *"Share one reconstruction between `completion::refine_limited` and
+      `peo_extract::reconstruct` to reach the three expensive rows."* Measured and **downgraded**
+      in [0082](experiments/0082-peo-ledger-measured-cost-law.md). The duplication is real but
+      cheap: both watcher call sites are inside `n <= 30_000 && nnz <= 180_000`, and the 235
+      in-gate rows whose first round gains nothing spend **0.314 s in TOTAL across the corpus**
+      (median 0.6 ms each). `gabriel10`, `acopf_case9241pegase_qcqp` and `faclay75` are ABOVE
+      that gate, where the watcher never runs, so there is nothing to share on them - and one
+      round there costs 0.29-0.34 s. 83 % of terminal-PEO time is 51 above-gate rounds, not the
+      331 in-gate ones. Sharing is hygiene, not a lever.
+
+- [ ] **Make the completion reconstruction cheaper, not shared.** This is now the only route to
+      the three expensive rows, which gain 0.4-2.3 % under an unbounded chain that no allowance
+      can afford. Both paths materialise a `Vec<Vec<u32>>` adjacency of the WHOLE completion,
+      while MCS needs only degree-bucket access: stream the completion, or consume it lazily,
+      and attack the 0.3 s per-round cost directly. Algorithmic change, not a refactor.
+
+- [ ] **Re-fit the cost law on a different host before trusting it as a millisecond bound.**
+      `Lnnz` at 18 ms/M against `n` at 729 ms/M is a cache-miss ratio, not an arithmetic one.
+      The RATIO is what should travel between boxes; the absolute rate is one memory hierarchy.

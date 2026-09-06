@@ -160,6 +160,10 @@ _(algorithm families & primitives — see [techniques/_TEMPLATE.md](techniques/_
 - [amd.md](techniques/amd.md) — the anchor (score 1.00 by definition); strong on dense KKT.
 - [nested-dissection.md](techniques/nested-dissection.md) — the separator family; in the
   portfolio via METIS/Scotch/KaHIP plus two hand-rolled variants.
+- [work-ledgers.md](techniques/work-ledgers.md) — **how to gate an expensive path**: replace a
+  flat structural limit with a per-matrix work budget, fit its cost law, and judge the currency by
+  its worst over-run rather than its residual spread. Every flat-limit widening in this repo that
+  reached hidden validation failed there; every ledger passed.
 
 ## Experiments
 _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experiments/_TEMPLATE.md))_
@@ -230,5 +234,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 
 - [0077: bounded terminal PEO re-extraction](experiments/0077-terminal-peo-re-extraction.md): a07cc9c public 0.8317720492495939 -> 0.8300471638388927; 18 wins / 0 losses; 68 tests and 300 trusted cases pass. Two rounds maximum, second conditional on strict gain; official pending.
 - [0080: PEO re-extraction above the gate](experiments/0080-peo-re-extraction-above-the-gate.md): the terminal chain extended to rows outside 16..30k / 180k under a work ledger of 5*(n+nnz)+Lnnz; dev 0.829057 -> 0.827794, held-out 0.852396 -> 0.852280, 5 wins / 0 losses per corpus, worst call below the base; official pending.
+- [0081: oversize in-gate PEO ledger](experiments/0081-oversize-in-gate-peo-ledger.md): in-gate rounds above `peo_extract::MAX_LNNZ` charged against the same ledger instead of refused outright; dev 0.827794 -> 0.827195, 3 wins / 0 losses, all gt_10k. A flat `MAX_LNNZ = 650_000` scored the same locally and FAILED hidden as `9efba180`, which is why it is a ledger.
+- [0082: the PEO ledger priced by a measured cost law](experiments/0082-peo-ledger-measured-cost-law.md): answers 0081's open question by fitting per-round wall time over 382 instrumented rounds - `n : nnz : Lnnz = 40 : 2 : 1` at 18.0 ms per M units, not the shipped 5 : 5 : 1 - and re-denominates both ledgers in it at 4_500_000 units, plus a pre-symbolic entry refusal on the above-gate branch. Dev 0.827195 -> **0.826107**, 7 wins / 0 losses, gt_10k 0.753129 -> 0.750416. `gams05` alone is 7.96 of the 10.88 bips. The census method prices any allowance exactly with no rebuild; unbounded is dev 0.825734 at a 2.907 s worst call, over the cap.
 
 - [Tarjan-Yannakakis MCS background](literature/tarjan-yannakakis-1984-mcs.md): inspected primary abstract and independent completion-containment derivation.

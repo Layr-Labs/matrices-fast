@@ -172,11 +172,53 @@ use feral::symbolic::column_counts_gnp;
 /// two MCS passes and two exact scores, so charging each round against a fixed allowance
 /// bounds the added time by structure alone.
 const PEO_LARGE_MAX_NNZ: usize = 1_500_000;
-const PEO_LARGE_MAX_LNNZ: usize = 20_000_000;
+/// Implied by the ledger - `Lnnz` enters the round cost at weight 1, so no round with
+/// `Lnnz > PEO_LEDGER` is ever charged - and kept only as an independent allocation
+/// guard, because the reconstruction sizes its adjacency from `Lnnz`.
+const PEO_LARGE_MAX_LNNZ: usize = 4_500_000;
 const PEO_LARGE_ROUNDS: usize = 8;
 const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
-const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
-const PEO_LARGE_LEDGER: u64 = 2_500_000;
+
+/// Per-round cost law for the terminal PEO chain, in abstract work units, and
+/// the per-matrix allowance both chains charge against.
+///
+/// A round pays `permute_pattern` + elimination tree + column counts
+/// (`O(n + nnz)`), one reconstruction and two bucket-MCS passes
+/// (`O(n + Lnnz)`), and two exact scores. The weights are a least-squares fit
+/// of measured per-round wall time on 382 rounds of this pipeline (331 in-gate,
+/// 51 above-gate) against the three terms: 728.6 ms per M(n), 34.4 ms per
+/// M(nnz), 18.1 ms per M(Lnnz) - a ratio of about 40 : 2 : 1. The per-vertex
+/// term dominates by far more than an earlier 5 : 5 : 1 estimate assumed,
+/// because permuting the pattern and both MCS passes walk per-vertex lists in
+/// permuted order and are bound by cache misses rather than by arithmetic.
+///
+/// In this currency one round costs 18.0 ms per million units with a worst
+/// observed over-run of 1.74x, against 2.13x for 16 : 1 : 1 and 2.75x for
+/// 5 : 5 : 1 over the same rounds; the allowance is therefore a real time bound
+/// and not just a size limit. 4_500_000 units is about 81 ms of added terminal
+/// work per matrix, 141 ms at the worst observed over-run - two orders below
+/// the 2 s cap. Above all, weighting `n` at 40 is what keeps the largest inputs
+/// out: at n = 300_000 the entry cost alone is 12M units, so a very large
+/// pattern is refused by structure however sparse its factor turns out to be.
+const PEO_ROUND_N: u64 = 40;
+const PEO_ROUND_NNZ: u64 = 2;
+const PEO_LEDGER: u64 = 4_500_000;
+
+/// The part of the round cost that is known before the column counts exist.
+/// A matrix that cannot afford one round is refused on this alone, so it never
+/// pays `permute_pattern` + elimination tree + column counts for a chain that
+/// will not run. Pure function of the pattern, so both required `order()` runs
+/// agree.
+fn peo_entry_cost(n: usize, nnz: usize) -> u64 {
+    PEO_ROUND_N
+        .saturating_mul(n as u64)
+        .saturating_add(PEO_ROUND_NNZ.saturating_mul(nnz as u64))
+}
+
+/// Full cost of one round, once `Lnnz` is known from the column counts.
+fn peo_round_cost(n: usize, nnz: usize, lnnz: u64) -> u64 {
+    peo_entry_cost(n, nnz).saturating_add(lnnz)
+}
 
 /// Inside the 16..30k / 180k gate the reconstruction still refuses any factor
 /// above `peo_extract::MAX_LNNZ`. Instrumenting `reconstruct` over the dev corpus
@@ -2876,8 +2918,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // An oversize round pays before it runs; an ordinary one is free.
             let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
             let max_lnnz = if lnnz > peo_extract::MAX_LNNZ as u64 {
-                let cost = 5 * (n as u64 + nnz as u64) + lnnz;
-                if oversize_ledger + cost > PEO_OVERSIZE_LEDGER { break; }
+                let cost = peo_round_cost(n, nnz, lnnz);
+                if oversize_ledger + cost > PEO_LEDGER { break; }
                 oversize_ledger += cost;
                 PEO_OVERSIZE_MAX_LNNZ
             } else {
@@ -2897,7 +2939,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
             if final_flops == incumbent_flops { break; }
         }
-    } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ {
+    } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ && peo_entry_cost(n, nnz) <= PEO_LEDGER {
+        // The entry test is the ledger applied to what is knowable before the counts
+        // exist, so a matrix that cannot afford one round stops here instead of paying a
+        // full symbolic factorization for a chain that will then be refused. On the dev
+        // corpus that is the five largest rows, which are also among the cheapest, and it
+        // returns 15-61 ms each with no effect on any score.
         // Above the gate the incumbent completion has had no cleanup at all: neither the
         // bounded watcher nor the re-extraction above reaches these rows. The same strict-gain
         // chain applies, since a PEO of the incumbent's completion H eliminates the original
@@ -2912,8 +2959,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if lnnz > PEO_LARGE_MAX_LNNZ as u64 { break; }
             // Pay for the round before running it. The chain works on a non-increasing
             // graph, so a round the ledger cannot cover ends it.
-            let cost = 5 * (n as u64 + nnz as u64) + lnnz;
-            if ledger + cost > PEO_LARGE_LEDGER { break; }
+            let cost = peo_round_cost(n, nnz, lnnz);
+            if ledger + cost > PEO_LEDGER { break; }
             ledger += cost;
             let Some(candidates) = peo_extract::candidates_bounded(
                 n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
@@ -3910,6 +3957,47 @@ fn is_bijection(perm: &[usize], n: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The terminal PEO work ledger. The entry cost must be a true lower bound
+    /// on the round cost (otherwise the pre-symbolic refusal could turn away a
+    /// round the ledger would have afforded), a charged in-gate round must stay
+    /// affordable anywhere in that envelope so the oversize path is not dead
+    /// code, and admission must be bounded in `n` alone - the term the measured
+    /// fit says dominates, and the one the older flat limits left open.
+    #[test]
+    fn peo_ledger_entry_cost_bounds_and_admits_the_in_gate_region() {
+        for &(n, nnz) in &[
+            (16usize, 30usize),
+            (30_000, 180_000),
+            (17_364, 252_910),
+            (313_068, 1_292_408),
+            (usize::MAX, usize::MAX),
+        ] {
+            for &lnnz in &[0u64, 1, 300_000, 4_500_000, u64::MAX] {
+                assert!(peo_entry_cost(n, nnz) <= peo_round_cost(n, nnz, lnnz));
+            }
+            assert_eq!(peo_round_cost(n, nnz, 0), peo_entry_cost(n, nnz));
+        }
+
+        // In-gate rounds within `peo_extract::MAX_LNNZ` are never charged, so
+        // the promoted chain there is untouched whatever the ledger says. What
+        // the ledger must still allow is one CHARGED in-gate round anywhere in
+        // that envelope, up to the oversize factor cap - otherwise the oversize
+        // path would be dead code.
+        let worst_oversize_in_gate =
+            peo_round_cost(30_000, 180_000, PEO_OVERSIZE_MAX_LNNZ as u64);
+        assert!(worst_oversize_in_gate <= PEO_LEDGER);
+
+        // What the ledger admits is bounded in each term on its own, which is
+        // the property the flat-limit versions lacked.
+        for n in [0usize, 1, 112_500, 112_501, 340_000] {
+            let admitted = peo_entry_cost(n, 0) <= PEO_LEDGER;
+            assert_eq!(admitted, (n as u64) * PEO_ROUND_N <= PEO_LEDGER);
+        }
+        assert!(peo_entry_cost(313_068, 1_292_408) > PEO_LEDGER);
+        assert!(peo_round_cost(usize::MAX, usize::MAX, u64::MAX) > PEO_LEDGER);
+    }
+
     #[test]
     fn clique_cutoff_exhaustive_small_graphs() {
         let n = 5;

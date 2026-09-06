@@ -229,6 +229,15 @@ const REDUCE_SMALL_MAX_NNZ: usize = 60_000;
 const REDUCE_EXTRA_CORE_LEDGER: usize = 300_000;
 const REDUCE_PAIR_BUDGET: u64 = 1_000_000;
 const REDUCE_EXTRA_ALPHAS: [f64; 2] = [0.5, 5.0];
+/// Density floor for the sparse-large band of the extra-depth reductions. The dense band requires
+/// `nnz >= 6 n`, which excludes a class of large graphs sitting between four and six: on the two
+/// corpora used here that is transswitch2736spr (4.75), transswitch2383wpr (4.64),
+/// powerflow2736spr (4.16) and powerflow2383wpr (4.06). An earlier attempt to admit them was read
+/// as a null result; on this tree, with the terminal chains in place to exploit the different core
+/// the extra depth leaves, admitting them moves two of them by 6.7% and 9.9%. No budget changes:
+/// the existing reduce-work budget, pair budget and extra-core ledger all still apply unchanged,
+/// and a sweep confirmed raising them adds nothing.
+const REDUCE_SPARSE_DENSITY: usize = 4;
 
 /// Medium-size envelope for the *extra* tuned candidates (α-5/α-2 AMD, default
 /// AMF, α-2 AMF). A few extra AMD/AMF passes are trivially cheap in this region;
@@ -2769,7 +2778,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // them is the crown's slowest class and stays exactly as the crown has it.
             let small_band = nnz <= REDUCE_SMALL_MAX_NNZ;
             let dense_band = nnz > REDUCE_EXTRA_MIN_NNZ && nnz >= 6 * n;
-            if !(small_band || dense_band) || reduce_work + nnz > REDUCE_WORK_NNZ {
+            let sparse_large = nnz > REDUCE_EXTRA_MIN_NNZ && nnz >= REDUCE_SPARSE_DENSITY * n;
+            if !(small_band || dense_band || sparse_large) || reduce_work + nnz > REDUCE_WORK_NNZ {
                 break;
             }
             reduce_work += nnz;

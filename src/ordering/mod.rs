@@ -3155,7 +3155,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Then the extra depths, bounded and sequential (see the consts above).
     // Placed LAST on purpose (monotone by construction); gated on (n, nnz, core
     // size) and work budgets only - never on identity.
+    // Residual-core late phase (A): from-scratch EXTRA depths may refine the
+    // core (recurse) when cn is in the exact/safe band; when any core path
+    // strictly improves the incumbent, full-graph MINL is skipped as a
+    // replacement (core minfill/refine already paid). Residual-core (B): open
+    // a third mid band for cheap from-scratch K=2 only (not nested).
+    let mut core_path_improved = false;
     if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
+        let flops_before_core = best_flops;
         // Order a core with the given AMF alphas + AMD, one pass after another,
         // rank on the core graph and return the spliced argmin with its trusted
         // flops. `threads` = true runs the passes on scoped threads (the shipped
@@ -3425,9 +3432,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // passes cost a few ms) and DENSE mid-large graphs (nnz > REDUCE_EXTRA_MIN_NNZ and
             // nnz >= 6 n, where the robust-envelope gate has given time back). The band between
             // them is the crown's slowest class and stays exactly as the crown has it.
+            // Two historical bands (0064) plus (B) a mid below-anchor K=2-only
+            // band: 60k < nnz <= 200k and best_flops < amd_flops. Mid attempts
+            // use a tight one-shot work cap so the crown's slow class stays
+            // bounded; depths other than 2 skip via continue (not nested).
             let small_band = nnz <= REDUCE_SMALL_MAX_NNZ;
             let dense_band = nnz > REDUCE_EXTRA_MIN_NNZ && nnz >= 6 * n;
-            if !(small_band || dense_band) || reduce_work + nnz > REDUCE_WORK_NNZ {
+            let mid_k2 = depth == 2
+                && nnz > REDUCE_SMALL_MAX_NNZ
+                && nnz <= REDUCE_EXTRA_MIN_NNZ
+                && best_flops < amd_flops;
+            if !(small_band || dense_band || mid_k2) {
+                continue;
+            }
+            let work_cap = if mid_k2 && !(small_band || dense_band) {
+                // Exactly one mid-band K=2 attempt worth of CSC entries.
+                nnz
+            } else {
+                REDUCE_WORK_NNZ
+            };
+            if reduce_work + nnz > work_cap {
                 break;
             }
             reduce_work += nnz;
@@ -3457,12 +3481,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
             seen_core_n.push(cn);
             core_work += cl.core_nnz();
-            if let Some((f, p)) = order_core(&cl, &REDUCE_EXTRA_ALPHAS, false, false, best_flops) {
+            // A: refine_core on from-scratch EXTRA cores in the safe exact band
+            // (cn <= REDUCE_EXTRA_EXACT_MAX_CN, core_nnz <= 50k). Dense mid-large
+            // extras still use proxy ranking when cn is large; recurse is a no-op
+            // there via REDUCE_RECURSE_MAX_NNZ.
+            let extra_recurse = (8..=REDUCE_EXTRA_EXACT_MAX_CN).contains(&cn)
+                && cl.core_nnz() <= 50_000;
+            if let Some((f, p)) = order_core(&cl, &REDUCE_EXTRA_ALPHAS, false, extra_recurse, best_flops) {
                 if f < best_flops {
                     best_flops = f;
                     best_perm = p;
                 }
             }
+        }
+        if best_flops < flops_before_core {
+            core_path_improved = true;
         }
     }
 
@@ -3674,7 +3707,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // AMD on it, and admits either only on a strict exact decrease. Bounded by
     // an op budget and a fill gate; the watcher above walks the same lattice
     // with a different, witness-driven schedule and a smaller budget.
-    if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16 {
+    // A replacement: when a residual-core path already improved the incumbent,
+    // core minfill/refine paid the late lattice budget — skip full-graph MINL.
+    if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16 && !core_path_improved {
         let mut cur_flops = score(&best_perm);
         let entry_flops = cur_flops;
         let mut descent_completed = false;

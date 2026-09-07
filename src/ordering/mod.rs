@@ -1894,6 +1894,42 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 });
             }
         }
+        // 0096: three more lotteries the 14-family escalation never isolated —
+        // SqPure@5 (the heavy block's measured cm_sqpure@5 winner, relabelled),
+        // DegDivNvSqrtWf@10 (plain-shipped variant, relabelled), SqDiv@5 (mid-α
+        // for the most general variant). Hub-free gated (max_deg*50<=n): the
+        // escalation died mid-corpus, and the only measured per-pass cliff in
+        // this walk class sits on hub rows — hubs keep the seven shipped
+        // lotteries. Disjoint 40k seed streams; same budget/cap/slot/floor.
+        if max_deg * 50 <= n {
+            for (w, (variant, alpha)) in [
+                (custom_metrics::ScoreVariant::SqPure, 5.0f64),
+                (custom_metrics::ScoreVariant::DegDivNvSqrtWf, 10.0),
+                (custom_metrics::ScoreVariant::SqDiv, 5.0),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let passes =
+                    (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
+                for r in 0..passes {
+                    let seed = 40_000u64 + (w as u64) * 1_000 + r as u64;
+                    consider!(move || {
+                        let q = relabel(n, seed);
+                        let b = permute_pattern(sp_ref, &q);
+                        let bcp: Vec<i32> =
+                            b.col_ptr.iter().map(|&x| x as i32).collect();
+                        let bri: Vec<i32> =
+                            b.row_idx.iter().map(|&x| x as i32).collect();
+                        let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+                            .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
+                        let pb =
+                            custom_metrics::order_variant(&bcore, alpha, true, variant)?;
+                        Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+                    });
+                }
+            }
+        }
     }
 
     // ── EXTRA AMF α VALUES (win D) ──────────────────────────────────────────
@@ -3543,23 +3579,34 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // fill-edge deletion, realizes the minimal completion by MCS-PEO and by
     // AMD on it, and admits either only on a strict exact decrease. Bounded by
     // an op budget and a fill gate; the watcher above walks the same lattice
-    // with a different, witness-driven schedule and a smaller budget.
+    // with a different, witness-driven schedule and a smaller budget. Chained up
+    // to three descents: the op budget can break a scan early, leaving the
+    // completion non-minimal, so a fresh budget continues where it stopped — but
+    // each link runs only after the previous one strictly won, so non-winners pay
+    // exactly the single-descent cost and minimal completions pay one fruitless
+    // re-scan.
     if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16 {
         let mut cur_flops = score(&best_perm);
-        if let Some(cands) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            minl::minl_candidates(&scoring_pat, &best_perm)
-        }))
-        .ok()
-        .flatten()
-        {
-            for cand in cands {
-                if is_bijection(&cand, n) {
-                    let f = score(&cand);
-                    if f < cur_flops {
-                        cur_flops = f;
-                        best_perm = cand;
+        for _ in 0..3 {
+            let before = cur_flops;
+            if let Some(cands) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                minl::minl_candidates(&scoring_pat, &best_perm)
+            }))
+            .ok()
+            .flatten()
+            {
+                for cand in cands {
+                    if is_bijection(&cand, n) {
+                        let f = score(&cand);
+                        if f < cur_flops {
+                            cur_flops = f;
+                            best_perm = cand;
+                        }
                     }
                 }
+            }
+            if cur_flops >= before {
+                break;
             }
         }
         best_flops = best_flops.min(cur_flops);

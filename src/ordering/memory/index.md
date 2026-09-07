@@ -235,6 +235,8 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 
 ## Local follow-up experiments
 
+- [0092: transplant 300k chained](experiments/0092-transplant-300k-chained-smallwins.md): 081af15 dev 0.823737 → **0.823446** (−2.91 bips), gt_10k 0.749902→0.749287; 300k ledger + chained 2nd/3rd on wins + tiny MinFill/streams/alphas/rounds; 69 tests, worst 0.714 s; official pending.
+
 - [0087: stage-6 stream sampling](experiments/0087-stage6-move-sampling-metered-by-fill.md) — multi-set bundle failed; smaller pool/hygiene control completed but missed promotion. Current numbering replaces the local 0085 collision.
 - [0088: cross-candidate subtree transplant](experiments/0088-cross-candidate-subtree-transplant.md) — 600k bundle gained 9.10 dev bips and failed opaquely. Current numbering replaces the local 0086 collision.
 - [0089: production-core stage-6 screen](experiments/0089-production-core-stage6-screen.md) — exact frontier, 2 final winners / 0.07338 dev bips; below screen.

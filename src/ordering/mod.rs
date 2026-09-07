@@ -1439,9 +1439,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         });
         if n < 2_000 && nnz < 10_000 {
             let minfill_restarts = if n <= 1_000 && nnz <= 5_000 {
-                24
+                32
             } else {
-                6
+                8
             };
             for seed in 1..=minfill_restarts {
                 let q = relabel(n, seed);
@@ -1957,6 +1957,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0x45A1_89C3_F208_7314),
                 (100_000_000, 0xA076_1D64_78BD_642F),
                 (50_000_000, 0xE703_7ED1_A0B4_28DB),
+                (50_000_000, 0xC0FF_EE11_2233_4455),
             ]
         } else {
             &[
@@ -1965,6 +1966,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0x27BB_2EE6_87B0_B0FD),
                 (50_000_000, 0x45A1_89C3_F208_7314),
                 (100_000_000, 0xA076_1D64_78BD_642F),
+                (50_000_000, 0xDEAD_BEEF_CAFE_F00D),
             ]
         };
         for &(budget, rng_seed) in small_streams {
@@ -2738,7 +2740,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     let rp: Vec<i32> = relabeled.col_ptr.iter().map(|&v| v as i32).collect();
                     let ri: Vec<i32> = relabeled.row_idx.iter().map(|&v| v as i32).collect();
                     let rc = feral_ordering_core::CscPattern::new(cn, &rp, &ri)?;
-                    for alpha in [2.5, 10.0, 0.5, 5.0] {
+                    for alpha in [2.5, 10.0, 0.5, 5.0, 1.0, 16.0] {
                         let options = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
                         if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
                             let cp: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
@@ -3014,7 +3016,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             for (_, seed) in seeds {
                 let mut cur = seed;
                 let mut cur_flops = u64::MAX;
-                for _ in 0..8 {
+                for _ in 0..12 {
                     let pp = permute_pattern(&scoring_pat, &cur);
                     let et = EliminationTree::from_pattern(&pp);
                     let counts = column_counts_gnp(&pp, &et);
@@ -3050,6 +3052,33 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
+                // Chained second pass: spends only where the first strictly won,
+                // so most rows pay nothing extra. The new incumbent has a different
+                // elimination tree (different blocks), so the same donors can find
+                // further independent block improvements. Same 250k ledger, but only
+                // on winners — a substitutive second draw, not an unconditional cost.
+                let donors2 = runner_up.borrow();
+                if let Some(cand2) = transplant_probe::refine_with_donors(
+                    &scoring_pat, &best_perm, &donors2, amd_flops,
+                ) {
+                    let f2 = score(&cand2);
+                    if f2 < best_flops {
+                        best_flops = f2;
+                        best_perm = cand2;
+                        // Third pass, same conditioning: only where the second won.
+                        // Diminishing, but strictly monotonic and nearly free (few rows).
+                        let donors3 = runner_up.borrow();
+                        if let Some(cand3) = transplant_probe::refine_with_donors(
+                            &scoring_pat, &best_perm, &donors3, amd_flops,
+                        ) {
+                            let f3 = score(&cand3);
+                            if f3 < best_flops {
+                                best_flops = f3;
+                                best_perm = cand3;
+                            }
+                        }
+                    }
+                }
             }
         }
     }

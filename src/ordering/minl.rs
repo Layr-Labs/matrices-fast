@@ -30,6 +30,14 @@
 
 use super::*;
 
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+thread_local! {
+    static VERIFY_INTERSECTIONS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// nnz(A) ceiling: above it the scan measured zero removals in the old
 /// challenge (the budget exhausts before one edge of a completion that large
 /// turns out to be removable).
@@ -319,8 +327,10 @@ pub(crate) fn minl_candidates(sp: &ScoringPattern, seed: &[usize]) -> Option<(Ve
     // `false` when the op budget cut the descent short: the completion is
     // then not minimal and the (expensive) post-descent refinement is skipped.
     let mut completed = true;
-    // `umark[w] == u + 1` ⇔ w ∈ N(u) for the current group's u.
+    // Each group visit needs a fresh epoch: a neighbor can be removed at
+    // the other endpoint between visits, leaving a stale vertex-ID stamp.
     let mut umark: Vec<u32> = vec![0; n];
+    let mut ustamp: u32 = 0;
     let mut umark_for: u32 = u32::MAX;
     // `cmark[w] == stamp` ⇔ w ∈ c for the edge under test.
     let mut cmark: Vec<u32> = vec![0; n];
@@ -353,11 +363,14 @@ pub(crate) fn minl_candidates(sp: &ScoringPattern, seed: &[usize]) -> Option<(Ve
             }
             let (uu, vv) = (u as usize, v as usize);
             if umark_for != u {
-                // (Re)build the stamp of N(u); stale stamps of the previous u
-                // are harmless because the stamp value is u + 1.
+                ustamp = ustamp.wrapping_add(1);
+                if ustamp == 0 {
+                    umark.fill(0);
+                    ustamp = 1;
+                }
                 ops -= adj[uu].len() as i64;
                 for &w in &adj[uu] {
-                    umark[w as usize] = u + 1;
+                    umark[w as usize] = ustamp;
                 }
                 umark_for = u;
             }
@@ -365,9 +378,18 @@ pub(crate) fn minl_candidates(sp: &ScoringPattern, seed: &[usize]) -> Option<(Ve
             ops -= adj[vv].len() as i64;
             c.clear();
             for &w in &adj[vv] {
-                if umark[w as usize] == u + 1 {
+                if umark[w as usize] == ustamp {
                     c.push(w);
                 }
+            }
+            #[cfg(test)]
+            if VERIFY_INTERSECTIONS.with(|flag| flag.get()) {
+                let actual: Vec<u32> = adj[vv]
+                    .iter()
+                    .copied()
+                    .filter(|w| adj[uu].binary_search(w).is_ok())
+                    .collect();
+                assert_eq!(c, actual, "stale neighborhood cache at ({u}, {v})");
             }
             let k = c.len();
             if k > MINL_MAX_COMMON {

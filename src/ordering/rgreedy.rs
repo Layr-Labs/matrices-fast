@@ -38,6 +38,9 @@
 
 #![allow(dead_code)]
 
+#[cfg(test)]
+mod bound_tests;
+
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
     fn mul(words: &mut [u64; 6], factor: u64) {
         let mut carry = 0u128;
@@ -81,6 +84,10 @@ pub(crate) fn rank_alpha_three_quarters_cmp(
 /// far inside the 4 GiB worker cap. The SHIPPED gate at the call site is much
 /// lower and is chosen for TIME, not memory.
 pub(crate) const MAX_N: usize = 12_000;
+
+// Public-dev tuning: preserve cheap small-problem trajectories; larger root
+// problems use the stronger bound in both whole-graph and subtree searches.
+const CLIQUE_PRUNING_MIN_N: usize = 1_024;
 
 /// Pivot selection switches from a linear scan over the live set to degree
 /// buckets above this `n`. Swept on the full small tier at the shipped budget:
@@ -137,6 +144,8 @@ pub(crate) struct Game<'a> {
     /// Only vertices `< nelim` may be eliminated (see `new_partial`). Equal to
     /// `n` for a whole-matrix game.
     nelim: usize,
+    /// Root-problem policy, also inherited by its smaller subtree games.
+    clique_pruning: bool,
     /// Which pivot-selection structure this game uses. MEASURED, not assumed:
     /// the linear scan is a tight, cache-friendly sweep over two dense arrays,
     /// and below n≈3000 it beats the buckets outright despite being O(n) per
@@ -238,6 +247,7 @@ impl<'a> Game<'a> {
             mind: 0,
             nlive: 0,
             nelim: n,
+            clique_pruning: n >= CLIQUE_PRUNING_MIN_N,
             nlist: Vec::with_capacity(n),
             cand: Vec::with_capacity(n),
             tmp: vec![0u64; w],
@@ -438,6 +448,46 @@ impl Game<'_> {
         (self.deg[v] as usize + 1) * (3 * self.w + 6) + 24
     }
 
+    /// The previous pivot made its live neighbors a clique. If `b` of
+    /// those neighbors are permanently live boundary vertices and `e` are
+    /// future pivots, those e columns cost at least
+    /// (b+1)^2 + ... + (b+e)^2, irrespective of their interleaving with
+    /// other pivots. Every other future column costs at least one.
+    fn prune_after_elimination(&mut self, flops: u64, bound: u64, cap: i64) -> bool {
+        // Small games are cheap to finish and keep their existing trajectories.
+        // Prune larger bitset states, where replaying a doomed suffix is costly.
+        if !self.clique_pruning {
+            return flops >= bound;
+        }
+        self.prune_clique_floor(flops, bound, cap)
+    }
+
+    fn prune_clique_floor(&mut self, flops: u64, bound: u64, cap: i64) -> bool {
+        if flops.saturating_add(self.nlive as u64) >= bound {
+            return true;
+        }
+        let d = self.nlist.len();
+        let e = if self.nelim == self.n {
+            d
+        } else {
+            if !self.fits_ops(d, cap) {
+                return true;
+            }
+            self.ops += d as i64;
+            self.nlist
+                .iter()
+                .filter(|&&v| (v as usize) < self.nelim)
+                .count()
+        };
+        let b = d - e;
+        let squares = |k: usize| {
+            let k = k as u64;
+            k * (k + 1) * (2 * k + 1) / 6
+        };
+        let floor = squares(d) - squares(b) + (self.nlive - e) as u64;
+        flops.saturating_add(floor) >= bound
+    }
+
     /// One randomized greedy run. `fixed` is a prefix of pivots replayed
     /// verbatim before randomization starts (the LNS operator); pass an empty
     /// slice for a from-scratch run. Returns `None` as soon as the partial
@@ -465,7 +515,7 @@ impl Game<'_> {
             let c = self.eliminate(v);
             f += c * c;
             out.push(v);
-            if f >= bound {
+            if self.prune_after_elimination(f, bound, hard_cap) {
                 return None;
             }
         }
@@ -590,7 +640,7 @@ impl Game<'_> {
             let c = self.eliminate(pick);
             f += c * c;
             out.push(pick);
-            if f >= bound {
+            if self.prune_after_elimination(f, bound, hard_cap) {
                 return None;
             }
         }
@@ -712,7 +762,26 @@ pub(crate) fn search_with_nelim(
     rng_seed: u64,
     par: Params,
 ) -> Option<(Vec<usize>, u64)> {
+    search_with_nelim_pruned(
+        n, adj0, nelim, seed, seed_flops, budget, rng_seed, par,
+        n >= CLIQUE_PRUNING_MIN_N,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn search_with_nelim_pruned(
+    n: usize,
+    adj0: &[u64],
+    nelim: usize,
+    seed: &[usize],
+    seed_flops: u64,
+    budget: i64,
+    rng_seed: u64,
+    par: Params,
+    clique_pruning: bool,
+) -> Option<(Vec<usize>, u64)> {
     let mut g = Game::new_partial(n, adj0, nelim)?;
+    g.clique_pruning = clique_pruning;
     let mut rng = rng_seed | 1;
     let mut best = seed_flops;
     let mut best_ord: Vec<usize> = Vec::new();
@@ -2429,7 +2498,7 @@ pub(crate) fn subtree_refine(
                             {
                                 rng_seed ^= 0xE703_7ED1_A0B4_28DB;
                             }
-                            let r = search_with_nelim(
+                            let r = search_with_nelim_pruned(
                                 m,
                                 &adj0[..needed],
                                 ssz,
@@ -2438,6 +2507,7 @@ pub(crate) fn subtree_refine(
                                 cfg.budget,
                                 rng_seed,
                                 stream_params(k),
+                                n >= CLIQUE_PRUNING_MIN_N,
                             );
                             if let Some((o, f)) = r {
                                 if best.as_ref().is_none_or(|(_, bf)| f < *bf) {

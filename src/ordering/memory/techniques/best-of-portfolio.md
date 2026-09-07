@@ -9,10 +9,12 @@ which is bit-for-bit the grader's baseline ordering.
 
 ## Why the anchor is the whole trick
 Because the baseline itself is in the candidate set, the returned permutation can
-never be worse than AMD on any matrix: `ratio ≤ 1.0` always. Every additional
-candidate is therefore **free upside** — it either wins and lowers the ratio, or
-loses and is discarded. There is no risk/reward tradeoff to balance, no tuning
-that can backfire on an unseen matrix.
+never be worse than AMD on any matrix: `ratio ≤ 1.0` always. An additional
+candidate is therefore **free score upside only when existing candidates and
+later search trajectories are preserved**: it either wins or is discarded.
+The AMD anchor does not guarantee dominance over the previous full heuristic.
+Changing work allocation, random-number consumption or cascade incumbents can
+regress relative to the prior solver, even while remaining no worse than AMD.
 
 This inverts the usual research question. It is not "which ordering is best on
 this family?" but "**which candidates can I afford to run?**" The only cost of a
@@ -182,6 +184,25 @@ Because non-improving and heavy QP/KKT instances never enter the branches, the
 cascading funnel incurs zero overhead on the slowest matrices while safely
 extending deep local search to ultra-sparse large matrices, breaking the 0.8760
 leaderboard barrier to reach 0.875942.
+
+## Certified pruning within a fixed work budget
+
+[0098](../experiments/0098-clique-floor-and-minl-epochs.md) uses the clique made
+by the last eliminated pivot to lower-bound the remaining squared-column cost.
+With `d` clique vertices, `b` permanent boundary vertices and `nlive` future
+pivots, the floor is `S(d) - S(b) + nlive - (d-b)`, where `S` sums squares.
+Boundary counting is charged to the existing allowance. The parent-size policy
+is inherited by subtree games; no larger search budgets are requested.
+
+The bound is admissible, but earlier abandonment reshuffles bounded random
+search trajectories. Dev improved only 0.806560 → 0.806483, with 33 wins and
+30 regressions, opposite-sign corpus halves, and a drop-top-one regression.
+This is not a robustness result. The accompanying MINL epoch-cache correction
+fixes a synthetic stale-neighbor defect but was score-neutral on dev.
+
+[Luce–Ng](../literature/luce-ng-2013-minimum-flops.md) explains why fill and
+FLOP objectives must remain distinct. Neither a fill reduction nor an
+admissible search bound alone proves end-to-end heuristic improvement.
 
 ## Links
 - [amd.md](amd.md) — the anchor, and why it is hard to beat here.

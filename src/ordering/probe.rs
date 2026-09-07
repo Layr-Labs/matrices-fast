@@ -88,21 +88,10 @@ fn probe_timing_and_score() {
     let mut log_sums = [0.0f64; 3];
     let mut counts = [0usize; 3];
 
-    // SSI_PROBE_ONLY=a,b,c restricts the run to the named rows;
-    // SSI_PROBE_REPEAT=k times each row k times and keeps the minimum.
-    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
-        .ok()
-        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
-    let repeat: usize = std::env::var("SSI_PROBE_REPEAT").ok().and_then(|v| v.parse().ok()).unwrap_or(1).max(1);
     for (name, pat) in &corpus {
         let n = pat.n;
         if n == 0 {
             continue;
-        }
-        if let Some(set) = &only {
-            if !set.contains(name) {
-                continue;
-            }
         }
         let sp = scoring_pattern(pat);
         let (cp, ri) = core_of(pat);
@@ -116,27 +105,9 @@ fn probe_timing_and_score() {
                 .collect::<Vec<_>>(),
         );
 
-        let mut secs = f64::MAX;
-        let mut perm = Vec::new();
-        for _ in 0..repeat {
-            let _ = parallel::phase_take();
-            let t0 = Instant::now();
-            perm = order(pat);
-            let s = t0.elapsed().as_secs_f64();
-            if s < secs {
-                secs = s;
-                let marks = parallel::phase_take();
-                if std::env::var("SSI_PROBE_PHASES").is_ok() {
-                    let mut line = format!("PHASES\t{name}\t{secs:.4}");
-                    for (l, v, f) in marks {
-                        line.push_str(&format!("\t{l}={v:.4}/{:.4}", f as f64 / base as f64));
-                    }
-                    let fin = flops_of(&sp, &perm);
-                    line.push_str(&format!("\tfinal={:.4}", fin as f64 / base as f64));
-                    println!("{line}");
-                }
-            }
-        }
+        let t0 = Instant::now();
+        let perm = order(pat);
+        let secs = t0.elapsed().as_secs_f64();
         let mine = flops_of(&sp, &perm);
         println!("COUNTS\t{name}\t{n}\t{}\t{base}\t{mine}", pat.nnz());
         let ratio = mine as f64 / base as f64;
@@ -2443,163 +2414,5 @@ fn probe_core_gate_stage6() {
             "COREGATE\t{}\trows={}\tdlog={:.8}\tfactor={:.8}",
             BUCKET_NAMES[b], bucket_counts[b], dlog[b], f
         );
-    }
-}
-
-/// CANDIDATE CENSUS (test-only): for each row named in `SSI_PROBE_ONLY`, run a
-/// battery of single candidates in isolation and print `name -> ratio vs AMD`,
-/// so a win seen in another tree can be attributed to one generator.
-#[test]
-#[ignore]
-fn probe_census() {
-    let corpus = crate::corpus::corpus();
-    let only: std::collections::HashSet<String> = std::env::var("SSI_PROBE_ONLY")
-        .expect("set SSI_PROBE_ONLY")
-        .split(',')
-        .map(|x| x.trim().to_string())
-        .collect();
-    for (name, pat) in &corpus {
-        if !only.contains(name) {
-            continue;
-        }
-        let n = pat.n;
-        let nnz = pat.nnz();
-        let sp = scoring_pattern(pat);
-        let (cp, ri) = core_of(pat);
-        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
-        let amd: Vec<usize> = feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect();
-        let base = flops_of(&sp, &amd) as f64;
-        let max_deg = (0..n).map(|j| pat.col_ptr[j + 1] - pat.col_ptr[j]).max().unwrap_or(0);
-        println!("CENSUS {name} n={n} nnz={nnz} max_deg={max_deg} hub={}", max_deg * 50 > n);
-        let mut results: Vec<(f64, f64, String)> = Vec::new();
-        let mut run = |label: String, f: &dyn Fn() -> Option<Vec<i32>>| {
-            let t0 = Instant::now();
-            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-            let secs = t0.elapsed().as_secs_f64();
-            if let Ok(Some(p)) = r {
-                let perm: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
-                if is_bijection(&perm, n) {
-                    let ratio = flops_of(&sp, &perm) as f64 / base;
-                    results.push((ratio, secs, label));
-                    return;
-                }
-            }
-            results.push((f64::NAN, secs, label));
-        };
-        for agg in [true, false] {
-            for a in [10.0f64, 5.0, 2.5, 2.0, 1.0, 0.5, 16.0, -1.0] {
-                let o = feral_amd::AmdOptions { aggressive: agg, dense_alpha: a };
-                run(format!("amd agg={agg} a={a}"), &|| feral_amd::amd_order_opts(&core, &o).ok().map(|(p, ..)| p));
-            }
-        }
-        for a in [10.0f64, 5.0, 2.5, 2.0, 1.5, 1.0, 0.75, 0.5, 16.0, -1.0] {
-            let o = feral_amf::AmfOptions { dense_alpha: a, ..Default::default() };
-            run(format!("amf a={a}"), &|| feral_amf::amf_order_opts(&core, &o).ok().map(|(p, ..)| p));
-        }
-        let metis_max: usize = std::env::var("SSI_CENSUS_METIS_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(400_000);
-        if nnz < metis_max {
-            run("metis default".into(), &|| feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default()).ok().map(|(p, _, _)| p));
-            let mt = feral_metis::MetisOptions { niparts: 16, fm_passes: 20, ..Default::default() };
-            run("metis tuned".into(), &|| feral_metis::metis_order_full(&core, &mt).ok().map(|(p, _, _)| p));
-            for imb in [0.05f64, 0.10, 0.02] {
-                let o = feral_metis::MetisOptions { max_imbalance: imb, ..Default::default() };
-                run(format!("metis imb={imb}"), &|| feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p));
-                for seed in [2u64, 21, 26, 55] {
-                    let o2 = feral_metis::MetisOptions { max_imbalance: imb, seed: seed as _, ..Default::default() };
-                    run(format!("metis imb={imb} seed={seed}"), &|| feral_metis::metis_order_full(&core, &o2).ok().map(|(p, _, _)| p));
-                }
-                let o3 = feral_metis::MetisOptions { max_imbalance: imb, niparts: 16, ..Default::default() };
-                run(format!("metis imb={imb} niparts=16"), &|| feral_metis::metis_order_full(&core, &o3).ok().map(|(p, _, _)| p));
-            }
-            for sw in [100u32, 400] {
-                let o = feral_metis::MetisOptions { nd_to_amd_switch: sw, ..Default::default() };
-                run(format!("metis switch={sw}"), &|| feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p));
-            }
-            for seed in [2u64, 21, 26, 55] {
-                let o = feral_metis::MetisOptions { seed: seed as _, ..Default::default() };
-                run(format!("metis seed={seed}"), &|| feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p));
-            }
-        }
-        if nnz < 250_000 {
-            run("scotch".into(), &|| feral_scotch::scotch_order(&core).ok());
-            let st = feral_scotch::ScotchOptions { n_sep_trials: 10, ..Default::default() };
-            run("scotch tuned".into(), &|| feral_scotch::scotch_order_full(&core, &st).ok().map(|(p, _, _)| p));
-        }
-        if nnz < 60_000 {
-            run("kahip".into(), &|| feral_kahip::kahip_order(&core).ok());
-            let ke = feral_kahip::KahipOptions { mode: feral_kahip::KahipMode::Eco, ..Default::default() };
-            run("kahip eco".into(), &|| feral_kahip::kahip_order_full(&core, &ke).ok().map(|(p, _, _)| p));
-        }
-        if nnz < 400_000 {
-            run("rcm".into(), &|| Some(rcm_order(pat)));
-            run("sloan 2,1".into(), &|| Some(sloan_order(pat, 2, 1)));
-            run("sloan 1,2".into(), &|| Some(sloan_order(pat, 1, 2)));
-            run("nd".into(), &|| Some(nd_order(pat)));
-            run("ndfm".into(), &|| Some(ndfm_order(pat)));
-        }
-        if n < 4_000 && nnz < 12_000 {
-            run("minfill".into(), &|| Some(minfill_order(pat)));
-        }
-        for variant in [
-            custom_metrics::ScoreVariant::SqDiv,
-            custom_metrics::ScoreVariant::SqPure,
-            custom_metrics::ScoreVariant::Ammf,
-            custom_metrics::ScoreVariant::AmindNorm,
-            custom_metrics::ScoreVariant::DegDivNvSqrtWf,
-            custom_metrics::ScoreVariant::DegDivNvWfP15,
-            custom_metrics::ScoreVariant::DegP075,
-            custom_metrics::ScoreVariant::DegP125,
-            custom_metrics::ScoreVariant::DegPlusDegme,
-            custom_metrics::ScoreVariant::DegDivNvDegme,
-            custom_metrics::ScoreVariant::DegSqrt,
-        ] {
-            let alphas: Vec<f64> = std::env::var("SSI_CENSUS_ALPHAS").ok()
-                .map(|v| v.split(',').filter_map(|x| x.trim().parse().ok()).collect())
-                .unwrap_or_else(|| vec![10.0, 1.0]);
-            for &a in &alphas {
-                run(format!("cm {variant:?} a={a}"), &|| custom_metrics::order_variant(&core, a, true, variant).ok());
-            }
-        }
-        for spec in metric_sweep::EXTRA_METRICS.iter() {
-            run(format!("ms {} a=10", spec.name), &|| metric_sweep::order_generic(&core, 10.0, true, spec).ok());
-        }
-        if std::env::var("SSI_CENSUS_RELABEL_METRICS").is_ok() {
-            for seed in 1..=4u64 {
-                let q = relabel(n, seed);
-                let b = permute_pattern(&sp, &q);
-                let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
-                let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
-                let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri).unwrap();
-                for variant in [
-                    custom_metrics::ScoreVariant::SqDiv,
-                    custom_metrics::ScoreVariant::DegSqrt,
-                    custom_metrics::ScoreVariant::DegP075,
-                    custom_metrics::ScoreVariant::DegDivNvWfP15,
-                    custom_metrics::ScoreVariant::DegPlusDegme,
-                ] {
-                    for a in [10.0f64, 1.0] {
-                        run(format!("relabel-{variant:?} a={a} seed={seed}"), &|| custom_metrics::order_variant(&bcore, a, true, variant).ok().map(|pb| pb.iter().map(|&x| q[x as usize] as i32).collect()));
-                    }
-                }
-                let spec = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == "extra_deg2_div_nv_wf05").unwrap();
-                run(format!("relabel-wf05 a=10 seed={seed}"), &|| metric_sweep::order_generic(&bcore, 10.0, true, spec).ok().map(|pb| pb.iter().map(|&x| q[x as usize] as i32).collect()));
-            }
-        }
-        for seed in 1..=6u64 {
-            let q = relabel(n, seed);
-            let b = permute_pattern(&sp, &q);
-            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
-            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
-            let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri).unwrap();
-            run(format!("relabel-amd seed={seed}"), &|| feral_amd::amd_order(&bcore).ok().map(|pb| pb.iter().map(|&x| q[x as usize] as i32).collect()));
-            let o = feral_amf::AmfOptions { dense_alpha: 5.0, ..Default::default() };
-            run(format!("relabel-amf5 seed={seed}"), &|| feral_amf::amf_order_opts(&bcore, &o).ok().map(|(pb, ..)| pb.iter().map(|&x| q[x as usize] as i32).collect()));
-        }
-        results.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-        let show = if std::env::var("SSI_CENSUS_ALL").is_ok() { results.len() } else { 12 };
-        for (ratio, secs, label) in results.iter().take(show) {
-            println!("   {ratio:.4}  {secs:.3}s  {label}");
-        }
-        println!("   ... {} candidates; worst {:.4}", results.len(), results.iter().filter(|r| !r.0.is_nan()).map(|r| r.0).fold(0.0, f64::max));
     }
 }

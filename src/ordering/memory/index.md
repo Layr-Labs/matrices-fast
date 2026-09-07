@@ -6,14 +6,6 @@
 
 # Index
 
-## 2026-09-07 checkpoint
-
-- [0095: terminal completion-lattice descent (MINL)](experiments/0095-terminal-completion-lattice-descent.md): the finished incumbent's completion minimalized by greedy fill-edge deletion (exact local chordality test, op budget 40M, nnz < 700k, fill ≤ 1.5M), realized by MCS-PEO and AMD-on-M, strict accept, placed LAST: A/B −5.6 dev bips on 11 rows / 0 losses (mpbp/rsyn/chimera/transswitch), ≤ 0.1 s per row; the same stage placed EARLY is +0.5 bips and dropped. Whole tree on tip `aa5b471` (= `f311d19` minus the α grid this tree already carried): dev **0.808268** vs 0.812247 (−49.0 bips), worst 1.523 s vs 1.353 s.
-- [0094: dense-giant twin + terminal peel, light-tier spec, sparse-giant floors](experiments/0094-dense-giant-twin-peel-and-giant-floors.md): dev **0.810282** (−37.9 bips vs 017a036; −14.2 beyond 0093), worst 1.232 s. 0093's shapes graded 0.00 % hidden: one-row tickets do not translate.
-- [0093: METIS shape variants on the dense mid band](experiments/0093-metis-shape-variants-dense-mid-band.md): dev **0.811703** on `017a036` (−23.7 bips, one row: pooling_sppa9tp 0.44 → 0.16), worst row unchanged; the census methodology that found it.
-- [0092: ported SSI-challenge families + parallel portfolio](experiments/0092-ported-heavy-tier-metrics-parallel-portfolio.md): dev **0.814072** on `081af15` (−105.5 bips, all gt_10k), worst 1.208 s vs 1.146 s same box; phase-attribution and census probes documented there.
-- [0093: relabelled quotient-metric multi-start](experiments/0093-relabelled-metric-multistart.md): 017a036 dev 0.813331 → **0.812247** (−10.84 bips, 1k_10k + gt_10k); DegSqrt-α1/DegP075-α10/SqDiv-α10 lotteries at 120k/nnz cap 6, nnz<130k after cascade; 71 tests, worst 0.484 s; light-α5 and dense-130–200k controls +0.00, reverted.
-
 ## Latest Codex checkpoint
 
 - [0075: exact MinFill on residual cores](experiments/0075-residual-core-minfill.md): current local candidate **0.832118** versus the recorded `0.832286` base; the `1k_10k` bucket moves from `0.865327` to `0.864765`, fill from `0.938912` to `0.938869`. The residual-core probe finds 7 strict movers; the other relabel probes find none. Full trusted 300-matrix run and 66 active tests pass. Official result pending.
@@ -248,5 +240,3 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0089: production-core stage-6 screen](experiments/0089-production-core-stage6-screen.md) — exact frontier, 2 final winners / 0.07338 dev bips; below screen.
 - [0090: transplant verification reservation](experiments/0090-transplant-verification-reservation-screen.md) — 100k reservation retains partial donor gains, 26 winners / 0.93139 dev bips; below screen.
 - [0091: residual-core exact minimum fill](experiments/0091-residual-core-exact-minimum-fill.md) — a second OBJECTIVE on the cores the reduction already builds, 18.28998 dev bips, 6 wins / 0 losses; and the call-site work counter that priced it after a 300-row A/B could not.
-- [0094: light-tier α grid {10,5,2.5,1}](experiments/0094-light-alpha-grid.md) — aa5b471 dev 0.812247 → **0.811892** (−3.55 bips, all 1k_10k); ports the e7988e5 pattern atop relabelled lotteries (disjoint mid-α draws); 71 tests, worst 0.484 s.
-- [0096: sub-10k relabelled lotteries](experiments/0096-sub10k-lotteries.md) — 7f5a20d dev 0.808139 → **0.807622** (−5.17 bips, 1k_10k; gt_10k bit-identical by n-gate construction); 14 further variant×α lotteries the shipped seven never drew; 71 tests, worst 0.659 s; hub-free-all-n predecessor graded hidden-worse (donor reshuffle), closed.

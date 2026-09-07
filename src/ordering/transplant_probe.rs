@@ -21,6 +21,10 @@ pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
 /// reservation (0090 screen). Strict-accept only; ledger-bounded; structural
 /// gates only. Donors are displaced portfolio orderings already retained.
 const TRANSPLANT_LEDGER: u64 = 250_000;
+/// Extra transplant budget only for the medium bucket. Global ledger raises
+/// (300k/400k/500k) timed out on hidden; medium rows historically sit well
+/// under the 2s cap while still absorbing deepen gains in the sweep.
+const TRANSPLANT_LEDGER_MEDIUM: u64 = 350_000;
 
 pub(super) fn refine_with_donors(
     sp: &ScoringPattern,
@@ -31,7 +35,12 @@ pub(super) fn refine_with_donors(
     let n = sp.n;
     let nnz = sp.row_idx.len();
     let unit = n as u64 + nnz as u64;
-    if n < 16 || donors.is_empty() || 3 * unit > TRANSPLANT_LEDGER {
+    let ledger = if (1000..10_000).contains(&n) {
+        TRANSPLANT_LEDGER_MEDIUM
+    } else {
+        TRANSPLANT_LEDGER
+    };
+    if n < 16 || donors.is_empty() || 3 * unit > ledger {
         return None;
     }
     let mut ws = scoring_ws::ScoreWorkspace::new(n, nnz);
@@ -43,7 +52,7 @@ pub(super) fn refine_with_donors(
     }
     let donor_perms: Vec<&[usize]> = donors.iter().map(|(_, p)| p.as_slice()).collect();
     let (best_f, assembled) =
-        transplant_pass(&mut ws, sp, incumbent, &donor_perms, inc_f, TRANSPLANT_LEDGER);
+        transplant_pass(&mut ws, sp, incumbent, &donor_perms, inc_f, ledger);
     if best_f < inc_f && is_bijection(&assembled, n) {
         Some(assembled)
     } else {

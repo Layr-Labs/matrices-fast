@@ -245,7 +245,7 @@ const REDUCE_EXTRA_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
 /// Rank extra-depth core candidates by exact flops when the core is small
 /// enough that symbolic scoring is cheap. Proxy (ndiv+nms) can disagree with
 /// the true objective and pick a worse pass.
-const REDUCE_EXTRA_EXACT_MAX_CN: usize = 8_000;
+const REDUCE_EXTRA_EXACT_MAX_CN: usize = 16_000;
 
 /// Medium-size envelope for the *extra* tuned candidates (α-5/α-2 AMD, default
 /// AMF, α-2 AMF). A few extra AMD/AMF passes are trivially cheap in this region;

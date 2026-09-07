@@ -1837,6 +1837,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // same α-sensitivity holds for these walks). Stays inside the
             // measured light envelope; post-cascade placement unchanged.
             for alpha in [10.0f64, 5.0, 2.5, 1.0] {
+                // Replace, rather than add, the light sub-10k degree^1.25
+                // tickets with mean block-flop width in degree-scale units.
+                let variant = if n < 10_000 && variant == custom_metrics::ScoreVariant::DegP125 {
+                    custom_metrics::ScoreVariant::SupernodeRms
+                } else {
+                    variant
+                };
                 consider!(move || custom_metrics::order_variant(&core, alpha, true, variant));
             }
         }

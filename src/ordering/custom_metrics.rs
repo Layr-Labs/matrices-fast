@@ -104,6 +104,7 @@ pub enum ScoreVariant {
     DegSqrt,
     DegP075,
     DegP125,
+    SupernodeRms,
     DegDivNvSqrtWf,
     DegDivNvWfP15,
     DegPlusDegme,
@@ -122,6 +123,7 @@ const DEGREE_FAMILY: &[ScoreVariant] = &[
     ScoreVariant::DegSqrt,
     ScoreVariant::DegP075,
     ScoreVariant::DegP125,
+    ScoreVariant::SupernodeRms,
     ScoreVariant::DegDivNvSqrtWf,
     ScoreVariant::DegDivNvWfP15,
     ScoreVariant::DegPlusDegme,
@@ -132,6 +134,15 @@ const DEGREE_FAMILY: &[ScoreVariant] = &[
 /// crate and not re-exported, so this is an independent copy of the same
 /// quantization convention MUMPS/AMF uses: `i32::MAX - 1`).
 const SCORE_DUMMY_I32: i32 = i32::MAX - 1;
+
+/// Mean squared column width for s consecutive clique-supernode pivots
+/// with d shared external neighbors: sum_{i=1}^s (d+i)^2 / s.
+/// The quotient degree is an estimate, so this is a ranking proxy, not a
+/// claim of an exact cost for the arbitrary remaining graph.
+fn supernode_mean_square(d: f64, size: usize) -> f64 {
+    let s = size as f64;
+    d * d + d * (s + 1.0) + (s + 1.0) * (2.0 * s + 1.0) / 6.0
+}
 
 /// Quantize an `i64` score into a bucket index in `[0, 2n+1]`. Identical
 /// convention to `algo::amf_bucket_of` (private there, so reimplemented here
@@ -432,6 +443,7 @@ fn finalize_step_variant(
                 ScoreVariant::DegSqrt => raw_deg.sqrt(),
                 ScoreVariant::DegP075 => raw_deg.powf(0.75),
                 ScoreVariant::DegP125 => raw_deg.powf(1.25),
+                ScoreVariant::SupernodeRms => supernode_mean_square(raw_deg, nvi_i as usize).sqrt(),
                 ScoreVariant::DegDivNvSqrtWf => {
                     let a = wf_f.abs().sqrt();
                     let wf_signed = if wf_f < 0.0 { -a } else { a };
@@ -556,6 +568,22 @@ pub fn order_variant(
 mod tests {
     use super::*;
 
+    #[test]
+    fn supernode_closed_form_matches_explicit_column_sum() {
+        for d in 0..=64 {
+            for size in 1..=32 {
+                let expected = (1..=size).map(|i| ((d + i) * (d + i)) as f64).sum::<f64>()
+                    / size as f64;
+                let actual = supernode_mean_square(d as f64, size);
+                assert!((actual - expected).abs() <= 1e-12 * expected.max(1.0));
+                let priority = actual.sqrt();
+                assert!(priority + 1e-10 >= (d + 1) as f64);
+                assert!(priority <= (d + size) as f64 + 1e-10);
+            }
+            assert_eq!(supernode_mean_square(d as f64, 1), ((d + 1) * (d + 1)) as f64);
+        }
+    }
+
     fn assert_bijection(perm: &[i32], n: usize) {
         assert_eq!(perm.len(), n, "permutation length");
         let mut seen = vec![false; n];
@@ -594,6 +622,7 @@ mod tests {
             ScoreVariant::DegSqrt,
             ScoreVariant::DegP075,
             ScoreVariant::DegP125,
+            ScoreVariant::SupernodeRms,
             ScoreVariant::DegDivNvSqrtWf,
             ScoreVariant::DegDivNvWfP15,
             ScoreVariant::DegPlusDegme,
@@ -625,6 +654,7 @@ mod tests {
             ScoreVariant::DegSqrt,
             ScoreVariant::DegP075,
             ScoreVariant::DegP125,
+            ScoreVariant::SupernodeRms,
             ScoreVariant::DegDivNvSqrtWf,
             ScoreVariant::DegDivNvWfP15,
             ScoreVariant::DegPlusDegme,

@@ -844,6 +844,14 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
         } else {
             base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
         }
+    } else if (500_000..=1_500_000).contains(&nnz) && nnz <= 8 * n && max_deg * 200 <= n {
+        // Sparse hub-free giants: the budget gives them zero restarts, yet one
+        // relabelled pass is the best single generator on the acopf class
+        // (1.0000 -> 0.9737 for 0.13 s) and an AMD pass is cheap there. The
+        // 200x hub test (not the usual 50x) keeps the faclay class out: its
+        // 2777-degree hubs make the pass 0.13 s of pure cost on the corpus's
+        // cap-critical row, and no relabelled restart wins there.
+        base_r.max(1)
     } else {
         base_r
     }
@@ -1087,10 +1095,10 @@ fn reference_plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool)
 /// milliseconds below it); the heavy block above 130k picks a measured prefix.
 const METRIC_LIGHT_MAX_NNZ: usize = 130_000;
 const HEAVY_METRIC_MIN_NNZ: usize = 130_000;
-/// Excludes exactly the two slowest `order()` rows of the whole heavy tier
-/// (faclay75 nnz=1.38M and acopf nnz=1.29M), on which no metric variant
-/// improved anything.
-const HEAVY_METRIC_MAX_NNZ: usize = 1_200_000;
+/// 1.4M admits the sparse-hub giant class (faclay75, nnz=1.38M, max degree
+/// 2777): its hub-scale variant DegDivNvWfP15 measured 0.9667 -> 0.9405 there
+/// for 0.19 s, on a row the subtree/alt trims brought down to 0.86 s.
+const HEAVY_METRIC_MAX_NNZ: usize = 1_400_000;
 const HEAVY_METRIC_BUDGET: usize = 2_800_000;
 const HEAVY_METRIC_MAX_VARIANTS: usize = 4;
 /// `extra_deg_div_nv_wf2`'s own ceiling: its cost does not track the others
@@ -1825,10 +1833,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
         // The 15 `metric_sweep` specs are NOT queued here: on the light tier every
-        // measured win came from the eleven `ScoreVariant`s above, and each extra
-        // spec costs a full symbolic scoring pass (0.3-0.5 s for all fifteen on a
+        // measured win came from the `ScoreVariant`s above, and each extra spec
+        // costs a full symbolic scoring pass (0.3-0.5 s for all fifteen on a
         // 100k-nnz row). They stay in the heavy block where they are measured
-        // winners.
+        // winners — except the block's own top spec, which the census found to be
+        // the best single generator on gabriel09 (0.9446 vs the finished 0.9568).
+        if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == "extra_deg2_div_nv_wf05") {
+            consider!(move || metric_sweep::order_generic(&core, 10.0, true, spec));
+        }
     }
 
     // ── EXTRA AMF α VALUES (win D) ──────────────────────────────────────────
@@ -1886,7 +1898,18 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             let alpha = if max_deg >= 1_000 { 0.75 } else { 1.5 };
             consider!(move || custom_metrics::order_variant(&core, alpha, true, variant));
         } else {
-            for &(name, alpha) in HEAVY_METRIC_ORDER.iter().take(k) {
+            // Dense giants (nnz >= 20 n) take the α2.5 twin of the first variant
+            // as well: on the pooling_sppc3pq class it is a distinct basin
+            // (0.4846 vs 0.5338 for the α10 pass) and the pass costs ~60 ms.
+            // Selected explicitly so the sparse band's prefix (whose second
+            // entry, SqPure α5, is the crudeoil_pooling_dt3 winner) is untouched.
+            let dense_giant = nnz >= HEAVY_METRIC_GIANT_MIN_NNZ && nnz >= 20 * n;
+            let picks: Vec<(&str, f64)> = if dense_giant {
+                vec![HEAVY_METRIC_ORDER[0], HEAVY_METRIC_ORDER[2]]
+            } else {
+                HEAVY_METRIC_ORDER.iter().take(k).copied().collect()
+            };
+            for (name, alpha) in picks {
                 match name {
                     "cm_sqdiv" => consider!(move || custom_metrics::order_variant(
                         &core,
@@ -1930,6 +1953,25 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         let amd_heavy_nodense = feral_amd::AmdOptions { aggressive: false, dense_alpha: -1.0 };
         if amd_pass_is_new(&mut amd_seen_nonagg, -1.0) {
             consider!(move || feral_amd::amd_order_opts(&core, &amd_heavy_nodense).map(|(p, ..)| p));
+        }
+    }
+
+    // ── METIS SHAPE VARIANTS on the dense mid band ──────────────────────────
+    // The cascade above runs METIS shape variants only below 60k nnz and only
+    // after a base separator already won. On dense KKT rows (nnz >= 20 n) in the
+    // 60k-250k band the default separator is far off (pooling_sppa9tp: default
+    // 0.50, incumbent 0.44) while a differently shaped dissection is not
+    // (max_imbalance 0.05 -> 0.25, 0.02 -> 0.22, 0.10 with 16 initial partitions
+    // -> 0.18, each ~25 ms): the pooling_*tp family measured the same way in the
+    // SSI challenge. Three fixed shapes, no seed games; n <= 30k keeps the
+    // partitioner off large graphs where it is both slow and wrong.
+    if heavy_arm_enabled() && n <= 30_000 && nnz >= 20 * n && (60_000..250_000).contains(&nnz) {
+        for (imb, nip) in [(0.05f64, 0u32), (0.02, 0), (0.10, 16)] {
+            let mut o = feral_metis::MetisOptions { max_imbalance: imb, ..Default::default() };
+            if nip > 0 {
+                o.niparts = nip;
+            }
+            consider!(move || feral_metis::metis_order_full(&core, &o).map(|(p, _, _)| p));
         }
     }
 
@@ -3442,6 +3484,52 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
+
+    // ── TERMINAL COUNT-RANKED PEEL on dense giants ──────────────────────────
+    // For a fixed chordal completion Σ c_j² depends only on the completion, and
+    // the incumbent's own exact column counts say which vertices the objective
+    // cares about most. Splicing the k fattest columns to the END of the order
+    // (they were going to form the final dense clique anyway) and letting the
+    // rest keep its order is one exact evaluation per k. On dense giants the
+    // old challenge measured this move as the last −8% on pooling_sppc3pq
+    // (0.427 → 0.393); every other terminal stage is gated off these rows.
+    if nnz >= HEAVY_METRIC_GIANT_MIN_NNZ && nnz >= 20 * n && n >= 200 {
+        let mut cur_flops = score(&best_perm);
+        for &k in &[2usize, 16, 96] {
+            if k >= n {
+                break;
+            }
+            let pp = permute_pattern(&scoring_pat, &best_perm);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
+            let mut cnt = vec![0usize; n];
+            for (pos, &v) in best_perm.iter().enumerate() {
+                cnt[v] = counts[pos];
+            }
+            let mut ranked: Vec<usize> = (0..n).collect();
+            ranked.sort_unstable_by(|&a, &b| cnt[b].cmp(&cnt[a]).then(a.cmp(&b)));
+            let mut deferred = vec![false; n];
+            for &v in &ranked[..k] {
+                deferred[v] = true;
+            }
+            let mut cand: Vec<usize> = best_perm.iter().copied().filter(|&v| !deferred[v]).collect();
+            let mut tail: Vec<usize> = ranked[..k].to_vec();
+            tail.sort_unstable_by_key(|&v| (pattern.col_ptr[v + 1] - pattern.col_ptr[v], v));
+            cand.extend(tail);
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < cur_flops {
+                    cur_flops = f;
+                    best_perm = cand;
+                }
+            }
+        }
+        best_flops = best_flops.min(cur_flops);
+    }
+    #[cfg(test)]
+    parallel::phase_mark("15.peel", _tph, best_flops);
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
 
     #[cfg(test)]
     transplant_probe::capture(&runner_up.borrow());

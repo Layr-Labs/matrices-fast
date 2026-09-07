@@ -188,6 +188,9 @@ const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
 const PEO_ALT_SEEDS: usize = 8;
 const PEO_ALT_MAX_N: usize = 50_000;
 /// Ranked-subtree chain (first round and its conditional follow-ups) ceiling.
+/// One subtree refinement round on a completion the terminal MINL descent
+/// strictly improved (the chains never saw it); ledger units as in the chain.
+const MINL_SUBTREE_BUDGET: i64 = 8_000_000;
 const SUBTREE_CHAIN_MAX_N: usize = 35_000;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
@@ -1873,6 +1876,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             (custom_metrics::ScoreVariant::DegDivNvWfP15, 10.0),
             (custom_metrics::ScoreVariant::DegSqrt, 5.0),
             (custom_metrics::ScoreVariant::DegSqrt, 2.5),
+            // 0096: three more families in the same envelope (SqPure@10,
+            // DegP125@1, DegDivNvSqrtWf@10): rsyn0820/0830/0840m04m and
+            // crudeoil_lee4_06 on dev, one pass each at the cap-critical nnz.
+            (custom_metrics::ScoreVariant::SqPure, 10.0),
+            (custom_metrics::ScoreVariant::DegP125, 1.0),
+            (custom_metrics::ScoreVariant::DegDivNvSqrtWf, 10.0),
         ]
         .into_iter()
         .enumerate()
@@ -1881,59 +1890,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
             for r in 0..passes {
                 let seed = 30_000u64 + (v as u64) * 1_000 + r as u64;
-                consider!(move || {
-                    let q = relabel(n, seed);
-                    let b = permute_pattern(sp_ref, &q);
-                    let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
-                    let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
-                    let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
-                        .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
-                    let pb =
-                        custom_metrics::order_variant(&bcore, alpha, true, variant)?;
-                    Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
-                });
-            }
-        }
-    }
-    // ── SUB-10k RELABELLED LOTTERIES (0096: hidden-gt preservation by structure)
-    // The 0096 bundle (hub-free lotteries on all n) won dev +1.28 with a gt_10k
-    // redistribution cost and graded hidden-worse: extra draws reshuffle the
-    // runner_up pool, and transplant assemblies on hidden gt_10k rows can flip.
-    // Buckets are defined by dimension n, and order() state is strictly per-call,
-    // so work gated on `n < 10_000` leaves every gt_10k row (n >= 10_000)
-    // BIT-IDENTICAL — same instructions, same inputs, same permutation — which
-    // preserves hidden gt_10k trajectories structurally, not empirically. The
-    // whole slow tail (pod worst 1.523 s) lives at n >= 10_000, so this block
-    // cannot move the worst case either. Fourteen further variant lotteries the
-    // shipped seven never drew (SqPure@5/@10/@2.5, DegDivNvSqrtWf@10/@5,
-    // SqDiv@5/@2.5, DegP075@5/@2.5, DegP125@5/@2.5, DegDivNvWfP15@5,
-    // DegPlusDegme@10/@5 — heavy-measured/plain-shipped/mid-α rationales
-    // as in 0093/0095), disjoint 40k streams, same 120k/nnz cap-6 budget, same
-    // post-cascade slot, best-of floor.
-    if heavy_arm_enabled() && n < 10_000 && nnz < METRIC_LIGHT_MAX_NNZ {
-        for (w, (variant, alpha)) in [
-            (custom_metrics::ScoreVariant::SqPure, 5.0f64),
-            (custom_metrics::ScoreVariant::DegDivNvSqrtWf, 10.0),
-            (custom_metrics::ScoreVariant::SqDiv, 5.0),
-            (custom_metrics::ScoreVariant::DegP075, 5.0),
-            (custom_metrics::ScoreVariant::DegP125, 5.0),
-            (custom_metrics::ScoreVariant::DegPlusDegme, 10.0),
-            (custom_metrics::ScoreVariant::DegP125, 2.5),
-            (custom_metrics::ScoreVariant::DegDivNvWfP15, 5.0),
-            (custom_metrics::ScoreVariant::SqPure, 10.0),
-            (custom_metrics::ScoreVariant::DegP075, 2.5),
-            (custom_metrics::ScoreVariant::DegDivNvSqrtWf, 5.0),
-            (custom_metrics::ScoreVariant::SqDiv, 2.5),
-            (custom_metrics::ScoreVariant::SqPure, 2.5),
-            (custom_metrics::ScoreVariant::DegPlusDegme, 5.0),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let passes =
-                (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
-            for r in 0..passes {
-                let seed = 40_000u64 + (w as u64) * 1_000 + r as u64;
                 consider!(move || {
                     let q = relabel(n, seed);
                     let b = permute_pattern(sp_ref, &q);
@@ -3599,12 +3555,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // with a different, witness-driven schedule and a smaller budget.
     if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16 {
         let mut cur_flops = score(&best_perm);
-        if let Some(cands) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let entry_flops = cur_flops;
+        let mut descent_completed = false;
+        if let Some((cands, completed)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             minl::minl_candidates(&scoring_pat, &best_perm)
         }))
         .ok()
         .flatten()
         {
+            descent_completed = completed;
             for cand in cands {
                 if is_bijection(&cand, n) {
                     let f = score(&cand);
@@ -3612,6 +3571,48 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         cur_flops = f;
                         best_perm = cand;
                     }
+                }
+            }
+        }
+        // A strict MINL win is a NEW completion the subtree chain has never
+        // refined: one bounded refinement round on it, paid only on the rows
+        // where the descent fired AND ran to a minimal completion (a
+        // budget-cut descent sits on the big-fill rows, where the round is
+        // the most expensive and the completion is not minimal anyway).
+        if descent_completed && cur_flops < entry_flops && n <= SUBTREE_CHAIN_MAX_N {
+            let permuted_m = permute_pattern(&scoring_pat, &best_perm);
+            let etree_m = EliminationTree::from_pattern(&permuted_m);
+            let post_m = etree_m.postorder();
+            let mut candidate_m: Vec<usize> = post_m.iter().map(|&j| best_perm[j]).collect();
+            let post_pattern_m = permute_pattern(&scoring_pat, &candidate_m);
+            let post_etree_m = EliminationTree::from_pattern(&post_pattern_m);
+            let counts_m: Vec<u32> = column_counts_gnp(&post_pattern_m, &post_etree_m)
+                .into_iter()
+                .map(|c| c as u32)
+                .collect();
+            let parent_m: Vec<i32> = post_etree_m
+                .parent
+                .iter()
+                .map(|p| p.map_or(-1, |j| j as i32))
+                .collect();
+            let mut cfg_m = subtree_cfg_for(n, nnz);
+            cfg_m.round = 5;
+            cfg_m.max_blocks = 32;
+            cfg_m.budget = MINL_SUBTREE_BUDGET;
+            let improved_m = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate_m,
+                &counts_m,
+                &parent_m,
+                cfg_m,
+            );
+            if improved_m > 0 && is_bijection(&candidate_m, n) {
+                let f = score(&candidate_m);
+                if f < cur_flops {
+                    cur_flops = f;
+                    best_perm = candidate_m;
                 }
             }
         }

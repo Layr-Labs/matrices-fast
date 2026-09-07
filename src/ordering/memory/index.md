@@ -9,6 +9,7 @@
 ## 2026-09-07 checkpoint
 
 - [0092: ported SSI-challenge families + parallel portfolio](experiments/0092-ported-heavy-tier-metrics-parallel-portfolio.md): dev **0.814072** on `081af15` (−105.5 bips, all gt_10k), worst 1.208 s vs 1.146 s same box; phase-attribution and census probes documented there.
+- [0093: relabelled quotient-metric multi-start](experiments/0093-relabelled-metric-multistart.md): 017a036 dev 0.813331 → **0.812247** (−10.84 bips, 1k_10k + gt_10k); DegSqrt-α1/DegP075-α10/SqDiv-α10 lotteries at 120k/nnz cap 6, nnz<130k after cascade; 71 tests, worst 0.484 s; light-α5 and dense-130–200k controls +0.00, reverted.
 
 ## Latest Codex checkpoint
 

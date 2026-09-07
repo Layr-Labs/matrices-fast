@@ -1820,11 +1820,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // α is load-bearing: at α=1 AMD's dense threshold max(16, α√n)
             // defers far fewer hub rows, which is where DegSqrt takes
             // ringpack_30_2 0.41 -> 0.23 and AmindNorm edgecross24 0.91 -> 0.79.
-            // α∈{10,5,2.5,1}: 0092 shipped {10,1}; α5/2.5 sit between the
-            // dense-threshold regimes that separately win (DegSqrt@1 on
-            // ringpack hubs; α10 on denser KKTs). Each pass is milliseconds
-            // below METRIC_LIGHT_MAX_NNZ and best-of floors the downside.
-            for alpha in [10.0f64, 5.0, 2.5, 1.0] {
+            for alpha in [10.0f64, 1.0] {
                 consider!(move || custom_metrics::order_variant(&core, alpha, true, variant));
             }
         }
@@ -1833,6 +1829,49 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // spec costs a full symbolic scoring pass (0.3-0.5 s for all fifteen on a
         // 100k-nnz row). They stay in the heavy block where they are measured
         // winners.
+    }
+
+    // ── RELABELLED QUOTIENT-METRIC MULTISTART (new lotteries, same 0005 form) ──
+    // AMD and AMF are relabelled because their quotient-graph walks read the
+    // vertex numbering (hash-bucket insertion order); `order_variant` is the same
+    // walk class over the same primitives, so `METRIC(Q A Qᵀ)` composed back is a
+    // randomized-restart minimum-METRIC ordering for one metric pass. The winner
+    // never built this family: only AMD/AMF are relabelled. Three variant lotteries
+    // (DegSqrt at α=1, the biggest named light-tier win; DegP075 and SqDiv at the
+    // shipped α=10 default, two distinct objectives) keep attribution per-variant;
+    // `RELABEL_METRIC_BUDGET / nnz` passes each (capped) bound the added time
+    // uniformly, inside the same `nnz < 130k` envelope whose per-pass cost is
+    // already measured safe. Queued after the cascade with everything else ported,
+    // so cascade gates see crown values; best-of floor.
+    const RELABEL_METRIC_BUDGET: usize = 120_000;
+    const RELABEL_METRIC_MAX_PASSES: usize = 6;
+    if heavy_arm_enabled() && nnz < METRIC_LIGHT_MAX_NNZ {
+        for (v, variant) in [
+            custom_metrics::ScoreVariant::DegSqrt,
+            custom_metrics::ScoreVariant::DegP075,
+            custom_metrics::ScoreVariant::SqDiv,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let alpha = if v == 0 { 1.0 } else { 10.0 };
+            let passes =
+                (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
+            for r in 0..passes {
+                let seed = 30_000u64 + (v as u64) * 1_000 + r as u64;
+                consider!(move || {
+                    let q = relabel(n, seed);
+                    let b = permute_pattern(sp_ref, &q);
+                    let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+                    let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+                    let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+                        .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
+                    let pb =
+                        custom_metrics::order_variant(&bcore, alpha, true, variant)?;
+                    Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+                });
+            }
+        }
     }
 
     // ── EXTRA AMF α VALUES (win D) ──────────────────────────────────────────

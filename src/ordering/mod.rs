@@ -1414,6 +1414,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if amd_pass_is_new(&mut amd_seen_agg, 16.0) {
                 consider!(move || feral_amd::amd_order_opts(&core, &amd_opts16).map(|(p, ..)| p));
             }
+            // 0110: mid AMD alphas on light nnz only (twin-skip; cheap vs relabel)
+            if nnz < 130_000 {
+                for &da in &[0.75f64, 1.5, 2.0, 3.0, 7.5, 12.0] {
+                    if amd_pass_is_new(&mut amd_seen_agg, da) {
+                        let opts = feral_amd::AmdOptions { aggressive: true, dense_alpha: da };
+                        consider!(move || feral_amd::amd_order_opts(&core, &opts).map(|(p, ..)| p));
+                    }
+                }
+            }
         }
     }
 
@@ -1849,6 +1858,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == "extra_deg2_div_nv_wf05") {
             consider!(move || metric_sweep::order_generic(&core, 10.0, true, spec));
         }
+        // 0110: two more sweep specs on sub-10k only (gt_10k bit-identical)
+        if n < 10_000 {
+            for sname in ["extra_deg15_div_nv", "extra_deg_div_nv_degme2"] {
+                if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == sname) {
+                    for &alpha in &[10.0f64, 5.0, 1.0] {
+                        consider!(move || metric_sweep::order_generic(&core, alpha, true, spec));
+                    }
+                }
+            }
+        }
     }
 
     // ── RELABELLED QUOTIENT-METRIC MULTISTART (new lotteries, same 0005 form) ──
@@ -1970,7 +1989,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         let d_wide = (D_MAX_NNZ..D_WIDE_MAX_NNZ).contains(&nnz)
             && nnz > D_WIDE_MIN_DENSITY * n
             && nnz < D_WIDE_MAX_DENSITY * n;
-        let alphas: &[f64] = if nnz < D_MAX_NNZ {
+        let alphas: &[f64] = if nnz < 130_000 {
+            // 0110: mid/wide AMF alphas, SAFE nnz<130k only (avoid 130k-400k dead zone)
+            &[2.5, 0.5, 1.5, 2.0, 3.0, 7.5, 0.75]
+        } else if nnz < D_MAX_NNZ {
             &[2.5, 0.5]
         } else if d_wide {
             &[2.5, 0.5, 1.0, 1.5, 2.0]
@@ -2492,17 +2514,28 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (100_000_000, 0xA076_1D64_78BD_642F),
                 (50_000_000, 0x45A1_89C3_F208_7314),
                 (50_000_000, 0xD1B5_4A32_D192_ED03),
+                // 0110: medium exact tickets (n<=6k; helped 1k_10k in 0109)
+                (50_000_000, 0xC2B2_AE3D_27D4_EB4F),
+                (50_000_000, 0x1656_67B1_9E37_79B9),
+                (100_000_000, 0x85EB_CA77_C2B2_AE3D),
+                (50_000_000, 0x94D0_49BB_1331_11EB),
+                (50_000_000, 0x1F83_D9AB_5B96_4D71),
             ]
         } else if best_flops < amd_flops && n <= 3_000 && nnz <= 18_000 {
             &[
                 (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
                 (50_000_000, 0xD1B5_4A32_D192_ED03),
                 (50_000_000, 0x27BB_2EE6_87B0_B0FD),
+                (50_000_000, 0xC2B2_AE3D_27D4_EB4F),
+                (50_000_000, 0x1656_67B1_9E37_79B9),
+                (50_000_000, 0x85EB_CA77_C2B2_AE3D),
             ]
         } else {
             &[
                 (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
                 (50_000_000, 0xD1B5_4A32_D192_ED03),
+                (50_000_000, 0xC2B2_AE3D_27D4_EB4F),
+                (50_000_000, 0x1656_67B1_9E37_79B9),
             ]
         };
         for &(budget, seed) in budgets {

@@ -2014,7 +2014,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
-
     // ── EXTRA AMF α VALUES (win D) ──────────────────────────────────────────
     // See `D_MAX_NNZ` / `D_WIDE_*`. Pure additions under the best-of floor.
     if heavy_arm_enabled() && n < AMF_MAX_N && nnz < AMF_MAX_NNZ {
@@ -2306,6 +2305,34 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── SUB-10k RELABELLED-AMF α SWEEP (open-questions) ─────────────────────
+    // open-questions relabelled-AMF α sweep; n<10k gate keeps gt_10k bit-identical.
+    // α∈{0.5, 2.5} never in amf_alphas (currently [5,2,-1,1,16]); same
+    // relabel → amf_order_opts → compose pattern as the all-n RELABELLED-AMF
+    // lottery above. Tight ticket count (budget/nnz clamp 1..=4 per α, ≤8 total);
+    // do NOT change the existing all-n amf_alphas array (avoid all-n timing).
+    if n < 10_000 && nnz <= RELABEL_AMF_MAX_NNZ && nnz < METRIC_LIGHT_MAX_NNZ {
+        let passes = (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, 4);
+        for (a_i, &da) in [0.5f64, 2.5].iter().enumerate() {
+            for r in 0..passes {
+                let seed = 80_000u64 + (a_i as u64) * 1_000 + r as u64;
+                let amf_opts = feral_amf::AmfOptions {
+                    dense_alpha: da,
+                    ..Default::default()
+                };
+                consider!(move || {
+                    let q = relabel(n, seed);
+                    let b = permute_pattern(sp_ref, &q);
+                    let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+                    let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+                    let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+                        .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
+                    let (pb, ..) = feral_amf::amf_order_opts(&bcore, &amf_opts)?;
+                    Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+                });
+            }
+        }
+    }
 
     // ── HEAVY-TIER RELABELLED-AMF MULTISTART (see the `HEAVY_RELABEL_AMF_*` consts)
     if heavy_arm_enabled() && nnz > RELABEL_AMF_MAX_NNZ {

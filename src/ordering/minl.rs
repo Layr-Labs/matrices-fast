@@ -35,7 +35,7 @@ use super::*;
 /// turns out to be removable).
 pub(crate) const MINL_MAX_NNZ: usize = 700_000;
 /// Incumbent fill ceiling, checked before the filled graph is built.
-pub(crate) const MINL_MAX_LNNZ: usize = 1_500_000;
+pub(crate) const MINL_MAX_LNNZ: usize = 600_000;
 /// Deterministic op budget for the whole deletion scan.
 pub(crate) const MINL_OPS_BUDGET: i64 = 40_000_000;
 pub(crate) const MINL_MAX_ROUNDS: usize = 16;

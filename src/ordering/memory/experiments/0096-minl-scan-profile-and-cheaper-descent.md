@@ -1,7 +1,7 @@
 # 0096 — MINL scan profiled: cheaper descent, exact re-testing, kept partial rounds, one refinement round
 
 **Date:** 2026-09-07. **Base:** `7f5a20d` (dukemawex `82d8d6e`, hidden 0.85171 = my `d74ab4b` + four relabelled-metric lottery families; dev 0.808139 on the 2-vCPU pod, worst 1.561 s).
-**Result:** dev **0.807259** (−10.9 bips), 30 rows better / 2 worse; worst same-box `order()` 1.634 s (tip 1.561 s). Harness __HARNESS__.
+**Result:** dev **0.807259** (−10.9 bips), 30 rows better / 2 worse; worst same-box `order()` 1.634 s (tip 1.561 s). Harness 300/300 rows OK, score 0.8073 (0.8896 / 0.8468 / 0.7158, fill 0.9307), 4 min 20 s on the pod.
 
 ## Profile (test-only counters in `minl.rs`, 14 rows, budget 120M to see the whole scan)
 

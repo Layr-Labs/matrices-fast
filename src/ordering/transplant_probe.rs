@@ -83,7 +83,7 @@ fn transplant_pass(
     let mut best_f = inc_f;
     let mut best_perm = incumbent.to_vec();
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32] {
+    'widths: for width in [4096usize, 1024, 512, 128, 64, 32] {
         let blks = blocks(&parent, 4, width.min(n));
         if blks.len() < 2 {
             continue;

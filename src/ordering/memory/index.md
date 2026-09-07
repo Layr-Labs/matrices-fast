@@ -245,3 +245,4 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0089: production-core stage-6 screen](experiments/0089-production-core-stage6-screen.md) — exact frontier, 2 final winners / 0.07338 dev bips; below screen.
 - [0090: transplant verification reservation](experiments/0090-transplant-verification-reservation-screen.md) — 100k reservation retains partial donor gains, 26 winners / 0.93139 dev bips; below screen.
 - [0091: residual-core exact minimum fill](experiments/0091-residual-core-exact-minimum-fill.md) — a second OBJECTIVE on the cores the reduction already builds, 18.28998 dev bips, 6 wins / 0 losses; and the call-site work counter that priced it after a 300-row A/B could not.
+- [0094: light-tier α grid {10,5,2.5,1}](experiments/0094-light-alpha-grid.md) — aa5b471 dev 0.812247 → **0.811892** (−3.55 bips, all 1k_10k); ports the e7988e5 pattern atop relabelled lotteries (disjoint mid-α draws); 71 tests, worst 0.484 s.

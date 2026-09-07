@@ -1820,7 +1820,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // α is load-bearing: at α=1 AMD's dense threshold max(16, α√n)
             // defers far fewer hub rows, which is where DegSqrt takes
             // ringpack_30_2 0.41 -> 0.23 and AmindNorm edgecross24 0.91 -> 0.79.
-            for alpha in [10.0f64, 1.0] {
+            // α=5/2.5 sample the dense-threshold continuum the two-point grid
+            // skipped (ported pattern: mid α won the heavy-tier movers, and the
+            // same α-sensitivity holds for these walks). Stays inside the
+            // measured light envelope; post-cascade placement unchanged.
+            for alpha in [10.0f64, 5.0, 2.5, 1.0] {
                 consider!(move || custom_metrics::order_variant(&core, alpha, true, variant));
             }
         }

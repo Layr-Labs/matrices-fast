@@ -1896,6 +1896,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // SqDiv@1, DegP075@1); one pass each at the cap-critical nnz.
             (custom_metrics::ScoreVariant::DegPlusDegme, 10.0),
             (custom_metrics::ScoreVariant::DegDivNvDegme, 10.0),
+            // type-2: one mid-α all-n ticket complementary to DegDivNvDegme@10
+            (custom_metrics::ScoreVariant::DegDivNvDegme, 5.0),
             (custom_metrics::ScoreVariant::SqDiv, 1.0),
             (custom_metrics::ScoreVariant::DegP075, 1.0),
         ]

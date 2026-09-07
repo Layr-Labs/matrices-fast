@@ -149,6 +149,7 @@ use crate::Pattern;
 /// what-if scoring). Not compiled into the shipped binary.
 #[cfg(test)]
 mod probe;
+#[cfg(test)]
 mod transplant_probe;
 
 pub mod rgreedy;
@@ -182,7 +183,7 @@ const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
 /// the allowance is set in measured time: 4M units is about 140 ms on the dev host.
 const PEO_ALT_LEDGER: u64 = 4_000_000;
 const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
-const PEO_ALT_SEEDS: usize = 8;
+const PEO_ALT_SEEDS: usize = 14;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 
@@ -236,11 +237,7 @@ const REDUCE_EXTRA_MIN_NNZ: usize = 200_000;
 const REDUCE_SMALL_MAX_NNZ: usize = 60_000;
 const REDUCE_EXTRA_CORE_LEDGER: usize = 300_000;
 const REDUCE_PAIR_BUDGET: u64 = 1_000_000;
-const REDUCE_EXTRA_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
-/// Rank extra-depth core candidates by exact flops when the core is small
-/// enough that symbolic scoring is cheap. Proxy (ndiv+nms) can disagree with
-/// the true objective and pick a worse pass.
-const REDUCE_EXTRA_EXACT_MAX_CN: usize = 8_000;
+const REDUCE_EXTRA_ALPHAS: [f64; 2] = [0.5, 5.0];
 
 /// Medium-size envelope for the *extra* tuned candidates (α-5/α-2 AMD, default
 /// AMF, α-2 AMF). A few extra AMD/AMF passes are trivially cheap in this region;
@@ -288,7 +285,7 @@ const RCM_MAX_NNZ: usize = 130_000;
 /// it cannot move the worst case; the generous `n` cap lets it reach the
 /// large-but-sparse gt_10k ties. Sloan targets exactly the mesh/grid structures
 /// (`watercontamination*`, `transswitch0300p`) that the minimum-degree and ND
-/// families leave tied at AMD. Best-of floor makes it zero-downside.
+/// families leave tied at AMD. Best-of floor → zero downside.
 const SLOAN_MAX_N: usize = 1_000;
 const SLOAN_MAX_NNZ: usize = 130_000;
 
@@ -1439,9 +1436,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         });
         if n < 2_000 && nnz < 10_000 {
             let minfill_restarts = if n <= 1_000 && nnz <= 5_000 {
-                24
+                40
             } else {
-                6
+                10
             };
             for seed in 1..=minfill_restarts {
                 let q = relabel(n, seed);
@@ -1468,11 +1465,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,
-            // Ammf / AmindNorm are implemented and unit-tested but were never
-            // wired into the production portfolio. They are fill-oriented
-            // quotient metrics orthogonal to SqDiv/SqPure and to AMD/AMF.
-            custom_metrics::ScoreVariant::Ammf,
-            custom_metrics::ScoreVariant::AmindNorm,
         ] {
             for &alpha in &[1.0, 10.0] {
                 consider(&mut best_flops, &mut best_perm, &|| {
@@ -1784,6 +1776,38 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     });
                 }
             }
+        }
+    }
+
+    // Sparse-large relabel tickets: matrices with nnz > RELABEL_BUDGET get zero
+    // restarts above, yet the highest-leverage gt_10k ties live there
+    // (acopf_case9241pegase_qcqp n=313k/nnz=1.29M). On sparse patterns AMD is
+    // cheap (cost tracks nnz, and sparse large is cheap per nnz), so two extra
+    // i.i.d. AMD tickets are affordable and can only help via best-of. Gated to
+    // sparse (nnz <= 5*n), non-hub (max_deg*50 <= n), and nnz <= 1.5M (same as
+    // AMF envelope) to stay off dense/hub large rows. Deterministic fixed seeds.
+    if n >= 10_000 && nnz > 300_000 && nnz <= 1_500_000 && nnz <= 5 * n && max_deg * 50 <= n {
+        for r in 0..4 {
+            let seed = 9_000u64 + r as u64;
+            let q = relabel(n, seed);
+            let b = permute_pattern(&scoring_pat, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Ok(Some(bcore)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+            })) else {
+                continue;
+            };
+            let amd_opt = match r % 4 {
+                0 => feral_amd::AmdOptions { aggressive: true, dense_alpha: 10.0 },
+                1 => feral_amd::AmdOptions { aggressive: false, dense_alpha: 10.0 },
+                2 => feral_amd::AmdOptions { aggressive: true, dense_alpha: 5.0 },
+                _ => feral_amd::AmdOptions { aggressive: false, dense_alpha: 5.0 },
+            };
+            consider(&mut best_flops, &mut best_perm, &|| {
+                let pb = feral_amd::amd_order_opts(&bcore, &amd_opt).map(|(p, ..)| p)?;
+                Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+            });
         }
     }
 
@@ -2603,11 +2627,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if !is_bijection(&cp, cn) {
                     return None;
                 }
-                let f = if recurse || cn <= REDUCE_EXTRA_EXACT_MAX_CN {
-                    flops_of(&core_pat, &cp)
-                } else {
-                    proxy
-                };
+                let f = if recurse { flops_of(&core_pat, &cp) } else { proxy };
                 Some((f, cp))
             };
             // Results are merged by pass index, so thread timing never reaches
@@ -2635,6 +2655,33 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
             let (f_core, k) = pick?;
             let (_, cp) = results[k].as_ref()?;
+            // Exact re-ranking for extra depths (recurse==false): the pick above is
+            // by proxy (ndiv+nms_ldl) to save time, but on small cores exact scoring
+            // is cheap and the proxy can mis-rank. Re-score the (up to 3) passes
+            // exactly and take the true minimum — same set, so never worse than
+            // the proxy pick. Gated on core size only, same envelope as the
+            // minfill pass, so the added cost is bounded and off the slowest rows.
+            let (f_core, cp): (u64, &Vec<usize>) = if !recurse
+                && (8..=CORE_MINFILL_MAX_CN).contains(&cn)
+                && cl.core_nnz() <= CORE_MINFILL_MAX_CORE_NNZ
+            {
+                let mut best_exact: Option<(u64, &Vec<usize>)> = None;
+                for r in results.iter() {
+                    if let Some((_, perm)) = r {
+                        let f = flops_of(&core_pat, perm);
+                        if best_exact.map_or(true, |(bf, _)| f < bf) {
+                            best_exact = Some((f, perm));
+                        }
+                    }
+                }
+                if let Some((f, p)) = best_exact {
+                    (f, p)
+                } else {
+                    (f_core, cp)
+                }
+            } else {
+                (f_core, cp)
+            };
             // Core recursion (L-CORE-RECURSION-SUBTREE-r7, harness r7 VALIDATED): the
             // exact-ranked K=3 argmin is the last word in the pipeline, so refine it on
             // the core graph with the pipeline's own subtree laws before splicing.
@@ -2729,7 +2776,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // at a fraction of the cost of ordering the original matrix. Add
             // these after recursive refinement to preserve its finished result.
             if recurse && (1_000..10_000).contains(&n) && nnz <= 50_000
-                && (8..=4000).contains(&cn) && cl.core_nnz() <= 30_000 {
+                && (8..=CORE_MINFILL_MAX_CN).contains(&cn) && cl.core_nnz() <= 30_000 {
                 let mut best_core: Option<(u64, Vec<usize>)> = None;
                 let mut degree_order: Vec<usize> = (0..cn).collect();
                 degree_order.sort_unstable_by_key(|&v| (cl.core_col_ptr[v+1] - cl.core_col_ptr[v], v));
@@ -2738,7 +2785,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     let rp: Vec<i32> = relabeled.col_ptr.iter().map(|&v| v as i32).collect();
                     let ri: Vec<i32> = relabeled.row_idx.iter().map(|&v| v as i32).collect();
                     let rc = feral_ordering_core::CscPattern::new(cn, &rp, &ri)?;
-                    for alpha in [2.5, 10.0, 0.5, 5.0] {
+                    for alpha in [2.5, 10.0, 0.5, 5.0, 1.0, 16.0] {
                         let options = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
                         if let Ok((p, _)) = feral_amf::amf_order_opts(&rc, &options) {
                             let cp: Vec<usize> = p.into_iter().map(|v| q[v as usize]).collect();
@@ -3037,23 +3084,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
-
-    // Terminal cross-candidate subtree transplant (0090 reservation policy).
-    // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
-    // are the displaced portfolio orderings already retained for PEO_ALT.
-    {
-        let donors = runner_up.borrow();
-        if let Some(cand) = transplant_probe::refine_with_donors(
-            &scoring_pat, &best_perm, &donors, amd_flops,
-        ) {
-            let f = score(&cand);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = cand;
-            }
-        }
-    }
-
     #[cfg(test)]
     transplant_probe::capture(&runner_up.borrow());
     best_perm
@@ -3064,7 +3094,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 /// `REDUCE_MIN_N`/`REDUCE_MAX_NNZ`, and the core portfolio's AMF/AMD passes are
 /// ranked by a proxy at the extra depths, so this pass is a bounded exact
 /// search on an artefact the pipeline already holds. Gated on CORE size only.
-const CORE_MINFILL_MAX_CN: usize = 4_000;
+const CORE_MINFILL_MAX_CN: usize = 6_000;
 const CORE_MINFILL_MAX_CORE_NNZ: usize = 30_000;
 /// Words of deficiency evaluation ONE ROW may charge across all of its
 /// reduction depths before the search stops and completes with a
@@ -3243,7 +3273,7 @@ fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budge
 
     // Compact live set, packed so that unsigned order == (deficiency, index).
     // Packing needs `C(cn-1, 2) < 2^32`, i.e. `cn <= 65_535`. The call site
-    // gates at `cn <= CORE_MINFILL_MAX_CN` = 4000, and the `cn^2/8`-byte
+    // gates at `cn <= CORE_MINFILL_MAX_CN` = 6000, and the `cn^2/8`-byte
     // adjacency would need 8.6 GiB at `cn = 131_072` — past the 4 GiB
     // per-matrix cap — so the domain is bounded twice over. The clamp keeps the
     // result a bijection even outside it; only the tie order could differ.

@@ -235,6 +235,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 
 ## Local follow-up experiments
 
+- [0092: sparse-large diverse relabels](experiments/0092-sparse-large-diverse-relabels.md): 214cb89 dev 0.824729 → **0.824578** (−1.51 bips), gt_10k 0.751781→0.751416; 4 diverse AMD tickets on sparse-large (nnz>300k, nnz≤5n, non-hub) + seeds14/cn6k/minfill40-10/exact-rerank; 69 tests, worst 0.94–1.07 s; official pending.
 - [0087: stage-6 stream sampling](experiments/0087-stage6-move-sampling-metered-by-fill.md) — multi-set bundle failed; smaller pool/hygiene control completed but missed promotion. Current numbering replaces the local 0085 collision.
 - [0088: cross-candidate subtree transplant](experiments/0088-cross-candidate-subtree-transplant.md) — 600k bundle gained 9.10 dev bips and failed opaquely. Current numbering replaces the local 0086 collision.
 - [0089: production-core stage-6 screen](experiments/0089-production-core-stage6-screen.md) — exact frontier, 2 final winners / 0.07338 dev bips; below screen.

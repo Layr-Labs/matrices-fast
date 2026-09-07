@@ -6,6 +6,10 @@
 
 # Index
 
+## 2026-09-07 checkpoint
+
+- [0092: ported SSI-challenge families + parallel portfolio](experiments/0092-ported-heavy-tier-metrics-parallel-portfolio.md): dev **0.814072** on `081af15` (−105.5 bips, all gt_10k), worst 1.208 s vs 1.146 s same box; phase-attribution and census probes documented there.
+
 ## Latest Codex checkpoint
 
 - [0075: exact MinFill on residual cores](experiments/0075-residual-core-minfill.md): current local candidate **0.832118** versus the recorded `0.832286` base; the `1k_10k` bucket moves from `0.865327` to `0.864765`, fill from `0.938912` to `0.938869`. The residual-core probe finds 7 strict movers; the other relabel probes find none. Full trusted 300-matrix run and 66 active tests pass. Official result pending.

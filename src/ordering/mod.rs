@@ -1311,6 +1311,25 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // strictly fewer flops. `catch_unwind` guards against a candidate panicking
     // (which would otherwise crash the worker and FAIL the whole run).
     let runner_up: std::cell::RefCell<Vec<(u64, Vec<usize>)>> = std::cell::RefCell::new(Vec::new());
+    // Retain a direct-set subtree-refined ordering for the PEO/transplant
+    // donor pool, mirroring flush_batch's protocol exactly (displaced
+    // incumbent on improvement, else the candidate; sorted, deduped,
+    // truncated to PEO_ALT_SEEDS). Refined basins carry better segments than
+    // raw portfolio outputs, which is what transplant assembles — a source
+    // the pool never sees today. One clone + tiny sort per call; downstream
+    // stays ledger-capped, so worst-case time cannot move. Deterministic
+    // (fixed call order, no clock).
+    let retain_alt = |f: u64, cand: &[usize], best_flops: u64, best_perm: &[usize]| {
+        let mut r = runner_up.borrow_mut();
+        if f < best_flops {
+            r.push((best_flops, best_perm.to_vec()));
+        } else {
+            r.push((f, cand.to_vec()));
+        }
+        r.sort_by_key(|(s, _)| *s);
+        r.dedup_by_key(|(s, _)| *s);
+        r.truncate(PEO_ALT_SEEDS);
+    };
     // ── DEFERRED CANDIDATE PORTFOLIO ────────────────────────────────────────
     // `consider!` no longer RUNS a candidate; it queues its producer closure.
     // Every producer below is a pure function of the pattern, so a whole
@@ -2456,6 +2475,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
         if improved > 0 && is_bijection(&candidate, n) {
             let f = score(&candidate);
+            retain_alt(f, &candidate, best_flops, &best_perm);
             if f < best_flops {
                 best_flops = f;
                 best_perm = candidate;
@@ -2502,6 +2522,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 );
                 if improved2 > 0 && is_bijection(&candidate2, n) {
                     let f2 = score(&candidate2);
+                    retain_alt(f2, &candidate2, best_flops, &best_perm);
                     if f2 < best_flops {
                         best_flops = f2;
                         best_perm = candidate2;
@@ -2550,6 +2571,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         );
                         if improved3 > 0 && is_bijection(&candidate3, n) {
                             let f3 = score(&candidate3);
+                            retain_alt(f3, &candidate3, best_flops, &best_perm);
                             if f3 < best_flops {
                                 best_flops = f3;
                                 best_perm = candidate3;
@@ -2601,6 +2623,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                 );
                                 if improved4 > 0 && is_bijection(&candidate4, n) {
                                     let f4 = score(&candidate4);
+                                    retain_alt(f4, &candidate4, best_flops, &best_perm);
                                     if f4 < best_flops {
                                         best_flops = f4;
                                         best_perm = candidate4;
@@ -2647,6 +2670,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                             );
                                             if improved5 > 0 && is_bijection(&candidate5, n) {
                                                 let f = score(&candidate5);
+                                                retain_alt(f, &candidate5, best_flops, &best_perm);
                                                 if f < best_flops {
                                                     best_flops = f;
                                                     best_perm = candidate5;

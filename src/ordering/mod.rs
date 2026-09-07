@@ -3039,8 +3039,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     // Terminal cross-candidate subtree transplant (0090 reservation policy).
-    // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
-    // are the displaced portfolio orderings already retained for PEO_ALT.
+    // Late, strict-accept, 400k ledger, medium+ (n>=1000), below-AMD only.
+    // Donors are the displaced portfolio orderings retained for PEO_ALT.
     {
         let donors = runner_up.borrow();
         if let Some(cand) = transplant_probe::refine_with_donors(

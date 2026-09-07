@@ -232,3 +232,11 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0080: PEO re-extraction above the gate](experiments/0080-peo-re-extraction-above-the-gate.md): the terminal chain extended to rows outside 16..30k / 180k under a work ledger of 5*(n+nnz)+Lnnz; dev 0.829057 -> 0.827794, held-out 0.852396 -> 0.852280, 5 wins / 0 losses per corpus, worst call below the base; official pending.
 
 - [Tarjan-Yannakakis MCS background](literature/tarjan-yannakakis-1984-mcs.md): inspected primary abstract and independent completion-containment derivation.
+
+## Local follow-up experiments
+
+- [0087: stage-6 stream sampling](experiments/0087-stage6-move-sampling-metered-by-fill.md) — multi-set bundle failed; smaller pool/hygiene control completed but missed promotion. Current numbering replaces the local 0085 collision.
+- [0088: cross-candidate subtree transplant](experiments/0088-cross-candidate-subtree-transplant.md) — 600k bundle gained 9.10 dev bips and failed opaquely. Current numbering replaces the local 0086 collision.
+- [0089: production-core stage-6 screen](experiments/0089-production-core-stage6-screen.md) — exact frontier, 2 final winners / 0.07338 dev bips; below screen.
+- [0090: transplant verification reservation](experiments/0090-transplant-verification-reservation-screen.md) — 100k reservation retains partial donor gains, 26 winners / 0.93139 dev bips; below screen.
+- [0091: residual-core exact minimum fill](experiments/0091-residual-core-exact-minimum-fill.md) — a second OBJECTIVE on the cores the reduction already builds, 18.28998 dev bips, 6 wins / 0 losses; and the call-site work counter that priced it after a 300-row A/B could not.

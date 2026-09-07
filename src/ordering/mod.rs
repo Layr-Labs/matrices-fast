@@ -149,6 +149,8 @@ use crate::Pattern;
 /// what-if scoring). Not compiled into the shipped binary.
 #[cfg(test)]
 mod probe;
+#[cfg(test)]
+mod transplant_probe;
 
 pub mod rgreedy;
 mod completion;
@@ -1092,7 +1094,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     // One scratch arena serves all full-pattern scores in this invocation.
     let score_workspace = std::cell::RefCell::new(scoring_ws::ScoreWorkspace::new(n, pattern.nnz()));
-    let score = |p: &[usize]| score_workspace.borrow_mut().flops(&scoring_pat, p);
+    let score = |p: &[usize]| {
+        let f = score_workspace.borrow_mut().flops(&scoring_pat, p);
+        #[cfg(test)]
+        probe::alt_lineage::note_scored(f, p);
+        f
+    };
 
     // ── The FLOOR: the grader's exact baseline ordering ──────────────────────
     // `amd_order` with library-default options IS the grader's baseline, so
@@ -1164,6 +1171,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 return;
             }
             let f = score(&perm);
+            #[cfg(test)]
+            probe::alt_lineage::note_consider(f, &perm, *best_flops, &best_perm[..]);
             {
                 // Retain the best few displaced orderings. A chain started from a
                 // different ordering converges to a different minimal triangulation,
@@ -2560,6 +2569,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // Preserve the leader's degree-three exact ranking and extra-depth
         // proxy ranking. Additional relabel candidates are held until the end
         // of the complete inherited pipeline so they cannot change its seeds.
+        // One shared exact-minimum-fill allowance for the whole row, spent
+        // across reduction depths in call order.
+        let core_minfill_ledger = std::cell::Cell::new(CORE_MINFILL_LEDGER);
         let mut order_core = |cl: &core_lift::CoreLift, alphas: &[f64], threads: bool, recurse: bool, incumbent: u64| -> Option<(u64, Vec<usize>)> {
             let cn = cl.core_n();
             let core_pat = ScoringPattern {
@@ -2641,14 +2653,48 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             } else {
                 None
             };
-            let core_perm: &[usize] = refined.as_deref().unwrap_or(cp);
+            let base_perm: &[usize] = refined.as_deref().unwrap_or(cp);
+            #[cfg(test)]
+            probe::capture_core_candidate(
+                cn, recurse, &cl.core_col_ptr, &cl.core_row_idx, cl.prefix_flops, base_perm,
+            );
+            // Exact minimum fill on the residual core, at EVERY reduction depth
+            // and on any row whose CORE is small enough — the reduction is paid
+            // regardless, the AMF/AMD passes above are ranked by a proxy at the
+            // extra depths, and minimum fill is a different objective from the
+            // minimum-degree family every other pass belongs to. Gated on core
+            // size only, never on identity, and bounded by a word allowance.
+            // Accepted only on a strict decrease of the EXACT core objective, so
+            // it can never lower the portfolio's own pick.
+            let mut minfill_pick: Option<Vec<usize>> = None;
+            if (8..=CORE_MINFILL_MAX_CN).contains(&cn)
+                && cl.core_nnz() <= CORE_MINFILL_MAX_CORE_NNZ
+                && core_minfill_ledger.get() > 0
+            {
+                let budget_before = core_minfill_ledger.get();
+                let (p, charged) = minfill_core_order(
+                    cn, &cl.core_col_ptr, &cl.core_row_idx, budget_before,
+                );
+                #[cfg(test)]
+                probe::minfill_cost::observe(
+                    cn, cl.core_nnz(), budget_before,
+                    &cl.core_col_ptr, &cl.core_row_idx, &p, charged,
+                );
+                core_minfill_ledger.set(core_minfill_ledger.get() - charged);
+                if is_bijection(&p, cn)
+                    && flops_of(&core_pat, &p) < flops_of(&core_pat, base_perm)
+                {
+                    minfill_pick = Some(p);
+                }
+            }
+            let core_perm: &[usize] = minfill_pick.as_deref().unwrap_or(base_perm);
             let mut cand = core_lift::splice(cl, core_perm);
             if !is_bijection(&cand, n) {
                 return None;
             }
             // The reduction records an exact fixed-prefix cost. Scoring only
             // the residual core avoids rebuilding the full symbolic graph.
-            let mut f = cl.prefix_flops + if refined.is_some() || !recurse {
+            let mut f = cl.prefix_flops + if refined.is_some() || !recurse || minfill_pick.is_some() {
                 flops_of(&core_pat, core_perm)
             } else {
                 f_core
@@ -2946,6 +2992,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // a different starting ordering can, because it converges somewhere else. The seeds
     // are orderings the portfolio already built and discarded, so only the rounds cost
     // anything, and they are charged against one shared allowance under the measured law.
+    #[cfg(test)]
+    probe::alt_lineage::capture_entry(n, nnz, &best_perm, &runner_up.borrow());
     if n >= 16 && (n as u64 + nnz as u64) < PEO_ALT_LEDGER {
         let seeds = runner_up.borrow().clone();
         if !seeds.is_empty() {
@@ -2977,7 +3025,300 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    #[cfg(test)]
+    transplant_probe::capture(&runner_up.borrow());
     best_perm
+}
+
+/// Residual-core exact-minimum-fill pass: gates and work allowance.
+/// The reduction that builds the core is already paid on every row inside
+/// `REDUCE_MIN_N`/`REDUCE_MAX_NNZ`, and the core portfolio's AMF/AMD passes are
+/// ranked by a proxy at the extra depths, so this pass is a bounded exact
+/// search on an artefact the pipeline already holds. Gated on CORE size only.
+const CORE_MINFILL_MAX_CN: usize = 4_000;
+const CORE_MINFILL_MAX_CORE_NNZ: usize = 30_000;
+/// Words of deficiency evaluation ONE ROW may charge across all of its
+/// reduction depths before the search stops and completes with a
+/// degree-ordered tail. A per-row allowance, not a per-core one: a row with
+/// several in-gate cores would otherwise spend the allowance once per core,
+/// and it is the per-ROW added time that the wall-clock cap and the tail
+/// regression gates are denominated in. Cheaper per unit than
+/// `minfill_order`'s degree-pair budget: a word AND + popcount over two
+/// sequential rows, against a random byte probe into an `n·n` matrix.
+const CORE_MINFILL_LEDGER: i64 = 16_000_000;
+
+/// Set bits of one bitset row, ascending.
+fn bitset_row_bits(slice: &[u64], out: &mut Vec<usize>) {
+    out.clear();
+    for (j, &word) in slice.iter().enumerate() {
+        let mut bits = word;
+        while bits != 0 {
+            out.push(64 * j + bits.trailing_zeros() as usize);
+            bits &= bits - 1;
+        }
+    }
+}
+
+/// Deficiency of `v` on the current live graph — `C(deg,2) − |E(N(v))|`, from
+/// `Σ_{u∈N(v)} |N(u) ∩ N(v)|`, restricted to the words `N(v)` actually occupies.
+///
+/// `wk` holds the ascending indices of the possibly-nonzero words of row `v`,
+/// read from the row's summary. Words outside `wk` are zero in row `v`, so
+/// `rows[u] & rows[v]` is zero there and contributes nothing to the popcount:
+/// the value is identical to a full `0..w` scan, at `|N(v)| · |wk|` word
+/// operations instead of `|N(v)| · w`. The summary is allowed to be a
+/// *superset* of the nonzero words (a cleared word may stay marked), which
+/// costs a few zero ANDs and changes no result.
+///
+/// The **charge** is deliberately `|N(v)| · w + 1`, the full-scan cost, so the
+/// allowance buys exactly the same search as the reference implementation and
+/// the ordering is bit-identical. Cheaper words, same ledger.
+fn bitset_deficiency_summ(
+    rows: &[u64], w: usize, wk: &[usize], v: usize, deg: usize, nb: &mut Vec<usize>,
+) -> (u64, i64) {
+    nb.clear();
+    let base = v * w;
+    for &k in wk.iter() {
+        let mut bits = rows[base + k];
+        while bits != 0 {
+            nb.push(64 * k + bits.trailing_zeros() as usize);
+            bits &= bits - 1;
+        }
+    }
+    let mut twice_edges = 0u64;
+    // A contiguous `0..w` inner loop indexes without the `wk` indirection, so
+    // take it once the occupied words are more than half the row.
+    if wk.len() * 2 >= w {
+        for &u in nb.iter() {
+            let other = u * w;
+            for k in 0..w {
+                twice_edges += (rows[other + k] & rows[base + k]).count_ones() as u64;
+            }
+        }
+    } else {
+        for &u in nb.iter() {
+            let other = u * w;
+            for &k in wk.iter() {
+                twice_edges += (rows[other + k] & rows[base + k]).count_ones() as u64;
+            }
+        }
+    }
+    let d = deg as u64;
+    (d * d.saturating_sub(1) / 2 - twice_edges / 2, (nb.len() * w) as i64 + 1)
+}
+
+/// Exact minimum-fill elimination ordering of a residual core, on a dynamic
+/// elimination graph held as `⌈cn/64⌉`-word bitset rows with a one-word
+/// **summary** per row marking which of those words may be nonzero.
+///
+/// The summary is what makes the representation cheap on the cores production
+/// actually builds: the gate admits `cn <= 4000` (so `w` up to 63) at
+/// `core_nnz <= 30_000` (so mean degree ≤ 15), and a full `0..w` scan spends
+/// `w / |occupied words|` — three to four times — more words than the
+/// neighbourhood occupies. Every loop that walked `0..w` now walks the
+/// occupied words instead:
+///
+/// - deficiency evaluation: `|N(v)| · |wk(v)|` ([the value is unchanged](fn.bitset_deficiency_summ.html));
+/// - the pivot's neighbourhood union: `|N(p)| · |wk(p)|`, since OR-ing a zero
+///   word is the identity;
+/// - degree recomputation and the `N(N(p))` union: `|wk(u)|` per neighbour.
+///
+/// Pivot selection is a min-reduce over a **compact array of live vertices**
+/// packed as `(deficiency << 32) | index`, so the unsigned word order *is* the
+/// `(minimum deficiency, then smallest index)` tie rule, elimination is an
+/// `O(1)` `swap_remove`, and the scan costs `Σ |live|` rather than `cn` per
+/// pivot over two separate arrays. A core deficiency is at most
+/// `C(cn−1, 2) < 2³²` at this gate, so the packing is lossless.
+///
+/// Deficiencies are cached and recomputed only on `N(v) ∪ N(N(v))` after each
+/// pivot — the only vertices whose deficiency can change, because eliminating
+/// `v` alters no other vertex's neighbourhood and adds edges only inside
+/// `N(v)`. Ties break by ascending index, so the result is deterministic.
+///
+/// A HARD word allowance bounds the search on any input; on exhaustion the
+/// remaining live vertices are appended in ascending current degree (ties by
+/// index), which is still a valid bijection. It is checked **inside** the
+/// initial deficiency sweep and the per-pivot recompute sweep as well as at
+/// pivot boundaries, because either sweep can exceed the whole allowance on a
+/// dense core. Breaking out of the initial sweep is what bounds a call that is
+/// handed a nearly spent ledger: degrees are already final at that point, so
+/// the degree-ordered tail — the only thing an exhausted call returns — is
+/// unchanged.
+///
+/// Every word the allowance is charged for is charged at the reference
+/// implementation's full-scan rate, so the ordering and the returned charge are
+/// bit-identical to `minfill_core_order_ref` on every input; only the time is
+/// smaller. `tests::minfill_core_order_matches_reference` pins that.
+fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budget: i64)
+    -> (Vec<usize>, i64)
+{
+    if cn == 0 {
+        return (Vec::new(), 0);
+    }
+    let allowance = budget;
+    let w = cn.div_ceil(64);
+    let sw = w.div_ceil(64);
+    let mut rows = vec![0u64; cn * w];
+    // Summary bits are maintained as a superset of the nonzero words: set when
+    // a word may become nonzero, never cleared. See `bitset_deficiency_summ`.
+    let mut summ = vec![0u64; cn * sw];
+    for j in 0..cn {
+        let (start, end) = (col_ptr[j], col_ptr[j + 1]);
+        for &i in &row_idx[start..end] {
+            if i != j && i < cn {
+                rows[j * w + i / 64] |= 1u64 << (i % 64);
+                rows[i * w + j / 64] |= 1u64 << (j % 64);
+                summ[j * sw + (i / 64) / 64] |= 1u64 << ((i / 64) % 64);
+                summ[i * sw + (j / 64) / 64] |= 1u64 << ((j / 64) % 64);
+            }
+        }
+    }
+
+    let mut deg = vec![0usize; cn];
+    let mut defic = vec![0u64; cn];
+    let mut nb: Vec<usize> = Vec::with_capacity(cn);
+    let mut wk: Vec<usize> = Vec::with_capacity(w);
+    let mut uwk: Vec<usize> = Vec::with_capacity(w);
+    let mut touched: Vec<usize> = Vec::with_capacity(cn);
+    let mut dirty = vec![0u64; w];
+    let mut dirty_summ = vec![0u64; sw];
+    let mut pivot_row = vec![0u64; w];
+    let mut order: Vec<usize> = Vec::with_capacity(cn);
+    for v in 0..cn {
+        bitset_row_bits(&summ[v * sw..v * sw + sw], &mut wk);
+        deg[v] = wk.iter().map(|&k| rows[v * w + k].count_ones() as usize).sum();
+    }
+    // The initial sweep's total charge is known in closed form before any word
+    // is touched: one evaluation of each vertex costs `deg(v)·w + 1`, and
+    // `nb.len()` at that point *is* `deg(v)`. So a call handed a ledger too
+    // small to pay for the sweep can charge it analytically and skip the work
+    // entirely — the reference implementation runs the sweep to completion,
+    // ends at the same negative budget, then breaks out of the pivot loop on
+    // its first iteration, leaving the degree-ordered tail as the whole
+    // result. Degrees are already final, so that tail is unchanged. This is
+    // the only bound on a nearly-spent call: without it, an exhausted ledger
+    // still buys `2 · core_nnz · w` words of unusable work per capture.
+    let sweep_charge: i64 = deg.iter()
+        .map(|&d| (d as i64).saturating_mul(w as i64).saturating_add(1))
+        .fold(0i64, |a, b| a.saturating_add(b));
+    if budget.saturating_sub(sweep_charge) < 0 {
+        budget -= sweep_charge;
+    } else {
+        for v in 0..cn {
+            bitset_row_bits(&summ[v * sw..v * sw + sw], &mut wk);
+            let (value, charged) = bitset_deficiency_summ(&rows, w, &wk, v, deg[v], &mut nb);
+            defic[v] = value;
+            budget -= charged;
+        }
+    }
+
+    // Compact live set, packed so that unsigned order == (deficiency, index).
+    // Packing needs `C(cn-1, 2) < 2^32`, i.e. `cn <= 65_535`. The call site
+    // gates at `cn <= CORE_MINFILL_MAX_CN` = 4000, and the `cn^2/8`-byte
+    // adjacency would need 8.6 GiB at `cn = 131_072` — past the 4 GiB
+    // per-matrix cap — so the domain is bounded twice over. The clamp keeps the
+    // result a bijection even outside it; only the tie order could differ.
+    debug_assert!(cn <= 65_535, "packed selection key assumes cn <= 65535");
+    let mut heap: Vec<u64> = Vec::with_capacity(cn);
+    let mut slot: Vec<u32> = vec![u32::MAX; cn];
+    for v in 0..cn {
+        slot[v] = heap.len() as u32;
+        heap.push((defic[v].min(u32::MAX as u64) << 32) | v as u64);
+    }
+
+    for _ in 0..cn {
+        if budget < 0 || heap.is_empty() {
+            break;
+        }
+        let mut best_packed = u64::MAX;
+        let mut best_slot = 0usize;
+        for (i, &p) in heap.iter().enumerate() {
+            if p < best_packed {
+                best_packed = p;
+                best_slot = i;
+            }
+        }
+        let best = (best_packed & 0xFFFF_FFFF) as usize;
+        order.push(best);
+        let moved = heap.pop().unwrap();
+        if best_slot < heap.len() {
+            heap[best_slot] = moved;
+            slot[(moved & 0xFFFF_FFFF) as usize] = best_slot as u32;
+        }
+        slot[best] = u32::MAX;
+
+        bitset_row_bits(&summ[best * sw..best * sw + sw], &mut wk);
+        nb.clear();
+        for &k in wk.iter() {
+            let mut bits = rows[best * w + k];
+            while bits != 0 {
+                nb.push(64 * k + bits.trailing_zeros() as usize);
+                bits &= bits - 1;
+            }
+        }
+        pivot_row.copy_from_slice(&rows[best * w..best * w + w]);
+        for &u in nb.iter() {
+            for &k in wk.iter() {
+                rows[u * w + k] |= pivot_row[k];
+            }
+            for j in 0..sw {
+                summ[u * sw + j] |= summ[best * sw + j];
+            }
+            rows[u * w + u / 64] &= !(1u64 << (u % 64));
+            rows[u * w + best / 64] &= !(1u64 << (best % 64));
+        }
+        for &u in nb.iter() {
+            bitset_row_bits(&summ[u * sw..u * sw + sw], &mut uwk);
+            deg[u] = uwk.iter().map(|&k| rows[u * w + k].count_ones() as usize).sum();
+        }
+        for word in dirty.iter_mut() {
+            *word = 0;
+        }
+        for word in dirty_summ.iter_mut() {
+            *word = 0;
+        }
+        for &u in nb.iter() {
+            dirty[u / 64] |= 1u64 << (u % 64);
+            dirty_summ[(u / 64) / 64] |= 1u64 << ((u / 64) % 64);
+            bitset_row_bits(&summ[u * sw..u * sw + sw], &mut uwk);
+            for &k in uwk.iter() {
+                dirty[k] |= rows[u * w + k];
+            }
+            for j in 0..sw {
+                dirty_summ[j] |= summ[u * sw + j];
+            }
+        }
+        touched.clear();
+        bitset_row_bits(&dirty_summ, &mut uwk);
+        for &k in uwk.iter() {
+            let mut bits = dirty[k];
+            while bits != 0 {
+                touched.push(64 * k + bits.trailing_zeros() as usize);
+                bits &= bits - 1;
+            }
+        }
+        for idx in 0..touched.len() {
+            let x = touched[idx];
+            if slot[x] == u32::MAX {
+                continue;
+            }
+            bitset_row_bits(&summ[x * sw..x * sw + sw], &mut wk);
+            let (value, charged) = bitset_deficiency_summ(&rows, w, &wk, x, deg[x], &mut nb);
+            defic[x] = value;
+            heap[slot[x] as usize] = (value.min(u32::MAX as u64) << 32) | x as u64;
+            budget -= charged;
+            if budget < 0 {
+                break;
+            }
+        }
+    }
+
+    if order.len() < cn {
+        let mut rest: Vec<usize> = (0..cn).filter(|&v| slot[v] != u32::MAX).collect();
+        rest.sort_by(|&a, &b| deg[a].cmp(&deg[b]).then_with(|| a.cmp(&b)));
+        order.extend(rest);
+    }
+    (order, allowance - budget)
 }
 
 /// Minimum-FILL (minimum-deficiency) ordering (pure Rust, hard work budget).
@@ -4866,5 +5207,319 @@ mod tests {
             );
             assert!(flops_of(&scoring_pat, &full) < flops_of(&scoring_pat, &raw_full));
         }
+    }
+}
+
+/// Reference (pre-r8) residual-core minimum-fill search, retained under
+/// `cfg(test)` as the equivalence oracle for [`minfill_core_order`].
+///
+/// Full `0..w` scans everywhere, an `n`-wide `live`/`defic` selection scan, and
+/// no budget check inside the initial deficiency sweep. It is the
+/// implementation whose realized dev score of 0.8247292221402652 and
+/// zero-regression row set were measured; `minfill_core_order` must return the
+/// same permutation and the same charge on every input, so that score carries
+/// over unchanged.
+#[cfg(test)]
+fn minfill_core_order_ref(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budget: i64)
+    -> (Vec<usize>, i64)
+{
+    fn deficiency(rows: &[u64], w: usize, v: usize, deg: usize, nb: &mut Vec<usize>) -> (u64, i64) {
+        bitset_row_bits(&rows[v * w..v * w + w], nb);
+        let mut twice_edges = 0u64;
+        let base = v * w;
+        for &u in nb.iter() {
+            let other = u * w;
+            for k in 0..w {
+                twice_edges += (rows[other + k] & rows[base + k]).count_ones() as u64;
+            }
+        }
+        let d = deg as u64;
+        (d * d.saturating_sub(1) / 2 - twice_edges / 2, (nb.len() * w) as i64 + 1)
+    }
+
+    if cn == 0 {
+        return (Vec::new(), 0);
+    }
+    let allowance = budget;
+    let w = cn.div_ceil(64);
+    let mut rows = vec![0u64; cn * w];
+    for j in 0..cn {
+        let (start, end) = (col_ptr[j], col_ptr[j + 1]);
+        for &i in &row_idx[start..end] {
+            if i != j && i < cn {
+                rows[j * w + i / 64] |= 1u64 << (i % 64);
+                rows[i * w + j / 64] |= 1u64 << (j % 64);
+            }
+        }
+    }
+
+    let mut live = vec![true; cn];
+    let mut deg = vec![0usize; cn];
+    let mut defic = vec![0u64; cn];
+    let mut nb: Vec<usize> = Vec::with_capacity(cn);
+    let mut touched: Vec<usize> = Vec::with_capacity(cn);
+    let mut dirty = vec![0u64; w];
+    let mut pivot_row = vec![0u64; w];
+    let mut order: Vec<usize> = Vec::with_capacity(cn);
+    for v in 0..cn {
+        deg[v] = rows[v * w..v * w + w].iter().map(|x| x.count_ones() as usize).sum();
+    }
+    for v in 0..cn {
+        let (value, charged) = deficiency(&rows, w, v, deg[v], &mut nb);
+        defic[v] = value;
+        budget -= charged;
+    }
+
+    for _ in 0..cn {
+        if budget < 0 {
+            break;
+        }
+        let mut best = usize::MAX;
+        let mut best_key = u64::MAX;
+        for v in 0..cn {
+            if live[v] && defic[v] < best_key {
+                best_key = defic[v];
+                best = v;
+            }
+        }
+        if best == usize::MAX {
+            break;
+        }
+        order.push(best);
+        live[best] = false;
+        bitset_row_bits(&rows[best * w..best * w + w], &mut nb);
+        pivot_row.copy_from_slice(&rows[best * w..best * w + w]);
+        for &u in nb.iter() {
+            for k in 0..w {
+                rows[u * w + k] |= pivot_row[k];
+            }
+            rows[u * w + u / 64] &= !(1u64 << (u % 64));
+            rows[u * w + best / 64] &= !(1u64 << (best % 64));
+        }
+        for &u in nb.iter() {
+            deg[u] = rows[u * w..u * w + w].iter().map(|x| x.count_ones() as usize).sum();
+        }
+        for word in dirty.iter_mut() {
+            *word = 0;
+        }
+        for &u in nb.iter() {
+            dirty[u / 64] |= 1u64 << (u % 64);
+            for k in 0..w {
+                dirty[k] |= rows[u * w + k];
+            }
+        }
+        bitset_row_bits(&dirty, &mut touched);
+        for idx in 0..touched.len() {
+            let x = touched[idx];
+            if !live[x] {
+                continue;
+            }
+            let (value, charged) = deficiency(&rows, w, x, deg[x], &mut nb);
+            defic[x] = value;
+            budget -= charged;
+            if budget < 0 {
+                break;
+            }
+        }
+    }
+
+    if order.len() < cn {
+        let mut rest: Vec<usize> = (0..cn).filter(|&v| live[v]).collect();
+        rest.sort_by(|&a, &b| deg[a].cmp(&deg[b]).then_with(|| a.cmp(&b)));
+        order.extend(rest);
+    }
+    (order, allowance - budget)
+}
+
+/// Equivalence and cost pins for the r8 residual-core minimum-fill rewrite.
+///
+/// [`minfill_core_order`] replaced full `⌈cn/64⌉`-word scans with
+/// summary-driven scans over the words a neighbourhood actually occupies, and
+/// the `cn`-wide selection scan with a min-reduce over a compact packed live
+/// array. Both are cost changes only: the charge per deficiency evaluation is
+/// still the full-scan `|N(v)| · w + 1`, so the search truncates at exactly the
+/// same point and the permutation is unchanged. These tests pin that against
+/// [`minfill_core_order_ref`].
+#[cfg(test)]
+mod minfill_fast_tests {
+    use super::{minfill_core_order, minfill_core_order_ref};
+
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            self.0 = x;
+            x
+        }
+        fn below(&mut self, n: usize) -> usize {
+            (self.next() % n as u64) as usize
+        }
+    }
+
+    /// Symmetric CSC pattern on `cn` vertices with `edges` random edges, the
+    /// diagonal always present, and every off-diagonal entry mirrored — the
+    /// shape `core_lift` hands the pass. `dup` repeats each entry, exercising
+    /// the duplicate-tolerant bit set.
+    fn pattern(cn: usize, edges: usize, seed: u64, dup: bool)
+        -> (Vec<usize>, Vec<usize>)
+    {
+        let mut rng = Rng(seed | 1);
+        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); cn];
+        for v in 0..cn {
+            adj[v].push(v);
+        }
+        for _ in 0..edges {
+            let a = rng.below(cn);
+            let b = rng.below(cn);
+            if a != b {
+                adj[a].push(b);
+                adj[b].push(a);
+            }
+        }
+        let mut col_ptr = Vec::with_capacity(cn + 1);
+        let mut row_idx = Vec::new();
+        for v in 0..cn {
+            col_ptr.push(row_idx.len());
+            adj[v].sort_unstable();
+            adj[v].dedup();
+            for &u in &adj[v] {
+                row_idx.push(u);
+                if dup {
+                    row_idx.push(u);
+                }
+            }
+        }
+        col_ptr.push(row_idx.len());
+        (col_ptr, row_idx)
+    }
+
+    fn check(cn: usize, edges: usize, seed: u64, dup: bool, budget: i64) {
+        let (col_ptr, row_idx) = pattern(cn, edges, seed, dup);
+        let (fast, fast_charge) = minfill_core_order(cn, &col_ptr, &row_idx, budget);
+        let (refr, ref_charge) = minfill_core_order_ref(cn, &col_ptr, &row_idx, budget);
+        assert_eq!(
+            fast, refr,
+            "permutation differs at cn={cn} edges={edges} seed={seed} dup={dup} budget={budget}"
+        );
+        assert_eq!(
+            fast_charge, ref_charge,
+            "charge differs at cn={cn} edges={edges} seed={seed} dup={dup} budget={budget}"
+        );
+        let mut seen = vec![false; cn];
+        for &v in &fast {
+            assert!(v < cn && !seen[v], "not a bijection at cn={cn}");
+            seen[v] = true;
+        }
+        assert_eq!(fast.len(), cn, "not a bijection at cn={cn}");
+    }
+
+    /// Small and medium shapes across the whole `w` range, at budgets that
+    /// exhaust in the initial sweep, mid-search, and never.
+    #[test]
+    fn minfill_core_order_matches_reference() {
+        let sizes = [1usize, 2, 3, 7, 8, 9, 31, 63, 64, 65, 100, 127, 128, 129, 200, 400];
+        let budgets = [0i64, 1, 7, 64, 500, 5_000, 100_000, 16_000_000];
+        let mut seed = 0x9E3779B97F4A7C15u64;
+        for &cn in sizes.iter() {
+            for &mult in [0usize, 1, 3, 10].iter() {
+                for &dup in [false, true].iter() {
+                    for &budget in budgets.iter() {
+                        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                        check(cn, cn * mult, seed, dup, budget);
+                    }
+                }
+            }
+        }
+        // Complete graphs: the D9 corner-A shape, where the summary is a full
+        // row and the contiguous inner loop is taken.
+        for &cn in [8usize, 40, 120].iter() {
+            for &budget in [0i64, 1_000, 16_000_000].iter() {
+                check(cn, cn * cn, 12345, false, budget);
+            }
+        }
+    }
+
+    /// The production gate corner: `cn` up to 4000 at `core_nnz` up to 30 000,
+    /// against the shipped 16M-word ledger and a spent one. Ignored by default
+    /// because the reference implementation is what makes it slow.
+    #[test]
+    #[ignore]
+    fn minfill_core_order_matches_reference_at_gate_corner() {
+        for &(cn, edges) in [(1000usize, 15_000usize), (2000, 15_000), (4000, 15_000),
+                             (4000, 4_000), (3000, 30_000)].iter() {
+            for &budget in [1i64, 16_000_000, 1_000_000_000].iter() {
+                check(cn, edges, 0xC0FFEE, false, budget);
+            }
+        }
+    }
+
+    /// The one cost term the word allowance does NOT bound: the per-pivot
+    /// selection scan, `O(cn²)` in total.
+    ///
+    /// A perfect matching has every vertex at degree 1 and deficiency 0, so
+    /// every pivot is admitted for a 64-word charge and the search runs the
+    /// full `cn` pivots on a nearly-spent ledger — `Σ |live| = cn²/2` packed
+    /// comparisons against a charge of about `cn · (w + 1)`. That isolates the
+    /// scan, and its rate is what `D3` needs in order to price the term at the
+    /// gate corner `cn = CORE_MINFILL_MAX_CN`.
+    #[test]
+    #[ignore]
+    fn minfill_core_order_scan_rate() {
+        println!("cn\tw\tcharge\tms\tscan_pairs\tns_per_pair");
+        for &cn in [1000usize, 2000, 4000].iter() {
+            let mut col_ptr = Vec::with_capacity(cn + 1);
+            let mut row_idx = Vec::new();
+            for v in 0..cn {
+                col_ptr.push(row_idx.len());
+                let mate = if v % 2 == 0 { v + 1 } else { v - 1 };
+                let mut e = vec![v, mate];
+                e.sort_unstable();
+                row_idx.extend(e);
+            }
+            col_ptr.push(row_idx.len());
+            let t = std::time::Instant::now();
+            let (perm, charge) = minfill_core_order(cn, &col_ptr, &row_idx, 16_000_000);
+            let ms = t.elapsed().as_secs_f64() * 1e3;
+            assert_eq!(perm.len(), cn);
+            let pairs = (cn as f64) * (cn as f64) / 2.0;
+            println!(
+                "{cn}\t{}\t{charge}\t{ms:.3}\t{pairs:.0}\t{:.3}",
+                cn.div_ceil(64), ms * 1e6 / pairs
+            );
+        }
+    }
+
+    /// Wall-clock ratio of the reference implementation to the rewrite on
+    /// gate-corner shapes, printed for the round's cost record. Not a threshold.
+    #[test]
+    #[ignore]
+    fn minfill_core_order_speedup() {
+        let shapes = [(500usize, 5_000usize), (1000, 10_000), (2000, 15_000),
+                      (4000, 15_000), (4000, 30_000), (3000, 30_000),
+                      (1000, 30_000), (2000, 4_000)];
+        println!("cn\tedges\tw\tcharge\tref_ms\tfast_ms\tratio");
+        let mut tot_ref = 0.0f64;
+        let mut tot_fast = 0.0f64;
+        for &(cn, edges) in shapes.iter() {
+            let (col_ptr, row_idx) = pattern(cn, edges, 0xC0FFEE, false);
+            let t = std::time::Instant::now();
+            let (refr, charge) = minfill_core_order_ref(cn, &col_ptr, &row_idx, 16_000_000);
+            let ref_ms = t.elapsed().as_secs_f64() * 1e3;
+            let t = std::time::Instant::now();
+            let (fast, fcharge) = minfill_core_order(cn, &col_ptr, &row_idx, 16_000_000);
+            let fast_ms = t.elapsed().as_secs_f64() * 1e3;
+            assert_eq!(fast, refr);
+            assert_eq!(fcharge, charge);
+            tot_ref += ref_ms;
+            tot_fast += fast_ms;
+            println!(
+                "{cn}\t{edges}\t{}\t{charge}\t{ref_ms:.2}\t{fast_ms:.2}\t{:.2}",
+                cn.div_ceil(64), ref_ms / fast_ms.max(1e-9)
+            );
+        }
+        println!("TOTAL\t\t\t\t{tot_ref:.2}\t{tot_fast:.2}\t{:.2}", tot_ref / tot_fast.max(1e-9));
     }
 }

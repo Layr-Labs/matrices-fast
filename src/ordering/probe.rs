@@ -17,6 +17,11 @@
 use super::*;
 use std::time::Instant;
 
+mod core_lineage;
+pub(super) mod minfill_cost;
+mod wide_core;
+pub(super) mod alt_lineage;
+
 /// Buckets exactly as the harness does (lt_1k / 1k_10k / gt_10k).
 fn bucket(n: usize) -> usize {
     if n < 1_000 {
@@ -2115,5 +2120,299 @@ fn probe_uniform_rounds_synthetic() {
         let base = flops_of(&sp, &baseline);
         assert!(mine <= base, "{name}: lost the AMD incumbent");
         println!("SYNTHETIC\t{name}\t{}\t{}\t{base}\t{mine}", pat.n, pat.nnz());
+    }
+}
+
+// Production-core stage-6 screening, on the exact frontier permutation.
+thread_local! {
+    static CORE_CAPTURE_ENABLED: std::cell::Cell<bool> = std::cell::Cell::new(false);
+    static CORE_CANDIDATES: std::cell::RefCell<Vec<CoreCandidate>> =
+        std::cell::RefCell::new(Vec::new());
+}
+const CUTOFF_PAIRED_SEED: u64 = 0x917ad73;
+const CUTOFF_PLATEAU_SEED: u64 = 0xa839d37;
+const CUTOFF_PAIRED_DRAWS: usize = 512;
+const CUTOFF_PLATEAU_DRAWS: usize = 1024;
+/// One `order_core` selection: the residual core, the fixed prefix cost and the
+/// core ordering the pipeline actually splices.
+pub(super) struct CoreCandidate {
+    pub(super) cn: usize,
+    /// True on the K = 3 pass, which is the only one that runs production's
+    /// medium terminal-core portfolio (`mod.rs:2685`).
+    pub(super) recurse: bool,
+    pub(super) col_ptr: Vec<usize>,
+    pub(super) row_idx: Vec<usize>,
+    pub(super) prefix_flops: u64,
+    pub(super) core_perm: Vec<usize>,
+}
+
+/// Test-only capture of the core ordering `order_core` is about to splice.
+pub(super) fn capture_core_candidate(
+    cn: usize,
+    recurse: bool,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    prefix_flops: u64,
+    core_perm: &[usize],
+) {
+    if !CORE_CAPTURE_ENABLED.with(|enabled| enabled.get()) { return; }
+    CORE_CANDIDATES.with(|c| {
+        c.borrow_mut().push(CoreCandidate {
+            cn,
+            recurse,
+            col_ptr: col_ptr.to_vec(),
+            row_idx: row_idx.to_vec(),
+            prefix_flops,
+            core_perm: core_perm.to_vec(),
+        })
+    });
+}
+
+fn take_core_candidates() -> Vec<CoreCandidate> {
+    CORE_CANDIDATES.with(|c| std::mem::take(&mut *c.borrow_mut()))
+}
+
+
+impl SmallScore {
+fn flops_and_fill(&self, perm: &[usize]) -> (u64, u64) {
+        let mut rows = self.rows.clone();
+        let words = (self.n+63)/64;
+        let mut flops = 0;
+        let mut total = 0;
+        for &v in perm {
+            let neighbors = rows[v];
+            let count = 1 + neighbors[..words].iter().map(|x| x.count_ones() as u64).sum::<u64>();
+            flops += count*count;
+            total += count;
+            for w in 0..words {
+                let mut bits = neighbors[w];
+                while bits != 0 {
+                    let u = w*64 + bits.trailing_zeros() as usize;
+                    bits &= bits-1;
+                    for k in 0..words { rows[u][k] |= neighbors[k]; }
+                    rows[u][u/64] &= !(1 << (u%64));
+                    rows[u][v/64] &= !(1 << (v%64));
+                }
+            }
+        }
+        (flops, total)
+    }
+}
+fn cutoff_paired_swap_stream(
+    scoring: &SmallScore, mut best: Vec<usize>, seed: u64, draws: usize,
+) -> Vec<usize> {
+    let n = best.len();
+    if n < 4 { return best; }
+    let mut best_f = scoring.flops(&best);
+    let mut state = seed;
+    for _ in 0..draws {
+        let mut positions = [0usize; 4];
+        for p in &mut positions {
+            state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+            *p = state as usize % n;
+        }
+        if (0..4).any(|i| (i+1..4).any(|j| positions[i] == positions[j])) { continue; }
+        let mut candidate = best.clone();
+        candidate.swap(positions[0], positions[1]);
+        candidate.swap(positions[2], positions[3]);
+        let f = scoring.flops_bounded(&candidate,best_f);
+        if f < best_f { best_f = f; best = candidate; }
+    }
+    best
+}
+fn cutoff_plateau_stream(
+    scoring: &SmallScore, start: Vec<usize>, neutral: bool, seed: u64, draws: usize,
+) -> Vec<usize> {
+    let n=start.len();
+    if n<2 { return start; }
+    let mut best=start.clone(); let mut current=start;
+    let mut best_f=scoring.flops(&best);
+    let mut state=seed;
+    for _ in 0..draws {
+        state^=state<<13; state^=state>>7; state^=state<<17; let a=state as usize%n;
+        state^=state<<13; state^=state>>7; state^=state<<17; let b=state as usize%n;
+        if a==b { continue; }
+        current.swap(a,b);
+        let f=scoring.flops_bounded(&current,best_f);
+        if f<best_f { best_f=f; best=current.clone(); }
+        else if f>best_f || !neutral { current.swap(a,b); }
+    }
+    best
+}
+
+#[test]
+#[ignore]
+fn probe_core_gate_stage6() {
+    CORE_CAPTURE_ENABLED.with(|enabled| enabled.set(true));
+    let sets: usize = std::env::var("CORE_GATE_SETS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
+    let units_budget: u64 = std::env::var("CORE_GATE_UNITS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10_000_000);
+    let corpus = crate::corpus::corpus();
+    let mut bucket_counts = [0usize; 3];
+    for (_, p) in &corpus {
+        bucket_counts[bucket(p.n)] += 1;
+    }
+
+    let mut base_logs = [0.0f64; 3];
+    let mut paid_rows = 0usize;
+    let mut paid_new_rows = 0usize;
+    let mut paid_captures = 0usize;
+    let mut core_winners = 0usize;
+    let mut dlog = [0.0f64; 3];
+    let mut in_gate = 0usize;
+    let mut newly = 0usize;
+    let mut winners = 0usize;
+    let mut equal_rows = 0usize;
+    let mut total_us = 0u128;
+    let mut worst_row_ms = 0.0f64;
+    let mut worst_row = String::new();
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let _ = take_core_candidates();
+        let incumbent = order(pat);
+        let cands = take_core_candidates();
+        let sp = scoring_pattern(pat);
+        let inc_f = flops_of(&sp, &incumbent);
+        let (cpi, rii) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cpi, &rii).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+
+        base_logs[bucket(n)] += (inc_f as f64 / amd).ln();
+        println!("COREBASE\t{name}\tn={n}\tnnz={nnz}\tbase={}\tinc={inc_f}", amd as u64);
+        let raw_in_gate = (12..=300).contains(&n) && nnz <= 3_000;
+        let mut row_best = inc_f;
+        let mut row_ms = 0.0f64;
+        let mut row_cn = 0usize;
+        let mut row_units = 0u64;
+        let mut row_hit = false;
+        let mut row_paid = 0usize;
+        let mut row_core_wins = 0usize;
+        for c in &cands {
+            if !(12..=300).contains(&c.cn) || c.row_idx.len() > 3_000 {
+                continue;
+            }
+            row_hit = true;
+            let core_pat = Pattern {
+                n: c.cn,
+                col_ptr: c.col_ptr.clone(),
+                row_idx: c.row_idx.clone(),
+            };
+            let core_sp = ScoringPattern {
+                n: c.cn,
+                col_ptr: c.col_ptr.clone(),
+                row_idx: c.row_idx.clone(),
+            };
+            let t = Instant::now();
+            let scoring = SmallScore::new(&core_pat);
+            let (base_f, fill) = scoring.flops_and_fill(&c.core_perm);
+            assert_eq!(base_f, flops_of(&core_sp, &c.core_perm), "{name}: core scorer");
+            // Refuse-at-zero clamp: on the core there is no incumbent to
+            // preserve, so a row whose stream pair does not fit the meter gets
+            // no sets at all.
+            let words = (c.cn + 63) / 64;
+            let per_set =
+                (words as u64 * (c.cn as u64 + fill)) * (CUTOFF_PAIRED_DRAWS + CUTOFF_PLATEAU_DRAWS) as u64;
+            let allowed = if per_set == 0 { 0 } else { (units_budget / per_set) as usize };
+            let use_sets = allowed.min(sets);
+            if use_sets > 0 { row_paid += 1; paid_captures += 1; }
+            let mut best = c.core_perm.clone();
+            let mut best_f = base_f;
+            let mut state = CUTOFF_PAIRED_SEED ^ CUTOFF_PLATEAU_SEED;
+            for set in 0..use_sets {
+                let (sa, sb) = if set == 0 {
+                    (CUTOFF_PAIRED_SEED, CUTOFF_PLATEAU_SEED)
+                } else {
+                    (splitmix64(&mut state) | 1, splitmix64(&mut state) | 1)
+                };
+                let cand = cutoff_plateau_stream(
+                    &scoring,
+                    cutoff_paired_swap_stream(&scoring, best.clone(), sa, CUTOFF_PAIRED_DRAWS),
+                    true,
+                    sb,
+                    CUTOFF_PLATEAU_DRAWS,
+                );
+                let f = scoring.flops(&cand);
+                if f < best_f {
+                    best_f = f;
+                    best = cand;
+                }
+            }
+            let ms = t.elapsed().as_secs_f64() * 1e3;
+            row_ms += ms;
+            row_units += per_set * use_sets as u64;
+            row_cn = c.cn;
+            if best_f < base_f {
+                row_core_wins += 1;
+                assert!(is_bijection(&best, c.cn), "{name}");
+                assert_eq!(best_f, flops_of(&core_sp, &best), "{name}: polished core");
+            }
+            let total = c.prefix_flops + best_f;
+            if total < row_best {
+                row_best = total;
+            }
+        }
+        if !row_hit {
+            continue;
+        }
+        if row_paid > 0 {
+            paid_rows += 1;
+            if !raw_in_gate { paid_new_rows += 1; }
+        }
+        core_winners += row_core_wins;
+        println!("CORECOST\t{name}\tn={n}\tcn={row_cn}\tcaptures={}\tpaid={row_paid}\tcore_wins={row_core_wins}\tunits={row_units}\tms={row_ms:.3}", cands.len());
+        in_gate += 1;
+        if !raw_in_gate {
+            newly += 1;
+        }
+        total_us += (row_ms * 1e3) as u128;
+        if row_ms > worst_row_ms {
+            worst_row_ms = row_ms;
+            worst_row = name.clone();
+        }
+        if row_best < inc_f {
+            winners += 1;
+            dlog[bucket(n)] += (row_best as f64).ln() - (inc_f as f64).ln();
+            println!(
+                "COREGATE_ROW\t{name}\tn={n}\tnnz={nnz}\tcn={row_cn}\traw_in_gate={raw_in_gate}\t{inc_f} -> {row_best}\tgain={:.4}%\tratio {:.6} -> {:.6}\tms={row_ms:.2}\tunits={row_units}",
+                100.0 * (inc_f - row_best) as f64 / inc_f as f64,
+                inc_f as f64 / amd,
+                row_best as f64 / amd
+            );
+        } else if row_best == inc_f {
+            equal_rows += 1;
+        }
+    }
+
+    println!("COREBASE_SCORE {:.9}", aggregate(&base_logs, &bucket_counts));
+    let proposed_logs = std::array::from_fn(|b| base_logs[b] + dlog[b]);
+    println!("COREPROPOSAL_SCORE {:.9} paid_rows={paid_rows} paid_new_rows={paid_new_rows} paid_captures={paid_captures} core_winners={core_winners}", aggregate(&proposed_logs, &bucket_counts));
+    println!(
+        "COREGATE in_gate={in_gate} newly_admissible={newly} winners={winners} equal={equal_rows} sets={sets} units={units_budget} total_ms={:.1} worst_ms={worst_row_ms:.2} on {worst_row}",
+        total_us as f64 / 1e3
+    );
+    for b in 0..3 {
+        let f = if bucket_counts[b] == 0 {
+            1.0
+        } else {
+            (dlog[b] / bucket_counts[b] as f64).exp()
+        };
+        println!(
+            "COREGATE\t{}\trows={}\tdlog={:.8}\tfactor={:.8}",
+            BUCKET_NAMES[b], bucket_counts[b], dlog[b], f
+        );
     }
 }

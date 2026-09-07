@@ -136,3 +136,9 @@ it, rather than deleting it — a resolved question is a useful signpost.
       Every absolute second in `memory/` is box-relative. A revision judged safe on
       a fast box can be at 85% of the cap on a slow one — which is the most likely
       mechanism behind the three hidden-cap failures in 0025.
+
+## Measured follow-up on frontier 996e8d6
+
+Production-core stage-6 polishing at the 10M starting-fill estimate is below its screen: 2 final winners / 0.07338 dev bips ([0089](experiments/0089-production-core-stage6-screen.md)). Most improved cores lose to other completed pipeline candidates. Distinct core portfolios remain open; the exhibited blend718 portfolio win receives no proposal sets in this polish screen.
+
+The 100k transplant with verification reservation yields 26 winners / 0.93139 dev bips, retaining every winner when gated below raw AMD and reducing paid rows 196→152 ([0090](experiments/0090-transplant-verification-reservation-screen.md)). It misses the predeclared three-bip floor. Reserving final verification before spending the last donor allowance is useful bookkeeping; larger ledgers or different donor choices remain separate experiments with unvalidated runtime exposure.

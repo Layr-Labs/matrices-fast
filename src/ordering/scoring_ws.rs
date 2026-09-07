@@ -385,6 +385,13 @@ impl ScoreWorkspace {
         self.delta.iter().map(|&c| c as u64).sum()
     }
 
+    #[cfg(test)]
+    pub(crate) fn probe_counts(&self) -> &[i32] { &self.delta }
+    #[cfg(test)]
+    pub(crate) fn probe_parent(&self) -> &[i32] { &self.parent }
+    #[cfg(test)]
+    pub(crate) fn probe_post(&self) -> &[u32] { &self.post }
+
     pub(crate) fn flops(&mut self, pat: &ScoringPattern, perm: &[usize]) -> u64 {
         self.permute_into(pat, perm);
         self.build_etree();

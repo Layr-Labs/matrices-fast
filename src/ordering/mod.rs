@@ -1933,6 +1933,25 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── METIS SHAPE VARIANTS on the dense mid band ──────────────────────────
+    // The cascade above runs METIS shape variants only below 60k nnz and only
+    // after a base separator already won. On dense KKT rows (nnz >= 20 n) in the
+    // 60k-250k band the default separator is far off (pooling_sppa9tp: default
+    // 0.50, incumbent 0.44) while a differently shaped dissection is not
+    // (max_imbalance 0.05 -> 0.25, 0.02 -> 0.22, 0.10 with 16 initial partitions
+    // -> 0.18, each ~25 ms): the pooling_*tp family measured the same way in the
+    // SSI challenge. Three fixed shapes, no seed games; n <= 30k keeps the
+    // partitioner off large graphs where it is both slow and wrong.
+    if heavy_arm_enabled() && n <= 30_000 && nnz >= 20 * n && (60_000..250_000).contains(&nnz) {
+        for (imb, nip) in [(0.05f64, 0u32), (0.02, 0), (0.10, 16)] {
+            let mut o = feral_metis::MetisOptions { max_imbalance: imb, ..Default::default() };
+            if nip > 0 {
+                o.niparts = nip;
+            }
+            consider!(move || feral_metis::metis_order_full(&core, &o).map(|(p, _, _)| p));
+        }
+    }
+
     // RELABELLED-AMD MULTI-START — a randomized-restart minimum degree, for free.
     //
     // AMD's output is decided by its tie-breaking, and its tie-breaking reads the

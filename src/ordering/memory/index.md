@@ -8,6 +8,7 @@
 
 ## 2026-09-07 checkpoint
 
+- [0093: METIS shape variants on the dense mid band](experiments/0093-metis-shape-variants-dense-mid-band.md): dev **0.811703** on `017a036` (−23.7 bips, one row: pooling_sppa9tp 0.44 → 0.16), worst row unchanged; the census methodology that found it.
 - [0092: ported SSI-challenge families + parallel portfolio](experiments/0092-ported-heavy-tier-metrics-parallel-portfolio.md): dev **0.814072** on `081af15` (−105.5 bips, all gt_10k), worst 1.208 s vs 1.146 s same box; phase-attribution and census probes documented there.
 
 ## Latest Codex checkpoint

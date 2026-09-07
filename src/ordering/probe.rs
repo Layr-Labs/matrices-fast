@@ -2496,19 +2496,26 @@ fn probe_census() {
             let o = feral_amf::AmfOptions { dense_alpha: a, ..Default::default() };
             run(format!("amf a={a}"), &|| feral_amf::amf_order_opts(&core, &o).ok().map(|(p, ..)| p));
         }
-        if nnz < 400_000 {
+        let metis_max: usize = std::env::var("SSI_CENSUS_METIS_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(400_000);
+        if nnz < metis_max {
             run("metis default".into(), &|| feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default()).ok().map(|(p, _, _)| p));
             let mt = feral_metis::MetisOptions { niparts: 16, fm_passes: 20, ..Default::default() };
             run("metis tuned".into(), &|| feral_metis::metis_order_full(&core, &mt).ok().map(|(p, _, _)| p));
-            for imb in [0.05f64, 0.10] {
+            for imb in [0.05f64, 0.10, 0.02] {
                 let o = feral_metis::MetisOptions { max_imbalance: imb, ..Default::default() };
                 run(format!("metis imb={imb}"), &|| feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p));
+                for seed in [2u64, 21, 26, 55] {
+                    let o2 = feral_metis::MetisOptions { max_imbalance: imb, seed: seed as _, ..Default::default() };
+                    run(format!("metis imb={imb} seed={seed}"), &|| feral_metis::metis_order_full(&core, &o2).ok().map(|(p, _, _)| p));
+                }
+                let o3 = feral_metis::MetisOptions { max_imbalance: imb, niparts: 16, ..Default::default() };
+                run(format!("metis imb={imb} niparts=16"), &|| feral_metis::metis_order_full(&core, &o3).ok().map(|(p, _, _)| p));
             }
             for sw in [100u32, 400] {
                 let o = feral_metis::MetisOptions { nd_to_amd_switch: sw, ..Default::default() };
                 run(format!("metis switch={sw}"), &|| feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p));
             }
-            for seed in [2u64, 21, 55] {
+            for seed in [2u64, 21, 26, 55] {
                 let o = feral_metis::MetisOptions { seed: seed as _, ..Default::default() };
                 run(format!("metis seed={seed}"), &|| feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p));
             }

@@ -20,7 +20,7 @@ pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
 /// Production terminal cross-candidate subtree transplant with verification
 /// reservation (0090 screen). Strict-accept only; ledger-bounded; structural
 /// gates only. Donors are displaced portfolio orderings already retained.
-const TRANSPLANT_LEDGER: u64 = 100_000;
+const TRANSPLANT_LEDGER: u64 = 250_000;
 
 pub(super) fn refine_with_donors(
     sp: &ScoringPattern,
@@ -31,7 +31,7 @@ pub(super) fn refine_with_donors(
     let n = sp.n;
     let nnz = sp.row_idx.len();
     let unit = n as u64 + nnz as u64;
-    if n < 16 || donors.is_empty() || 4 * unit > TRANSPLANT_LEDGER {
+    if n < 16 || donors.is_empty() || 3 * unit > TRANSPLANT_LEDGER {
         return None;
     }
     let mut ws = scoring_ws::ScoreWorkspace::new(n, nnz);

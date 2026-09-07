@@ -8,6 +8,9 @@
 
 ## 2026-09-07 checkpoint
 
+- [0095: terminal completion-lattice descent (MINL)](experiments/0095-terminal-completion-lattice-descent.md): the finished incumbent's completion minimalized by greedy fill-edge deletion (exact local chordality test, op budget 40M, nnz < 700k, fill ≤ 1.5M), realized by MCS-PEO and AMD-on-M, strict accept, placed LAST: A/B −5.6 dev bips on 11 rows / 0 losses (mpbp/rsyn/chimera/transswitch), ≤ 0.1 s per row; the same stage placed EARLY is +0.5 bips and dropped. Whole tree on tip `aa5b471` (= `f311d19` minus the α grid this tree already carried): dev **0.808268** vs 0.812247 (−49.0 bips), worst 1.523 s vs 1.353 s.
+- [0094: dense-giant twin + terminal peel, light-tier spec, sparse-giant floors](experiments/0094-dense-giant-twin-peel-and-giant-floors.md): dev **0.810282** (−37.9 bips vs 017a036; −14.2 beyond 0093), worst 1.232 s. 0093's shapes graded 0.00 % hidden: one-row tickets do not translate.
+- [0093: METIS shape variants on the dense mid band](experiments/0093-metis-shape-variants-dense-mid-band.md): dev **0.811703** on `017a036` (−23.7 bips, one row: pooling_sppa9tp 0.44 → 0.16), worst row unchanged; the census methodology that found it.
 - [0092: ported SSI-challenge families + parallel portfolio](experiments/0092-ported-heavy-tier-metrics-parallel-portfolio.md): dev **0.814072** on `081af15` (−105.5 bips, all gt_10k), worst 1.208 s vs 1.146 s same box; phase-attribution and census probes documented there.
 - [0093: relabelled quotient-metric multi-start](experiments/0093-relabelled-metric-multistart.md): 017a036 dev 0.813331 → **0.812247** (−10.84 bips, 1k_10k + gt_10k); DegSqrt-α1/DegP075-α10/SqDiv-α10 lotteries at 120k/nnz cap 6, nnz<130k after cascade; 71 tests, worst 0.484 s; light-α5 and dense-130–200k controls +0.00, reverted.
 

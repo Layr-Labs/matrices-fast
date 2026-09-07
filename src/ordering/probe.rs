@@ -2496,19 +2496,26 @@ fn probe_census() {
             let o = feral_amf::AmfOptions { dense_alpha: a, ..Default::default() };
             run(format!("amf a={a}"), &|| feral_amf::amf_order_opts(&core, &o).ok().map(|(p, ..)| p));
         }
-        if nnz < 400_000 {
+        let metis_max: usize = std::env::var("SSI_CENSUS_METIS_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(400_000);
+        if nnz < metis_max {
             run("metis default".into(), &|| feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default()).ok().map(|(p, _, _)| p));
             let mt = feral_metis::MetisOptions { niparts: 16, fm_passes: 20, ..Default::default() };
             run("metis tuned".into(), &|| feral_metis::metis_order_full(&core, &mt).ok().map(|(p, _, _)| p));
-            for imb in [0.05f64, 0.10] {
+            for imb in [0.05f64, 0.10, 0.02] {
                 let o = feral_metis::MetisOptions { max_imbalance: imb, ..Default::default() };
                 run(format!("metis imb={imb}"), &|| feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p));
+                for seed in [2u64, 21, 26, 55] {
+                    let o2 = feral_metis::MetisOptions { max_imbalance: imb, seed: seed as _, ..Default::default() };
+                    run(format!("metis imb={imb} seed={seed}"), &|| feral_metis::metis_order_full(&core, &o2).ok().map(|(p, _, _)| p));
+                }
+                let o3 = feral_metis::MetisOptions { max_imbalance: imb, niparts: 16, ..Default::default() };
+                run(format!("metis imb={imb} niparts=16"), &|| feral_metis::metis_order_full(&core, &o3).ok().map(|(p, _, _)| p));
             }
             for sw in [100u32, 400] {
                 let o = feral_metis::MetisOptions { nd_to_amd_switch: sw, ..Default::default() };
                 run(format!("metis switch={sw}"), &|| feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p));
             }
-            for seed in [2u64, 21, 55] {
+            for seed in [2u64, 21, 26, 55] {
                 let o = feral_metis::MetisOptions { seed: seed as _, ..Default::default() };
                 run(format!("metis seed={seed}"), &|| feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p));
             }
@@ -2546,12 +2553,37 @@ fn probe_census() {
             custom_metrics::ScoreVariant::DegDivNvDegme,
             custom_metrics::ScoreVariant::DegSqrt,
         ] {
-            for a in [10.0f64, 1.0] {
+            let alphas: Vec<f64> = std::env::var("SSI_CENSUS_ALPHAS").ok()
+                .map(|v| v.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+                .unwrap_or_else(|| vec![10.0, 1.0]);
+            for &a in &alphas {
                 run(format!("cm {variant:?} a={a}"), &|| custom_metrics::order_variant(&core, a, true, variant).ok());
             }
         }
         for spec in metric_sweep::EXTRA_METRICS.iter() {
             run(format!("ms {} a=10", spec.name), &|| metric_sweep::order_generic(&core, 10.0, true, spec).ok());
+        }
+        if std::env::var("SSI_CENSUS_RELABEL_METRICS").is_ok() {
+            for seed in 1..=4u64 {
+                let q = relabel(n, seed);
+                let b = permute_pattern(&sp, &q);
+                let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+                let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+                let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri).unwrap();
+                for variant in [
+                    custom_metrics::ScoreVariant::SqDiv,
+                    custom_metrics::ScoreVariant::DegSqrt,
+                    custom_metrics::ScoreVariant::DegP075,
+                    custom_metrics::ScoreVariant::DegDivNvWfP15,
+                    custom_metrics::ScoreVariant::DegPlusDegme,
+                ] {
+                    for a in [10.0f64, 1.0] {
+                        run(format!("relabel-{variant:?} a={a} seed={seed}"), &|| custom_metrics::order_variant(&bcore, a, true, variant).ok().map(|pb| pb.iter().map(|&x| q[x as usize] as i32).collect()));
+                    }
+                }
+                let spec = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == "extra_deg2_div_nv_wf05").unwrap();
+                run(format!("relabel-wf05 a=10 seed={seed}"), &|| metric_sweep::order_generic(&bcore, 10.0, true, spec).ok().map(|pb| pb.iter().map(|&x| q[x as usize] as i32).collect()));
+            }
         }
         for seed in 1..=6u64 {
             let q = relabel(n, seed);

@@ -1820,7 +1820,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // α is load-bearing: at α=1 AMD's dense threshold max(16, α√n)
             // defers far fewer hub rows, which is where DegSqrt takes
             // ringpack_30_2 0.41 -> 0.23 and AmindNorm edgecross24 0.91 -> 0.79.
-            for alpha in [10.0f64, 1.0] {
+            // α∈{10,5,2.5,1}: 0092 shipped {10,1}; α5/2.5 sit between the
+            // dense-threshold regimes that separately win (DegSqrt@1 on
+            // ringpack hubs; α10 on denser KKTs). Each pass is milliseconds
+            // below METRIC_LIGHT_MAX_NNZ and best-of floors the downside.
+            for alpha in [10.0f64, 5.0, 2.5, 1.0] {
                 consider!(move || custom_metrics::order_variant(&core, alpha, true, variant));
             }
         }

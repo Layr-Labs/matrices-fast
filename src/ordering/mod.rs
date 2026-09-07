@@ -149,6 +149,7 @@ use crate::Pattern;
 /// what-if scoring). Not compiled into the shipped binary.
 #[cfg(test)]
 mod probe;
+#[cfg(test)]
 mod transplant_probe;
 
 pub mod rgreedy;
@@ -236,11 +237,7 @@ const REDUCE_EXTRA_MIN_NNZ: usize = 200_000;
 const REDUCE_SMALL_MAX_NNZ: usize = 60_000;
 const REDUCE_EXTRA_CORE_LEDGER: usize = 300_000;
 const REDUCE_PAIR_BUDGET: u64 = 1_000_000;
-const REDUCE_EXTRA_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
-/// Rank extra-depth core candidates by exact flops when the core is small
-/// enough that symbolic scoring is cheap. Proxy (ndiv+nms) can disagree with
-/// the true objective and pick a worse pass.
-const REDUCE_EXTRA_EXACT_MAX_CN: usize = 8_000;
+const REDUCE_EXTRA_ALPHAS: [f64; 2] = [0.5, 5.0];
 
 /// Medium-size envelope for the *extra* tuned candidates (α-5/α-2 AMD, default
 /// AMF, α-2 AMF). A few extra AMD/AMF passes are trivially cheap in this region;
@@ -1468,11 +1465,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,
-            // Ammf / AmindNorm are implemented and unit-tested but were never
-            // wired into the production portfolio. They are fill-oriented
-            // quotient metrics orthogonal to SqDiv/SqPure and to AMD/AMF.
-            custom_metrics::ScoreVariant::Ammf,
-            custom_metrics::ScoreVariant::AmindNorm,
         ] {
             for &alpha in &[1.0, 10.0] {
                 consider(&mut best_flops, &mut best_perm, &|| {
@@ -2603,11 +2595,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if !is_bijection(&cp, cn) {
                     return None;
                 }
-                let f = if recurse || cn <= REDUCE_EXTRA_EXACT_MAX_CN {
-                    flops_of(&core_pat, &cp)
-                } else {
-                    proxy
-                };
+                let f = if recurse { flops_of(&core_pat, &cp) } else { proxy };
                 Some((f, cp))
             };
             // Results are merged by pass index, so thread timing never reaches
@@ -2679,7 +2667,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Accepted only on a strict decrease of the EXACT core objective, so
             // it can never lower the portfolio's own pick.
             let mut minfill_pick: Option<Vec<usize>> = None;
-            if (8..=CORE_MINFILL_MAX_CN).contains(&cn)
+            // Work cut: extra-depth cn<=2000 (iter11: score-neutral vs baseline).
+            let minfill_cn_cap = if recurse { CORE_MINFILL_MAX_CN } else { 2_000 };
+            if (8..=minfill_cn_cap).contains(&cn)
                 && cl.core_nnz() <= CORE_MINFILL_MAX_CORE_NNZ
                 && core_minfill_ledger.get() > 0
             {
@@ -3037,23 +3027,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
-
-    // Terminal cross-candidate subtree transplant (0090 reservation policy).
-    // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
-    // are the displaced portfolio orderings already retained for PEO_ALT.
-    {
-        let donors = runner_up.borrow();
-        if let Some(cand) = transplant_probe::refine_with_donors(
-            &scoring_pat, &best_perm, &donors, amd_flops,
-        ) {
-            let f = score(&cand);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = cand;
-            }
-        }
-    }
-
     #[cfg(test)]
     transplant_probe::capture(&runner_up.borrow());
     best_perm
@@ -3074,7 +3047,7 @@ const CORE_MINFILL_MAX_CORE_NNZ: usize = 30_000;
 /// regression gates are denominated in. Cheaper per unit than
 /// `minfill_order`'s degree-pair budget: a word AND + popcount over two
 /// sequential rows, against a random byte probe into an `n·n` matrix.
-const CORE_MINFILL_LEDGER: i64 = 16_000_000;
+const CORE_MINFILL_LEDGER: i64 = 15_000_000;
 
 /// Set bits of one bitset row, ascending.
 fn bitset_row_bits(slice: &[u64], out: &mut Vec<usize>) {
@@ -3252,7 +3225,8 @@ fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budge
     let mut slot: Vec<u32> = vec![u32::MAX; cn];
     for v in 0..cn {
         slot[v] = heap.len() as u32;
-        heap.push((defic[v].min(u32::MAX as u64) << 32) | v as u64);
+        // Largest-index tie-break; paired with extra-depth cn cap work cut.
+        heap.push((defic[v].min(u32::MAX as u64) << 32) | (!((v as u32)) as u64));
     }
 
     for _ in 0..cn {
@@ -3267,12 +3241,12 @@ fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budge
                 best_slot = i;
             }
         }
-        let best = (best_packed & 0xFFFF_FFFF) as usize;
+        let best = (!(best_packed as u32)) as usize;
         order.push(best);
         let moved = heap.pop().unwrap();
         if best_slot < heap.len() {
             heap[best_slot] = moved;
-            slot[(moved & 0xFFFF_FFFF) as usize] = best_slot as u32;
+            slot[(!(moved as u32)) as usize] = best_slot as u32;
         }
         slot[best] = u32::MAX;
 
@@ -3334,7 +3308,7 @@ fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budge
             bitset_row_bits(&summ[x * sw..x * sw + sw], &mut wk);
             let (value, charged) = bitset_deficiency_summ(&rows, w, &wk, x, deg[x], &mut nb);
             defic[x] = value;
-            heap[slot[x] as usize] = (value.min(u32::MAX as u64) << 32) | x as u64;
+            heap[slot[x] as usize] = (value.min(u32::MAX as u64) << 32) | (!((x as u32)) as u64);
             budget -= charged;
             if budget < 0 {
                 break;
@@ -5304,10 +5278,10 @@ fn minfill_core_order_ref(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut b
             break;
         }
         let mut best = usize::MAX;
-        let mut best_key = u64::MAX;
+        let mut best_def = u64::MAX;
         for v in 0..cn {
-            if live[v] && defic[v] < best_key {
-                best_key = defic[v];
+            if live[v] && (defic[v] < best_def || (defic[v] == best_def && (best == usize::MAX || v > best))) {
+                best_def = defic[v];
                 best = v;
             }
         }

@@ -1851,7 +1851,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
         // 0111: sweep extras on n<10k only (gt_10k bit-identical; no AMD/AMF)
         if n < 10_000 {
-            for sname in ["extra_deg15_div_nv", "extra_deg_div_nv_degme2"] {
+            for sname in [
+                "extra_deg15_div_nv",
+                "extra_deg_div_nv_degme2",
+                "extra_deg3_div_nv",
+                "extra_deg_p15",
+                "extra_deg_div_nv_wf01",
+            ] {
                 if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == sname) {
                     for &alpha in &[10.0f64, 5.0, 1.0] {
                         consider!(move || metric_sweep::order_generic(&core, alpha, true, spec));
@@ -2014,7 +2020,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
-
     // ── EXTRA AMF α VALUES (win D) ──────────────────────────────────────────
     // See `D_MAX_NNZ` / `D_WIDE_*`. Pure additions under the best-of floor.
     if heavy_arm_enabled() && n < AMF_MAX_N && nnz < AMF_MAX_NNZ {

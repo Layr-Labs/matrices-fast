@@ -1863,8 +1863,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // uniformly, inside the same `nnz < 130k` envelope whose per-pass cost is
     // already measured safe. Queued after the cascade with everything else ported,
     // so cascade gates see crown values; best-of floor.
-    const RELABEL_METRIC_BUDGET: usize = 120_000;
-    const RELABEL_METRIC_MAX_PASSES: usize = 6;
+    const RELABEL_METRIC_BUDGET: usize = 240_000; // 0103 tip: doubled tickets of proven families
+    const RELABEL_METRIC_MAX_PASSES: usize = 12; // 0103
     if heavy_arm_enabled() && nnz < METRIC_LIGHT_MAX_NNZ {
         // 0095: keep 0093's three families; add DegP125@10, DegDivNvWfP15@10,
         // and DegSqrt mid-α (5 / 2.5) lotteries — same budget/cap/envelope.

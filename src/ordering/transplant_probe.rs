@@ -20,7 +20,7 @@ pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
 /// Production terminal cross-candidate subtree transplant with verification
 /// reservation (0090 screen). Strict-accept only; ledger-bounded; structural
 /// gates only. Donors are displaced portfolio orderings already retained.
-const TRANSPLANT_LEDGER: u64 = 250_000;
+const TRANSPLANT_LEDGER: u64 = 300_000;
 
 pub(super) fn refine_with_donors(
     sp: &ScoringPattern,

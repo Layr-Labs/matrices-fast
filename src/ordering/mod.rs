@@ -1888,6 +1888,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             (custom_metrics::ScoreVariant::DegDivNvDegme, 10.0),
             (custom_metrics::ScoreVariant::SqDiv, 1.0),
             (custom_metrics::ScoreVariant::DegP075, 1.0),
+            // 0100b: breadth continues — DegSqrt@10 (missing shipped-alpha),
+            // Ammf@10, SqPure@1, DegDivNvWfP15@1.
+            (custom_metrics::ScoreVariant::DegSqrt, 10.0),
+            (custom_metrics::ScoreVariant::Ammf, 10.0),
+            (custom_metrics::ScoreVariant::SqPure, 1.0),
+            (custom_metrics::ScoreVariant::DegDivNvWfP15, 1.0),
         ]
         .into_iter()
         .enumerate()

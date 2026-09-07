@@ -40,6 +40,48 @@ pub(super) fn candidates_bounded(
     Some([forward, reverse])
 }
 
+/// Four extractions using vertex id and completed-graph degree as static tie
+/// ranks. This is kept separate from [`candidates_bounded`] so callers can
+/// spend it once at a strict terminal best-of boundary instead of multiplying
+/// it through every round of an incumbent-dependent chain.
+pub(super) fn ranked_candidates_bounded(
+    n: usize,
+    cp: &[usize],
+    ri: &[usize],
+    parent: &[Option<usize>],
+    counts: &[usize],
+    incumbent: &[usize],
+    max_n: usize,
+    max_nnz: usize,
+    max_lnnz: usize,
+) -> Option<[Vec<usize>; 4]> {
+    let mut adj = reconstruct(n, cp, ri, parent, counts, incumbent, max_n, max_nnz, max_lnnz)?;
+    let id: Vec<usize> = (0..n).collect();
+    for neighbors in &mut adj {
+        neighbors.sort_unstable();
+    }
+    let id_forward = mcs_peo(&adj, &id, false);
+    let id_reverse = mcs_peo(&adj, &id, true);
+
+    let degree: Vec<usize> = adj.iter().map(Vec::len).collect();
+    for neighbors in &mut adj {
+        neighbors.sort_unstable_by_key(|&u| (degree[u as usize], u));
+    }
+    let mut degree_order: Vec<usize> = (0..n).collect();
+    degree_order.sort_unstable_by_key(|&v| (degree[v], v));
+    let degree_forward = mcs_peo(&adj, &degree_order, false);
+    let degree_reverse = mcs_peo(&adj, &degree_order, true);
+
+    if !super::is_bijection(&id_forward, n)
+        || !super::is_bijection(&id_reverse, n)
+        || !super::is_bijection(&degree_forward, n)
+        || !super::is_bijection(&degree_reverse, n)
+    {
+        return None;
+    }
+    Some([id_forward, id_reverse, degree_forward, degree_reverse])
+}
+
 fn reconstruct(
     n: usize,
     cp: &[usize],
@@ -234,6 +276,25 @@ mod tests {
                         let f = flops_of(&pat, &candidate);
                         best = best.min(f);
                         assert!(f <= baseline, "n={n}, mask={mask}, order={incumbent:?}");
+                    }
+                    for candidate in ranked_candidates_bounded(
+                        n,
+                        &pp.col_ptr,
+                        &pp.row_idx,
+                        &et.parent,
+                        &counts,
+                        &incumbent,
+                        MAX_N,
+                        MAX_INPUT_NNZ,
+                        MAX_LNNZ,
+                    )
+                    .unwrap()
+                    {
+                        assert!(is_peo(&filled, &candidate));
+                        assert!(
+                            flops_of(&pat, &candidate) <= baseline,
+                            "ranked n={n}, mask={mask}, order={incumbent:?}"
+                        );
                     }
                     assert!(best <= baseline);
                     if !next_permutation(&mut incumbent) { break; }

@@ -1,6 +1,15 @@
 # Best-of portfolio (the current architecture)
 
 ## What it is
+
+2026-09-07 qualification: the AMD anchor bounds accepted flop scores, not
+runtime. In an incumbent-dependent pipeline, adding a candidate early can
+also change later trajectories and donor allocation. Strict phase acceptance
+is not a proof of whole-pipeline dominance. A true terminal best-of avoids
+that interaction but still pays for losing candidates. The bounded STRIP,
+TELOS and final MCS experiment, including a rejected late-donor expansion,
+is recorded in [0098](../experiments/0098-bounded-structural-terminal-portfolio.md).
+
 `order()` does not commit to one algorithm. It runs a *portfolio* of candidate
 orderings on the matrix, scores each one with feral's own symbolic analysis
 (`Σ cⱼ²`, the exact quantity the grader ranks), and returns the cheapest. The

@@ -162,6 +162,8 @@ mod scoring_ws;
 mod parallel;
 mod metric_sweep;
 mod minl;
+mod strip;
+mod telos;
 
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
@@ -1216,10 +1218,22 @@ fn flush_batch<'a>(
             // different ordering converges to a different minimal triangulation,
             // and the leader's is not always the cheapest one.
             let mut r = runner_up.borrow_mut();
-            if f < *best_flops { r.push((*best_flops, best_perm.clone())); } else { r.push((f, perm.clone())); }
-            r.sort_by_key(|(s, _)| *s);
-            r.dedup_by_key(|(s, _)| *s);
-            r.truncate(PEO_ALT_SEEDS);
+            let (displaced_score, displaced_perm): (u64, &[usize]) = if f < *best_flops {
+                (*best_flops, best_perm)
+            } else {
+                (f, &perm)
+            };
+            // The ledger is already sorted, score-unique, and capped. Avoid an
+            // O(n) permutation clone when this entry would immediately be
+            // removed by the old sort/dedup/truncate sequence.
+            let score_is_new = !r.iter().any(|(s, _)| *s == displaced_score);
+            let can_enter = r.len() < PEO_ALT_SEEDS
+                || r.last().is_some_and(|(s, _)| displaced_score < *s);
+            if score_is_new && can_enter {
+                r.push((displaced_score, displaced_perm.to_vec()));
+                r.sort_by_key(|(s, _)| *s);
+                r.truncate(PEO_ALT_SEEDS);
+            }
         }
         if f < *best_flops {
             *best_flops = f;
@@ -1298,6 +1312,29 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             max_deg = deg;
         }
     }
+
+    // STRIP's second ranking uses the anchor AMD factor's exact column counts.
+    // Capture it before later exact scores reuse the workspace. The gate is
+    // purely structural and excludes dense and cap-critical rows.
+    const STRIP_MAX_N: usize = 30_000;
+    const STRIP_MAX_NNZ: usize = 130_000;
+    const STRIP_MAX_AVG_DEG: usize = 24;
+    let strip_gate = n < STRIP_MAX_N
+        && nnz < STRIP_MAX_NNZ
+        && nnz < (STRIP_MAX_AVG_DEG + 1).saturating_mul(n);
+    let strip_lcount_ranking: Vec<usize> = if strip_gate {
+        let ws = score_workspace.borrow();
+        let counts = ws.column_counts();
+        let mut by_vertex = vec![0i32; n];
+        for (position, &vertex) in best_perm.iter().enumerate() {
+            by_vertex[vertex] = counts[position];
+        }
+        let mut ranking: Vec<usize> = (0..n).collect();
+        ranking.sort_unstable_by(|&a, &b| by_vertex[b].cmp(&by_vertex[a]).then(a.cmp(&b)));
+        ranking
+    } else {
+        Vec::new()
+    };
 
     // Twin-skip ledgers for the plain-AMD passes. Within one `aggressive`
     // class an AMD pass is fully determined by its dense-deferred SET (see
@@ -1762,8 +1799,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             };
             consider!(move || feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
         }
+        // Continue the library's default seed 1 with seed 2. Do not retain a
+        // nonconsecutive seed selected because it won a corpus comparison.
         let opts_seed = feral_metis::MetisOptions {
-            seed: 21,
+            seed: 2,
             ..Default::default()
         };
         consider!(move || feral_metis::metis_order_full(&core, &opts_seed).map(|(p, _, _)| p));
@@ -3597,7 +3636,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         ) {
             let f = score(&cand);
             if f < best_flops {
-                best_flops = f;
                 best_perm = cand;
             }
         }
@@ -3605,6 +3643,124 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
+
+    // Terminal STRIP portfolio. Removing a small structural-hub prefix,
+    // ordering the induced remainder, and appending the prefix reaches a
+    // family absent from both minimum-degree and separator candidates. This
+    // runs after transplant and admits only an exact strict win before MINL.
+    if strip_gate {
+        let (degree_ranking, stages) = strip::degree_induced_schedule(pattern);
+        let mut strip_tasks: Vec<parallel::CandFn> = Vec::with_capacity(stages.len() + 1);
+        for (k, subgraph) in stages {
+            let removed = degree_ranking[..k].to_vec();
+            strip_tasks.push(Box::new(move || {
+                strip::strip_from_induced(pattern, &subgraph, &removed)
+                    .ok_or(feral_ordering_core::OrderingError::MalformedInput)
+            }));
+        }
+        if strip_lcount_ranking.len() > 64 {
+            let ranking = &strip_lcount_ranking;
+            strip_tasks.push(Box::new(move || {
+                strip::strip_candidate(pattern, ranking, 64)
+                    .ok_or(feral_ordering_core::OrderingError::MalformedInput)
+            }));
+        }
+        let (core_ranking, stages) = strip::induced_schedule(
+            pattern,
+            strip::core_ranking(pattern),
+            &strip::EXTRA_KS,
+        );
+        for (k, subgraph) in stages {
+            let removed = core_ranking[..k].to_vec();
+            strip_tasks.push(Box::new(move || {
+                strip::strip_from_induced(pattern, &subgraph, &removed)
+                    .ok_or(feral_ordering_core::OrderingError::MalformedInput)
+            }));
+        }
+
+        // Upstream terminal stages keep their exact score in scoped locals;
+        // synchronize once at this family boundary before strict acceptance.
+        best_flops = score(&best_perm);
+        let mut results = parallel::run_candidates(
+            &strip_tasks,
+            &scoring_pat,
+            n,
+            nnz,
+            best_flops,
+            false,
+        );
+        let strip_won = parallel::accept(&mut results, &mut best_flops, &mut best_perm);
+
+        // Only an earned strict STRIP winner receives bounded PEO extraction.
+        // Each round is exact-scored and a stalled round ends the chain.
+        if strip_won && n >= 16 {
+            const STRIP_PEO_ROUNDS: usize = 4;
+            const STRIP_PEO_LEDGER: u64 = 2_500_000;
+            const STRIP_PEO_MAX_LNNZ: usize = 1_000_000;
+            let mut ledger = 0u64;
+            for _ in 0..STRIP_PEO_ROUNDS {
+                let pp = permute_pattern(&scoring_pat, &best_perm);
+                let et = EliminationTree::from_pattern(&pp);
+                let counts = column_counts_gnp(&pp, &et);
+                let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
+                if lnnz > STRIP_PEO_MAX_LNNZ as u64 {
+                    break;
+                }
+                let cost = n as u64 + nnz as u64 + lnnz;
+                if ledger + cost > STRIP_PEO_LEDGER {
+                    break;
+                }
+                ledger += cost;
+                let Some(candidates) = peo_extract::candidates_bounded(
+                    n,
+                    &pp.col_ptr,
+                    &pp.row_idx,
+                    &et.parent,
+                    &counts,
+                    &best_perm,
+                    usize::MAX,
+                    usize::MAX,
+                    STRIP_PEO_MAX_LNNZ,
+                ) else {
+                    break;
+                };
+                let incumbent = best_flops;
+                for candidate in candidates {
+                    let f = score(&candidate);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = candidate;
+                    }
+                }
+                if best_flops == incumbent {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Completion-gradient descent: perturb the completion around its fattest
+    // symbolic columns, then keep only an exact strict improvement.  Refresh
+    // the scalar first because earlier terminal chains intentionally derive
+    // their scores locally while updating the permutation.
+    best_flops = score(&best_perm);
+    let telos_seeds = runner_up.borrow().clone();
+    let (telos_perm, telos_flops) = telos::refine(
+        &scoring_pat,
+        nnz,
+        max_deg,
+        &best_perm,
+        best_flops,
+        &telos_seeds,
+    );
+    if telos_flops < best_flops {
+        best_flops = telos_flops;
+        best_perm = telos_perm;
+    }
+    #[cfg(test)]
+    parallel::phase_mark("15.telos", _tph, best_flops);
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
 
     // ── TERMINAL COMPLETION-LATTICE DESCENT (MINL, see `minl.rs`) ──────────
     // Moves downward from the FINISHED incumbent's completion by exact local
@@ -3678,7 +3834,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         best_flops = best_flops.min(cur_flops);
     }
     #[cfg(test)]
-    parallel::phase_mark("15.minl", _tph, best_flops);
+    parallel::phase_mark("16.minl", _tph, best_flops);
     #[cfg(test)]
     let _tph = std::time::Instant::now();
 
@@ -3724,9 +3880,48 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         best_flops = best_flops.min(cur_flops);
     }
     #[cfg(test)]
-    parallel::phase_mark("15.peel", _tph, best_flops);
+    parallel::phase_mark("17.peel", _tph, best_flops);
     #[cfg(test)]
     let _tph = std::time::Instant::now();
+
+    // Terminal MCS tie alternatives: use original vertex id and completed-graph
+    // degree as static initial/neighbor ranks, in both directions. Keeping them
+    // outside the incumbent-dependent PEO chains makes this a true strict
+    // best-of the finished result and pays the four extractions/scorings once.
+    if n >= 16 && n <= peo_extract::MAX_N && nnz <= peo_extract::MAX_INPUT_NNZ {
+        let pp = permute_pattern(&scoring_pat, &best_perm);
+        let et = EliminationTree::from_pattern(&pp);
+        let counts = column_counts_gnp(&pp, &et);
+        if let Some(cands) = peo_extract::ranked_candidates_bounded(
+            n,
+            &pp.col_ptr,
+            &pp.row_idx,
+            &et.parent,
+            &counts,
+            &best_perm,
+            peo_extract::MAX_N,
+            peo_extract::MAX_INPUT_NNZ,
+            PEO_OVERSIZE_MAX_LNNZ,
+        ) {
+            let mut cur_flops: u64 = counts
+                .iter()
+                .map(|&c| (c as u64) * (c as u64))
+                .sum();
+            for cand in cands {
+                let f = score(&cand);
+                if f < cur_flops {
+                    cur_flops = f;
+                    best_perm = cand;
+                }
+            }
+            #[cfg(test)]
+            {
+                best_flops = best_flops.min(cur_flops);
+            }
+        }
+    }
+    #[cfg(test)]
+    parallel::phase_mark("18.peo-ties", _tph, best_flops);
 
     #[cfg(test)]
     transplant_probe::capture(&runner_up.borrow());

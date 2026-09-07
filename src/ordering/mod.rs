@@ -1855,38 +1855,47 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // randomized-restart minimum-METRIC ordering for one metric pass. The winner
     // never built this family: only AMD/AMF are relabelled. Three variant lotteries
     // (DegSqrt at α=1, the biggest named light-tier win; DegP075 and SqDiv at the
-    // shipped α=10 default, two distinct objectives) keep attribution per-variant;
-    // `RELABEL_METRIC_BUDGET / nnz` passes each (capped) bound the added time
-    // uniformly, inside the same `nnz < 130k` envelope whose per-pass cost is
-    // already measured safe. Queued after the cascade with everything else ported,
-    // so cascade gates see crown values; best-of floor.
+    // shipped α=10 default, two distinct objectives), each drawn at its shipped α
+    // and at mid α=5 (the continuum midpoint the plain α grid just showed to be
+    // load-bearing), keep attribution per-variant; `RELABEL_METRIC_BUDGET / nnz`
+    // passes each (capped) bound the added time uniformly, inside the same
+    // `nnz < 130k` envelope whose per-pass cost is already measured safe. Queued
+    // after the cascade with everything else ported, so cascade gates see crown
+    // values; best-of floor.
     const RELABEL_METRIC_BUDGET: usize = 120_000;
     const RELABEL_METRIC_MAX_PASSES: usize = 6;
     if heavy_arm_enabled() && nnz < METRIC_LIGHT_MAX_NNZ {
-        for (v, variant) in [
-            custom_metrics::ScoreVariant::DegSqrt,
-            custom_metrics::ScoreVariant::DegP075,
-            custom_metrics::ScoreVariant::SqDiv,
+        for (v, (variant, shipped_alpha)) in [
+            (custom_metrics::ScoreVariant::DegSqrt, 1.0f64),
+            (custom_metrics::ScoreVariant::DegP075, 10.0f64),
+            (custom_metrics::ScoreVariant::SqDiv, 10.0f64),
         ]
         .into_iter()
         .enumerate()
         {
-            let alpha = if v == 0 { 1.0 } else { 10.0 };
-            let passes =
-                (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
-            for r in 0..passes {
-                let seed = 30_000u64 + (v as u64) * 1_000 + r as u64;
-                consider!(move || {
-                    let q = relabel(n, seed);
-                    let b = permute_pattern(sp_ref, &q);
-                    let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
-                    let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
-                    let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
-                        .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
-                    let pb =
-                        custom_metrics::order_variant(&bcore, alpha, true, variant)?;
-                    Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
-                });
+            for (ai, alpha) in [shipped_alpha, 5.0].into_iter().enumerate() {
+                let passes =
+                    (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
+                for r in 0..passes {
+                    // ai=0 reuses the shipped 0093 seed stream exactly (same draws);
+                    // the mid-α lottery lives on a disjoint fixed stream.
+                    let seed = if ai == 0 {
+                        30_000u64 + (v as u64) * 1_000 + r as u64
+                    } else {
+                        36_000u64 + (v as u64) * 1_000 + r as u64
+                    };
+                    consider!(move || {
+                        let q = relabel(n, seed);
+                        let b = permute_pattern(sp_ref, &q);
+                        let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+                        let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+                        let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+                            .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
+                        let pb =
+                            custom_metrics::order_variant(&bcore, alpha, true, variant)?;
+                        Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+                    });
+                }
             }
         }
     }
@@ -3538,23 +3547,33 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // fill-edge deletion, realizes the minimal completion by MCS-PEO and by
     // AMD on it, and admits either only on a strict exact decrease. Bounded by
     // an op budget and a fill gate; the watcher above walks the same lattice
-    // with a different, witness-driven schedule and a smaller budget.
+    // with a different, witness-driven schedule and a smaller budget. Chained
+    // up to three descents: the op budget can break a scan early, leaving the
+    // completion non-minimal, so a fresh budget continues the same descent where
+    // it stopped — but each link runs only after the previous one strictly won,
+    // so most rows (and all non-winners) pay exactly the single-descent cost.
     if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16 {
         let mut cur_flops = score(&best_perm);
-        if let Some(cands) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            minl::minl_candidates(&scoring_pat, &best_perm)
-        }))
-        .ok()
-        .flatten()
-        {
-            for cand in cands {
-                if is_bijection(&cand, n) {
-                    let f = score(&cand);
-                    if f < cur_flops {
-                        cur_flops = f;
-                        best_perm = cand;
+        for _ in 0..3 {
+            let before = cur_flops;
+            if let Some(cands) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                minl::minl_candidates(&scoring_pat, &best_perm)
+            }))
+            .ok()
+            .flatten()
+            {
+                for cand in cands {
+                    if is_bijection(&cand, n) {
+                        let f = score(&cand);
+                        if f < cur_flops {
+                            cur_flops = f;
+                            best_perm = cand;
+                        }
                     }
                 }
+            }
+            if cur_flops >= before {
+                break;
             }
         }
         best_flops = best_flops.min(cur_flops);

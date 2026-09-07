@@ -6,6 +6,8 @@
 
 # Index
 
+- [0098: fresh MINL neighborhood epochs](experiments/0098-minl-neighbor-epochs.md): source-reviewed stale-membership fix on e88316d; remote result pending, no local execution.
+
 ## 2026-09-07 checkpoint
 
 - [0097: fill gate on the completion descent; sub-10k lotteries restored](experiments/0097-descent-fill-gate-and-restored-sub10k-lotteries.md): the descent's L-nonzero gate 1.5M → 600k (removes only scans the 40M budget covers < 15 % of: crudeoil_lee4_10, −0.10 s on the slowest row, +0.18 bips); gdonninelli's 0096 sub-10k block (overwritten by the e7f15a87 graft) put back verbatim; four more all-n relabelled families (DegPlusDegme@10, DegDivNvDegme@10, SqDiv@1, DegP075@1). On `fcb74a7` (dev 0.807259): **0.806788** (−5.8 bips, 12 better / 9 worse), worst 1.601 s vs 1.634 s.

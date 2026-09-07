@@ -1863,15 +1863,20 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     const RELABEL_METRIC_BUDGET: usize = 120_000;
     const RELABEL_METRIC_MAX_PASSES: usize = 6;
     if heavy_arm_enabled() && nnz < METRIC_LIGHT_MAX_NNZ {
-        for (v, variant) in [
-            custom_metrics::ScoreVariant::DegSqrt,
-            custom_metrics::ScoreVariant::DegP075,
-            custom_metrics::ScoreVariant::SqDiv,
+        // 0095: keep 0093's three families; add DegP125@10, DegDivNvWfP15@10,
+        // and DegSqrt mid-α (5 / 2.5) lotteries — same budget/cap/envelope.
+        for (v, (variant, alpha)) in [
+            (custom_metrics::ScoreVariant::DegSqrt, 1.0f64),
+            (custom_metrics::ScoreVariant::DegP075, 10.0),
+            (custom_metrics::ScoreVariant::SqDiv, 10.0),
+            (custom_metrics::ScoreVariant::DegP125, 10.0),
+            (custom_metrics::ScoreVariant::DegDivNvWfP15, 10.0),
+            (custom_metrics::ScoreVariant::DegSqrt, 5.0),
+            (custom_metrics::ScoreVariant::DegSqrt, 2.5),
         ]
         .into_iter()
         .enumerate()
         {
-            let alpha = if v == 0 { 1.0 } else { 10.0 };
             let passes =
                 (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
             for r in 0..passes {

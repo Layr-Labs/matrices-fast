@@ -181,7 +181,7 @@ const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
 /// the allowance is set in measured time: 4M units is about 140 ms on the dev host.
 const PEO_ALT_LEDGER: u64 = 4_000_000;
 const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
-const PEO_ALT_SEEDS: usize = 4;
+const PEO_ALT_SEEDS: usize = 8;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 
@@ -266,8 +266,8 @@ const SWEEP_EXTRA_MAX_NNZ: usize = 150_000;
 /// (`< 130000`) sits BELOW the slowest matrices' `nnz ≥ 163816` floor, so this
 /// only ever runs on ultra-sparse patterns where several AMD passes are
 /// milliseconds; the worst case is therefore held byte-for-byte.
-const ROBUST_MAX_N: usize = 150_000;
-const ROBUST_MAX_NNZ: usize = 600_000;
+const ROBUST_MAX_N: usize = 350_000;
+const ROBUST_MAX_NNZ: usize = 1_700_000;
 
 /// Reverse Cuthill–McKee envelope. RCM is O(nnz) pure Rust — a few-millisecond
 /// BFS even at large n — so it is bounded PRIMARILY by nnz. The `nnz < 130000`
@@ -1809,11 +1809,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 {
                     let perm: Vec<usize> = pb.iter().map(|&x| q[x as usize] as usize).collect();
                     if is_bijection(&perm, n) {
-                        let f = score(&perm);
-                        if f < best_flops {
-                            best_flops = f;
-                            best_perm = perm;
-                        }
+                        consider(&mut best_flops, &mut best_perm, &|| {
+                            Ok(perm.iter().map(|&x| x as i32).collect())
+                        });
                     }
                 }
             }
@@ -1826,11 +1824,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             })) {
                 let perm: Vec<usize> = pb.iter().map(|&x| q[x as usize] as usize).collect();
                 if is_bijection(&perm, n) {
-                    let f = score(&perm);
-                    if f < best_flops {
-                        best_flops = f;
-                        best_perm = perm;
-                    }
+                    consider(&mut best_flops, &mut best_perm, &|| {
+                        Ok(perm.iter().map(|&x| x as i32).collect())
+                    });
                 }
             }
         }

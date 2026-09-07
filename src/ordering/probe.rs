@@ -31,6 +31,11 @@ fn bucket(n: usize) -> usize {
 const BUCKET_NAMES: [&str; 3] = ["lt_1k", "1k_10k", "gt_10k"];
 const BUCKET_WEIGHTS: [f64; 3] = [0.30, 0.30, 0.40];
 
+/// Stage-6 multi-stream constants, kept test-only after submission `6ce0721`
+/// carried the production version and `failed` hidden validation.
+const CUTOFF_STREAM_SETS: usize = 32;
+const CUTOFF_STREAM_UNITS: u64 = 150_000_000;
+
 /// Weighted mean of per-bucket geomeans, with empty buckets renormalized out —
 /// the harness's exact aggregation.
 fn aggregate(log_sums: &[f64; 3], counts: &[usize; 3]) -> f64 {
@@ -2115,5 +2120,1346 @@ fn probe_uniform_rounds_synthetic() {
         let base = flops_of(&sp, &baseline);
         assert!(mine <= base, "{name}: lost the AMD incumbent");
         println!("SYNTHETIC\t{name}\t{}\t{}\t{base}\t{mine}", pat.n, pat.nnz());
+    }
+}
+
+/// Stage-6 move sampling: does the small-graph bitset polish have headroom left
+/// beyond its two hardcoded xorshift streams?
+///
+/// The shipped stage draws 512 paired-swap position tuples at seed `0x917ad73`
+/// and 1024 neutral-walk tuples at `0xa839d37`, with iteration counts that do
+/// not scale with `n`. `cutoff_differential` already shows that a *second*
+/// application of the *same* streams wins on 0 of 92 in-gate rows, which is
+/// local optimality with respect to 1536 fixed tuples only. This probe replaces
+/// the streams instead of repeating them.
+///
+/// Two shapes, both admitted by `SmallScore` strict-`<` best-of so no row can
+/// regress:
+///   * RESTART  - k independent (paired, plateau) stream pairs, each started
+///                from the incumbent, best-of.
+///   * CHAIN    - the same k pairs, each started from the current best.
+///
+/// Post-hoc identity: the mechanism is appended after `order()` returns, so it
+/// sees exactly the incumbent permutation and exactly the admission test the
+/// shipped version would apply at `mod.rs`'s stage-6 call site. Because the
+/// shipped position is *before* stage 7, a shipped version can only do better
+/// than what this prints (a strictly better `best_perm` re-enters the PEO loop),
+/// so every number here is a lower bound. Integer-exact and deterministic.
+#[test]
+#[ignore]
+fn probe_small_move_seeds() {
+    let ks: Vec<usize> = std::env::var("MOVE_SEED_KS")
+        .unwrap_or_else(|_| "1,2,4,8,32".to_string())
+        .split(',').map(|s| s.trim().parse().unwrap()).collect();
+    #[allow(non_snake_case)] let KS = &ks[..];
+    let corpus = crate::corpus::corpus();
+    let in_gate: Vec<_> = corpus
+        .iter()
+        .filter(|(_, pat)| (12..=300).contains(&pat.n) && pat.nnz() <= 3_000)
+        .collect();
+    println!("MOVESEED in_gate_rows={}", in_gate.len());
+
+    // log-ratio sums, per variant: [restart_k..., chain_k...]
+    let n_var = 2 * KS.len();
+    let mut dlog = vec![0.0f64; n_var];
+    let mut wins = vec![0usize; n_var];
+    let mut us = vec![0u128; n_var];
+    let mut inc_log = 0.0f64;
+
+    for (name, pat) in &in_gate {
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let incumbent = order(pat);
+        let scoring = SmallScore::new(pat);
+        let inc_flops = scoring.flops(&incumbent);
+        // The bitset scorer must agree with the harness's symbolic analysis or
+        // nothing below means anything.
+        assert_eq!(inc_flops, flops_of(&sp, &incumbent), "{name}");
+        inc_log += (inc_flops as f64 / amd as f64).ln();
+
+        for (ki, &k) in KS.iter().enumerate() {
+            // RESTART
+            let t = Instant::now();
+            let mut best = incumbent.clone();
+            let mut best_f = inc_flops;
+            let mut state = CUTOFF_PAIRED_SEED ^ CUTOFF_PLATEAU_SEED;
+            for s in 0..k {
+                let (s1, s2) = if s == 0 {
+                    (CUTOFF_PAIRED_SEED, CUTOFF_PLATEAU_SEED)
+                } else {
+                    let mut a = splitmix64(&mut state);
+                    let mut b = splitmix64(&mut state);
+                    if a == 0 { a = 1; }
+                    if b == 0 { b = 1; }
+                    (a, b)
+                };
+                let c = cutoff_plateau_stream(
+                    &scoring,
+                    cutoff_paired_swap_stream(&scoring, incumbent.clone(), s1, CUTOFF_PAIRED_DRAWS),
+                    true, s2, CUTOFF_PLATEAU_DRAWS,
+                );
+                let f = scoring.flops(&c);
+                if f < best_f { best_f = f; best = c; }
+            }
+            us[ki] += t.elapsed().as_micros();
+            assert!(is_bijection(&best, n), "{name}");
+            assert_eq!(best_f, flops_of(&sp, &best), "{name}");
+            assert!(best_f <= inc_flops);
+            dlog[ki] += (best_f as f64 / amd as f64).ln() - (inc_flops as f64 / amd as f64).ln();
+            if best_f < inc_flops {
+                wins[ki] += 1;
+                if k == 32 {
+                    println!("MOVESEED_ROW\tRESTART32\t{name}\tn={n}\tnnz={}\t{:.6} -> {:.6}",
+                        pat.nnz(), inc_flops as f64 / amd as f64, best_f as f64 / amd as f64);
+                }
+            }
+
+            // CHAIN
+            let vi = KS.len() + ki;
+            let t = Instant::now();
+            let mut best = incumbent.clone();
+            let mut best_f = inc_flops;
+            let mut state = CUTOFF_PAIRED_SEED ^ CUTOFF_PLATEAU_SEED;
+            for s in 0..k {
+                let (s1, s2) = if s == 0 {
+                    (CUTOFF_PAIRED_SEED, CUTOFF_PLATEAU_SEED)
+                } else {
+                    let mut a = splitmix64(&mut state);
+                    let mut b = splitmix64(&mut state);
+                    if a == 0 { a = 1; }
+                    if b == 0 { b = 1; }
+                    (a, b)
+                };
+                let c = cutoff_plateau_stream(
+                    &scoring,
+                    cutoff_paired_swap_stream(&scoring, best.clone(), s1, CUTOFF_PAIRED_DRAWS),
+                    true, s2, CUTOFF_PLATEAU_DRAWS,
+                );
+                let f = scoring.flops(&c);
+                if f < best_f { best_f = f; best = c; }
+            }
+            us[vi] += t.elapsed().as_micros();
+            assert!(is_bijection(&best, n), "{name}");
+            assert_eq!(best_f, flops_of(&sp, &best), "{name}");
+            assert!(best_f <= inc_flops);
+            dlog[vi] += (best_f as f64 / amd as f64).ln() - (inc_flops as f64 / amd as f64).ln();
+            if best_f < inc_flops {
+                wins[vi] += 1;
+                if k == 32 {
+                    println!("MOVESEED_ROW\tCHAIN32\t{name}\tn={n}\tnnz={}\t{:.6} -> {:.6}",
+                        pat.nnz(), inc_flops as f64 / amd as f64, best_f as f64 / amd as f64);
+                }
+            }
+        }
+    }
+
+    let cnt = in_gate.len() as f64;
+    // Every in-gate row has n <= 300, so all of them live in the lt_1k bucket
+    // (147 dev rows). A bucket geomean moves by exp(dlog / 147); the dev score
+    // moves by 0.30 x that, since the other two buckets cannot change.
+    let lt1k_rows = corpus.iter().filter(|(_, p)| p.n > 0 && p.n < 1_000).count() as f64;
+    println!("MOVESEED lt1k_rows={lt1k_rows} in_gate_geomean_incumbent={:.6}", (inc_log / cnt).exp());
+    for (ki, &k) in KS.iter().enumerate() {
+        for (tag, vi) in [("RESTART", ki), ("CHAIN", KS.len() + ki)] {
+            let band = (dlog[vi] / cnt).exp();
+            let lt1k_factor = (dlog[vi] / lt1k_rows).exp();
+            println!(
+                "MOVESEED\t{tag}\tk={k}\twins={}\tdlog={:.8}\tband_factor={band:.6}\tlt1k_factor={lt1k_factor:.6}\tus={}",
+                wins[vi], dlog[vi], us[vi],
+            );
+        }
+    }
+    println!("MOVESEED note: dev delta = 0.30 x lt1k_geomean x (1 - lt1k_factor), in absolute score units");
+}
+
+/// Alternate-seed chain pool depth: does the 4M-unit chain ledger shipped at
+/// `4d86414` go unspent because the seed pool runs out?
+///
+/// `PEO_ALT_SEEDS` retains the 4 best displaced orderings and chains from each
+/// in turn, all charged against one shared `PEO_ALT_LEDGER` (4M units, about
+/// 140 ms on the dev host). The pool holds the k best DISTINCT scores seen so
+/// far, which is monotone in k: a larger pool's first 4 entries are exactly the
+/// shipped pool's, in the same order, so a larger k re-runs the shipped chains
+/// unchanged and then spends whatever ledger they left over. Score is therefore
+/// monotone non-worsening in k and total chain work is bounded by the SAME
+/// ledger; the only new term is the retention bookkeeping in `consider`.
+///
+/// Prints the exact harness score for each k, plus every row that moves.
+#[test]
+#[ignore]
+fn probe_alt_seed_pool() {
+    let ks: Vec<usize> = std::env::var("ALT_POOL_KS")
+        .unwrap_or_else(|_| "4,32".to_string())
+        .split(',')
+        .map(|s| s.trim().parse().unwrap())
+        .collect();
+    let corpus = crate::corpus::corpus();
+    let mut log_sums = vec![[0.0f64; 3]; ks.len()];
+    let mut counts = [0usize; 3];
+    let mut secs = vec![0.0f64; ks.len()];
+    let mut worst = vec![(0.0f64, String::new()); ks.len()];
+    let mut base_ratio: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+
+    for (name, pat) in &corpus {
+        if pat.n == 0 { continue; }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let b = bucket(pat.n);
+        counts[b] += 1;
+        let mut row_secs: Vec<f64> = Vec::new();
+        for (i, &k) in ks.iter().enumerate() {
+            let t0 = Instant::now();
+            let perm = match forest_certificate(pat) {
+                Some(p) => p,
+                None => leader_order_pool(pat, k),
+            };
+            let el = t0.elapsed().as_secs_f64();
+            secs[i] += el;
+            row_secs.push(el);
+            if el > worst[i].0 { worst[i] = (el, name.clone()); }
+            assert!(is_bijection(&perm, pat.n), "{name} k={k}");
+            let ratio = flops_of(&sp, &perm) as f64 / amd;
+            log_sums[i][b] += ratio.ln();
+            if i == 0 {
+                base_ratio.insert(name.clone(), ratio);
+            } else {
+                let b0 = base_ratio[name];
+                if (ratio - b0).abs() > 1e-12 {
+                    println!("ALTPOOL_ROW\tk={k}\t{name}\tn={}\tnnz={}\t{b0:.6} -> {ratio:.6}\t{:+.6}",
+                        pat.n, pat.nnz(), ratio - b0);
+                }
+            }
+        }
+        let dt = row_secs.iter().cloned().fold(f64::MIN, f64::max) - row_secs[0];
+        if dt.abs() > 0.005 {
+            print!("ALTPOOL_T\t{name}\tn={}\tnnz={}\tmax_dt={:+.3}", pat.n, pat.nnz(), dt);
+            for (i, &k) in ks.iter().enumerate() { print!("\tk{k}={:.3}", row_secs[i]); }
+            println!();
+        }
+    }
+
+    for (i, &k) in ks.iter().enumerate() {
+        let score = aggregate(&log_sums[i], &counts);
+        print!("ALTPOOL\tk={k}\tscore={score:.6}");
+        for b in 0..3 {
+            print!("\t{}={:.6}", BUCKET_NAMES[b], (log_sums[i][b] / counts[b] as f64).exp());
+        }
+        println!("\ttotal_s={:.1}\tworst={:.3}s on {}", secs[i], worst[i].0, worst[i].1);
+    }
+}
+
+/// Per-row cost model for the stage-6 stream sets.
+///
+/// One `SmallScore` pass clones `n * words` u64s and then ORs a `words`-wide row
+/// into each factor entry, so its cost is `words * (n + fill)` word operations,
+/// where `fill` is the incumbent's factor nonzero count. `nnz` does not appear:
+/// a sparse pattern whose elimination fills in completely costs exactly as much
+/// as a dense one. This prints the model input and the measured time per row so
+/// the stage's op budget can be calibrated against milliseconds rather than
+/// against what the dev corpus happens to contain.
+#[test]
+#[ignore]
+fn probe_stage6_cost() {
+    let corpus = crate::corpus::corpus();
+    let mut rows: Vec<(f64, String, usize, usize, u64, u64)> = Vec::new();
+    for (name, pat) in &corpus {
+        if !(12..=300).contains(&pat.n) || pat.nnz() > 3_000 { continue; }
+        let incumbent = order(pat);
+        let scoring = SmallScore::new(pat);
+        let (mut best_f, fill) = scoring.flops_and_fill(&incumbent);
+        let words = (pat.n + 63) / 64;
+        let units = words as u64 * (pat.n as u64 + fill);
+        let per_set = (units * (CUTOFF_PAIRED_DRAWS + CUTOFF_PLATEAU_DRAWS) as u64).max(1);
+        let sets = (CUTOFF_STREAM_UNITS / per_set).clamp(1, CUTOFF_STREAM_SETS as u64) as usize;
+        let t = Instant::now();
+        let mut best = incumbent.clone();
+        let mut state = CUTOFF_PAIRED_SEED ^ CUTOFF_PLATEAU_SEED;
+        for set in 0..sets {
+            let (a, b) = if set == 0 {
+                (CUTOFF_PAIRED_SEED, CUTOFF_PLATEAU_SEED)
+            } else {
+                (splitmix64(&mut state) | 1, splitmix64(&mut state) | 1)
+            };
+            let c = cutoff_plateau_stream(
+                &scoring,
+                cutoff_paired_swap_stream(&scoring, best.clone(), a, CUTOFF_PAIRED_DRAWS),
+                true, b, CUTOFF_PLATEAU_DRAWS,
+            );
+            let f = scoring.flops(&c);
+            if f < best_f { best_f = f; best = c; }
+        }
+        let ms = t.elapsed().as_secs_f64() * 1e3;
+        rows.push((ms, name.clone(), pat.n, pat.nnz(), fill, units * sets as u64));
+    }
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    println!("STAGE6COST rows={} sets={}", rows.len(), CUTOFF_STREAM_SETS);
+    for (ms, name, n, nnz, fill, units) in &rows {
+        println!("STAGE6COST\t{name}\tn={n}\tnnz={nnz}\tfill={fill}\tunits={units}\tms={ms:.1}\tns_per_unit={:.4}",
+            ms * 1e6 / (*units as f64 * (CUTOFF_PAIRED_DRAWS + CUTOFF_PLATEAU_DRAWS) as f64));
+    }
+    let tot: f64 = rows.iter().map(|r| r.0).sum();
+    println!("STAGE6COST total_ms={tot:.1} max_ms={:.1} on {}", rows[0].0, rows[0].1);
+}
+
+/// Is there anything left at `n <= 300` in a DIFFERENT move class?
+///
+/// `0085` exhausted stage 6's own class - 512 paired position swaps plus 1024
+/// single swaps, sampled from more streams until sets 129-256 stopped winning.
+/// The band still carries 18.70 dev bips per bucket-wide 1 % and ~0.9 s of
+/// unspent time, so the question is whether the ceiling belongs to the band or
+/// to the move class. This prices three classes the shipped stage cannot reach,
+/// post-hoc on the finished permutation (a lower bound on the shipped value, by
+/// the same argument that made 0.31 post-hoc become 0.86 shipped):
+///
+///   ROT3      rotate three positions (an odd permutation the swap class needs
+///             two accepted moves to reach)
+///   REVSEG    reverse a window of 2..=8 consecutive positions
+///   INSERT    lift one position out and reinsert it elsewhere, shifting the
+///             rest - the classic Or-opt move, which no fixed number of
+///             transpositions of untouched positions reproduces
+///
+/// Each runs `k` independent streams of 1536 draws under `SmallScore` strict-`<`
+/// best-of, exactly as stage 6 admits, so a win here is a shipped win.
+#[test]
+#[ignore]
+fn probe_small_move_classes() {
+    let k: usize = std::env::var("MOVE_CLASS_K").ok().and_then(|s| s.parse().ok()).unwrap_or(8);
+    let draws: usize = 1536;
+    let corpus = crate::corpus::corpus();
+    let names = ["ROT3", "REVSEG", "INSERT", "ALL3"];
+    let mut dlog = [0.0f64; 4];
+    let mut wins = [0usize; 4];
+    let mut us = [0u128; 4];
+    let mut rowc = 0usize;
+
+    for (name, pat) in &corpus {
+        if !(12..=300).contains(&pat.n) || pat.nnz() > 3_000 { continue; }
+        rowc += 1;
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect::<Vec<_>>(),
+        ) as f64;
+        let incumbent = order(pat);
+        let scoring = SmallScore::new(pat);
+        let inc = scoring.flops(&incumbent);
+        assert_eq!(inc, flops_of(&sp, &incumbent) , "{name}");
+
+        for cls in 0..4 {
+            let t = Instant::now();
+            let mut best = incumbent.clone();
+            let mut best_f = inc;
+            let mut state = 0x5DEECE66Du64 ^ (cls as u64 + 1);
+            for _ in 0..k {
+                for pick in 0..3 {
+                    if cls < 3 && pick != cls { continue; }
+                    let mut cur = best.clone();
+                    let mut cur_f = best_f;
+                    for _ in 0..draws {
+                        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                        let a = state as usize % n;
+                        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                        let b = state as usize % n;
+                        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                        let c = state as usize % n;
+                        let mut cand = cur.clone();
+                        match pick {
+                            0 => {
+                                if a == b || b == c || a == c { continue; }
+                                let t0 = cand[a]; cand[a] = cand[b]; cand[b] = cand[c]; cand[c] = t0;
+                            }
+                            1 => {
+                                let lo = a.min(b);
+                                let len = 2 + (c % 7);
+                                let hi = (lo + len).min(n);
+                                if hi - lo < 2 { continue; }
+                                cand[lo..hi].reverse();
+                            }
+                            _ => {
+                                if a == b { continue; }
+                                let v = cand.remove(a);
+                                cand.insert(b, v);
+                            }
+                        }
+                        let f = scoring.flops_bounded(&cand, cur_f);
+                        if f < cur_f { cur_f = f; cur = cand; }
+                    }
+                    if cur_f < best_f { best_f = cur_f; best = cur; }
+                }
+            }
+            us[cls] += t.elapsed().as_micros();
+            assert!(is_bijection(&best, n), "{name} {}", names[cls]);
+            assert_eq!(best_f, flops_of(&sp, &best), "{name} {}", names[cls]);
+            assert!(best_f <= inc);
+            dlog[cls] += (best_f as f64 / amd).ln() - (inc as f64 / amd).ln();
+            if best_f < inc {
+                wins[cls] += 1;
+                println!("MOVECLASS_ROW\t{}\t{name}\tn={n}\tnnz={}\t{:.6} -> {:.6}",
+                    names[cls], pat.nnz(), inc as f64 / amd, best_f as f64 / amd);
+            }
+        }
+    }
+    let lt1k = corpus.iter().filter(|(_, p)| p.n > 0 && p.n < 1_000).count() as f64;
+    println!("MOVECLASS rows={rowc} k={k} draws={draws} lt1k_rows={lt1k}");
+    for cls in 0..4 {
+        println!("MOVECLASS\t{}\twins={}\tdlog={:.8}\tlt1k_factor={:.6}\tus={}",
+            names[cls], wins[cls], dlog[cls], (dlog[cls] / lt1k).exp(), us[cls]);
+    }
+    println!("MOVECLASS note: dev delta = 0.30 x lt1k_geomean x (1 - lt1k_factor)");
+}
+
+// ===========================================================================
+// r5 — cross-candidate subtree transplant (open seam #2)
+// ===========================================================================
+//
+// The pipeline builds two things on every row and then throws one of them
+// away: the incumbent's elimination tree (whose subtrees are exactly
+// separable subproblems, `rgreedy::subtree_refine`'s own premise) and the
+// distinct displaced orderings `consider` retains for stage 8. This probe
+// donates the second into the first.
+//
+// Cost model, and why the whole block set is free: blocks are DISJOINT
+// subtrees of the postordered incumbent, so `Sigma c^2` splits as
+// (fixed part) + Sigma_blocks (block contribution), and a block's own
+// contribution is independent of what happens inside any other block.
+// Transplanting one donor into EVERY block at once and taking one exact
+// symbolic factorization therefore yields the exact per-block delta for all
+// blocks simultaneously. `k` donors cost exactly `k` full scorings, which is
+// the bound the register quotes against the ~30 `consider` already performs.
+
+thread_local! {
+    static ALT_SEEDS: std::cell::RefCell<Vec<Vec<usize>>> =
+        std::cell::RefCell::new(Vec::new());
+    static CORE_CANDIDATES: std::cell::RefCell<Vec<CoreCandidate>> =
+        std::cell::RefCell::new(Vec::new());
+}
+
+/// Test-only capture of the alternate-seed pool `leader_order_pool` retains.
+pub(super) fn capture_alt_seeds(pool: &[(u64, Vec<usize>)]) {
+    ALT_SEEDS.with(|c| {
+        let mut r = c.borrow_mut();
+        r.clear();
+        r.extend(pool.iter().map(|(_, p)| p.clone()));
+    });
+}
+
+fn take_alt_seeds() -> Vec<Vec<usize>> {
+    ALT_SEEDS.with(|c| std::mem::take(&mut *c.borrow_mut()))
+}
+
+/// One `order_core` selection: the residual core, the fixed prefix cost and the
+/// core ordering the pipeline actually splices.
+pub(super) struct CoreCandidate {
+    pub(super) cn: usize,
+    pub(super) col_ptr: Vec<usize>,
+    pub(super) row_idx: Vec<usize>,
+    pub(super) prefix_flops: u64,
+    pub(super) core_perm: Vec<usize>,
+}
+
+/// Test-only capture of the core ordering `order_core` is about to splice.
+pub(super) fn capture_core_candidate(
+    cn: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    prefix_flops: u64,
+    core_perm: &[usize],
+) {
+    CORE_CANDIDATES.with(|c| {
+        c.borrow_mut().push(CoreCandidate {
+            cn,
+            col_ptr: col_ptr.to_vec(),
+            row_idx: row_idx.to_vec(),
+            prefix_flops,
+            core_perm: core_perm.to_vec(),
+        })
+    });
+}
+
+fn take_core_candidates() -> Vec<CoreCandidate> {
+    CORE_CANDIDATES.with(|c| std::mem::take(&mut *c.borrow_mut()))
+}
+
+/// Maximal disjoint postorder subtree blocks with size in `[min_s, max_s]`,
+/// selected exactly as `rgreedy::subtree_refine` selects them (descending
+/// position scan, topmost eligible node wins).
+fn postorder_blocks(parent: &[i32], n: usize, min_s: usize, max_s: usize) -> Vec<(usize, usize)> {
+    let mut size: Vec<u32> = vec![1; n];
+    for j in 0..n {
+        let p = parent[j];
+        if p >= 0 {
+            size[p as usize] += size[j];
+        }
+    }
+    let mut covered = vec![false; n];
+    let mut blocks: Vec<(usize, usize)> = Vec::new();
+    for j in (0..n).rev() {
+        if covered[j] {
+            continue;
+        }
+        let sz = size[j] as usize;
+        if sz < min_s || sz > max_s {
+            continue;
+        }
+        let a = j + 1 - sz;
+        for c in covered.iter_mut().take(j + 1).skip(a) {
+            *c = true;
+        }
+        blocks.push((a, j));
+    }
+    blocks
+}
+
+fn block_contribution(counts: &[usize], a: usize, b: usize) -> u64 {
+    counts[a..=b].iter().map(|&c| (c as u64) * (c as u64)).sum()
+}
+
+#[test]
+#[ignore]
+fn probe_subtree_transplant() {
+    let max_n: usize = std::env::var("TRANSPLANT_MAX_N")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60_000);
+    let min_s: usize = std::env::var("TRANSPLANT_MIN_S")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4);
+    let corpus = crate::corpus::corpus();
+    let mut bucket_counts = [0usize; 3];
+    for (_, p) in &corpus {
+        bucket_counts[bucket(p.n)] += 1;
+    }
+
+    let mut dlog = [0.0f64; 3];
+    let mut rows_seen = 0usize;
+    let mut rows_with_donors = 0usize;
+    let mut winners = 0usize;
+    let mut ratio_spread = 0.0f64;
+    let mut total_us = 0u128;
+    let mut scorings = 0usize;
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n < 16 || n > max_n {
+            continue;
+        }
+        rows_seen += 1;
+        let _ = take_alt_seeds();
+        let incumbent = order(pat);
+        let donors: Vec<Vec<usize>> = take_alt_seeds()
+            .into_iter()
+            .filter(|d| d.len() == n && *d != incumbent)
+            .collect();
+        if donors.len() < 2 {
+            continue;
+        }
+        rows_with_donors += 1;
+
+        let sp = scoring_pattern(pat);
+        let inc_f = flops_of(&sp, &incumbent);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+
+        let t = Instant::now();
+        // Postorder the incumbent: score-preserving, and it makes every subtree
+        // a contiguous range of positions.
+        let permuted = permute_pattern(&sp, &incumbent);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let base: Vec<usize> = post.iter().map(|&j| incumbent[j]).collect();
+        let base_pat = permute_pattern(&sp, &base);
+        let base_et = EliminationTree::from_pattern(&base_pat);
+        let base_counts = column_counts_gnp(&base_pat, &base_et);
+        let base_f: u64 = base_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+        assert_eq!(base_f, inc_f, "{name}: postorder must preserve the score");
+        let parent: Vec<i32> = base_et
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+
+        let mut ranks: Vec<Vec<usize>> = Vec::with_capacity(donors.len());
+        for d in &donors {
+            let mut r = vec![0usize; n];
+            for (k, &v) in d.iter().enumerate() {
+                r[v] = k;
+            }
+            ranks.push(r);
+        }
+
+        let widths: &[usize] = if n > 20_000 {
+            &[128, 1024]
+        } else {
+            &[32, 128, 512, 4096]
+        };
+        let mut row_best = inc_f;
+        let mut row_best_width = 0usize;
+        let mut row_blocks = 0usize;
+        for &max_s in widths {
+            if max_s < min_s {
+                continue;
+            }
+            let blocks = postorder_blocks(&parent, n, min_s, max_s.min(n));
+            if blocks.len() < 2 {
+                continue;
+            }
+            let base_contrib: Vec<u64> = blocks
+                .iter()
+                .map(|&(a, b)| block_contribution(&base_counts, a, b))
+                .collect();
+            let mut best_contrib = base_contrib.clone();
+            let mut best_seg: Vec<Option<Vec<usize>>> = vec![None; blocks.len()];
+            for rank in &ranks {
+                let mut trial = base.clone();
+                for &(a, b) in &blocks {
+                    let mut seg: Vec<usize> = base[a..=b].to_vec();
+                    seg.sort_by_key(|&v| rank[v]);
+                    trial[a..=b].copy_from_slice(&seg);
+                }
+                let tp = permute_pattern(&sp, &trial);
+                let tet = EliminationTree::from_pattern(&tp);
+                let tc = column_counts_gnp(&tp, &tet);
+                scorings += 1;
+                for (i, &(a, b)) in blocks.iter().enumerate() {
+                    let c = block_contribution(&tc, a, b);
+                    if c < best_contrib[i] {
+                        best_contrib[i] = c;
+                        best_seg[i] = Some(trial[a..=b].to_vec());
+                    }
+                }
+            }
+            let gain: u64 = base_contrib
+                .iter()
+                .zip(&best_contrib)
+                .map(|(a, b)| a - b)
+                .sum();
+            if gain == 0 {
+                continue;
+            }
+            let mut final_perm = base.clone();
+            for (i, &(a, b)) in blocks.iter().enumerate() {
+                if let Some(s) = &best_seg[i] {
+                    final_perm[a..=b].copy_from_slice(s);
+                }
+            }
+            assert!(is_bijection(&final_perm, n), "{name}");
+            let fin = flops_of(&sp, &final_perm);
+            // The separability premise, checked rather than asserted in prose.
+            assert_eq!(
+                fin,
+                inc_f - gain,
+                "{name}: block contributions must be independent (max_s={max_s})"
+            );
+            if fin < row_best {
+                row_best = fin;
+                row_best_width = max_s;
+                row_blocks = blocks.len();
+            }
+        }
+        total_us += t.elapsed().as_micros();
+
+        if row_best < inc_f {
+            winners += 1;
+            let before = inc_f as f64 / amd;
+            let after = row_best as f64 / amd;
+            ratio_spread += (before - after) * 100.0;
+            dlog[bucket(n)] += (row_best as f64).ln() - (inc_f as f64).ln();
+            println!(
+                "TRANSPLANT_ROW\t{name}\tn={n}\tnnz={}\tdonors={}\tmax_s={row_best_width}\tblocks={row_blocks}\t{inc_f} -> {row_best}\tgain={:.4}%\tratio {before:.6} -> {after:.6}",
+                pat.nnz(),
+                donors.len(),
+                100.0 * (inc_f - row_best) as f64 / inc_f as f64
+            );
+        }
+    }
+
+    println!(
+        "TRANSPLANT rows_seen={rows_seen} rows_with_donors={rows_with_donors} winners={winners} scorings={scorings} ms={:.1}",
+        total_us as f64 / 1e3
+    );
+    println!("TRANSPLANT summed_ratio_spread_points={ratio_spread:.4}");
+    for b in 0..3 {
+        let f = if bucket_counts[b] == 0 {
+            1.0
+        } else {
+            (dlog[b] / bucket_counts[b] as f64).exp()
+        };
+        println!(
+            "TRANSPLANT\t{}\trows={}\tdlog={:.8}\tfactor={:.8}",
+            BUCKET_NAMES[b], bucket_counts[b], dlog[b], f
+        );
+    }
+}
+
+// ===========================================================================
+// r5 — evaluate the small-graph polish on the K=3 residual core (seam #1)
+// ===========================================================================
+//
+// Stage 6 tests `12 <= n <= 300 && nnz <= 3000` on the RAW pattern, so a
+// 7295-vertex row whose core is 95 vertices never reaches it. This probe takes
+// the core ordering `order_core` actually splices, applies stage 6's own two
+// streams to it, and re-splices against the fixed prefix. The comparison is
+// against the SHIPPED final score, so a win here is a win production would take
+// under its own strict best-of.
+
+#[test]
+#[ignore]
+fn probe_core_gate_stage6() {
+    let sets: usize = std::env::var("CORE_GATE_SETS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
+    let units_budget: u64 = std::env::var("CORE_GATE_UNITS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10_000_000);
+    let corpus = crate::corpus::corpus();
+    let mut bucket_counts = [0usize; 3];
+    for (_, p) in &corpus {
+        bucket_counts[bucket(p.n)] += 1;
+    }
+
+    let mut dlog = [0.0f64; 3];
+    let mut in_gate = 0usize;
+    let mut newly = 0usize;
+    let mut winners = 0usize;
+    let mut equal_rows = 0usize;
+    let mut total_us = 0u128;
+    let mut worst_row_ms = 0.0f64;
+    let mut worst_row = String::new();
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let _ = take_core_candidates();
+        let incumbent = order(pat);
+        let cands = take_core_candidates();
+        if cands.is_empty() {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let inc_f = flops_of(&sp, &incumbent);
+        let (cpi, rii) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cpi, &rii).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+
+        let raw_in_gate = (12..=300).contains(&n) && nnz <= 3_000;
+        let mut row_best = inc_f;
+        let mut row_ms = 0.0f64;
+        let mut row_cn = 0usize;
+        let mut row_units = 0u64;
+        let mut row_hit = false;
+        for c in &cands {
+            if !(12..=300).contains(&c.cn) || c.row_idx.len() > 3_000 {
+                continue;
+            }
+            row_hit = true;
+            let core_pat = Pattern {
+                n: c.cn,
+                col_ptr: c.col_ptr.clone(),
+                row_idx: c.row_idx.clone(),
+            };
+            let core_sp = ScoringPattern {
+                n: c.cn,
+                col_ptr: c.col_ptr.clone(),
+                row_idx: c.row_idx.clone(),
+            };
+            let t = Instant::now();
+            let scoring = SmallScore::new(&core_pat);
+            let (base_f, fill) = scoring.flops_and_fill(&c.core_perm);
+            assert_eq!(base_f, flops_of(&core_sp, &c.core_perm), "{name}: core scorer");
+            // Refuse-at-zero clamp: on the core there is no incumbent to
+            // preserve, so a row whose stream pair does not fit the meter gets
+            // no sets at all.
+            let words = (c.cn + 63) / 64;
+            let per_set =
+                (words as u64 * (c.cn as u64 + fill)) * (CUTOFF_PAIRED_DRAWS + CUTOFF_PLATEAU_DRAWS) as u64;
+            let allowed = if per_set == 0 { 0 } else { (units_budget / per_set) as usize };
+            let use_sets = allowed.min(sets);
+            let mut best = c.core_perm.clone();
+            let mut best_f = base_f;
+            let mut state = CUTOFF_PAIRED_SEED ^ CUTOFF_PLATEAU_SEED;
+            for set in 0..use_sets {
+                let (sa, sb) = if set == 0 {
+                    (CUTOFF_PAIRED_SEED, CUTOFF_PLATEAU_SEED)
+                } else {
+                    (splitmix64(&mut state) | 1, splitmix64(&mut state) | 1)
+                };
+                let cand = cutoff_plateau_stream(
+                    &scoring,
+                    cutoff_paired_swap_stream(&scoring, best.clone(), sa, CUTOFF_PAIRED_DRAWS),
+                    true,
+                    sb,
+                    CUTOFF_PLATEAU_DRAWS,
+                );
+                let f = scoring.flops(&cand);
+                if f < best_f {
+                    best_f = f;
+                    best = cand;
+                }
+            }
+            let ms = t.elapsed().as_secs_f64() * 1e3;
+            row_ms += ms;
+            row_units += per_set * use_sets as u64;
+            row_cn = c.cn;
+            if best_f < base_f {
+                assert!(is_bijection(&best, c.cn), "{name}");
+                assert_eq!(best_f, flops_of(&core_sp, &best), "{name}: polished core");
+            }
+            let total = c.prefix_flops + best_f;
+            if total < row_best {
+                row_best = total;
+            }
+        }
+        if !row_hit {
+            continue;
+        }
+        in_gate += 1;
+        if !raw_in_gate {
+            newly += 1;
+        }
+        total_us += (row_ms * 1e3) as u128;
+        if row_ms > worst_row_ms {
+            worst_row_ms = row_ms;
+            worst_row = name.clone();
+        }
+        if row_best < inc_f {
+            winners += 1;
+            dlog[bucket(n)] += (row_best as f64).ln() - (inc_f as f64).ln();
+            println!(
+                "COREGATE_ROW\t{name}\tn={n}\tnnz={nnz}\tcn={row_cn}\traw_in_gate={raw_in_gate}\t{inc_f} -> {row_best}\tgain={:.4}%\tratio {:.6} -> {:.6}\tms={row_ms:.2}\tunits={row_units}",
+                100.0 * (inc_f - row_best) as f64 / inc_f as f64,
+                inc_f as f64 / amd,
+                row_best as f64 / amd
+            );
+        } else if row_best == inc_f {
+            equal_rows += 1;
+        }
+    }
+
+    println!(
+        "COREGATE in_gate={in_gate} newly_admissible={newly} winners={winners} equal={equal_rows} sets={sets} units={units_budget} total_ms={:.1} worst_ms={worst_row_ms:.2} on {worst_row}",
+        total_us as f64 / 1e3
+    );
+    for b in 0..3 {
+        let f = if bucket_counts[b] == 0 {
+            1.0
+        } else {
+            (dlog[b] / bucket_counts[b] as f64).exp()
+        };
+        println!(
+            "COREGATE\t{}\trows={}\tdlog={:.8}\tfactor={:.8}",
+            BUCKET_NAMES[b], bucket_counts[b], dlog[b], f
+        );
+    }
+}
+
+// ===========================================================================
+// r5 — the transplant, METERED exactly as production would meter it
+// ===========================================================================
+//
+// The unmetered ceiling is not shippable: the widths x donors sweep costs up
+// to 34 exact scorings on a row whose scoring is O(n + nnz). This arm charges
+// every scoring against ONE ledger denominated in `(n + nnz)` units — an
+// INPUT, so the admission gate really is a work bound (D2) — and reports the
+// per-row added time so the S1/S2/S3 distribution can be predeclared (D12).
+//
+// Setup is two units: one `score` to get the incumbent's per-position column
+// counts, and one permute+etree+postorder. The postordered base's counts are
+// then a PERMUTATION of the incumbent's (a postorder is an equivalent
+// ordering, so every vertex keeps its column count), which is asserted here
+// rather than assumed.
+
+fn transplant_widths() -> Vec<usize> {
+    std::env::var("TRANSPLANT_WIDTHS")
+        .ok()
+        .map(|s| s.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+        .unwrap_or_else(|| vec![32, 128, 512, 4096])
+}
+
+#[test]
+#[ignore]
+fn probe_transplant_metered() {
+    let cap: u64 = std::env::var("TRANSPLANT_LEDGER")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(400_000);
+    let max_donors: usize = std::env::var("TRANSPLANT_DONORS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8);
+    let min_s: usize = std::env::var("TRANSPLANT_MIN_S")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4);
+    let widths = transplant_widths();
+
+    let corpus = crate::corpus::corpus();
+    let mut bucket_counts = [0usize; 3];
+    for (_, p) in &corpus {
+        bucket_counts[bucket(p.n)] += 1;
+    }
+
+    let mut dlog = [0.0f64; 3];
+    let mut winners = 0usize;
+    let mut admitted = 0usize;
+    let mut refused = 0usize;
+    let mut spread = 0.0f64;
+    let mut total_ms = 0.0f64;
+    let mut units_total = 0u64;
+    let mut s5 = 0usize;
+    let mut s10 = 0usize;
+    let mut s25 = 0usize;
+    let mut s50 = 0usize;
+    let mut worst = (0.0f64, String::new());
+    let mut width_wins = vec![0usize; widths.len()];
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let _ = take_alt_seeds();
+        let incumbent = order(pat);
+        let mut donors: Vec<Vec<usize>> = take_alt_seeds()
+            .into_iter()
+            .filter(|d| d.len() == n && *d != incumbent)
+            .collect();
+        donors.truncate(max_donors);
+        if donors.is_empty() || n < 16 {
+            continue;
+        }
+        let unit = n as u64 + nnz as u64;
+        if unit.saturating_mul(2) > cap {
+            refused += 1;
+            continue;
+        }
+        admitted += 1;
+
+        let sp = scoring_pattern(pat);
+        let t = Instant::now();
+        // Unit 1: the incumbent's exact score and per-position column counts.
+        let inc_permuted = permute_pattern(&sp, &incumbent);
+        let inc_et = EliminationTree::from_pattern(&inc_permuted);
+        let inc_counts = column_counts_gnp(&inc_permuted, &inc_et);
+        let inc_f: u64 = inc_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+        // Unit 2: postorder. Score-preserving, makes subtrees contiguous.
+        let post = inc_et.postorder();
+        let base: Vec<usize> = post.iter().map(|&j| incumbent[j]).collect();
+        let base_counts: Vec<usize> = post.iter().map(|&j| inc_counts[j]).collect();
+        let mut post_of = vec![0usize; n];
+        for (k, &j) in post.iter().enumerate() {
+            post_of[j] = k;
+        }
+        let parent: Vec<i32> = {
+            let mut p = vec![-1i32; n];
+            for j in 0..n {
+                if let Some(q) = inc_et.parent[j] {
+                    p[post_of[j]] = post_of[q] as i32;
+                }
+            }
+            p
+        };
+        let mut ledger = 2 * unit;
+
+        let mut ranks: Vec<Vec<usize>> = Vec::with_capacity(donors.len());
+        for d in &donors {
+            let mut r = vec![0usize; n];
+            for (k, &v) in d.iter().enumerate() {
+                r[v] = k;
+            }
+            ranks.push(r);
+        }
+
+        let mut row_best = inc_f;
+        let mut row_best_perm: Option<Vec<usize>> = None;
+        let mut row_best_width = usize::MAX;
+        let mut checked_base = false;
+        'widths: for (wi, &max_s) in widths.iter().enumerate() {
+            let blocks = postorder_blocks(&parent, n, min_s, max_s.min(n));
+            if blocks.len() < 2 {
+                continue;
+            }
+            let base_contrib: Vec<u64> = blocks
+                .iter()
+                .map(|&(a, b)| block_contribution(&base_counts, a, b))
+                .collect();
+            let mut best_contrib = base_contrib.clone();
+            let mut best_seg: Vec<Option<Vec<usize>>> = vec![None; blocks.len()];
+            for rank in &ranks {
+                if ledger + unit > cap {
+                    break 'widths;
+                }
+                ledger += unit;
+                let mut trial = base.clone();
+                for &(a, b) in &blocks {
+                    let mut seg: Vec<usize> = base[a..=b].to_vec();
+                    seg.sort_by_key(|&v| rank[v]);
+                    trial[a..=b].copy_from_slice(&seg);
+                }
+                let tp = permute_pattern(&sp, &trial);
+                let tet = EliminationTree::from_pattern(&tp);
+                let tc = column_counts_gnp(&tp, &tet);
+                if !checked_base {
+                    // The postorder-invariance of the column counts, checked.
+                    let bp = permute_pattern(&sp, &base);
+                    let bet = EliminationTree::from_pattern(&bp);
+                    let bc = column_counts_gnp(&bp, &bet);
+                    assert_eq!(bc, base_counts, "{name}: postorder must preserve counts");
+                    checked_base = true;
+                }
+                for (i, &(a, b)) in blocks.iter().enumerate() {
+                    let c = block_contribution(&tc, a, b);
+                    if c < best_contrib[i] {
+                        best_contrib[i] = c;
+                        best_seg[i] = Some(trial[a..=b].to_vec());
+                    }
+                }
+            }
+            let gain: u64 = base_contrib
+                .iter()
+                .zip(&best_contrib)
+                .map(|(a, b)| a - b)
+                .sum();
+            if gain == 0 {
+                continue;
+            }
+            if ledger + unit > cap {
+                break 'widths;
+            }
+            ledger += unit;
+            let mut final_perm = base.clone();
+            for (i, &(a, b)) in blocks.iter().enumerate() {
+                if let Some(s) = &best_seg[i] {
+                    final_perm[a..=b].copy_from_slice(s);
+                }
+            }
+            assert!(is_bijection(&final_perm, n), "{name}");
+            let f = flops_of(&sp, &final_perm);
+            assert_eq!(f, inc_f - gain, "{name}: blocks must be independent");
+            if f < row_best {
+                row_best = f;
+                row_best_perm = Some(final_perm);
+                row_best_width = wi;
+            }
+        }
+        let ms = t.elapsed().as_secs_f64() * 1e3;
+        total_ms += ms;
+        units_total += ledger;
+        if ms > 5.0 {
+            s5 += 1;
+        }
+        if ms > 10.0 {
+            s10 += 1;
+        }
+        if ms > 25.0 {
+            s25 += 1;
+        }
+        if ms > 50.0 {
+            s50 += 1;
+        }
+        if ms > worst.0 {
+            worst = (ms, name.clone());
+        }
+        if let Some(p) = row_best_perm {
+            assert!(is_bijection(&p, n));
+            winners += 1;
+            width_wins[row_best_width] += 1;
+            dlog[bucket(n)] += (row_best as f64).ln() - (inc_f as f64).ln();
+            let pct = 100.0 * (inc_f - row_best) as f64 / inc_f as f64;
+            spread += pct;
+            println!(
+                "TPM_ROW\t{name}\tn={n}\tnnz={nnz}\tunit={unit}\tdonors={}\twidth={}\tledger={ledger}\tms={ms:.2}\t{inc_f} -> {row_best}\tgain={pct:.4}%",
+                donors.len(),
+                widths[row_best_width]
+            );
+        }
+    }
+
+    println!(
+        "TPM cap={cap} donors<={max_donors} min_s={min_s} widths={widths:?} admitted={admitted} refused={refused} winners={winners}"
+    );
+    println!(
+        "TPM total_ms={total_ms:.1} units={units_total} ns_per_unit={:.3} rows_gt5ms={s5} rows_gt10ms={s10} rows_gt25ms={s25} rows_gt50ms={s50} worst={:.2}ms on {}",
+        total_ms * 1e6 / units_total.max(1) as f64,
+        worst.0,
+        worst.1
+    );
+    println!("TPM summed_ratio_spread_points={spread:.4} width_wins={width_wins:?}");
+    let mut dev = 0.0f64;
+    let geo = [0.889730f64, 0.863089, 0.752193];
+    let wts = [0.30f64, 0.30, 0.40];
+    for b in 0..3 {
+        let f = if bucket_counts[b] == 0 {
+            1.0
+        } else {
+            (dlog[b] / bucket_counts[b] as f64).exp()
+        };
+        dev += wts[b] * geo[b] * (1.0 - f);
+        println!(
+            "TPM\t{}\trows={}\tdlog={:.8}\tfactor={:.8}",
+            BUCKET_NAMES[b], bucket_counts[b], dlog[b], f
+        );
+    }
+    println!("TPM dev_bips={:.3} (against lt_1k 0.889730 / 1k_10k 0.863089 / gt_10k 0.752193)", dev * 1e4);
+}
+
+/// One metered transplant pass over an incumbent, exactly as production would
+/// run it. Returns `(improved permutation, exact score, ledger units spent)`.
+#[allow(clippy::too_many_arguments)]
+fn transplant_pass(
+    sp: &ScoringPattern,
+    n: usize,
+    unit: u64,
+    incumbent: &[usize],
+    inc_counts: &[usize],
+    inc_f: u64,
+    parent_of: &[Option<usize>],
+    post: &[usize],
+    ranks: &[Vec<usize>],
+    widths: &[usize],
+    min_s: usize,
+    cap: u64,
+) -> (Option<(u64, Vec<usize>)>, u64) {
+    if unit.saturating_mul(2) > cap || ranks.is_empty() {
+        return (None, 0);
+    }
+    let mut ledger = 2 * unit;
+    // Postorder: score-preserving, and it makes every subtree contiguous.
+    // The postordered base's counts are a permutation of the incumbent's.
+    assert_eq!(post.len(), n, "postorder must cover every vertex");
+    let base: Vec<usize> = post.iter().map(|&j| incumbent[j]).collect();
+    let base_counts: Vec<usize> = post.iter().map(|&j| inc_counts[j]).collect();
+    let mut post_of = vec![0usize; n];
+    for (k, &j) in post.iter().enumerate() {
+        post_of[j] = k;
+    }
+    let parent: Vec<i32> = {
+        let mut p = vec![-1i32; n];
+        for j in 0..n {
+            if let Some(q) = parent_of[j] {
+                p[post_of[j]] = post_of[q] as i32;
+            }
+        }
+        p
+    };
+
+    let mut row_best: Option<(u64, Vec<usize>)> = None;
+    let mut best_f = inc_f;
+    'widths: for &max_s in widths {
+        let blocks = postorder_blocks(&parent, n, min_s, max_s.min(n));
+        if blocks.len() < 2 {
+            continue;
+        }
+        let base_contrib: Vec<u64> = blocks
+            .iter()
+            .map(|&(a, b)| block_contribution(&base_counts, a, b))
+            .collect();
+        let mut best_contrib = base_contrib.clone();
+        let mut best_seg: Vec<Option<Vec<usize>>> = vec![None; blocks.len()];
+        for rank in ranks {
+            if ledger + unit > cap {
+                break 'widths;
+            }
+            ledger += unit;
+            let mut trial = base.clone();
+            for &(a, b) in &blocks {
+                let mut seg: Vec<usize> = base[a..=b].to_vec();
+                seg.sort_by_key(|&v| rank[v]);
+                trial[a..=b].copy_from_slice(&seg);
+            }
+            let tp = permute_pattern(sp, &trial);
+            let tet = EliminationTree::from_pattern(&tp);
+            let tc = column_counts_gnp(&tp, &tet);
+            for (i, &(a, b)) in blocks.iter().enumerate() {
+                let c = block_contribution(&tc, a, b);
+                if c < best_contrib[i] {
+                    best_contrib[i] = c;
+                    best_seg[i] = Some(trial[a..=b].to_vec());
+                }
+            }
+        }
+        let gain: u64 = base_contrib
+            .iter()
+            .zip(&best_contrib)
+            .map(|(a, b)| a - b)
+            .sum();
+        if gain == 0 || inc_f - gain >= best_f {
+            continue;
+        }
+        if ledger + unit > cap {
+            break 'widths;
+        }
+        ledger += unit;
+        let mut final_perm = base.clone();
+        for (i, &(a, b)) in blocks.iter().enumerate() {
+            if let Some(s) = &best_seg[i] {
+                final_perm[a..=b].copy_from_slice(s);
+            }
+        }
+        if !is_bijection(&final_perm, n) {
+            continue;
+        }
+        let f = flops_of(sp, &final_perm);
+        assert_eq!(f, inc_f - gain, "block contributions must be independent");
+        if f < best_f {
+            best_f = f;
+            row_best = Some((f, final_perm));
+        }
+    }
+    (row_best, ledger)
+}
+
+#[test]
+#[ignore]
+fn probe_transplant_sweep() {
+    let caps: Vec<u64> = std::env::var("TRANSPLANT_CAPS")
+        .unwrap_or_else(|_| "300000,600000,1000000,2000000".to_string())
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+    let widths = transplant_widths();
+    let min_s: usize = std::env::var("TRANSPLANT_MIN_S")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4);
+    let max_donors: usize = std::env::var("TRANSPLANT_DONORS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8);
+
+    let corpus = crate::corpus::corpus();
+    let mut bucket_counts = [0usize; 3];
+    for (_, p) in &corpus {
+        bucket_counts[bucket(p.n)] += 1;
+    }
+    let nc = caps.len();
+    let mut dlog = vec![[0.0f64; 3]; nc];
+    let mut winners = vec![0usize; nc];
+    let mut admitted = vec![0usize; nc];
+    let mut total_ms = vec![0.0f64; nc];
+    let mut units = vec![0u64; nc];
+    let mut s25 = vec![0usize; nc];
+    let mut s50 = vec![0usize; nc];
+    let mut s10 = vec![0usize; nc];
+    let mut worst = vec![(0.0f64, String::new()); nc];
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let _ = take_alt_seeds();
+        let incumbent = order(pat);
+        let mut donors: Vec<Vec<usize>> = take_alt_seeds()
+            .into_iter()
+            .filter(|d| d.len() == n && *d != incumbent)
+            .collect();
+        donors.truncate(max_donors);
+        if donors.is_empty() || n < 16 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let permuted = permute_pattern(&sp, &incumbent);
+        let et = EliminationTree::from_pattern(&permuted);
+        let inc_counts = column_counts_gnp(&permuted, &et);
+        let inc_f: u64 = inc_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+        let parent_of: Vec<Option<usize>> = et.parent.clone();
+        let post = et.postorder();
+        let ranks: Vec<Vec<usize>> = donors
+            .iter()
+            .map(|d| {
+                let mut r = vec![0usize; n];
+                for (k, &v) in d.iter().enumerate() {
+                    r[v] = k;
+                }
+                r
+            })
+            .collect();
+        let unit = n as u64 + nnz as u64;
+
+        for (ci, &cap) in caps.iter().enumerate() {
+            let t = Instant::now();
+            let (res, spent) = transplant_pass(
+                &sp, n, unit, &incumbent, &inc_counts, inc_f, &parent_of, &post, &ranks,
+                &widths, min_s, cap,
+            );
+            let ms = t.elapsed().as_secs_f64() * 1e3;
+            if spent == 0 {
+                continue;
+            }
+            admitted[ci] += 1;
+            total_ms[ci] += ms;
+            units[ci] += spent;
+            if ms > 10.0 { s10[ci] += 1; }
+            if ms > 25.0 { s25[ci] += 1; }
+            if ms > 50.0 { s50[ci] += 1; }
+            if ms > worst[ci].0 { worst[ci] = (ms, name.clone()); }
+            if let Some((f, _)) = res {
+                winners[ci] += 1;
+                dlog[ci][bucket(n)] += (f as f64).ln() - (inc_f as f64).ln();
+                println!(
+                    "TSW_ROW\tcap={cap}\t{name}\tn={n}\tnnz={nnz}\tunit={unit}\tspent={spent}\tms={ms:.2}\t{inc_f} -> {f}\tgain={:.4}%",
+                    100.0 * (inc_f - f) as f64 / inc_f as f64
+                );
+            }
+        }
+    }
+
+    let geo = [0.889730f64, 0.863089, 0.752193];
+    let wts = [0.30f64, 0.30, 0.40];
+    println!("TSW widths={widths:?} min_s={min_s} donors<={max_donors}");
+    for (ci, &cap) in caps.iter().enumerate() {
+        let mut dev = 0.0f64;
+        let mut fac = [0.0f64; 3];
+        for b in 0..3 {
+            let f = if bucket_counts[b] == 0 {
+                1.0
+            } else {
+                (dlog[ci][b] / bucket_counts[b] as f64).exp()
+            };
+            fac[b] = f;
+            dev += wts[b] * geo[b] * (1.0 - f);
+        }
+        println!(
+            "TSW\tcap={cap}\tadmitted={}\twinners={}\tdev_bips={:.3}\tlt_1k={:.8}\t1k_10k={:.8}\tgt_10k={:.8}\ttotal_ms={:.1}\tns_per_unit={:.2}\tgt10ms={}\tgt25ms={}\tgt50ms={}\tworst={:.2}ms/{}",
+            admitted[ci], winners[ci], dev * 1e4, fac[0], fac[1], fac[2],
+            total_ms[ci], total_ms[ci] * 1e6 / units[ci].max(1) as f64,
+            s10[ci], s25[ci], s50[ci], worst[ci].0, worst[ci].1
+        );
     }
 }

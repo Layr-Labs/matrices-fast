@@ -385,6 +385,28 @@ impl ScoreWorkspace {
         self.delta.iter().map(|&c| c as u64).sum()
     }
 
+    /// Valid after `flops()`: the exact column count of every POSITION of the
+    /// permuted pattern, i.e. `c_j` for `j` in `0..n`. `nnz_l` is its sum and
+    /// the returned flop count is the sum of its squares, so exposing it adds
+    /// no work at all - it is the array both were already reduced from.
+    pub(crate) fn counts(&self) -> &[i32] {
+        &self.delta
+    }
+
+    /// Valid after `flops()`: the elimination-tree parent of every POSITION
+    /// (`-1` = root).
+    pub(crate) fn etree_parent(&self) -> &[i32] {
+        &self.parent
+    }
+
+    /// Valid after `flops()`: an elimination-tree postorder over POSITIONS,
+    /// roots ascending and children ascending - the same traversal
+    /// `EliminationTree::postorder()` returns, which is what makes a subtree a
+    /// contiguous range of positions after re-permuting by it.
+    pub(crate) fn etree_postorder(&self) -> &[u32] {
+        &self.post
+    }
+
     pub(crate) fn flops(&mut self, pat: &ScoringPattern, perm: &[usize]) -> u64 {
         self.permute_into(pat, perm);
         self.build_etree();

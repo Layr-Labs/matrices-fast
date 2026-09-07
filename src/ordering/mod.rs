@@ -181,7 +181,45 @@ const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
 /// the allowance is set in measured time: 4M units is about 140 ms on the dev host.
 const PEO_ALT_LEDGER: u64 = 4_000_000;
 const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
+/// Retained alternate chain seeds. The pool holds the `PEO_ALT_SEEDS` best
+/// DISTINCT displaced scores seen so far, which is monotone in the constant:
+/// raising it re-runs the shipped chains unchanged and then spends whatever
+/// the shared `PEO_ALT_LEDGER` has left, so the per-matrix work envelope is
+/// the same 4M units and no row can regress under the strict best-of. Swept
+/// over the dev corpus at 4 / 8 / 16 / 32: 8 takes the whole knee (4 rows,
+/// -0.61 dev bips, +3.6 s corpus-wide, +7 ms on the corpus maximum), 16 adds
+/// nothing, and 32 buys 0.20 bips more for +9.8 s and +49 ms on the corpus
+/// maximum - which is the tail rule's whole tolerance.
 const PEO_ALT_SEEDS: usize = 8;
+/// Total permutation entries the alternate-seed pool may retain, i.e. its
+/// address-space bound: 16M entries is 128 MB, exactly what four seeds cost at
+/// the chain gate's own corner.
+const PEO_ALT_POOL_ELEMS: usize = 16_000_000;
+/// Cross-candidate subtree transplant. Every charged unit is ONE call to the
+/// same arena scorer `leader_order` already invokes at all 36 `consider` sites,
+/// and that scorer is permute + elimination tree + Gilbert-Ng-Peyton column
+/// counts: linear in `(n, nnz)` and INDEPENDENT of the factor, so - unlike a
+/// `SmallScore` pass - this gate really is a work bound and a pattern that
+/// fills in completely costs exactly what a sparse one costs. Measured at
+/// 20.6 ns per `(n + nnz)` unit over 262 in-gate dev rows, so the ledger is set
+/// in TIME and not in ops: 600k units is ~12 ms here and ~17 ms on the slowest
+/// host on record, against the frontier's 134 ms of per-matrix cap slack. A row
+/// is refused outright unless the cheapest sequence that can produce anything -
+/// setup, one donor, one verification, four units - fits.
+const TRANSPLANT_LEDGER: u64 = 600_000;
+/// Block widths, COARSEST first: the largest wins are whole-subtree donations
+/// (`procurement1large` -8.69 %, `crudeoil_lee4_10` -4.68 % at 4096), so a
+/// ledger that runs out has to run out on the fine end.
+const TRANSPLANT_WIDTHS: [usize; 4] = [4_096, 512, 128, 32];
+/// Smallest subtree worth transplanting into: below four positions the block is
+/// a chain or a clique and every donor induces the same order on it.
+const TRANSPLANT_MIN_S: usize = 4;
+/// Stage-6 small-graph move sampling: one xorshift stream of positions per
+/// refiner, at the seeds and draw counts the stage has always shipped with.
+const CUTOFF_PAIRED_SEED: u64 = 0x917ad73;
+const CUTOFF_PLATEAU_SEED: u64 = 0xa839d37;
+const CUTOFF_PAIRED_DRAWS: usize = 512;
+const CUTOFF_PLATEAU_DRAWS: usize = 1024;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 
@@ -900,6 +938,36 @@ impl SmallScore {
         }
         total
     }
+    // Exact flops and the factor nonzero count of `perm` in one pass. The second
+    // number is what sets the cost of every later scoring pass: a pass clones
+    // `n * words` u64s and then ORs a `words`-wide row into each factor entry, so
+    // it costs `words * (n + fill)` word operations. `nnz` does not appear - a
+    // sparse pattern whose elimination fills in completely costs exactly as much
+    // as a dense one, which is why the stage's `nnz` gate does not bound it.
+    #[cfg(test)]
+    fn flops_and_fill(&self, perm: &[usize]) -> (u64, u64) {
+        let mut rows = self.rows.clone();
+        let words = (self.n+63)/64;
+        let mut flops = 0;
+        let mut total = 0;
+        for &v in perm {
+            let neighbors = rows[v];
+            let count = 1 + neighbors[..words].iter().map(|x| x.count_ones() as u64).sum::<u64>();
+            flops += count*count;
+            total += count;
+            for w in 0..words {
+                let mut bits = neighbors[w];
+                while bits != 0 {
+                    let u = w*64 + bits.trailing_zeros() as usize;
+                    bits &= bits-1;
+                    for k in 0..words { rows[u][k] |= neighbors[k]; }
+                    rows[u][u/64] &= !(1 << (u%64));
+                    rows[u][v/64] &= !(1 << (v%64));
+                }
+            }
+        }
+        (flops, total)
+    }
     fn flops_bounded(&self, perm: &[usize], bound: u64) -> u64 {
         let mut rows = self.rows.clone();
         let words = (self.n+63)/64;
@@ -974,13 +1042,25 @@ fn plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<us
     best
 }
 
-fn cutoff_paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
+#[cfg(test)]
+fn cutoff_paired_swap_refine(pattern: &Pattern, best: Vec<usize>) -> Vec<usize> {
+    if best.len() < 4 { return best; }
+    let scoring = SmallScore::new(pattern);
+    cutoff_paired_swap_stream(&scoring, best, CUTOFF_PAIRED_SEED, CUTOFF_PAIRED_DRAWS)
+}
+
+// The position-sampling core of the paired-swap refiner. The xorshift seed and
+// the draw count are parameters so that several independent streams can share
+// one prebuilt scorer; `(CUTOFF_PAIRED_SEED, CUTOFF_PAIRED_DRAWS)` reproduces
+// the single-stream behaviour bit-for-bit.
+fn cutoff_paired_swap_stream(
+    scoring: &SmallScore, mut best: Vec<usize>, seed: u64, draws: usize,
+) -> Vec<usize> {
     let n = best.len();
     if n < 4 { return best; }
-    let scoring = SmallScore::new(pattern);
     let mut best_f = scoring.flops(&best);
-    let mut state = 0x917ad73u64;
-    for _ in 0..512 {
+    let mut state = seed;
+    for _ in 0..draws {
         let mut positions = [0usize; 4];
         for p in &mut positions {
             state ^= state << 13; state ^= state >> 7; state ^= state << 17;
@@ -997,14 +1077,23 @@ fn cutoff_paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usi
 }
 
 // Walk score-neutral permutations, retaining strict-best output separately.
+#[cfg(test)]
 fn cutoff_plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<usize> {
+    if start.len() < 2 { return start; }
+    let scoring = SmallScore::new(pattern);
+    cutoff_plateau_stream(&scoring, start, neutral, CUTOFF_PLATEAU_SEED, CUTOFF_PLATEAU_DRAWS)
+}
+
+// The position-sampling core of the neutral walk, parameterised the same way.
+fn cutoff_plateau_stream(
+    scoring: &SmallScore, start: Vec<usize>, neutral: bool, seed: u64, draws: usize,
+) -> Vec<usize> {
     let n=start.len();
     if n<2 { return start; }
-    let scoring=SmallScore::new(pattern);
     let mut best=start.clone(); let mut current=start;
     let mut best_f=scoring.flops(&best);
-    let mut state=0xa839d37u64;
-    for _ in 0..1024 {
+    let mut state=seed;
+    for _ in 0..draws {
         state^=state<<13; state^=state>>7; state^=state<<17; let a=state as usize%n;
         state^=state<<13; state^=state>>7; state^=state<<17; let b=state as usize%n;
         if a==b { continue; }
@@ -1063,6 +1152,15 @@ fn reference_plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool)
 }
 
 fn leader_order(pattern: &Pattern) -> Vec<usize> {
+    leader_order_pool(pattern, PEO_ALT_SEEDS)
+}
+
+// `alt_pool` is the number of displaced orderings retained as alternate chain
+// seeds. It is a parameter only so a probe can sweep it; production always
+// passes `PEO_ALT_SEEDS`. The pool holds the `alt_pool` best DISTINCT scores
+// seen so far, which is monotone in `alt_pool`: a larger pool's first
+// `PEO_ALT_SEEDS` entries are exactly the smaller pool's, in the same order.
+fn leader_order_pool(pattern: &Pattern, alt_pool: usize) -> Vec<usize> {
     let mut terminal_core_candidate: Option<(u64, Vec<usize>)> = None;
     let n = pattern.n;
     if n == 0 {
@@ -1149,6 +1247,20 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Try a candidate produced by `f`; keep it if it is a valid bijection with
     // strictly fewer flops. `catch_unwind` guards against a candidate panicking
     // (which would otherwise crash the worker and FAIL the whole run).
+    // Only the alternate-seed chain stage reads this pool, and its gate is known
+    // up front, so a matrix that can never reach that stage retains nothing.
+    // The second clamp holds the pool's ADDRESS SPACE at the incumbent's worst
+    // case rather than at twice it: `RULES.md` caps a graded matrix at 4 GiB and
+    // says the cap is not applied to local runs, so this term cannot be measured
+    // here and has to be solved. The chain gate admits `n + nnz < 4_000_000`, so
+    // four retained permutations are at most 4 x 4M x 8 B = 128 MB; capping the
+    // pool at `PEO_ALT_POOL_ELEMS` keeps eight of them inside the same 128 MB and
+    // still never falls below four anywhere the gate admits.
+    let alt_pool = if n >= 16 && (n as u64 + pattern.nnz() as u64) < PEO_ALT_LEDGER {
+        alt_pool.min(PEO_ALT_POOL_ELEMS / n)
+    } else {
+        0
+    };
     let runner_up: std::cell::RefCell<Vec<(u64, Vec<usize>)>> = std::cell::RefCell::new(Vec::new());
     let consider =
         |best_flops: &mut u64,
@@ -1168,11 +1280,27 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // Retain the best few displaced orderings. A chain started from a
                 // different ordering converges to a different minimal triangulation,
                 // and the leader's is not always the cheapest one.
+                // The pool is always sorted, distinct by score, and at most
+                // `alt_pool` long, so an entry whose score is already held, or
+                // which loses to a full pool's worst, would be dropped again by
+                // the very next dedup/truncate. Deciding that BEFORE cloning
+                // makes the common case an O(alt_pool) scan of u64 keys instead
+                // of an O(n) copy plus a sort, and leaves the retained list
+                // bit-identical.
                 let mut r = runner_up.borrow_mut();
-                if f < *best_flops { r.push((*best_flops, best_perm.clone())); } else { r.push((f, perm.clone())); }
-                r.sort_by_key(|(s, _)| *s);
-                r.dedup_by_key(|(s, _)| *s);
-                r.truncate(PEO_ALT_SEEDS);
+                let displaced = if f < *best_flops { *best_flops } else { f };
+                let admits = r.len() < alt_pool
+                    && !r.iter().any(|&(s, _)| s == displaced)
+                    || r.len() == alt_pool
+                        && alt_pool > 0
+                        && displaced < r[alt_pool - 1].0
+                        && !r.iter().any(|&(s, _)| s == displaced);
+                if admits {
+                    let keep = if f < *best_flops { best_perm.clone() } else { perm.clone() };
+                    let at = r.partition_point(|&(s, _)| s < displaced);
+                    r.insert(at, (displaced, keep));
+                    r.truncate(alt_pool);
+                }
             }
             if f < *best_flops {
                 *best_flops = f;
@@ -2642,6 +2770,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 None
             };
             let core_perm: &[usize] = refined.as_deref().unwrap_or(cp);
+            #[cfg(test)]
+            probe::capture_core_candidate(
+                cn, &cl.core_col_ptr, &cl.core_row_idx, cl.prefix_flops, core_perm,
+            );
             let mut cand = core_lift::splice(cl, core_perm);
             if !is_bijection(&cand, n) {
                 return None;
@@ -2867,8 +2999,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
     if n >= 12 && n <= 300 && pattern.nnz() <= 3_000 {
-        best_perm = cutoff_paired_swap_refine(pattern, best_perm);
-        best_perm = cutoff_plateau_refine(pattern, best_perm, true);
+        // One stream pair, exactly as shipped. The 32-set version measured
+        // 0.86 dev bips and raised 104 of 300 rows by more than 25 ms with a
+        // 154 ms maximum; submission `6ce0721` carried it and `failed` hidden
+        // validation, so the multi-set stage is withdrawn pending a budget an
+        // order of magnitude smaller.
+        let scoring = SmallScore::new(pattern);
+        best_perm = cutoff_plateau_stream(
+            &scoring,
+            cutoff_paired_swap_stream(
+                &scoring, best_perm, CUTOFF_PAIRED_SEED, CUTOFF_PAIRED_DRAWS,
+            ),
+            true, CUTOFF_PLATEAU_SEED, CUTOFF_PLATEAU_DRAWS,
+        );
     }
     // Re-extract two PEOs from the fully finished result, then repeat only
     // after a strict exact gain. Each round drops its reconstruction scratch.
@@ -2911,7 +3054,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
             if final_flops == incumbent_flops { break; }
         }
-    } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ {
+    } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ
+        && 5 * (n as u64 + nnz as u64) < PEO_LARGE_LEDGER
+    {
+        // The third conjunct is a pre-symbolic refusal, not a new limit. Every
+        // round of this branch costs `5(n + nnz) + lnnz` and `lnnz >= n >= 16`,
+        // so `5(n + nnz) >= PEO_LARGE_LEDGER` already implies the very first
+        // round is refused - after the branch has paid for `permute_pattern`,
+        // `EliminationTree::from_pattern` and `column_counts_gnp`. Deciding it
+        // from `(n, nnz)` alone is score-identical by arithmetic and returns the
+        // symbolic prefix on every row the ledger was always going to refuse.
         // Above the gate the incumbent completion has had no cleanup at all: neither the
         // bounded watcher nor the re-extraction above reaches these rows. The same strict-gain
         // chain applies, since a PEO of the incumbent's completion H eliminates the original
@@ -2977,6 +3129,178 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // ── Cross-candidate subtree transplant ──────────────────────────────────
+    // Terminal, after every other stage, so nothing downstream consumes what
+    // it changes and its price is exact rather than a lower bound.
+    //
+    // Two facts the pipeline already relies on:
+    //
+    //   1. An etree postorder leaves `Σ c_j²` unchanged and makes every
+    //      subtree occupy a CONTIGUOUS range of positions — the premise
+    //      `rgreedy::subtree_refine` is built on.
+    //   2. For `v` in a subtree `S`, `c_v` depends only on `S`'s descendants
+    //      (Liu's reachable-set characterisation), and the fill graph after
+    //      eliminating a SET does not depend on the order within the set. So
+    //      `Σ c_j²` splits as (fixed part) + Σ_blocks (block contribution) and
+    //      DISJOINT subtrees contribute independently.
+    //
+    // Fact 2 is what makes this affordable: transplanting one donor ordering
+    // into EVERY block at once and taking ONE exact score yields the exact
+    // per-block delta for every block simultaneously, so the blocks can be
+    // accepted independently on a strict decrease. The donors are the
+    // orderings `consider` has already scored and discarded and the pool has
+    // already retained for stage 8 — no new ordering is produced, no new graph
+    // is built, and the whole added cost is `k + 2` calls to the SAME arena
+    // scorer `leader_order` invokes at all 36 `consider` sites.
+    //
+    // The move is non-local: a transplanted block order is not in any
+    // perturbation neighbourhood of the incumbent, which is why it reaches
+    // rows the closed swap / 3-cycle / reversal / Or-opt classes cannot.
+    //
+    // Work bound. One `score` costs permute + etree + Gilbert-Ng-Peyton column
+    // counts, all linear in `(n, nnz)` up to the inverse Ackermann factor and
+    // INDEPENDENT of the factor — so, unlike a `SmallScore` pass, the
+    // admission gate really is a work bound. Every score is charged `n + nnz`
+    // against one ledger, and a row is refused outright unless the cheapest
+    // useful sequence (setup + one donor + one verification = four units) fits.
+    // At `TRANSPLANT_LEDGER` the total is therefore bounded by an absolute
+    // constant in units, hence by an absolute constant in time.
+    {
+        let unit = n as u64 + nnz as u64;
+        let seeds = runner_up.borrow();
+        if n >= 16 && !seeds.is_empty() && unit.saturating_mul(4) <= TRANSPLANT_LEDGER {
+            let mut ledger = unit;
+            let inc_f = score(&best_perm);
+            let (base, base_counts, size) = {
+                let ws = score_workspace.borrow();
+                let counts = ws.counts();
+                let post = ws.etree_postorder();
+                let eparent = ws.etree_parent();
+                let mut post_of = vec![0u32; n];
+                for (k, &j) in post.iter().enumerate() {
+                    post_of[j as usize] = k as u32;
+                }
+                let base: Vec<usize> = post.iter().map(|&j| best_perm[j as usize]).collect();
+                let base_counts: Vec<u64> =
+                    post.iter().map(|&j| counts[j as usize] as u64).collect();
+                let mut parent = vec![-1i32; n];
+                for j in 0..n {
+                    let p = eparent[j];
+                    if p >= 0 {
+                        parent[post_of[j] as usize] = post_of[p as usize] as i32;
+                    }
+                }
+                let mut size = vec![1u32; n];
+                for j in 0..n {
+                    let p = parent[j];
+                    if p >= 0 {
+                        size[p as usize] += size[j];
+                    }
+                }
+                (base, base_counts, size)
+            };
+            let mut best_f = inc_f;
+            let mut best_cand: Option<Vec<usize>> = None;
+            let mut rank = vec![0usize; n];
+            let mut covered = vec![false; n];
+            let mut trial: Vec<usize> = Vec::with_capacity(n);
+            let mut seg: Vec<usize> = Vec::new();
+            'widths: for &max_s in TRANSPLANT_WIDTHS.iter() {
+                // Maximal disjoint postorder blocks, the same descending scan
+                // `subtree_refine` uses: the topmost eligible node on any
+                // root-to-leaf path wins and everything under it is covered.
+                covered.iter_mut().for_each(|c| *c = false);
+                let hi = max_s.min(n);
+                let mut blocks: Vec<(usize, usize)> = Vec::new();
+                for j in (0..n).rev() {
+                    if covered[j] {
+                        continue;
+                    }
+                    let sz = size[j] as usize;
+                    if sz < TRANSPLANT_MIN_S || sz > hi {
+                        continue;
+                    }
+                    let a = j + 1 - sz;
+                    for c in covered.iter_mut().take(j + 1).skip(a) {
+                        *c = true;
+                    }
+                    blocks.push((a, j));
+                }
+                if blocks.len() < 2 {
+                    continue;
+                }
+                let base_contrib: Vec<u64> = blocks
+                    .iter()
+                    .map(|&(a, b)| base_counts[a..=b].iter().map(|&c| c * c).sum())
+                    .collect();
+                let mut best_contrib = base_contrib.clone();
+                let mut best_seg: Vec<Option<Vec<usize>>> = vec![None; blocks.len()];
+                for (_, donor) in seeds.iter() {
+                    if ledger + unit > TRANSPLANT_LEDGER {
+                        break 'widths;
+                    }
+                    ledger += unit;
+                    for (k, &v) in donor.iter().enumerate() {
+                        rank[v] = k;
+                    }
+                    trial.clear();
+                    trial.extend_from_slice(&base);
+                    for &(a, b) in &blocks {
+                        seg.clear();
+                        seg.extend_from_slice(&base[a..=b]);
+                        seg.sort_unstable_by_key(|&v| rank[v]);
+                        trial[a..=b].copy_from_slice(&seg);
+                    }
+                    let _ = score(&trial);
+                    let ws = score_workspace.borrow();
+                    let counts = ws.counts();
+                    for (i, &(a, b)) in blocks.iter().enumerate() {
+                        let c: u64 = counts[a..=b]
+                            .iter()
+                            .map(|&x| (x as u64) * (x as u64))
+                            .sum();
+                        if c < best_contrib[i] {
+                            best_contrib[i] = c;
+                            best_seg[i] = Some(trial[a..=b].to_vec());
+                        }
+                    }
+                }
+                let gain: u64 = base_contrib
+                    .iter()
+                    .zip(&best_contrib)
+                    .map(|(a, b)| a - b)
+                    .sum();
+                if gain == 0 || inc_f - gain >= best_f {
+                    continue;
+                }
+                if ledger + unit > TRANSPLANT_LEDGER {
+                    break 'widths;
+                }
+                ledger += unit;
+                let mut cand = base.clone();
+                for (i, &(a, b)) in blocks.iter().enumerate() {
+                    if let Some(s) = &best_seg[i] {
+                        cand[a..=b].copy_from_slice(s);
+                    }
+                }
+                if !is_bijection(&cand, n) {
+                    continue;
+                }
+                let f = score(&cand);
+                if f < best_f {
+                    best_f = f;
+                    best_cand = Some(cand);
+                }
+            }
+            if let Some(c) = best_cand {
+                if best_f < inc_f {
+                    best_perm = c;
+                }
+            }
+        }
+    }
+    #[cfg(test)]
+    probe::capture_alt_seeds(&runner_up.borrow());
     best_perm
 }
 

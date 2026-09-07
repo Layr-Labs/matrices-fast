@@ -3223,7 +3223,8 @@ fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budge
     let mut slot: Vec<u32> = vec![u32::MAX; cn];
     for v in 0..cn {
         slot[v] = heap.len() as u32;
-        heap.push((defic[v].min(u32::MAX as u64) << 32) | v as u64);
+        // Prefer largest original index on equal deficiency (invert low 32 bits).
+        heap.push((defic[v].min(u32::MAX as u64) << 32) | (!((v as u32)) as u64));
     }
 
     for _ in 0..cn {
@@ -3238,12 +3239,12 @@ fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budge
                 best_slot = i;
             }
         }
-        let best = (best_packed & 0xFFFF_FFFF) as usize;
+        let best = (!(best_packed as u32)) as usize;
         order.push(best);
         let moved = heap.pop().unwrap();
         if best_slot < heap.len() {
             heap[best_slot] = moved;
-            slot[(moved & 0xFFFF_FFFF) as usize] = best_slot as u32;
+            slot[(!(moved as u32)) as usize] = best_slot as u32;
         }
         slot[best] = u32::MAX;
 
@@ -3305,7 +3306,7 @@ fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budge
             bitset_row_bits(&summ[x * sw..x * sw + sw], &mut wk);
             let (value, charged) = bitset_deficiency_summ(&rows, w, &wk, x, deg[x], &mut nb);
             defic[x] = value;
-            heap[slot[x] as usize] = (value.min(u32::MAX as u64) << 32) | x as u64;
+            heap[slot[x] as usize] = (value.min(u32::MAX as u64) << 32) | (!((x as u32)) as u64);
             budget -= charged;
             if budget < 0 {
                 break;
@@ -5275,10 +5276,10 @@ fn minfill_core_order_ref(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut b
             break;
         }
         let mut best = usize::MAX;
-        let mut best_key = u64::MAX;
+        let mut best_def = u64::MAX;
         for v in 0..cn {
-            if live[v] && defic[v] < best_key {
-                best_key = defic[v];
+            if live[v] && (defic[v] < best_def || (defic[v] == best_def && (best == usize::MAX || v > best))) {
+                best_def = defic[v];
                 best = v;
             }
         }

@@ -3432,21 +3432,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // passes cost a few ms) and DENSE mid-large graphs (nnz > REDUCE_EXTRA_MIN_NNZ and
             // nnz >= 6 n, where the robust-envelope gate has given time back). The band between
             // them is the crown's slowest class and stays exactly as the crown has it.
-            // Two historical bands (0064) plus (B) a mid below-anchor K=2-only
+            // Two historical bands (0064) plus (B) a mid below-anchor K=2/K=4
             // band: 60k < nnz <= 200k and best_flops < amd_flops. Mid attempts
-            // use a tight one-shot work cap so the crown's slow class stays
-            // bounded; depths other than 2 skip via continue (not nested).
+            // use a tight one-shot work cap (nnz, same as promoted K=2) so the
+            // crown's slow class stays bounded; depths other than 2 and 4 skip
+            // via continue (not nested). With REDUCE_EXTRA_DEPTHS order, at most
+            // one mid depth fits under the nnz ledger (no 2*nnz raise).
             let small_band = nnz <= REDUCE_SMALL_MAX_NNZ;
             let dense_band = nnz > REDUCE_EXTRA_MIN_NNZ && nnz >= 6 * n;
-            let mid_k2 = depth == 2
+            let mid_band = (depth == 2 || depth == 4)
                 && nnz > REDUCE_SMALL_MAX_NNZ
                 && nnz <= REDUCE_EXTRA_MIN_NNZ
                 && best_flops < amd_flops;
-            if !(small_band || dense_band || mid_k2) {
+            if !(small_band || dense_band || mid_band) {
                 continue;
             }
-            let work_cap = if mid_k2 && !(small_band || dense_band) {
-                // Exactly one mid-band K=2 attempt worth of CSC entries.
+            let work_cap = if mid_band && !(small_band || dense_band) {
+                // Exactly one mid-band attempt worth of CSC entries (keep nnz).
                 nnz
             } else {
                 REDUCE_WORK_NNZ

@@ -1,6 +1,20 @@
 # Best-of portfolio (the current architecture)
 
 ## What it is
+
+2026-09-07 qualification: the AMD anchor bounds accepted flop scores, not
+runtime. In an incumbent-dependent pipeline, adding a candidate early can
+also change later trajectories and donor allocation. Strict phase acceptance
+is not a proof of whole-pipeline dominance. A true terminal best-of avoids
+that interaction but still pays for losing candidates. The bounded STRIP,
+TELOS and final MCS experiment, including a rejected late-donor expansion,
+is recorded in [0098](../experiments/0098-bounded-structural-terminal-portfolio.md).
+The full eight-arm [0101 ablation](../experiments/0101-terminal-work-ablation-and-lean-schedule.md)
+confirms that each terminal family contributes, but a five-candidate TELOS
+schedule reproduces the larger schedule's returned permutations on all 300
+dev inputs. Allocation reuse is not automatically faster: the MCS bucket
+workspace gave mixed matched results and was left out of production.
+
 `order()` does not commit to one algorithm. It runs a *portfolio* of candidate
 orderings on the matrix, scores each one with feral's own symbolic analysis
 (`Σ cⱼ²`, the exact quantity the grader ranks), and returns the cheapest. The
@@ -9,10 +23,11 @@ which is bit-for-bit the grader's baseline ordering.
 
 ## Why the anchor is the whole trick
 Because the baseline itself is in the candidate set, the returned permutation can
-never be worse than AMD on any matrix: `ratio ≤ 1.0` always. Every additional
-candidate is therefore **free upside** — it either wins and lowers the ratio, or
-loses and is discarded. There is no risk/reward tradeoff to balance, no tuning
-that can backfire on an unseen matrix.
+never be worse than AMD on any successfully completed, valid run:
+`ratio ≤ 1.0`. That is an anchor guarantee, not a claim of free runtime or
+dominance over an earlier portfolio. An early candidate can redirect later
+incumbent-dependent search, and even a losing terminal candidate consumes
+work. Measure the complete pipeline and its resource headroom.
 
 This inverts the usual research question. It is not "which ordering is best on
 this family?" but "**which candidates can I afford to run?**" The only cost of a
@@ -36,8 +51,11 @@ That is only a ~2× margin. Anything added to the slow tier risks the run. The
 [`probe`](../../probe.rs) module exists because the harness prints `(capped)`
 instead of a time, so this number is otherwise invisible.
 
-The cost driver is **nnz, not n** — `qapw` (n=705, nnz=87496) takes 0.539 s while
-much larger sparse matrices take less. Gate by nnz first, n as a backstop.
+Cost depends on input nonzeros, dimension, completed-factor size, and the
+number of candidate/search passes. The historical `qapw` example shows why
+dimension alone is inadequate; sparse inputs with many isolated vertices
+also show why a nonzero-only gate is insufficient. Bound the quantities the
+actual kernels allocate and traverse, and validate the combined cost.
 
 ## Where the remaining headroom is
 122 of 300 matrices are tied at *exactly* 1.000 — AMD beats every separator-,

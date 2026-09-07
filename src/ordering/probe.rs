@@ -22,6 +22,178 @@ pub(super) mod minfill_cost;
 mod wide_core;
 pub(super) mod alt_lineage;
 
+// Test-only ablation switches. The production build has no environment or
+// mutable control input; every terminal family is enabled there. Thread-local
+// state keeps parallel tests independent and is read only by the caller of
+// order(), before candidate tasks are dispatched.
+thread_local! {
+    static TERMINAL_PHASES: std::cell::Cell<u8> = const { std::cell::Cell::new(7) };
+}
+
+pub(super) fn terminal_phase_enabled(bit: u8) -> bool {
+    TERMINAL_PHASES.with(|mask| mask.get() & bit != 0)
+}
+
+fn with_terminal_phases<T>(mask: u8, f: impl FnOnce() -> T) -> T {
+    struct Restore(u8);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            TERMINAL_PHASES.with(|mask| mask.set(self.0));
+        }
+    }
+    let _restore = Restore(TERMINAL_PHASES.with(|value| value.replace(mask)));
+    f()
+}
+
+/// Matched full-pipeline ablation, not a sum of isolated marginal wins.
+/// Alternating arm order reduces systematic warm-up/order bias. All arms use
+/// the same canonical seed and allocation changes; bits select STRIP / TELOS /
+/// terminal MCS respectively. This retains the legacy TELOS schedule as the
+/// reference for experiment 0101. Exact counts and phase times are emitted.
+#[test]
+#[ignore]
+fn probe_terminal_phase_ablation() {
+    let corpus = crate::corpus::corpus();
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok().map(|v| v.split(',').map(|s| s.trim().to_string()).collect());
+    let repeat = std::env::var("SSI_PROBE_REPEAT").ok()
+        .and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
+    let mut log_sums = [[0.0; 3]; 8];
+    let mut bucket_counts = [0; 3];
+    let mut totals = [0.0; 8];
+    let mut worst = [0.0f64; 8];
+    for (row, (name, pat)) in corpus.iter().enumerate() {
+        if only.as_ref().is_some_and(|set| !set.contains(name)) || pat.n == 0 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let anchor: Vec<_> = feral_amd::amd_order(&core).unwrap()
+            .into_iter().map(|v| v as usize).collect();
+        let anchor_flops = flops_of(&sp, &anchor);
+        let mut arm_perms: Vec<Option<Vec<usize>>> = vec![None; 8];
+        let mut arm_secs = [f64::MAX; 8];
+        let mut arm_phase_secs = [[0.0; 3]; 8];
+        for trial in 0..repeat {
+            for position in 0..8 {
+                let arm = if (row + trial) % 2 == 0 { position } else { 7 - position };
+                let _ = parallel::phase_take();
+                let start = Instant::now();
+                let perm = with_terminal_phases(arm as u8 | 24, || order(pat));
+                let secs = start.elapsed().as_secs_f64();
+                let marks = parallel::phase_take();
+                assert!(is_bijection(&perm, pat.n), "{name} arm={arm}");
+                if let Some(previous) = &arm_perms[arm] {
+                    assert_eq!(previous, &perm, "{name} arm={arm} repeat determinism");
+                } else {
+                    arm_perms[arm] = Some(perm);
+                }
+                if secs < arm_secs[arm] {
+                    arm_secs[arm] = secs;
+                    for (label, seconds, _) in marks {
+                        match label {
+                            "15a.strip" => arm_phase_secs[arm][0] = seconds,
+                            "15.telos" => arm_phase_secs[arm][1] = seconds,
+                            "18.peo-ties" => arm_phase_secs[arm][2] = seconds,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        let b = bucket(pat.n);
+        bucket_counts[b] += 1;
+        for arm in 0..8 {
+            let exact = flops_of(&sp, arm_perms[arm].as_ref().unwrap());
+            let [strip, telos, mcs] = arm_phase_secs[arm];
+            println!("ABLATION\t{name}\t{}\t{}\t{arm}\t{anchor_flops}\t{exact}\t{:.6}\t{strip:.6}\t{telos:.6}\t{mcs:.6}",
+                pat.n, pat.nnz(), arm_secs[arm]);
+            log_sums[arm][b] += (exact as f64 / anchor_flops as f64).ln();
+            totals[arm] += arm_secs[arm];
+            worst[arm] = worst[arm].max(arm_secs[arm]);
+        }
+    }
+    for arm in 0..8 {
+        println!("ABLATION_SCORE\t{arm}\t{:.15}\t{:.6}\t{:.6}\t{:?}",
+            aggregate(&log_sums[arm], &bucket_counts), totals[arm], worst[arm], bucket_counts);
+    }
+}
+
+/// Compare the old two-tier/runner-up TELOS schedule with one five-candidate
+/// round. Both arms retain STRIP and the full bounded terminal MCS family.
+#[test]
+#[ignore]
+fn probe_telos_cost_ablation() {
+    terminal_cost_ablation([31, 23], "TELOS");
+}
+
+/// Both arms use the small TELOS schedule. The MCS arm halves the shared
+/// structural allowance and caps continuation at two rounds instead of four.
+#[test]
+#[ignore]
+fn probe_rank_cost_ablation() {
+    terminal_cost_ablation([23, 7], "RANK");
+}
+
+fn terminal_cost_ablation(masks: [u8; 2], prefix: &str) {
+    let mut log_sums = [[0.0; 3]; 2];
+    let mut counts = [0; 3];
+    let mut totals = [0.0; 2];
+    let mut phase_totals = [0.0; 2];
+    let mut worst = [0.0f64; 2];
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok().map(|v| v.split(',').map(|s| s.trim().to_string()).collect());
+    let repeat = std::env::var("SSI_PROBE_REPEAT").ok()
+        .and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
+    for (row, (name, pat)) in crate::corpus::corpus().iter().enumerate() {
+        if only.as_ref().is_some_and(|set| !set.contains(name)) || pat.n == 0 { continue; }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let anchor: Vec<_> = feral_amd::amd_order(&core).unwrap()
+            .into_iter().map(|v| v as usize).collect();
+        let anchor_flops = flops_of(&sp, &anchor);
+        let mut perms: [Option<Vec<usize>>; 2] = [None, None];
+        let mut secs = [f64::MAX; 2];
+        let mut phase_secs = [0.0; 2];
+        for trial in 0..repeat {
+            for position in 0..2 {
+                let arm = (row + trial + position) % 2;
+                let _ = parallel::phase_take();
+                let start = Instant::now();
+                let perm = with_terminal_phases(masks[arm], || order(pat));
+                let duration = start.elapsed().as_secs_f64();
+                let marks = parallel::phase_take();
+                assert!(is_bijection(&perm, pat.n), "{name} arm={arm}");
+                if let Some(previous) = &perms[arm] {
+                    assert_eq!(previous, &perm, "{name} arm={arm} repeat determinism");
+                } else { perms[arm] = Some(perm); }
+                if duration < secs[arm] {
+                    secs[arm] = duration;
+                    let label = if prefix == "RANK" { "18.peo-ties" } else { "15.telos" };
+                    phase_secs[arm] = marks.iter().find(|m| m.0 == label).map_or(0.0, |m| m.1);
+                }
+            }
+        }
+        let exact = [flops_of(&sp, perms[0].as_ref().unwrap()), flops_of(&sp, perms[1].as_ref().unwrap())];
+        let b = bucket(pat.n);
+        counts[b] += 1;
+        for arm in 0..2 {
+            log_sums[arm][b] += (exact[arm] as f64 / anchor_flops as f64).ln();
+            totals[arm] += secs[arm];
+            phase_totals[arm] += phase_secs[arm];
+            worst[arm] = worst[arm].max(secs[arm]);
+        }
+        println!("{prefix}_COST\t{name}\t{}\t{}\t{anchor_flops}\t{}\t{}\t{:.6}\t{:.6}\t{:.6}\t{:.6}\t{}",
+            pat.n, pat.nnz(), exact[0], exact[1], secs[0], secs[1], phase_secs[0], phase_secs[1], perms[0] == perms[1]);
+    }
+    for arm in 0..2 {
+        println!("{prefix}_SCORE\t{arm}\t{:.15}\t{:.6}\t{:.6}\t{:.6}\t{:?}",
+            aggregate(&log_sums[arm], &counts), totals[arm], phase_totals[arm], worst[arm], counts);
+    }
+}
+
 /// Buckets exactly as the harness does (lt_1k / 1k_10k / gt_10k).
 fn bucket(n: usize) -> usize {
     if n < 1_000 {

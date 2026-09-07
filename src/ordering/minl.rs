@@ -278,21 +278,14 @@ pub(crate) fn minl_candidates(sp: &ScoringPattern, seed: &[usize]) -> Option<(Ve
     let mut adj: Vec<Vec<u32>> = (0..n)
         .map(|v| fri[fcp[v] as usize..fcp[v + 1] as usize].iter().map(|&x| x as u32).collect())
         .collect();
-    let asort: Vec<Vec<u32>> = (0..n)
-        .map(|v| {
-            let mut c: Vec<u32> = sp.row_idx[sp.col_ptr[v]..sp.col_ptr[v + 1]]
-                .iter()
-                .map(|&x| x as u32)
-                .filter(|&x| x as usize != v)
-                .collect();
-            c.sort_unstable();
-            c
-        })
-        .collect();
     let mut fill: Vec<(u32, u32)> = Vec::new();
     for u in 0..n {
+        // `ScoringPattern` preserves Pattern's sorted, unique CSC-column
+        // invariant, so test original edges in place instead of cloning and
+        // sorting a second complete adjacency copy.
+        let original = &sp.row_idx[sp.col_ptr[u]..sp.col_ptr[u + 1]];
         for &wv in &adj[u] {
-            if (wv as usize) > u && asort[u].binary_search(&wv).is_err() {
+            if (wv as usize) > u && original.binary_search(&(wv as usize)).is_err() {
                 fill.push((u as u32, wv));
             }
         }
@@ -326,6 +319,7 @@ pub(crate) fn minl_candidates(sp: &ScoringPattern, seed: &[usize]) -> Option<(Ve
     let mut cmark: Vec<u32> = vec![0; n];
     let mut cstamp: u32 = 0;
     let mut c: Vec<u32> = Vec::new();
+    let mut clique_order: Vec<u32> = Vec::new();
     // An edge uv that failed the test can become deletable only if
     // N(u) ∩ N(v) shrank, i.e. an edge at u or at v was deleted: later rounds
     // re-test only the edges with a DIRTY endpoint (exact, and it leaves the
@@ -394,9 +388,10 @@ pub(crate) fn minl_candidates(sp: &ScoringPattern, seed: &[usize]) -> Option<(Ve
                     for &w in &c {
                         cmark[w as usize] = cstamp;
                     }
-                    let mut order: Vec<u32> = c.clone();
-                    order.sort_unstable_by_key(|&a| (adj[a as usize].len(), a));
-                    'members: for &a in &order {
+                    clique_order.clear();
+                    clique_order.extend_from_slice(&c);
+                    clique_order.sort_unstable_by_key(|&a| (adj[a as usize].len(), a));
+                    'members: for &a in &clique_order {
                         let na = &adj[a as usize];
                         ops -= na.len() as i64;
                         let mut cnt = 0usize;

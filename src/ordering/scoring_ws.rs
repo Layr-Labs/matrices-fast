@@ -385,6 +385,12 @@ impl ScoreWorkspace {
         self.delta.iter().map(|&c| c as u64).sum()
     }
 
+    /// Exact symbolic column counts from the most recent `flops` call, indexed
+    /// in that call's permuted column order.
+    pub(crate) fn column_counts(&self) -> &[i32] {
+        &self.delta
+    }
+
     pub(crate) fn probe_counts(&self) -> &[i32] { &self.delta }
     pub(crate) fn probe_parent(&self) -> &[i32] { &self.parent }
     pub(crate) fn probe_post(&self) -> &[u32] { &self.post }

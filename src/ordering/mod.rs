@@ -149,7 +149,6 @@ use crate::Pattern;
 /// what-if scoring). Not compiled into the shipped binary.
 #[cfg(test)]
 mod probe;
-#[cfg(test)]
 mod transplant_probe;
 
 pub mod rgreedy;
@@ -237,7 +236,11 @@ const REDUCE_EXTRA_MIN_NNZ: usize = 200_000;
 const REDUCE_SMALL_MAX_NNZ: usize = 60_000;
 const REDUCE_EXTRA_CORE_LEDGER: usize = 300_000;
 const REDUCE_PAIR_BUDGET: u64 = 1_000_000;
-const REDUCE_EXTRA_ALPHAS: [f64; 2] = [0.5, 5.0];
+const REDUCE_EXTRA_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
+/// Rank extra-depth core candidates by exact flops when the core is small
+/// enough that symbolic scoring is cheap. Proxy (ndiv+nms) can disagree with
+/// the true objective and pick a worse pass.
+const REDUCE_EXTRA_EXACT_MAX_CN: usize = 8_000;
 
 /// Medium-size envelope for the *extra* tuned candidates (α-5/α-2 AMD, default
 /// AMF, α-2 AMF). A few extra AMD/AMF passes are trivially cheap in this region;
@@ -1465,6 +1468,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,
+            // Ammf / AmindNorm are implemented and unit-tested but were never
+            // wired into the production portfolio. They are fill-oriented
+            // quotient metrics orthogonal to SqDiv/SqPure and to AMD/AMF.
+            custom_metrics::ScoreVariant::Ammf,
+            custom_metrics::ScoreVariant::AmindNorm,
         ] {
             for &alpha in &[1.0, 10.0] {
                 consider(&mut best_flops, &mut best_perm, &|| {
@@ -2595,7 +2603,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if !is_bijection(&cp, cn) {
                     return None;
                 }
-                let f = if recurse { flops_of(&core_pat, &cp) } else { proxy };
+                let f = if recurse || cn <= REDUCE_EXTRA_EXACT_MAX_CN {
+                    flops_of(&core_pat, &cp)
+                } else {
+                    proxy
+                };
                 Some((f, cp))
             };
             // Results are merged by pass index, so thread timing never reaches
@@ -3025,6 +3037,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+
+    // Terminal cross-candidate subtree transplant (0090 reservation policy).
+    // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
+    // are the displaced portfolio orderings already retained for PEO_ALT.
+    {
+        let donors = runner_up.borrow();
+        if let Some(cand) = transplant_probe::refine_with_donors(
+            &scoring_pat, &best_perm, &donors, amd_flops,
+        ) {
+            let f = score(&cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
+
     #[cfg(test)]
     transplant_probe::capture(&runner_up.borrow());
     best_perm

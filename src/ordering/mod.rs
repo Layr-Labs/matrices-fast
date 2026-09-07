@@ -1973,6 +1973,47 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // ── SUB-10k LOTTERY FOLLOW-UPS (0096 follow-ups / gdonninelli)
+    // Remaining α rungs the promoted 0096 note listed but did not ship:
+    // DegDivNvSqrtWf@{2.5,1}, DegPlusDegme@{2.5,1}, SqPure@1, SqDiv@1,
+    // DegP075@1, DegP125@1, DegDivNvWfP15@{2.5,1}. Same n<10k / nnz gate,
+    // same 120k/nnz cap-6 budget, disjoint 50k seed streams (no collision with
+    // 30k all-n or 40k sub10k). Leaves gt_10k bit-identical; no extra passes
+    // on the slow tail.
+    if heavy_arm_enabled() && n < 10_000 && nnz < METRIC_LIGHT_MAX_NNZ {
+        for (w, (variant, alpha)) in [
+            (custom_metrics::ScoreVariant::DegDivNvSqrtWf, 2.5f64),
+            (custom_metrics::ScoreVariant::DegDivNvSqrtWf, 1.0),
+            (custom_metrics::ScoreVariant::DegPlusDegme, 2.5),
+            (custom_metrics::ScoreVariant::DegPlusDegme, 1.0),
+            (custom_metrics::ScoreVariant::SqPure, 1.0),
+            (custom_metrics::ScoreVariant::SqDiv, 1.0),
+            (custom_metrics::ScoreVariant::DegP075, 1.0),
+            (custom_metrics::ScoreVariant::DegP125, 1.0),
+            (custom_metrics::ScoreVariant::DegDivNvWfP15, 2.5),
+            (custom_metrics::ScoreVariant::DegDivNvWfP15, 1.0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let passes =
+                (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
+            for r in 0..passes {
+                let seed = 50_000u64 + (w as u64) * 1_000 + r as u64;
+                consider!(move || {
+                    let q = relabel(n, seed);
+                    let b = permute_pattern(sp_ref, &q);
+                    let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+                    let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+                    let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+                        .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
+                    let pb =
+                        custom_metrics::order_variant(&bcore, alpha, true, variant)?;
+                    Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+                });
+            }
+        }
+    }
 
     // ── EXTRA AMF α VALUES (win D) ──────────────────────────────────────────
     // See `D_MAX_NNZ` / `D_WIDE_*`. Pure additions under the best-of floor.

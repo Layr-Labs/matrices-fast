@@ -19,8 +19,8 @@ pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
 
 /// Production terminal cross-candidate subtree transplant with verification
 /// reservation (0090 screen). Strict-accept only; ledger-bounded; structural
-/// gates only. Donors are displaced portfolio orderings already retained.
-const TRANSPLANT_LEDGER: u64 = 250_000;
+/// gates only; medium+ (`n >= 1000`). Donors are displaced portfolio orderings.
+const TRANSPLANT_LEDGER: u64 = 500_000;
 
 pub(super) fn refine_with_donors(
     sp: &ScoringPattern,
@@ -31,7 +31,14 @@ pub(super) fn refine_with_donors(
     let n = sp.n;
     let nnz = sp.row_idx.len();
     let unit = n as u64 + nnz as u64;
-    if n < 16 || donors.is_empty() || 3 * unit > TRANSPLANT_LEDGER {
+    // Medium+ only: lt_1k gains from transplant were tiny (~0.5 bip) while
+    // every admission still burns ledger; concentrating 500k on n>=1000
+    // recovered nearly the full 500k geomean with far fewer paid rows.
+    #[cfg(test)]
+    if std::env::var_os("TRANSPLANT_SKIP").is_some() {
+        return None;
+    }
+    if n < 1000 || donors.is_empty() || 3 * unit > TRANSPLANT_LEDGER {
         return None;
     }
     let mut ws = scoring_ws::ScoreWorkspace::new(n, nnz);
@@ -237,6 +244,240 @@ fn terminal_pass(
     }
     assert!(ledger <= cap);
     (best_f, ledger, scored_donors, stopped_partial)
+}
+
+/// Production-shaped transplant with tunable knobs (for sweeps only).
+#[cfg(test)]
+fn terminal_pass_tuned(
+    sp: &ScoringPattern,
+    incumbent: &[usize],
+    donors: &[Vec<usize>],
+    inc_f: u64,
+    cap: u64,
+    gate_mult: u64,
+    widths: &[usize],
+    min_block: usize,
+) -> (u64, u64, usize) {
+    let n = sp.n;
+    let unit = n as u64 + sp.row_idx.len() as u64;
+    if n < 16 || donors.is_empty() || gate_mult * unit > cap {
+        return (inc_f, 0, 0);
+    }
+    let mut ws = scoring_ws::ScoreWorkspace::new(n, sp.row_idx.len());
+    assert_eq!(ws.flops(sp, incumbent), inc_f);
+    let mut ledger = unit;
+    let post = ws.probe_post().to_vec();
+    let base: Vec<usize> = post.iter().map(|&j| incumbent[j as usize]).collect();
+    let base_counts: Vec<u64> = post
+        .iter()
+        .map(|&j| ws.probe_counts()[j as usize] as u64)
+        .collect();
+    let mut post_of = vec![0usize; n];
+    for (k, &j) in post.iter().enumerate() {
+        post_of[j as usize] = k;
+    }
+    let mut parent = vec![-1i32; n];
+    for j in 0..n {
+        let p = ws.probe_parent()[j];
+        if p >= 0 {
+            parent[post_of[j]] = post_of[p as usize] as i32;
+        }
+    }
+    let mut best_f = inc_f;
+    let mut scored_donors = 0usize;
+    let mut rank = vec![0usize; n];
+    'widths: for &width in widths {
+        let blks = blocks(&parent, min_block, width.min(n));
+        if blks.len() < 2 {
+            continue;
+        }
+        let contribution: Vec<u64> = blks
+            .iter()
+            .map(|&(a, b)| base_counts[a..=b].iter().map(|&c| c * c).sum())
+            .collect();
+        let mut best_contribution = contribution.clone();
+        let mut segments: Vec<Option<Vec<usize>>> = vec![None; blks.len()];
+        for donor in donors {
+            if ledger + 2 * unit > cap {
+                break;
+            }
+            ledger += unit;
+            scored_donors += 1;
+            for (k, &v) in donor.iter().enumerate() {
+                rank[v] = k;
+            }
+            let mut trial = base.clone();
+            for &(a, b) in &blks {
+                trial[a..=b].sort_unstable_by_key(|&v| rank[v]);
+            }
+            ws.flops(sp, &trial);
+            for (i, &(a, b)) in blks.iter().enumerate() {
+                let value = ws
+                    .probe_counts()[a..=b]
+                    .iter()
+                    .map(|&c| (c as u64) * (c as u64))
+                    .sum();
+                if value < best_contribution[i] {
+                    best_contribution[i] = value;
+                    segments[i] = Some(trial[a..=b].to_vec());
+                }
+            }
+        }
+        let gain: u64 = contribution
+            .iter()
+            .zip(&best_contribution)
+            .map(|(a, b)| a - b)
+            .sum();
+        if gain == 0 || inc_f.saturating_sub(gain) >= best_f {
+            continue;
+        }
+        if ledger + unit > cap {
+            break 'widths;
+        }
+        ledger += unit;
+        let mut assembled = base.clone();
+        for (i, &(a, b)) in blks.iter().enumerate() {
+            if let Some(segment) = &segments[i] {
+                assembled[a..=b].copy_from_slice(segment);
+            }
+        }
+        if !is_bijection(&assembled, n) {
+            continue;
+        }
+        let f = ws.flops(sp, &assembled);
+        if f < best_f {
+            best_f = f;
+        }
+    }
+    (best_f, ledger, scored_donors)
+}
+
+#[test]
+#[ignore]
+fn probe_transplant_ledger_gate_sweep() {
+    std::env::set_var("TRANSPLANT_SKIP", "1");
+    // Production refine_with_donors ignores this unless we gate it —
+    // temporarily monkey via ledger: we compare incremental configs on
+    // post-order incumbents when skip is unavailable. Prefer absolute.
+    let corpus = crate::corpus::corpus();
+    #[derive(Clone, Copy)]
+    struct Cfg {
+        name: &'static str,
+        cap: u64,
+        gate_mult: u64,
+        below_amd_only: bool,
+        min_n: usize,
+        max_n: usize,
+        min_block: usize,
+        width_mode: u8, // 0 std, 1 wide, 2 tight
+    }
+    let widths_std: [usize; 4] = [4096, 512, 128, 32];
+    let widths_wide: [usize; 5] = [8192, 4096, 512, 128, 32];
+    let widths_tight: [usize; 4] = [2048, 512, 128, 32];
+    let cfgs = [
+        Cfg { name: "base_250k_3x", cap: 250_000, gate_mult: 3, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "400k_3x", cap: 400_000, gate_mult: 3, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "500k_3x", cap: 500_000, gate_mult: 3, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "500k_2x", cap: 500_000, gate_mult: 2, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "350k_2x", cap: 350_000, gate_mult: 2, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "300k_3x", cap: 300_000, gate_mult: 3, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "400k_2x", cap: 400_000, gate_mult: 2, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "250k_2x", cap: 250_000, gate_mult: 2, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "500k_3x_med+", cap: 500_000, gate_mult: 3, below_amd_only: true, min_n: 1000, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "500k_3x_gt10k", cap: 500_000, gate_mult: 3, below_amd_only: true, min_n: 10000, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "500k_3x_1k10k", cap: 500_000, gate_mult: 3, below_amd_only: true, min_n: 1000, max_n: 10000, min_block: 4, width_mode: 0 },
+        Cfg { name: "400k_3x_noBelow", cap: 400_000, gate_mult: 3, below_amd_only: false, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "250k_3x_mb8", cap: 250_000, gate_mult: 3, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 8, width_mode: 0 },
+        Cfg { name: "600k_3x", cap: 600_000, gate_mult: 3, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 0 },
+        Cfg { name: "400k_3x_wide", cap: 400_000, gate_mult: 3, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 1 },
+        Cfg { name: "400k_3x_tight", cap: 400_000, gate_mult: 3, below_amd_only: true, min_n: 16, max_n: usize::MAX, min_block: 4, width_mode: 2 },
+    ];
+    let ncfg = cfgs.len();
+    let mut logs = vec![[0f64; 3]; ncfg + 1];
+    let mut counts = [0usize; 3];
+    let mut winners = vec![0usize; ncfg];
+    let mut paid = vec![0usize; ncfg];
+    // order() already applies production 250k transplant. This sweep measures
+    // *incremental* further gains from alternate knobs on that incumbent.
+    for (name, pat) in &corpus {
+        DONORS.with(|d| *d.borrow_mut() = Some(Vec::new()));
+        let incumbent = order(pat);
+        let donors = DONORS.with(|d| d.borrow_mut().take().unwrap());
+        let n = pat.n;
+        let bucket = if n < 1000 { 0 } else if n < 10000 { 1 } else { 2 };
+        counts[bucket] += 1;
+        let sp = ScoringPattern {
+            n,
+            col_ptr: pat.col_ptr.clone(),
+            row_idx: pat.row_idx.clone(),
+        };
+        let inc_f = flops_of(&sp, &incumbent);
+        let cp: Vec<i32> = pat.col_ptr.iter().map(|&x| x as i32).collect();
+        let ri: Vec<i32> = pat.row_idx.iter().map(|&x| x as i32).collect();
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = feral_amd::amd_order(&core)
+            .unwrap()
+            .iter()
+            .map(|&x| x as usize)
+            .collect::<Vec<_>>();
+        let anchor = flops_of(&sp, &amd);
+        logs[0][bucket] += (inc_f as f64 / anchor as f64).ln();
+        for (ci, cfg) in cfgs.iter().enumerate() {
+            let eligible = n >= cfg.min_n
+                && n < cfg.max_n
+                && (!cfg.below_amd_only || (anchor > 0 && inc_f < anchor));
+            let widths: &[usize] = match cfg.width_mode {
+                1 => &widths_wide,
+                2 => &widths_tight,
+                _ => &widths_std,
+            };
+            let (f, spent, _draws) = if eligible {
+                terminal_pass_tuned(
+                    &sp,
+                    &incumbent,
+                    &donors,
+                    inc_f,
+                    cfg.cap,
+                    cfg.gate_mult,
+                    widths,
+                    cfg.min_block,
+                )
+            } else {
+                (inc_f, 0, 0)
+            };
+            logs[ci + 1][bucket] += (f as f64 / anchor as f64).ln();
+            if spent > 0 {
+                paid[ci] += 1;
+            }
+            if f < inc_f {
+                winners[ci] += 1;
+                println!(
+                    "SWEEP_WIN\t{}\t{}\tn={}\tinc={}\tf={}\tdelta={}",
+                    cfg.name, name, n, inc_f, f, inc_f - f
+                );
+            }
+        }
+    }
+    let aggregate = |logs: &[f64; 3]| -> f64 {
+        [0.3, 0.3, 0.4]
+            .iter()
+            .enumerate()
+            .map(|(b, w)| w * (logs[b] / counts[b] as f64).exp())
+            .sum()
+    };
+    let baseline = aggregate(&logs[0]);
+    println!("SWEEP_BASELINE (post-production-transplant)={baseline:.9}");
+    for (ci, cfg) in cfgs.iter().enumerate() {
+        let score = aggregate(&logs[ci + 1]);
+        let bips = (baseline - score) * 10000.;
+        let b0 = (logs[ci + 1][0] / counts[0] as f64).exp();
+        let b1 = (logs[ci + 1][1] / counts[1] as f64).exp();
+        let b2 = (logs[ci + 1][2] / counts[2] as f64).exp();
+        println!(
+            "SWEEP_SUMMARY\t{}\tscore={:.9}\tbips={:.4}\twinners={}\tpaid={}\tlt={:.6}\tmid={:.6}\tgt={:.6}",
+            cfg.name, score, bips, winners[ci], paid[ci], b0, b1, b2
+        );
+    }
 }
 
 #[test]

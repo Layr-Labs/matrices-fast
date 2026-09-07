@@ -1886,6 +1886,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             (custom_metrics::ScoreVariant::DegDivNvWfP15, 10.0),
             (custom_metrics::ScoreVariant::DegSqrt, 5.0),
             (custom_metrics::ScoreVariant::DegSqrt, 2.5),
+            // Tip hunt: DegSqrt@10 — all-n already has @1/@5/@2.5; ship the
+            // missing shipped-default α under the same 30k budget/cap/envelope.
+            (custom_metrics::ScoreVariant::DegSqrt, 10.0),
             // 0096: three more families in the same envelope (SqPure@10,
             // DegP125@1, DegDivNvSqrtWf@10): rsyn0820/0830/0840m04m and
             // crudeoil_lee4_06 on dev, one pass each at the cap-critical nnz.
@@ -2014,7 +2017,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
-
     // ── EXTRA AMF α VALUES (win D) ──────────────────────────────────────────
     // See `D_MAX_NNZ` / `D_WIDE_*`. Pure additions under the best-of floor.
     if heavy_arm_enabled() && n < AMF_MAX_N && nnz < AMF_MAX_NNZ {

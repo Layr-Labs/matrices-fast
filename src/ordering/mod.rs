@@ -3432,21 +3432,29 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // passes cost a few ms) and DENSE mid-large graphs (nnz > REDUCE_EXTRA_MIN_NNZ and
             // nnz >= 6 n, where the robust-envelope gate has given time back). The band between
             // them is the crown's slowest class and stays exactly as the crown has it.
-            // Two historical bands (0064) plus (B) a mid below-anchor K=2-only
-            // band: 60k < nnz <= 200k and best_flops < amd_flops. Mid attempts
-            // use a tight one-shot work cap so the crown's slow class stays
-            // bounded; depths other than 2 skip via continue (not nested).
+            // Two historical bands (0064) plus (B) a mid below-anchor density
+            // selector: 60k < nnz <= 200k and best_flops < amd_flops.
+            // Dense-ish mid (nnz >= 6*n) allows depth==4 instead of 2; else
+            // keep depth==2 as on tip. Mid attempts use a tight one-shot work
+            // cap (work_cap = nnz) so the crown's slow class stays bounded;
+            // other depths skip via continue (not nested).
             let small_band = nnz <= REDUCE_SMALL_MAX_NNZ;
             let dense_band = nnz > REDUCE_EXTRA_MIN_NNZ && nnz >= 6 * n;
-            let mid_k2 = depth == 2
-                && nnz > REDUCE_SMALL_MAX_NNZ
+            let mid_band = nnz > REDUCE_SMALL_MAX_NNZ
                 && nnz <= REDUCE_EXTRA_MIN_NNZ
                 && best_flops < amd_flops;
-            if !(small_band || dense_band || mid_k2) {
+            // Density selector: dense-ish mid → K=4; sparse mid → K=2.
+            let mid_sel = mid_band
+                && if nnz >= 6 * n {
+                    depth == 4
+                } else {
+                    depth == 2
+                };
+            if !(small_band || dense_band || mid_sel) {
                 continue;
             }
-            let work_cap = if mid_k2 && !(small_band || dense_band) {
-                // Exactly one mid-band K=2 attempt worth of CSC entries.
+            let work_cap = if mid_sel && !(small_band || dense_band) {
+                // Exactly one mid-band attempt worth of CSC entries.
                 nnz
             } else {
                 REDUCE_WORK_NNZ

@@ -1,7 +1,3 @@
-[0142: certified reuse and exact subset windows](experiments/0142-certified-reuse-window-dp.md):
-full-dev 0.804851 -> **0.804632**, 52/0 improved/regressed, worst local
-1.159 -> **1.027 s**, 101 active tests passed; remote validation pending.
-
 [Latest Codex residual-core revision](experiments/0075-residual-core-minfill.md)
 
 [Latest Codex bounded-work revision](experiments/0074-shared-terminal-cleanup-budget.md)

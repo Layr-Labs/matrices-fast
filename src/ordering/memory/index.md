@@ -6,12 +6,6 @@
 
 # Index
 
-## 2026-09-08 checkpoint
-
-- [0137: n≤1000 leftover four/triple/pair + SmallScore](experiments/0137-n1k-leftover-pivots-smallscore.md): crown `7257386` local **0.804873** (−0.46 bip); lt_1k 0.887829 / 1k_10k 0.842581 / gt_10k 0.714375. Worst 0.989 s. No new work on n>1000.
-- [0136: gated rebuild2 + dual five n≤3000 + terminal SmallScore](experiments/0136-gated-rebuild2-dual-five-smallscore.md): local **0.804857**; **FAILED hidden** as `c7c1a8a`. Do not retry rebuild2/five2 above n=1000.
-- [0135: terminal SmallScore + mid-band watcher on shipped perm](experiments/0135-terminal-local-refine-mid-watcher.md): local **0.804898**; **FAILED hidden** as `f606aae` (mid-band watcher).
-
 ## 2026-09-07 checkpoint
 
 - [0099: max densify no MINL-after-core](experiments/0099-max-densify-nominl.md): tip 0.806243 → **0.806143** (−1.00 bip); not submitted.

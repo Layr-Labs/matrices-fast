@@ -4045,6 +4045,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         let mut cur_flops: u64 = raw_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
         let counts: Vec<u32> = raw_counts.into_iter().map(|c| c as u32).collect();
         let parent: Vec<i32> = post_etree.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+        // iter126: gain-conditioned cfg_agg after chain+deep (120 failed unconditional).
         for cfg in [
             subtree_cfg_for(n, nnz),
             terminal_deep_subtree_cfg(n, nnz, cur_flops, amd_flops),
@@ -4067,13 +4068,41 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
+        // iter132: SAME-tree cfg_agg 3M n<15k nnz<200k (no etree rebuild).
+        // abd4ec3 had the bip but FAIL timing — rebuild tax. 131 lean same-tree only −0.74 bip.
+        // Prefer worst<=1.00; >=15 movers; real bip past darth 0.84913.
+        if n < 15_000 && nnz < 200_000 {
+            let mut cfg_agg = subtree_cfg_for(n, nnz);
+            cfg_agg.round = 1;
+            cfg_agg.max_blocks = 48;
+            cfg_agg.min_s = 12;
+            cfg_agg.budget = 3_000_000;
+            if n >= 1_000 { cfg_agg.budget /= 2; }
+            if (1_000..10_000).contains(&n) { cfg_agg.max_s = 320; }
+            let mut candidate = base_cand.clone();
+            let improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate,
+                &counts,
+                &parent,
+                cfg_agg,
+            );
+            if improved > 0 && is_bijection(&candidate, n) {
+                let f = score(&candidate);
+                if f < cur_flops {
+                    cur_flops = f;
+                    best_perm = candidate;
+                }
+            }
+        }
         best_flops = best_flops.min(cur_flops);
 
         // iter110: chained rebuild round after a FINAL_REFINE win (refine_core shape).
         // Independent cfgs above leave a new tree unsearched; one conditioned rebuild
         // buys depth only where a strict gain already paid for the row.
         if cur_flops < best_flops_before_final {
-            let before_rebuild = cur_flops;
             let permuted2 = permute_pattern(&scoring_pat, &best_perm);
             let etree2 = EliminationTree::from_pattern(&permuted2);
             let post2 = etree2.postorder();
@@ -4112,51 +4141,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
             best_flops = best_flops.min(cur_flops);
-
-            // Second gain-conditioned rebuild, n<=1000 only. The n<10k copy
-            // (c7c1a8a) and the ungated copy (5f4e82b) both failed hidden
-            // timing. lt_1k cannot see lee1_07 / lee4_09.
-            if cur_flops < before_rebuild && n <= 1_000 {
-                let permuted3 = permute_pattern(&scoring_pat, &best_perm);
-                let etree3 = EliminationTree::from_pattern(&permuted3);
-                let post3 = etree3.postorder();
-                let base3: Vec<usize> = post3.iter().map(|&j| best_perm[j]).collect();
-                let post_pat3 = permute_pattern(&scoring_pat, &base3);
-                let post_et3 = EliminationTree::from_pattern(&post_pat3);
-                let raw3 = column_counts_gnp(&post_pat3, &post_et3);
-                let counts3: Vec<u32> = raw3.into_iter().map(|c| c as u32).collect();
-                let parent3: Vec<i32> =
-                    post_et3.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
-                let mut cfg3 = subtree_cfg_for(n, nnz);
-                cfg3.round = 1;
-                cfg3.max_blocks = 16;
-                cfg3.min_s = 16;
-                cfg3.budget = 4_000_000;
-                if n >= 1_000 {
-                    cfg3.budget /= 2;
-                }
-                if (1_000..10_000).contains(&n) {
-                    cfg3.max_s = 256;
-                }
-                let mut cand3 = base3;
-                let improved3 = rgreedy::subtree_refine(
-                    n,
-                    &pattern.col_ptr,
-                    &pattern.row_idx,
-                    &mut cand3,
-                    &counts3,
-                    &parent3,
-                    cfg3,
-                );
-                if improved3 > 0 && is_bijection(&cand3, n) {
-                    let f3 = score(&cand3);
-                    if f3 < cur_flops {
-                        cur_flops = f3;
-                        best_perm = cand3;
-                    }
-                }
-                best_flops = best_flops.min(cur_flops);
-            }
         }
     }
 
@@ -4205,149 +4189,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     best_perm = cand;
                 }
             }
-        }
-    }
-
-    // Terminal five-descent on the *shipped* incumbent (crown, n<=4000), then
-    // n<=1000-only leftover four/triple/pair and a second five. The full 5/4/3
-    // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
-    // cap rows. Strict exact admit → 0 worse.
-    {
-        const FINAL_FIVE_MAX_N: usize = 4_000;
-        const FINAL_FIVE_MAX_NNZ: usize = 60_000;
-        const FINAL_FIVE_OPS: i64 = 32_000_000;
-        // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
-        // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
-        // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.
-        const LT1K: usize = 1_000;
-        const LT1K_FOUR_OPS: i64 = 32_000_000;
-        const LT1K_TRIPLE_OPS: i64 = 32_000_000;
-        const LT1K_TRIPLE_SWEEPS: usize = 4;
-        const LT1K_PAIR_OPS: i64 = 64_000_000;
-        const LT1K_PAIR_SWEEPS: usize = 4;
-        if n >= 5 && n <= FINAL_FIVE_MAX_N && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
-            let before_five = best_flops;
-            if let Some(cand) = rgreedy::adjacent_five_descent(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                FINAL_FIVE_OPS,
-            ) {
-                if is_bijection(&cand, n) {
-                    let f = score(&cand);
-                    if f < best_flops {
-                        best_flops = f;
-                        best_perm = cand;
-                    }
-                }
-            }
-            if best_flops < before_five && n <= LT1K {
+            // iter126: single five 48M on n<=3000 (timing-safe band).
+            if (5..3_001).contains(&n) {
                 if let Some(cand) = rgreedy::adjacent_five_descent(
-                    n,
-                    &pattern.col_ptr,
-                    &pattern.row_idx,
-                    &best_perm,
-                    FINAL_FIVE_OPS,
+                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 48_000_000,
                 ) {
-                    if is_bijection(&cand, n) {
-                        let f = score(&cand);
-                        if f < best_flops {
-                            best_flops = f;
-                            best_perm = cand;
-                        }
-                    }
-                }
-            }
-        }
-        if n >= 4 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
-            if let Some(cand) = rgreedy::adjacent_four_descent(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                LT1K_FOUR_OPS,
-            ) {
-                if is_bijection(&cand, n) {
                     let f = score(&cand);
                     if f < best_flops {
                         best_flops = f;
                         best_perm = cand;
                     }
                 }
-            }
-        }
-        if n >= 3 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
-            if let Some(cand) = rgreedy::adjacent_triple_descent(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                LT1K_TRIPLE_SWEEPS,
-                LT1K_TRIPLE_OPS,
-            ) {
-                if is_bijection(&cand, n) {
-                    let f = score(&cand);
-                    if f < best_flops {
-                        best_flops = f;
-                        best_perm = cand;
-                    }
-                }
-            }
-            if let Some(cand) = rgreedy::adjacent_pair_descent(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                LT1K_PAIR_SWEEPS,
-                LT1K_PAIR_OPS,
-            ) {
-                let f = score(&cand);
-                if f < best_flops {
-                    best_flops = f;
-                    best_perm = cand;
-                }
-            }
-        }
-    }
-
-    // Terminal SmallScore local refine on the *shipped* incumbent, including
-    // any five-descent / rebuild2 replacement above. Stage-11 paired-swap /
-    // plateau runs before PEO / MINL / FINAL_REFINE / simp / pair / five, so
-    // later replacements in the n<=1024 band currently ship unrefined. Strict
-    // exact admit → 0 worse. Cost tracks n (16-word bitset), not nnz; drop
-    // the 12k nnz cap so denser lt_1k (qap, etc.) get the same polish.
-    // n<=1000 so this cannot see the cap rows. The mid-band 2M watcher
-    // previously stacked here failed the hidden 2 s cap (f606aae) and is
-    // not retried.
-    if n >= 12 && n <= 1_000 {
-        let mut cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, best_perm.clone()),
-            true,
-        );
-        // Second independent restart from the new incumbent. Same RNG stream,
-        // different seed perm, so the neighbourhood is not a byte replay.
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
-        if is_bijection(&cand, n) {
-            let f = score(&cand);
-            if f < best_flops {
-                best_flops = f;
-                best_perm = cand;
             }
         }
     }

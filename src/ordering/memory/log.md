@@ -184,3 +184,5 @@ round, so note the round if you know it.
 2026-09-08 | `7257386` 0.804919 → **0.804857** (−0.62 bip) | gated rebuild2 n<10k + dual five n≤3000 32M + terminal SmallScore (nnz cap dropped, one restart) | gt_10k control 0.714375, worst 1.021 s. Submitted. ([0136](experiments/0136-gated-rebuild2-dual-five-smallscore.md))
 2026-09-08 | 0136 `c7c1a8a` **FAILED hidden**. Same afternoon: c617a8e ungated rebuild FAIL; 51fb402 Frodan sparse-elim FAIL.
 2026-09-08 | `7257386` 0.804919 → **0.804873** (−0.46 bip) | all new work clamped n≤1000: rebuild2 + five2 + four/triple/extra pair + SmallScore×4 | gt_10k + 1k_10k ≈ crown, lt_1k 0.887829, worst 0.989 s. Submitted. ([0137](experiments/0137-n1k-leftover-pivots-smallscore.md))
+2026-09-08 | 0137 `767130f` **PROMOTED** hidden **0.848883** (−2.47 bip vs 0.84913). n≤1000 leftover family. 18c9ab8 jonathan cfg_agg same-tree FAIL.
+2026-09-08 | `767130f` 0.804873 → **0.804839** (−0.34 bip) | leftover family n≤1500 + rebuild3 + 2M watcher n≤1500 | gt_10k control, 1k_10k moved, worst 1.085 s out-of-gate. Submitted. ([0138](experiments/0138-n1500-leftover-rebuild3-watcher.md))

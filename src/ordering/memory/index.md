@@ -8,6 +8,7 @@
 
 ## 2026-09-08 checkpoint
 
+- [0138: n≤1500 leftover + rebuild3 + n≤1500 watcher](experiments/0138-n1500-leftover-rebuild3-watcher.md): on crown `767130f` (hidden 0.848883) local **0.804839** (−0.34 bip); 0.887767 / 0.842529 / 0.714375. Worst 1.085 s on an out-of-gate row.
 - [0137: n≤1000 leftover four/triple/pair + SmallScore](experiments/0137-n1k-leftover-pivots-smallscore.md): crown `7257386` local **0.804873** (−0.46 bip); lt_1k 0.887829 / 1k_10k 0.842581 / gt_10k 0.714375. Worst 0.989 s. No new work on n>1000.
 - [0136: gated rebuild2 + dual five n≤3000 + terminal SmallScore](experiments/0136-gated-rebuild2-dual-five-smallscore.md): local **0.804857**; **FAILED hidden** as `c7c1a8a`. Do not retry rebuild2/five2 above n=1000.
 - [0135: terminal SmallScore + mid-band watcher on shipped perm](experiments/0135-terminal-local-refine-mid-watcher.md): local **0.804898**; **FAILED hidden** as `f606aae` (mid-band watcher).

@@ -4113,10 +4113,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
             best_flops = best_flops.min(cur_flops);
 
-            // Second gain-conditioned rebuild, n<=1000 only. The n<10k copy
-            // (c7c1a8a) and the ungated copy (5f4e82b) both failed hidden
-            // timing. lt_1k cannot see lee1_07 / lee4_09.
-            if cur_flops < before_rebuild && n <= 1_000 {
+            // Second gain-conditioned rebuild, n<=1500 only. n<10k (c7c1a8a)
+            // and ungated (5f4e82b) failed hidden. 1500 stays below lee1_07
+            // (3670) / lee4_09 (15904). Crown 767130f used n<=1000.
+            if cur_flops < before_rebuild && n <= 1_500 {
+                let before_rebuild2 = cur_flops;
                 let permuted3 = permute_pattern(&scoring_pat, &best_perm);
                 let etree3 = EliminationTree::from_pattern(&permuted3);
                 let post3 = etree3.postorder();
@@ -4156,6 +4157,45 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
                 best_flops = best_flops.min(cur_flops);
+                // Third rebuild only where round two strictly paid.
+                if cur_flops < before_rebuild2 {
+                    let permuted4 = permute_pattern(&scoring_pat, &best_perm);
+                    let etree4 = EliminationTree::from_pattern(&permuted4);
+                    let post4 = etree4.postorder();
+                    let base4: Vec<usize> = post4.iter().map(|&j| best_perm[j]).collect();
+                    let post_pat4 = permute_pattern(&scoring_pat, &base4);
+                    let post_et4 = EliminationTree::from_pattern(&post_pat4);
+                    let raw4 = column_counts_gnp(&post_pat4, &post_et4);
+                    let counts4: Vec<u32> = raw4.into_iter().map(|c| c as u32).collect();
+                    let parent4: Vec<i32> =
+                        post_et4.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+                    let mut cfg4 = subtree_cfg_for(n, nnz);
+                    cfg4.round = 1;
+                    cfg4.max_blocks = 8;
+                    cfg4.min_s = 16;
+                    cfg4.budget = 2_000_000;
+                    if n >= 1_000 {
+                        cfg4.budget /= 2;
+                    }
+                    let mut cand4 = base4;
+                    let improved4 = rgreedy::subtree_refine(
+                        n,
+                        &pattern.col_ptr,
+                        &pattern.row_idx,
+                        &mut cand4,
+                        &counts4,
+                        &parent4,
+                        cfg4,
+                    );
+                    if improved4 > 0 && is_bijection(&cand4, n) {
+                        let f4 = score(&cand4);
+                        if f4 < cur_flops {
+                            cur_flops = f4;
+                            best_perm = cand4;
+                        }
+                    }
+                    best_flops = best_flops.min(cur_flops);
+                }
             }
         }
     }
@@ -4216,10 +4256,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         const FINAL_FIVE_MAX_N: usize = 4_000;
         const FINAL_FIVE_MAX_NNZ: usize = 60_000;
         const FINAL_FIVE_OPS: i64 = 32_000_000;
-        // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
-        // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
-        // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.
-        const LT1K: usize = 1_000;
+        // Extra pivot work on n<=1500. five2 at n<=3000 (c7c1a8a) and
+        // four/triple at n<=4000 (69e3932) failed hidden. 1500 cannot see
+        // lee1_07 / lee4_09. Crown 767130f used 1000.
+        const LT1K: usize = 1_500;
         const LT1K_FOUR_OPS: i64 = 32_000_000;
         const LT1K_TRIPLE_OPS: i64 = 32_000_000;
         const LT1K_TRIPLE_SWEEPS: usize = 4;
@@ -4320,7 +4360,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // n<=1000 so this cannot see the cap rows. The mid-band 2M watcher
     // previously stacked here failed the hidden 2 s cap (f606aae) and is
     // not retried.
-    if n >= 12 && n <= 1_000 {
+    if n >= 12 && n <= 1_024 {
         let mut cand = cutoff_plateau_refine(
             pattern,
             cutoff_paired_swap_refine(pattern, best_perm.clone()),
@@ -4348,6 +4388,34 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
+            }
+        }
+    }
+
+    // Terminal completion watcher on n<=1500. The early watcher runs before
+    // PEO / MINL / FINAL_REFINE / leftover pivots. f606aae's 2M pass died on
+    // n>4k; this gate cannot see lee1_07 / lee4_09.
+    if n >= 16 && n <= 1_500 && nnz <= 180_000 {
+        let pp = permute_pattern(&scoring_pat, &best_perm);
+        let et = EliminationTree::from_pattern(&pp);
+        let counts = column_counts_gnp(&pp, &et);
+        if let Some(q) = completion::refine_limited(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &pp.col_ptr,
+            &pp.row_idx,
+            &et.parent,
+            &counts,
+            &best_perm,
+            2_000_000,
+        ) {
+            if is_bijection(&q, n) {
+                let f = score(&q);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = q;
+                }
             }
         }
     }

@@ -3349,9 +3349,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     minfill_pick = Some(p);
                 }
             }
-            // iter74b: SKIP residual-core exact on danger (n≥1800 nnz≥9k).
-            // Lean streams still left crudeoil_lee1_07 at 1.112s; killers need
-            // full skip. Cheap/small-core breadth (cn≤1500 off-danger) kept.
+            // iter74b/76: SKIP residual-core exact on danger (n≥1800 nnz≥9k).
+            // iter78 tiny-core-on-danger was bit-identical — keep full skip.
             if core_exact_shots.get() > 0
                 && n < 12_000
                 && (50..=1_500).contains(&cn)
@@ -3964,22 +3963,25 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // keep multi-stream LNS; danger rows get one micro-stream + light descent.
     if n >= 16 && n < 3_000 && nnz <= 12_000 {
         let cost = (n as u64).saturating_mul(nnz as u64);
-        // iter74b: skip cost>20M entirely (chimera_selby / crudeoil_pooling_ct3).
+        // iter76/74b: skip cost>20M entirely (timing killers).
+        // iter77 micro 20–35M found ZERO flop improvement on pooling_ct3 /
+        // chimera_rfr — revert. Losses come from core-exact/medium skips.
         if cost > 20_000_000 {
             // no late polish on known timing killers
         } else {
+            // iter79c: mid-cost (8M<cost≤20M) single stream — keep cheap 6-stream
+            // densify (the ndcc13/waterund11/chimera wins); trim mid for timing.
             let late_streams: &[(i64, u64)] = if cost > 8_000_000 {
-                &[
-                    (12_000_000i64, 0xC0FF_EE00_BADC_0FFEu64),
-                    (8_000_000, 0x0D15_EA5E_FEED_FACEu64),
-                ]
+                &[(10_000_000i64, 0xC0FF_EE00_BADC_0FFEu64)]
             } else {
+                // iter79: denser cheap-band late polish (cost≤8M)
                 &[
-                    (20_000_000i64, 0xC0FF_EE00_BADC_0FFEu64),
-                    (20_000_000, 0x0D15_EA5E_FEED_FACEu64),
-                    (15_000_000, 0xCAFE_BABE_DEAD_BEEFu64),
-                    (15_000_000, 0xFEED_FACE_C0DE_1234u64),
-                    (10_000_000, 0x1111_2222_3333_4444u64),
+                    (25_000_000i64, 0xC0FF_EE00_BADC_0FFEu64),
+                    (25_000_000, 0x0D15_EA5E_FEED_FACEu64),
+                    (20_000_000, 0xCAFE_BABE_DEAD_BEEFu64),
+                    (20_000_000, 0xFEED_FACE_C0DE_1234u64),
+                    (15_000_000, 0x1111_2222_3333_4444u64),
+                    (15_000_000, 0x5555_6666_7777_8888u64),
                 ]
             };
             for &(budget, rng_seed) in late_streams {

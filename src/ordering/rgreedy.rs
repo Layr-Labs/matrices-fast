@@ -1033,6 +1033,25 @@ pub(crate) fn adjacent_pair_descent(
     sweeps: usize,
     budget: i64,
 ) -> Option<Vec<usize>> {
+    let mut completed_work = None;
+    adjacent_pair_descent_with_work(
+        n, col_ptr, row_idx, seed, sweeps, budget, &mut completed_work,
+    )
+}
+
+/// Preserve every pair sweep and its stopping checks. Publish a work receipt
+/// only after all requested sweeps complete, even if no swap was found.
+/// This ledger is deterministic accounting, not a wall-clock bound.
+pub(crate) fn adjacent_pair_descent_with_work(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    sweeps: usize,
+    budget: i64,
+    completed_work: &mut Option<i64>,
+) -> Option<Vec<usize>> {
+    *completed_work = None;
     if n < 2 || seed.len() != n || sweeps == 0 || budget <= 0 {
         return None;
     }
@@ -1103,6 +1122,20 @@ pub(crate) fn adjacent_pair_descent(
         }
     }
 
+    // Charge adjacency construction, Game setup, validation/copies and
+    // per-sweep bookkeeping in addition to the inherited Game::ops ledger.
+    // Checked arithmetic fails closed without discarding a legacy pair result.
+    let unmetered = (|| -> Option<i64> {
+        let w = n.div_ceil(64);
+        let setup = 3usize.checked_mul(n)?.checked_mul(w)?
+            .checked_add(2usize.checked_mul(row_idx.len())?)?
+            .checked_add(20usize.checked_mul(n)?)?
+            .checked_add(w)?
+            .checked_add(64)?
+            .checked_add(16usize.checked_mul(n)?.checked_mul(sweeps)?)?;
+        i64::try_from(setup).ok()
+    })();
+    *completed_work = unmetered.and_then(|setup| game.ops.checked_add(setup));
     changed_any.then_some(cur)
 }
 

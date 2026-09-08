@@ -4118,6 +4118,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Simplicial / adjacent-pair run before reduce/PEO/MINL/late polish/FINAL_REFINE;
     // those stages can replace the perm, leaving the new tree unpromoted.
     // Strict exact admit → 0 worse. Same gates as the early terminal passes.
+    let mut final_triple_allowance = None;
     {
         const FINAL_PAIR_MAX_N: usize = 4_000;
         const FINAL_PAIR_MAX_NNZ: usize = 60_000;
@@ -4145,19 +4146,29 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
         if n >= 3 && n <= FINAL_PAIR_MAX_N && nnz > 0 && nnz <= FINAL_PAIR_MAX_NNZ {
-            if let Some(cand) = rgreedy::adjacent_pair_descent(
+            let mut pair_work = None;
+            if let Some(cand) = rgreedy::adjacent_pair_descent_with_work(
                 n,
                 &pattern.col_ptr,
                 &pattern.row_idx,
                 &best_perm,
                 FINAL_PAIR_SWEEPS,
                 FINAL_PAIR_OPS,
+                &mut pair_work,
             ) {
                 let f = score(&cand);
                 if f < best_flops {
                     best_flops = f;
                     best_perm = cand;
                 }
+            }
+            // Receipt is available only after all inherited pair sweeps finish.
+            // Capture once, but do not spend it until promoted five-descent ends.
+            if n <= 1_000 && n.saturating_add(nnz) <= 100_000 {
+                final_triple_allowance = pair_work
+                    .and_then(|used| FINAL_PAIR_OPS.checked_sub(used))
+                    .filter(|&left| left > 0)
+                    .map(|left| left.min(8_000_000));
             }
         }
     }
@@ -4185,6 +4196,32 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     let f = score(&cand);
                     if f < best_flops {
                         best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
+    }
+
+    // One offset-zero exact triple sweep on the post-five incumbent, funded
+    // solely by completed final-pair residual work. No prior trajectory changes.
+    // Prepay output validation; the triple routine precharges input validation,
+    // setup, reset, six-order evaluation and elimination. At most one extra
+    // symbolic score is allowed; the structural gate is not a runtime guarantee.
+    if let Some(allowance) = final_triple_allowance {
+        let validation = (4 * n + 64) as i64;
+        if allowance > validation {
+            if let Some(cand) = rgreedy::adjacent_triple_descent(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                1,
+                allowance - validation,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_flops {
                         best_perm = cand;
                     }
                 }

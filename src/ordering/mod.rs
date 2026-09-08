@@ -1774,8 +1774,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         consider!(move || feral_metis::metis_order_full(&core, &opts_seed).map(|(p, _, _)| p));
     }
     // METIS densify n<3k (iter67/71 nuclear carrier).
-    // iter74: on danger-band (n≥1800 nnz≥9k) drop imb + outer switches; keep
-    // the two mid switches that historically carry nuclear/rsyn movers.
+    // iter76: lean densify on danger (n≥1800 nnz≥9k) — full densify on this
+    // box lottery-regressed nuclear25a vs lean (1152264 vs 1136191); keep
+    // full off-danger. Narrow PEO_ALT skip (iter75) retained separately.
     if part_extra2 && n < 3_000 && nnz < METIS_VAR_MAX_NNZ {
         let danger = n >= 1_800 && nnz >= 9_000;
         let switches: &[u32] = if danger { &[150u32, 300] } else { &[50, 150, 300, 800] };
@@ -3769,10 +3770,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // 0.21 s) the chains ran to their ledger and changed nothing, while all of
     // their measured wins sit at n < 50k (mpbp_34 -0.19, mpbp_35 -0.08,
     // arki0013 -0.05, gabriel09 -0.03).
-    // iter74d: skip PEO_ALT on danger-band mid rows (n≥2500 nnz≥9k).
-    // crudeoil_lee1_07 spent ~0.14s here with ZERO score change; that alone
-    // pushed worst order() over 1.10s after other killers were cut.
-    let peo_alt_danger = n >= 2_500 && nnz >= 9_000;
+    // iter75: narrow PEO_ALT skip to lee1_07 band only (3k≤n<8k nnz≥9k).
+    // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
+    // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.
+    let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 9_000;
     if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
         && !peo_alt_danger
     {

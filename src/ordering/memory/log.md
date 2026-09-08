@@ -1,5 +1,7 @@
 
 ## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
+
+2026-09-08 | tip 0.806243 → **0.805536** (−7.07 bip) | **iter74d timing-cut of iter72 family** — danger skip core-exact + late polish cost>20M skip + densify lean + medium 4-ticket floor on danger + PEO_ALT skip n≥2500 nnz≥9k | **24/4 movers**, worst **1.087s** (confirm 1.093). Submitted `b6040276` validating. Prior iter72 0.805384 / 29/0 / 1.196s FAIL; iter73 gated polish regress.
 - iter14 PEO ledger 2.5M→4M: **0.806156** null; reverted.
 
 - `4aa9f8f` failed (n/a): MINL re-enable on nnz≤80k after core hit sparse gt_10k.

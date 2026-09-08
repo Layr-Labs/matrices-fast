@@ -4067,10 +4067,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        // iter148c NON-TICKET: no 145d ticket, no 146b rebuild.
-        // Retain tip leftovers: LT1K=1000, density SS, completion 4M only.
-        // iter148c: already stripped rebuild; ticket also removed (NON-TICKET family).
-        // Ultra-safe timing fallback if rebuild was the hidden bomb.
+        // iter151g HEAVY ticket-only: mb64 / 4M — chase 146b bip without rebuild bomb
+        if (1_000..7_000).contains(&n) && nnz > 0 && nnz <= 17_000 {
+            let mut cfg_ch = subtree_cfg_for(n, nnz);
+            cfg_ch.round = 1;
+            cfg_ch.max_blocks = 64;
+            cfg_ch.min_s = 12;
+            cfg_ch.budget = if n >= 4_000 { 3_000_000 } else { 4_000_000 };
+            cfg_ch.max_s = 384;
+            let mut candidate = base_cand.clone();
+            let improved = rgreedy::subtree_refine(
+                n, &pattern.col_ptr, &pattern.row_idx, &mut candidate, &counts, &parent, cfg_ch,
+            );
+            if improved > 0 && is_bijection(&candidate, n) {
+                let f = score(&candidate);
+                if f < cur_flops { cur_flops = f; best_perm = candidate; }
+            }
+        }
         best_flops = best_flops.min(cur_flops);
 
         // iter110: chained rebuild round after a FINAL_REFINE win (refine_core shape).

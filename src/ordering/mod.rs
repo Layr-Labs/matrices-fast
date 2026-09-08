@@ -869,7 +869,7 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
     if let Some(perm) = forest_certificate(pattern) { return perm; }
-    leader_order(pattern)
+    insertion_refine(pattern, leader_order(pattern))
 }
 
 // Certificate fast path: only return when leaf peeling removes every vertex.
@@ -944,6 +944,8 @@ impl SmallScore {
             let suffix_floor = d * (d + 1) * (2 * d + 1) / 6
                 + (self.n - step - 1) as u64 - d;
             if total + suffix_floor > bound { return bound.saturating_add(1); }
+            // If the entire suffix is this clique, its cost is exact, not just a bound.
+            if d == (self.n - step - 1) as u64 { return total + suffix_floor; }
             for w in 0..words {
                 let mut bits = neighbors[w];
                 while bits != 0 {
@@ -998,6 +1000,35 @@ fn plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<us
         let f=scoring.flops(&current);
         if f<best_f { best_f=f; best=current.clone(); }
         else if f>best_f || !neutral { current.swap(a,b); }
+    }
+    best
+}
+
+fn insertion_refine(pattern: &Pattern, start: Vec<usize>) -> Vec<usize> {
+    let n = start.len();
+    if !(12..=1_000).contains(&n) || pattern.nnz() > 12_000 { return start; }
+    let scoring = SmallScore::new(pattern);
+    let mut best = start.clone();
+    let mut current = start;
+    let mut best_f = scoring.flops(&best);
+    let mut state = 0xd1b54a32d192ed03u64;
+    // ponytail: bounded sampled insertion walk; expand only with measured timing headroom.
+    for step in 0..4096 {
+        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+        let a = state as usize % n;
+        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+        let b = if step % 2 == 0 { state as usize % n }
+            else { (a + 1 + state as usize % 32) % n };
+        if a == b { continue; }
+        let (lo, hi) = (a.min(b), a.max(b));
+        if a < b { current[lo..=hi].rotate_left(1); }
+        else { current[lo..=hi].rotate_right(1); }
+        let f = scoring.flops_bounded(&current, best_f);
+        if f < best_f { best_f = f; best.clone_from(&current); }
+        else if f > best_f {
+            if a < b { current[lo..=hi].rotate_right(1); }
+            else { current[lo..=hi].rotate_left(1); }
+        }
     }
     best
 }
@@ -5628,6 +5659,27 @@ fn is_bijection(perm: &[usize], n: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn insertion_preserves_permutations_and_never_increases_flops() {
+        for n in [0, 1, 11, 12, 24, 65] {
+            let mut p = Pattern { n, col_ptr: vec![0], row_idx: Vec::new() };
+            for c in 0..n {
+                for r in 0..n {
+                    if r != c && ((r + c) % 7 == 0 || r.abs_diff(c) == 1) {
+                        p.row_idx.push(r);
+                    }
+                }
+                p.col_ptr.push(p.row_idx.len());
+            }
+            let sp = ScoringPattern { n, col_ptr: p.col_ptr.clone(), row_idx: p.row_idx.clone() };
+            let start: Vec<_> = (0..n).rev().collect();
+            let result = insertion_refine(&p, start.clone());
+            assert!(is_bijection(&result, n));
+            assert_eq!(result, insertion_refine(&p, start.clone()));
+            assert!(flops_of(&sp, &result) <= flops_of(&sp, &start));
+        }
+    }
+
     #[test]
     fn clique_cutoff_exhaustive_small_graphs() {
         let n = 5;

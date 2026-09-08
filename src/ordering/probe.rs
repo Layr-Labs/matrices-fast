@@ -18,6 +18,34 @@ use super::*;
 use std::time::Instant;
 
 mod core_lineage;
+
+#[test]
+#[ignore]
+fn probe_insertions() {
+    let mut wins = 0;
+    let mut worst = 0.0f64;
+    let mut log_delta = 0.0;
+    for (name, p) in crate::corpus::corpus() {
+        if !(12..=1_000).contains(&p.n) || p.nnz() > 12_000 { continue; }
+        let base = leader_order(&p);
+        let sp = scoring_pattern(&p);
+        let before = flops_of(&sp, &base);
+        let t = Instant::now();
+        let cand = insertion_refine(&p, base.clone());
+        let secs = t.elapsed().as_secs_f64();
+        worst = worst.max(secs);
+        assert!(is_bijection(&cand, p.n));
+        assert_eq!(cand, insertion_refine(&p, base));
+        let after = flops_of(&sp, &cand);
+        assert!(after <= before, "{name}");
+        if after < before {
+            wins += 1;
+            log_delta += (after as f64 / before as f64).ln();
+            println!("INSERT {name} n={} before={before} after={after} secs={secs:.6}", p.n);
+        }
+    }
+    println!("INSERT wins={wins} worst_added={worst:.6} log_delta={log_delta:.9}");
+}
 pub(super) mod minfill_cost;
 mod wide_core;
 pub(super) mod alt_lineage;

@@ -4159,33 +4159,37 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     best_perm = cand;
                 }
             }
-        }
-    }
-
-    // Terminal five-descent on the *shipped* incumbent (lean tail of the
-    // pivot-descents idea: ablation measured five-only −0.65 of −0.79 bips
-    // with the lowest worst-case, after the full 5/4/3 package died on the
-    // hidden cap). Five currently runs only pre-replacement; any later
-    // replacement ships without it. Strict exact admit → 0 worse. Same size
-    // class as FINAL_PAIR. Four/triple deliberately excluded: strictly less
-    // added work per admitted row than the failed package, same family.
-    {
-        const FINAL_FIVE_MAX_N: usize = 4_000;
-        const FINAL_FIVE_MAX_NNZ: usize = 60_000;
-        const FINAL_FIVE_OPS: i64 = 32_000_000;
-        if n >= 5 && n <= FINAL_FIVE_MAX_N && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
-            if let Some(cand) = rgreedy::adjacent_five_descent(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                FINAL_FIVE_OPS,
-            ) {
-                if is_bijection(&cand, n) {
+            // iter124: five-only 64M + gain-conditioned second five (reclaim 0.84913).
+            // 122 alone ~0.09 bip past darth local — too thin; second pass only if first wins.
+            if n >= 5 {
+                const FINAL_FIVE_OPS: i64 = 64_000_000;
+                let before = best_flops;
+                if let Some(cand) = rgreedy::adjacent_five_descent(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    FINAL_FIVE_OPS,
+                ) {
                     let f = score(&cand);
                     if f < best_flops {
                         best_flops = f;
                         best_perm = cand;
+                    }
+                }
+                if best_flops < before {
+                    if let Some(cand) = rgreedy::adjacent_five_descent(
+                        n,
+                        &pattern.col_ptr,
+                        &pattern.row_idx,
+                        &best_perm,
+                        FINAL_FIVE_OPS,
+                    ) {
+                        let f = score(&cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
+                        }
                     }
                 }
             }

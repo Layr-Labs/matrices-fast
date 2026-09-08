@@ -160,9 +160,14 @@ pub mod custom_metrics;
 mod core_lift;
 mod scoring_ws;
 mod parallel;
+mod candidate_cache;
 mod metric_sweep;
 mod minl;
+mod prefix_score;
+mod chordal_certificate;
 
+use candidate_cache::Family as CandidateFamily;
+use prefix_score::PrefixScore as SmallScore;
 use feral::ordering::amd::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
 use feral::sparse::csc::CscPattern as ScoringPattern;
@@ -869,6 +874,11 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
     if let Some(perm) = forest_certificate(pattern) { return perm; }
+    if let Some(perm) = chordal_certificate::order_bounded(
+        pattern.n, &pattern.col_ptr, &pattern.row_idx, 2_000_000,
+    ) {
+        return perm;
+    }
     leader_order(pattern)
 }
 
@@ -891,72 +901,6 @@ fn forest_certificate(p: &Pattern) -> Option<Vec<usize>> {
         }
     }
     if perm.len()==n {Some(perm)} else {None}
-}
-
-// Fixed-width exact elimination scorer (iter62: 16 words → n<=1024).
-const SMALL_SCORE_WORDS: usize = 16; // was 5 (n<=320)
-struct SmallScore { rows: Vec<[u64; SMALL_SCORE_WORDS]>, n: usize }
-impl SmallScore {
-    fn new(p: &Pattern) -> Self {
-        assert!(p.n <= SMALL_SCORE_WORDS * 64);
-        let mut rows = vec![[0u64; SMALL_SCORE_WORDS]; p.n];
-        for c in 0..p.n {
-            for &r in &p.row_idx[p.col_ptr[c]..p.col_ptr[c+1]] {
-                if r != c { rows[c][r/64] |= 1 << (r%64); rows[r][c/64] |= 1 << (c%64); }
-            }
-        }
-        Self { rows, n: p.n }
-    }
-    fn flops(&self, perm: &[usize]) -> u64 {
-        let mut rows = self.rows.clone();
-        let words = (self.n+63)/64;
-        let mut total = 0;
-        for &v in perm {
-            let neighbors = rows[v];
-            let count = 1 + neighbors[..words].iter().map(|x| x.count_ones() as u64).sum::<u64>();
-            total += count*count;
-            for w in 0..words {
-                let mut bits = neighbors[w];
-                while bits != 0 {
-                    let u = w*64 + bits.trailing_zeros() as usize;
-                    bits &= bits-1;
-                    for k in 0..words { rows[u][k] |= neighbors[k]; }
-                    rows[u][u/64] &= !(1 << (u%64));
-                    rows[u][v/64] &= !(1 << (v%64));
-                }
-            }
-        }
-        total
-    }
-    fn flops_bounded(&self, perm: &[usize], bound: u64) -> u64 {
-        let mut rows = self.rows.clone();
-        let words = (self.n+63)/64;
-        let mut total = 0;
-        for (step, &v) in perm.iter().enumerate() {
-            let neighbors = rows[v];
-            let count = 1 + neighbors[..words].iter().map(|x| x.count_ones() as u64).sum::<u64>();
-            total += count*count;
-            // Eliminating v creates a clique on its d live neighbors. In any
-            // suffix order those vertices contribute at least d²,...,1²;
-            // every other remaining vertex contributes at least one. This
-            // bound is independent of how the suffix interleaves the clique.
-            let d = count - 1;
-            let suffix_floor = d * (d + 1) * (2 * d + 1) / 6
-                + (self.n - step - 1) as u64 - d;
-            if total + suffix_floor > bound { return bound.saturating_add(1); }
-            for w in 0..words {
-                let mut bits = neighbors[w];
-                while bits != 0 {
-                    let u = w*64 + bits.trailing_zeros() as usize;
-                    bits &= bits-1;
-                    for k in 0..words { rows[u][k] |= neighbors[k]; }
-                    rows[u][u/64] &= !(1 << (u%64));
-                    rows[u][v/64] &= !(1 << (v%64));
-                }
-            }
-        }
-        total
-    }
 }
 
 // Coordinated four-vertex moves: intermediate single swaps need not improve.
@@ -1340,10 +1284,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // later gate reads `best_flops`. `catch_unwind` still guards each producer
     // (inside `parallel::run_candidates`), and each candidate is still
     // bijection-checked before it can win.
+    let mut generator_cache = candidate_cache::CandidateCache::new(n, &col_deg);
     let mut tasks: Vec<parallel::CandFn> = Vec::new();
     macro_rules! consider {
         ($f:expr) => {
             tasks.push(Box::new($f))
+        };
+    }
+    macro_rules! consider_cached {
+        ($family:expr, $alpha:expr, $seed:expr, $f:expr) => {
+            tasks.push(generator_cache.wrap($family, $alpha, true, $seed, Box::new($f)))
         };
     }
     macro_rules! flush {
@@ -1369,7 +1319,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             dense_alpha: 5.0,
             ..Default::default()
         };
-        consider!(move || feral_amf::amf_order_opts(&core, &opts).map(|(p, ..)| p));
+        consider_cached!(CandidateFamily::Amf, 5.0, None, move || {
+            feral_amf::amf_order_opts(&core, &opts).map(|(p, ..)| p)
+        });
     }
 
     // Medium-size extras: cheap here, pure upside layered over the AMD floor.
@@ -1395,7 +1347,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
 
         // Default-α AMF, complementing the α5 AMF above.
-        consider!(move || feral_amf::amf_order(&core));
+        consider_cached!(CandidateFamily::Amf, 10.0, None, move || feral_amf::amf_order(&core));
 
         // Tighter-dense AMF (α2) — a distinct AMF ordering for dense-ish mediums
         // that the α5/α10 AMF variants miss. Time-trivial at this size.
@@ -1403,7 +1355,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             dense_alpha: 2.0,
             ..Default::default()
         };
-        consider!(move || feral_amf::amf_order_opts(&core, &amf_opts2).map(|(p, ..)| p));
+        consider_cached!(CandidateFamily::Amf, 2.0, None, move || {
+            feral_amf::amf_order_opts(&core, &amf_opts2).map(|(p, ..)| p)
+        });
 
         // Aggressive AMD α1 and α16 — the two sweep-found AMD variants that still
         // add unique wins beyond the existing α{-1,2,5,10} set. Gated to genuinely
@@ -1444,13 +1398,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n < AMF_SWEEP_MAX_N && nnz < 130_000 {
         for da in [1.0f64, 16.0, -1.0] {
             let amf_a = feral_amf::AmfOptions { dense_alpha: da, ..Default::default() };
-            consider!(move || feral_amf::amf_order_opts(&core, &amf_a).map(|(p, ..)| p));
+            consider_cached!(CandidateFamily::Amf, da, None, move || {
+                feral_amf::amf_order_opts(&core, &amf_a).map(|(p, ..)| p)
+            });
         }
     } else if n < AMF_SWEEP_MAX_N && nnz >= 400_000 && nnz < AMF_SWEEP_MAX_NNZ
         && nnz < 1_200_000 // iter108b: faclay crown skip
     {
         let amf_nd = feral_amf::AmfOptions { dense_alpha: -1.0, ..Default::default() };
-        consider!(move || feral_amf::amf_order_opts(&core, &amf_nd).map(|(p, ..)| p));
+        consider_cached!(CandidateFamily::Amf, -1.0, None, move || {
+            feral_amf::amf_order_opts(&core, &amf_nd).map(|(p, ..)| p)
+        });
     }
 
     // NON-AGGRESSIVE AMD — a genuinely DIFFERENT elimination order from every
@@ -1648,7 +1606,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             custom_metrics::ScoreVariant::AmindNorm,
         ] {
             for &alpha in &[1.0, 10.0] {
-                consider!(move || {
+                consider_cached!(CandidateFamily::Custom(variant), alpha, None, move || {
                     custom_metrics::order_variant(&core, alpha, true, variant)
                 });
             }
@@ -1869,7 +1827,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // same α-sensitivity holds for these walks). Stays inside the
             // measured light envelope; post-cascade placement unchanged.
             for alpha in [10.0f64, 5.0, 2.5, 1.0] {
-                consider!(move || custom_metrics::order_variant(&core, alpha, true, variant));
+                consider_cached!(CandidateFamily::Custom(variant), alpha, None, move || {
+                    custom_metrics::order_variant(&core, alpha, true, variant)
+                });
             }
         }
         // The 15 `metric_sweep` specs are NOT queued here: on the light tier every
@@ -1879,14 +1839,18 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // winners — except the block's own top spec, which the census found to be
         // the best single generator on gabriel09 (0.9446 vs the finished 0.9568).
         if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == "extra_deg2_div_nv_wf05") {
-            consider!(move || metric_sweep::order_generic(&core, 10.0, true, spec));
+            consider_cached!(CandidateFamily::generic(spec), 10.0, None, move || {
+                metric_sweep::order_generic(&core, 10.0, true, spec)
+            });
         }
         // tip EXTRA on n<10k + densify n<3000 (restored iter69)
         if n < 10_000 {
             for sname in ["extra_deg15_div_nv", "extra_deg_div_nv_degme2"] {
                 if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == sname) {
                     for &alpha in &[10.0f64, 5.0, 1.0] {
-                        consider!(move || metric_sweep::order_generic(&core, alpha, true, spec));
+                        consider_cached!(CandidateFamily::generic(spec), alpha, None, move || {
+                            metric_sweep::order_generic(&core, alpha, true, spec)
+                        });
                     }
                 }
             }
@@ -1910,7 +1874,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             ] {
                 if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == sname) {
                     for &alpha in &[10.0f64, 5.0, 2.5, 1.0] {
-                        consider!(move || metric_sweep::order_generic(&core, alpha, true, spec));
+                        consider_cached!(CandidateFamily::generic(spec), alpha, None, move || {
+                            metric_sweep::order_generic(&core, alpha, true, spec)
+                        });
                     }
                 }
             }
@@ -1962,7 +1928,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
             for r in 0..passes {
                 let seed = 30_000u64 + (v as u64) * 1_000 + r as u64;
-                consider!(move || {
+                consider_cached!(CandidateFamily::Custom(variant), alpha, Some(seed), move || {
                     let q = relabel(n, seed);
                     let b = permute_pattern(sp_ref, &q);
                     let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
@@ -2015,7 +1981,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
             for r in 0..passes {
                 let seed = 40_000u64 + (w as u64) * 1_000 + r as u64;
-                consider!(move || {
+                consider_cached!(CandidateFamily::Custom(variant), alpha, Some(seed), move || {
                     let q = relabel(n, seed);
                     let b = permute_pattern(sp_ref, &q);
                     let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
@@ -2056,7 +2022,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (RELABEL_METRIC_BUDGET / nnz.max(1)).clamp(1, RELABEL_METRIC_MAX_PASSES);
             for r in 0..passes {
                 let seed = 50_000u64 + (w as u64) * 1_000 + r as u64;
-                consider!(move || {
+                consider_cached!(CandidateFamily::Custom(variant), alpha, Some(seed), move || {
                     let q = relabel(n, seed);
                     let b = permute_pattern(sp_ref, &q);
                     let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
@@ -2086,7 +2052,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         };
         for &a in alphas {
             let opts_a = feral_amf::AmfOptions { dense_alpha: a, ..Default::default() };
-            consider!(move || feral_amf::amf_order_opts(&core, &opts_a).map(|(p, ..)| p));
+            consider_cached!(CandidateFamily::Amf, a, None, move || {
+                feral_amf::amf_order_opts(&core, &opts_a).map(|(p, ..)| p)
+            });
         }
     }
 
@@ -2124,7 +2092,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 custom_metrics::ScoreVariant::SqPure
             };
             let alpha = if max_deg >= 1_000 { 0.75 } else { 1.5 };
-            consider!(move || custom_metrics::order_variant(&core, alpha, true, variant));
+            consider_cached!(CandidateFamily::Custom(variant), alpha, None, move || {
+                custom_metrics::order_variant(&core, alpha, true, variant)
+            });
         } else {
             // Dense giants (nnz >= 20 n) take the α2.5 twin of the first variant
             // as well: on the pooling_sppc3pq class it is a distinct basin
@@ -2139,23 +2109,35 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             };
             for (name, alpha) in picks {
                 match name {
-                    "cm_sqdiv" => consider!(move || custom_metrics::order_variant(
-                        &core,
+                    "cm_sqdiv" => consider_cached!(
+                        CandidateFamily::Custom(custom_metrics::ScoreVariant::SqDiv),
                         alpha,
-                        true,
-                        custom_metrics::ScoreVariant::SqDiv,
-                    )),
-                    "cm_sqpure" => consider!(move || custom_metrics::order_variant(
-                        &core,
+                        None,
+                        move || custom_metrics::order_variant(
+                            &core,
+                            alpha,
+                            true,
+                            custom_metrics::ScoreVariant::SqDiv,
+                        )
+                    ),
+                    "cm_sqpure" => consider_cached!(
+                        CandidateFamily::Custom(custom_metrics::ScoreVariant::SqPure),
                         alpha,
-                        true,
-                        custom_metrics::ScoreVariant::SqPure,
-                    )),
+                        None,
+                        move || custom_metrics::order_variant(
+                            &core,
+                            alpha,
+                            true,
+                            custom_metrics::ScoreVariant::SqPure,
+                        )
+                    ),
                     spec_name => {
                         if let Some(spec) =
                             metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == spec_name)
                         {
-                            consider!(move || metric_sweep::order_generic(&core, alpha, true, spec));
+                            consider_cached!(CandidateFamily::generic(spec), alpha, None, move || {
+                                metric_sweep::order_generic(&core, alpha, true, spec)
+                            });
                         }
                     }
                 }
@@ -2166,7 +2148,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 .iter()
                 .find(|s| s.name == "extra_deg_div_nv_wf2")
             {
-                consider!(move || metric_sweep::order_generic(&core, 10.0, true, spec));
+                consider_cached!(CandidateFamily::generic(spec), 10.0, None, move || {
+                    metric_sweep::order_generic(&core, 10.0, true, spec)
+                });
             }
         }
     }
@@ -2330,7 +2314,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     dense_alpha: da,
                     ..Default::default()
                 };
-                consider!(move || {
+                consider_cached!(CandidateFamily::Amf, da, Some(seed), move || {
                     let q = relabel(n, seed);
                     let b = permute_pattern(sp_ref, &q);
                     let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
@@ -2347,7 +2331,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         dense_alpha: -1.0,
                         ..Default::default()
                     };
-                    consider!(move || {
+                    consider_cached!(CandidateFamily::Amf, -1.0, Some(seed), move || {
                         let q = relabel(n, seed);
                         let b = permute_pattern(sp_ref, &q);
                         let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
@@ -2375,7 +2359,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             for r in 0..passes {
                 let seed = r as u64 + 1;
                 let amf_h = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
-                consider!(move || {
+                consider_cached!(CandidateFamily::Amf, alpha, Some(seed), move || {
                     let q = relabel(n, seed);
                     let b = permute_pattern(sp_ref, &q);
                     let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
@@ -2413,7 +2397,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     dense_alpha: da,
                     ..Default::default()
                 };
-                consider!(move || {
+                consider_cached!(CandidateFamily::Amf, da, Some(seed), move || {
                     let q = relabel(n, seed);
                     let b = permute_pattern(sp_ref, &q);
                     let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
@@ -2442,6 +2426,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     flush!();
+    drop(generator_cache);
     #[cfg(test)]
     parallel::phase_mark("1.portfolio", _tph, best_flops);
     #[cfg(test)]
@@ -4430,6 +4415,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
+        for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
+            if let Some(candidate) = rgreedy::subset_window_descent(
+                n, &pattern.col_ptr, &pattern.row_idx, &best_perm, width, 2, budget,
+            ) {
+                let flops = score(&candidate);
+                if flops < best_flops {
+                    best_flops = flops;
+                    best_perm = candidate;
+                }
+            }
+        }
+    }
     best_perm
 }
 

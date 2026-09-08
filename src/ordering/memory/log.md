@@ -174,5 +174,3 @@ round, so note the round if you know it.
 2026-09-08 | submitted **iter108b** `603ac76` validating (0.805234 / 1.003 / 62/3). Invent iter109 gate500k if need ([0134](experiments/0134-iter109-final-refine-500k.md)).
 
 2026-09-08 | invent iter110 on 108b: **0.804984** (−2.50 bip vs 108b) / 47/0 / worst 1.023s — chained FINAL_REFINE rebuild + terminal simp/pair. Ready on 603ac76 settle. iter109 500k micro abandoned.
-
-2026-09-08 | fb851f6 dev **0.804851 -> 0.804632**, fill 0.929670 -> 0.929561 | certified generator/score reuse, prefix-component scoring, chordal certificate, exact CPU kernels, component-factored subset windows | **52 better / 0 worse**, 300-pattern Yukon pass, worst local 1.159 -> **1.027 s**, 101 active tests passed; remote pending ([0142](experiments/0142-certified-reuse-window-dp.md)).

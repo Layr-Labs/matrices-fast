@@ -4045,6 +4045,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         let mut cur_flops: u64 = raw_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
         let counts: Vec<u32> = raw_counts.into_iter().map(|c| c as u32).collect();
         let parent: Vec<i32> = post_etree.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+        // iter126: gain-conditioned cfg_agg after chain+deep (120 failed unconditional).
         for cfg in [
             subtree_cfg_for(n, nnz),
             terminal_deep_subtree_cfg(n, nnz, cur_flops, amd_flops),
@@ -4064,6 +4065,37 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f < cur_flops {
                     cur_flops = f;
                     best_perm = candidate;
+                }
+            }
+        }
+        // iter128: full FINAL_REFINE-gate cfg_agg at 4M (127 failed timing) (half of failed 120).
+        // Target ~2–3 local bip past 110 with worst prefer<=1.00; skip nnz>=200k crowns.
+        if nnz < 200_000 {
+            let mut cfg_agg = subtree_cfg_for(n, nnz);
+            cfg_agg.round = 1;
+            cfg_agg.max_blocks = 48;
+            cfg_agg.min_s = 12;
+            cfg_agg.budget = 4_000_000;
+            if n >= 1_000 { cfg_agg.budget /= 2; }
+            if (1_000..10_000).contains(&n) { cfg_agg.max_s = 320; }
+            let permuted2 = permute_pattern(&scoring_pat, &best_perm);
+            let etree2 = EliminationTree::from_pattern(&permuted2);
+            let post2 = etree2.postorder();
+            let base2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
+            let post_pat2 = permute_pattern(&scoring_pat, &base2);
+            let post_et2 = EliminationTree::from_pattern(&post_pat2);
+            let raw2 = column_counts_gnp(&post_pat2, &post_et2);
+            let counts2: Vec<u32> = raw2.into_iter().map(|c| c as u32).collect();
+            let parent2: Vec<i32> = post_et2.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+            let mut cand2 = base2;
+            let improved2 = rgreedy::subtree_refine(
+                n, &pattern.col_ptr, &pattern.row_idx, &mut cand2, &counts2, &parent2, cfg_agg,
+            );
+            if improved2 > 0 && is_bijection(&cand2, n) {
+                let f2 = score(&cand2);
+                if f2 < cur_flops {
+                    cur_flops = f2;
+                    best_perm = cand2;
                 }
             }
         }
@@ -4159,29 +4191,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     best_perm = cand;
                 }
             }
-        }
-    }
-
-    // Terminal five-descent on the *shipped* incumbent (lean tail of the
-    // pivot-descents idea: ablation measured five-only −0.65 of −0.79 bips
-    // with the lowest worst-case, after the full 5/4/3 package died on the
-    // hidden cap). Five currently runs only pre-replacement; any later
-    // replacement ships without it. Strict exact admit → 0 worse. Same size
-    // class as FINAL_PAIR. Four/triple deliberately excluded: strictly less
-    // added work per admitted row than the failed package, same family.
-    {
-        const FINAL_FIVE_MAX_N: usize = 4_000;
-        const FINAL_FIVE_MAX_NNZ: usize = 60_000;
-        const FINAL_FIVE_OPS: i64 = 32_000_000;
-        if n >= 5 && n <= FINAL_FIVE_MAX_N && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
-            if let Some(cand) = rgreedy::adjacent_five_descent(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                FINAL_FIVE_OPS,
-            ) {
-                if is_bijection(&cand, n) {
+            // iter126: single five 48M on n<=3000 (timing-safe band).
+            if (5..3_001).contains(&n) {
+                if let Some(cand) = rgreedy::adjacent_five_descent(
+                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 48_000_000,
+                ) {
                     let f = score(&cand);
                     if f < best_flops {
                         best_flops = f;

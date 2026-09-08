@@ -38,9 +38,6 @@
 
 #![allow(dead_code)]
 
-mod window_dp;
-pub(crate) use window_dp::subset_window_descent;
-
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
     fn mul(words: &mut [u64; 6], factor: u64) {
         let mut carry = 0u128;
@@ -150,27 +147,11 @@ pub(crate) struct Game<'a> {
     /// better (-0.000285 vs -0.000216).
     use_buckets: bool,
     nlist: Vec<u32>,
-    nonzero_words: Vec<usize>,
     cand: Vec<u32>,
     tmp: Vec<u64>,
-    /// Its surviving vertices remain a clique as eliminations only add edges.
-    known_clique: Vec<u64>,
-    #[cfg(test)]
-    reference_kernels: bool,
-    #[cfg(test)]
-    cpu_stats: GameCpuStats,
     /// Deterministic work counter, in word-operations. The ONLY budget signal —
     /// no wall-clock anywhere in this module.
     pub(crate) ops: i64,
-}
-
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, Default)]
-struct GameCpuStats {
-    clique_eliminations: usize,
-    sparse_eliminations: usize,
-    dense_eliminations: usize,
-    clique_deficiencies: usize,
 }
 
 impl<'a> Game<'a> {
@@ -258,14 +239,8 @@ impl<'a> Game<'a> {
             nlive: 0,
             nelim: n,
             nlist: Vec::with_capacity(n),
-            nonzero_words: Vec::with_capacity(w),
             cand: Vec::with_capacity(n),
             tmp: vec![0u64; w],
-            known_clique: vec![0u64; w],
-            #[cfg(test)]
-            reference_kernels: false,
-            #[cfg(test)]
-            cpu_stats: GameCpuStats::default(),
             ops: 0,
         })
     }
@@ -275,12 +250,6 @@ impl<'a> Game<'a> {
         self.bhead.fill(-1);
         self.livelist.clear();
         self.deg.copy_from_slice(&self.deg0);
-        self.known_clique.fill(0);
-        self.nonzero_words.clear();
-        #[cfg(test)]
-        {
-            self.cpu_stats = GameCpuStats::default();
-        }
         for v in 0..self.n {
             let d = self.deg[v];
             if v >= self.nelim {
@@ -343,20 +312,12 @@ impl<'a> Game<'a> {
 
     /// Eliminate `v`, returning its column count `c = 1 + |N(v)|`.
     fn eliminate(&mut self, v: usize) -> u64 {
-        #[cfg(test)]
-        if self.reference_kernels {
-            return game_cpu_tests::reference_eliminate(self, v);
-        }
         let w = self.w;
         self.tmp.copy_from_slice(&self.adj[v * w..v * w + w]);
         // Materialize N(v).
         self.nlist.clear();
-        self.nonzero_words.clear();
         for k in 0..w {
             let mut word = self.tmp[k];
-            if word != 0 {
-                self.nonzero_words.push(k);
-            }
             while word != 0 {
                 let b = word.trailing_zeros() as usize;
                 word &= word - 1;
@@ -364,22 +325,6 @@ impl<'a> Game<'a> {
             }
         }
         let c = self.nlist.len() as u64 + 1;
-        let fill_free = self.nlist.len() <= 1
-            || self
-                .nonzero_words
-                .iter()
-                .all(|&k| self.tmp[k] & !self.known_clique[k] == 0);
-        let sparse_words = self.nonzero_words.len() < w;
-        #[cfg(test)]
-        {
-            if fill_free {
-                self.cpu_stats.clique_eliminations += 1;
-            } else if sparse_words {
-                self.cpu_stats.sparse_eliminations += 1;
-            } else {
-                self.cpu_stats.dense_eliminations += 1;
-            }
-        }
         let vw = v >> 6;
         // `v` leaves the live set first: it is never in `N(v)`, so the
         // neighbour loop below cannot touch its bucket links.
@@ -388,31 +333,17 @@ impl<'a> Game<'a> {
         for i in 0..self.nlist.len() {
             let u = self.nlist[i] as usize;
             let base = u * w;
-            let nd = if fill_free {
-                self.adj[base + vw] &= !vbit;
-                self.deg[u] - 1
-            } else {
-                let mut d = 0u32;
-                if sparse_words {
-                    let mut added = 0u32;
-                    for &k in &self.nonzero_words {
-                        let old = self.adj[base + k];
-                        added += (self.tmp[k] & !old).count_ones();
-                        self.adj[base + k] = old | self.tmp[k];
-                    }
-                    d = self.deg[u] + added;
-                } else {
-                    for k in 0..w {
-                        let nv = self.adj[base + k] | self.tmp[k];
-                        self.adj[base + k] = nv;
-                        d += nv.count_ones();
-                    }
-                }
-                // The union inserts u itself and retains v; remove both.
-                self.adj[base + (u >> 6)] &= !(1u64 << (u & 63));
-                self.adj[base + vw] &= !vbit;
-                d - 2
-            };
+            let mut d = 0u32;
+            for k in 0..w {
+                let nv = self.adj[base + k] | self.tmp[k];
+                self.adj[base + k] = nv;
+                d += nv.count_ones();
+            }
+            // `tmp` contains u (u ∈ N(v)) and `adj[u]` contained v; both are
+            // now set and both must go — hence the `-2`.
+            self.adj[base + (u >> 6)] &= !(1u64 << (u & 63));
+            self.adj[base + vw] &= !vbit;
+            let nd = d - 2;
             if self.use_buckets && u < self.nelim {
                 let od = self.deg[u];
                 if nd != od {
@@ -425,10 +356,6 @@ impl<'a> Game<'a> {
             }
             self.deg[u] = nd;
         }
-        if !fill_free {
-            self.known_clique.copy_from_slice(&self.tmp);
-        }
-        // Keep legacy logical charges: search trajectories depend on them.
         self.ops += ((self.nlist.len() + 1) * (3 * w + 6) + 24) as i64;
         for k in 0..w {
             self.adj[v * w + k] = 0;
@@ -449,26 +376,8 @@ impl<'a> Game<'a> {
 
     /// Number of fill edges eliminating `v` would create (its deficiency).
     fn deficiency(&mut self, v: usize) -> u32 {
-        #[cfg(test)]
-        if self.reference_kernels {
-            return game_cpu_tests::reference_deficiency(self, v);
-        }
         let w = self.w;
         self.tmp.copy_from_slice(&self.adj[v * w..v * w + w]);
-        if self.deg[v] <= 1
-            || self
-                .tmp
-                .iter()
-                .zip(&self.known_clique)
-                .all(|(&neighbors, &clique)| neighbors & !clique == 0)
-        {
-            self.ops += ((self.deg[v] as usize + 1) * (2 * w + 4)) as i64;
-            #[cfg(test)]
-            {
-                self.cpu_stats.clique_deficiencies += 1;
-            }
-            return 0;
-        }
         let mut missing: u32 = 0;
         for k in 0..w {
             let mut word = self.tmp[k];
@@ -501,314 +410,6 @@ impl<'a> Game<'a> {
             f += c * c;
         }
         f
-    }
-}
-
-#[cfg(test)]
-mod game_cpu_tests {
-    use super::*;
-    use crate::Pattern;
-
-    pub(super) fn reference_eliminate(game: &mut Game<'_>, v: usize) -> u64 {
-        let w = game.w;
-        game.tmp.copy_from_slice(&game.adj[v * w..v * w + w]);
-        game.nlist.clear();
-        for k in 0..w {
-            let mut word = game.tmp[k];
-            while word != 0 {
-                let b = word.trailing_zeros() as usize;
-                word &= word - 1;
-                game.nlist.push((k * 64 + b) as u32);
-            }
-        }
-        let c = game.nlist.len() as u64 + 1;
-        let vw = v >> 6;
-        let vbit = 1u64 << (v & 63);
-        for i in 0..game.nlist.len() {
-            let u = game.nlist[i] as usize;
-            let base = u * w;
-            let mut d = 0u32;
-            for k in 0..w {
-                let nv = game.adj[base + k] | game.tmp[k];
-                game.adj[base + k] = nv;
-                d += nv.count_ones();
-            }
-            game.adj[base + (u >> 6)] &= !(1u64 << (u & 63));
-            game.adj[base + vw] &= !vbit;
-            let nd = d - 2;
-            if game.use_buckets && u < game.nelim {
-                let od = game.deg[u];
-                if nd != od {
-                    game.bunlink(u, od as usize);
-                    game.blink(u, nd as usize);
-                    if (nd as usize) < game.mind {
-                        game.mind = nd as usize;
-                    }
-                }
-            }
-            game.deg[u] = nd;
-        }
-        game.ops += ((game.nlist.len() + 1) * (3 * w + 6) + 24) as i64;
-        for k in 0..w {
-            game.adj[v * w + k] = 0;
-        }
-        if game.use_buckets {
-            game.bunlink(v, game.deg[v] as usize);
-        } else {
-            let p = game.pos[v] as usize;
-            let last = *game.livelist.last().unwrap();
-            game.livelist[p] = last;
-            game.pos[last as usize] = p as u32;
-            game.livelist.pop();
-        }
-        game.deg[v] = 0;
-        game.nlive -= 1;
-        c
-    }
-
-    pub(super) fn reference_deficiency(game: &mut Game<'_>, v: usize) -> u32 {
-        let w = game.w;
-        game.tmp.copy_from_slice(&game.adj[v * w..v * w + w]);
-        let mut missing = 0u32;
-        for k in 0..w {
-            let mut word = game.tmp[k];
-            while word != 0 {
-                let b = word.trailing_zeros() as usize;
-                word &= word - 1;
-                let base = (k * 64 + b) * w;
-                let mut m = 0u32;
-                for q in 0..w {
-                    m += (game.tmp[q] & !game.adj[base + q]).count_ones();
-                }
-                missing += m - 1;
-            }
-        }
-        game.ops += ((game.deg[v] as usize + 1) * (2 * w + 4)) as i64;
-        missing / 2
-    }
-
-    fn same_state(actual: &Game<'_>, expected: &Game<'_>) {
-        assert_eq!(actual.n, expected.n);
-        assert_eq!(actual.w, expected.w);
-        assert_eq!(actual.adj0, expected.adj0);
-        assert_eq!(actual.adj, expected.adj);
-        assert_eq!(actual.deg0, expected.deg0);
-        assert_eq!(actual.deg, expected.deg);
-        assert_eq!(actual.livelist, expected.livelist);
-        assert_eq!(actual.pos, expected.pos);
-        assert_eq!(actual.bhead, expected.bhead);
-        assert_eq!(actual.bnext, expected.bnext);
-        assert_eq!(actual.bprev, expected.bprev);
-        assert_eq!(actual.mind, expected.mind);
-        assert_eq!(actual.nlive, expected.nlive);
-        assert_eq!(actual.nelim, expected.nelim);
-        assert_eq!(actual.use_buckets, expected.use_buckets);
-        assert_eq!(actual.nlist, expected.nlist);
-        assert_eq!(actual.cand, expected.cand);
-        assert_eq!(actual.tmp, expected.tmp);
-        assert_eq!(actual.ops, expected.ops);
-    }
-
-    fn check_sequence(p: &Pattern, nelim: usize, order: &[usize]) -> GameCpuStats {
-        let adj = Game::build_adj(p.n, &p.col_ptr, &p.row_idx).unwrap();
-        let mut actual = Game::new_partial(p.n, &adj, nelim).unwrap();
-        let mut expected = Game::new_partial(p.n, &adj, nelim).unwrap();
-        expected.reference_kernels = true;
-        actual.reset();
-        expected.reset();
-        same_state(&actual, &expected);
-        for (step, &v) in order.iter().enumerate() {
-            for &probe in order[step..].iter().take(if p.n <= 5 { p.n } else { 3 }) {
-                assert_eq!(actual.deficiency(probe), expected.deficiency(probe));
-                same_state(&actual, &expected);
-            }
-            if nelim < p.n {
-                assert_eq!(actual.deficiency(nelim), expected.deficiency(nelim));
-                same_state(&actual, &expected);
-            }
-            if actual.use_buckets {
-                actual.advance_mind();
-                expected.advance_mind();
-                same_state(&actual, &expected);
-            }
-            assert_eq!(actual.eliminate(v), expected.eliminate(v));
-            same_state(&actual, &expected);
-        }
-        actual.cpu_stats
-    }
-
-    fn next_permutation(order: &mut [usize]) -> bool {
-        if order.len() < 2 {
-            return false;
-        }
-        let Some(i) = (0..order.len() - 1).rev().find(|&i| order[i] < order[i + 1]) else {
-            return false;
-        };
-        let j = (i + 1..order.len()).rev().find(|&j| order[j] > order[i]).unwrap();
-        order.swap(i, j);
-        order[i + 1..].reverse();
-        true
-    }
-
-    fn shuffle(order: &mut [usize], rng: &mut u64) {
-        for i in (1..order.len()).rev() {
-            order.swap(i, (xs64(rng) % (i + 1) as u64) as usize);
-        }
-    }
-
-    #[test]
-    fn game_cpu_exhaustive_state_equivalence() {
-        for n in 1..=4 {
-            let pairs: Vec<_> = (0..n).flat_map(|u| (u + 1..n).map(move |v| (u, v))).collect();
-            for mask in 0usize..1usize << pairs.len() {
-                let edges: Vec<_> = pairs
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(bit, &edge)| (mask & (1 << bit) != 0).then_some(edge))
-                    .collect();
-                let p = Pattern::from_edges(n, &edges);
-                let mut order: Vec<_> = (0..n).collect();
-                loop {
-                    check_sequence(&p, n, &order);
-                    if !next_permutation(&mut order) {
-                        break;
-                    }
-                }
-                check_sequence(&p, n / 2, &(0..n / 2).collect::<Vec<_>>());
-            }
-        }
-    }
-
-    #[test]
-    fn game_cpu_random_cross_word_and_partial_state() {
-        let mut rng = 0x31790b5ad6e248cf;
-        for n in [7, 63, 64, 65, 127, 128, 129, 257] {
-            for threshold in [1, 4] {
-                let mut edges = Vec::new();
-                for u in 0..n {
-                    for v in u + 1..n {
-                        if xs64(&mut rng) % 16 < threshold {
-                            edges.push((u, v));
-                        }
-                    }
-                }
-                let p = Pattern::from_edges(n, &edges);
-                for nelim in [n, n / 2] {
-                    let mut order: Vec<_> = (0..nelim).collect();
-                    shuffle(&mut order, &mut rng);
-                    check_sequence(&p, nelim, &order);
-                }
-            }
-        }
-    }
-
-    fn blocked_pattern(n: usize) -> Pattern {
-        let mut edges = Vec::new();
-        for first in (0..n).step_by(17) {
-            let end = (first + 17).min(n);
-            for v in first + 1..end {
-                edges.push((first, v));
-                if v + 1 < end {
-                    edges.push((v, v + 1));
-                }
-            }
-        }
-        Pattern::from_edges(n, &edges)
-    }
-
-    #[test]
-    fn game_cpu_bucket_threshold_and_boundary_state() {
-        let mut rng = 0xda820159ebf3764d;
-        for n in [SCAN_MAX_N, SCAN_MAX_N + 1, 1603] {
-            let p = blocked_pattern(n);
-            for nelim in [n, n - 7] {
-                let mut order: Vec<_> = (0..nelim).collect();
-                shuffle(&mut order, &mut rng);
-                check_sequence(&p, nelim, &order);
-            }
-        }
-    }
-
-    #[test]
-    fn game_cpu_all_kernels_and_persistent_clique_are_exercised() {
-        let n = 192;
-        let p = Pattern::from_edges(
-            n,
-            &[(130, 1), (130, 2), (130, 3), (64, 5), (64, 70), (64, 140), (180, 181)],
-        );
-        let prefix = [130, 180, 1, 64, 5, 2, 3, 70, 140];
-        let mut order = prefix.to_vec();
-        order.extend((0..n).filter(|v| !prefix.contains(v)));
-        let stats = check_sequence(&p, n, &order);
-        assert!(stats.sparse_eliminations > 0, "{stats:?}");
-        assert!(stats.dense_eliminations > 0, "{stats:?}");
-        assert!(stats.clique_eliminations > 0, "{stats:?}");
-        assert!(stats.clique_deficiencies > 0, "{stats:?}");
-    }
-
-    #[test]
-    fn game_cpu_reset_discards_old_certificate() {
-        let p = Pattern::from_edges(8, &[(0, 1), (0, 2), (0, 3)]);
-        let adj = Game::build_adj(p.n, &p.col_ptr, &p.row_idx).unwrap();
-        let mut actual = Game::new(p.n, &adj).unwrap();
-        let mut expected = Game::new(p.n, &adj).unwrap();
-        expected.reference_kernels = true;
-        for _ in 0..3 {
-            actual.reset();
-            expected.reset();
-            same_state(&actual, &expected);
-            assert!(actual.known_clique.iter().all(|&word| word == 0));
-            assert_eq!(actual.deficiency(0), 3);
-            assert_eq!(expected.deficiency(0), 3);
-            same_state(&actual, &expected);
-            assert_eq!(actual.eliminate(0), expected.eliminate(0));
-            assert!(actual.known_clique.iter().any(|&word| word != 0));
-            same_state(&actual, &expected);
-            assert_eq!(actual.eliminate(1), expected.eliminate(1));
-            same_state(&actual, &expected);
-        }
-    }
-
-    #[test]
-    fn game_cpu_complete_runs_preserve_rng_budgets_and_output() {
-        for n in [17, 65, SCAN_MAX_N + 1] {
-            let p = blocked_pattern(n);
-            let adj = Game::build_adj(n, &p.col_ptr, &p.row_idx).unwrap();
-            let mut actual = Game::new(n, &adj).unwrap();
-            let mut expected = Game::new(n, &adj).unwrap();
-            expected.reference_kernels = true;
-            let reset = (2 * n * n.div_ceil(64) + 8 * n) as i64;
-            let seed: Vec<_> = (0..n).collect();
-            for policy in [
-                Policy { slack: 0, fill_tb: false },
-                Policy { slack: 1, fill_tb: false },
-                Policy { slack: 1, fill_tb: true },
-            ] {
-                for prefix in [0, n / 3] {
-                    for allowance in [reset - 1, reset + 1000, 20_000_000] {
-                        for bound in [1, u64::MAX] {
-                            let mut actual_rng = 0x638ffb719e402ad5;
-                            let mut expected_rng = actual_rng;
-                            let mut actual_order = Vec::new();
-                            let mut expected_order = Vec::new();
-                            let cap = actual.ops + allowance;
-                            let actual_score = actual.run(
-                                &seed[..prefix], policy, &mut actual_rng,
-                                bound, cap, &mut actual_order,
-                            );
-                            let expected_score = expected.run(
-                                &seed[..prefix], policy, &mut expected_rng,
-                                bound, cap, &mut expected_order,
-                            );
-                            assert_eq!(actual_score, expected_score);
-                            assert_eq!(actual_rng, expected_rng);
-                            assert_eq!(actual_order, expected_order);
-                            same_state(&actual, &expected);
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

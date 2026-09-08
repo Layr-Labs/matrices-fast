@@ -268,6 +268,19 @@ fn minl_try_delete_edge(
     true
 }
 
+fn minl_stamp_neighbors(row: &[u32], marks: &mut [u32], stamp: &mut u32, ops: &mut i64) {
+    *stamp = stamp.wrapping_add(1);
+    if *stamp == 0 {
+        *ops -= marks.len() as i64;
+        marks.fill(0);
+        *stamp = 1;
+    }
+    *ops -= row.len() as i64;
+    for &w in row {
+        marks[w as usize] = *stamp;
+    }
+}
+
 /// One completion-lattice descent from `seed`: returns up to two candidate
 /// orderings (MCS perfect elimination order of the minimalized completion,
 /// and AMD on that completion), or `None` when no fill edge was removable or
@@ -319,8 +332,10 @@ pub(crate) fn minl_candidates(sp: &ScoringPattern, seed: &[usize]) -> Option<(Ve
     // `false` when the op budget cut the descent short: the completion is
     // then not minimal and the (expensive) post-descent refinement is skipped.
     let mut completed = true;
-    // `umark[w] == u + 1` ⇔ w ∈ N(u) for the current group's u.
+    // Give each rebuild a fresh epoch, including revisits after deletions
+    // performed from another endpoint or in an earlier degree bucket.
     let mut umark: Vec<u32> = vec![0; n];
+    let mut ustamp: u32 = 0;
     let mut umark_for: u32 = u32::MAX;
     // `cmark[w] == stamp` ⇔ w ∈ c for the edge under test.
     let mut cmark: Vec<u32> = vec![0; n];
@@ -353,19 +368,14 @@ pub(crate) fn minl_candidates(sp: &ScoringPattern, seed: &[usize]) -> Option<(Ve
             }
             let (uu, vv) = (u as usize, v as usize);
             if umark_for != u {
-                // (Re)build the stamp of N(u); stale stamps of the previous u
-                // are harmless because the stamp value is u + 1.
-                ops -= adj[uu].len() as i64;
-                for &w in &adj[uu] {
-                    umark[w as usize] = u + 1;
-                }
+                minl_stamp_neighbors(&adj[uu], &mut umark, &mut ustamp, &mut ops);
                 umark_for = u;
             }
             // c = N(u) ∩ N(v), walking only N(v).
             ops -= adj[vv].len() as i64;
             c.clear();
             for &w in &adj[vv] {
-                if umark[w as usize] == u + 1 {
+                if umark[w as usize] == ustamp {
                     c.push(w);
                 }
             }
@@ -466,4 +476,46 @@ pub(crate) fn minl_candidates(sp: &ScoringPattern, seed: &[usize]) -> Option<(Ve
         }
     }
     Some((out, completed))
+}
+
+pub(super) fn repair_probe_graph(sp: &ScoringPattern, seed: &[usize]) -> Option<Vec<Vec<u32>>> {
+    let (cp, ri) = filled_graph(sp, seed, MINL_MAX_LNNZ)?;
+    Some((0..sp.n).map(|u| ri[cp[u] as usize..cp[u + 1] as usize]
+        .iter().map(|&v| v as u32).collect()).collect())
+}
+
+pub(super) fn repair_probe_peo(adj: &[Vec<u32>]) -> Vec<usize> {
+    minl_mcs_peo(adj.len(), adj)
+}
+
+#[cfg(test)]
+mod stamp_tests {
+    use super::minl_stamp_neighbors;
+
+    #[test]
+    fn rebuilding_after_other_endpoint_deletion_drops_stale_neighbor() {
+        let mut marks = [0; 8];
+        let mut epoch = 0;
+        let mut ops = 100;
+        minl_stamp_neighbors(&[1, 3, 5], &mut marks, &mut epoch, &mut ops);
+        let previous = epoch;
+        // Another endpoint can remove (u, 1) without clearing u's old mark.
+        minl_stamp_neighbors(&[2, 6], &mut marks, &mut epoch, &mut ops);
+        minl_stamp_neighbors(&[3, 5], &mut marks, &mut epoch, &mut ops);
+        assert_ne!(epoch, previous);
+        let actual: Vec<_> = (0..marks.len()).filter(|&i| marks[i] == epoch).collect();
+        assert_eq!(actual, vec![3, 5]);
+        assert_eq!(ops, 93);
+    }
+
+    #[test]
+    fn epoch_wrap_clears_previous_marks_and_charges_clear() {
+        let mut marks = [1, u32::MAX, 1, 0];
+        let mut epoch = u32::MAX;
+        let mut ops = 20;
+        minl_stamp_neighbors(&[3], &mut marks, &mut epoch, &mut ops);
+        assert_eq!(epoch, 1);
+        assert_eq!(marks, [0, 0, 0, 1]);
+        assert_eq!(ops, 15);
+    }
 }

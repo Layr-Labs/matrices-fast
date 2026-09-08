@@ -6,6 +6,23 @@
 
 # Index
 
+- [0106: flop-neutral completion flips](experiments/0106-flop-neutral-completion-flips.md): exact single-defect condition, followed by fill deletion; test-only remote34171018836 pending.
+
+- [0105: separator insertion and multiple deletions](experiments/0105-separator-insertion-repair-screen.md): tests passed including4270 certificate checks; one public win of9flops, negligible aggregate benefit. Not submitted.
+- [Chordal insertion certificates](literature/deshpande-garofalakis-jordan-stepwise.md), [minimum FLOPs](literature/luce-ng-minimum-flops.md), and [MCS-ETree](literature/heggernes-peyton-mcs-etree.md): primary-source background and scoped consequences for0105.
+
+- [0104: isolated MINL epochs on the remote lab](experiments/0104-isolated-minl-epochs-remote.md): remote tests passed, all300 flop counts unchanged; both arms hit the same public timeout. No score gain, no submission.
+
+- [0103: alpha-equivalent walk cache](experiments/0103-alpha-equivalent-walk-cache.md): two tests passed, all300 public counts unchanged, both trusted graders passed; full probe163.75s to161.55s on the same Intel runner. Retained as modest speed headroom.
+
+- [0102: linear symmetric permutation](experiments/0102-linear-symmetric-permutation.md): remote tests passed 1200 exact public CSC comparisons; all 300 full-probe counts identical. Helper time fell about25%, full probe about1%, with no worst-case improvement established.
+
+- [0100: unchanged promoted-source remote control](experiments/0100-promoted-source-control.md): e88316d production source, documentation-only diff; timed out in workflow 34162012605. Baseline runtime instability is possible; no score.
+- [0101: fixed-pass supernode RMS priority](experiments/0101-supernode-rms-priority.md): official timeout in34162539982; subsequent authorized remote public lab measured0.806560 to0.806556, one win and one loss. Parked for negligible, concentrated benefit.
+
+- [0098: fresh MINL neighborhood epochs](experiments/0098-minl-neighbor-epochs.md): source-reviewed stale-membership fix on e88316d; remote timeout, no score.
+- [0099: adaptive exact clique membership](experiments/0099-adaptive-clique-membership.md): probe required edges or scan adjacency while retaining full-row charges; remote timeout, no score.
+
 ## 2026-09-07 checkpoint
 
 - [0097: fill gate on the completion descent; sub-10k lotteries restored](experiments/0097-descent-fill-gate-and-restored-sub10k-lotteries.md): the descent's L-nonzero gate 1.5M → 600k (removes only scans the 40M budget covers < 15 % of: crudeoil_lee4_10, −0.10 s on the slowest row, +0.18 bips); gdonninelli's 0096 sub-10k block (overwritten by the e7f15a87 graft) put back verbatim; four more all-n relabelled families (DegPlusDegme@10, DegDivNvDegme@10, SqDiv@1, DegP075@1). On `fcb74a7` (dev 0.807259): **0.806788** (−5.8 bips, 12 better / 9 worse), worst 1.601 s vs 1.634 s.
@@ -245,6 +262,10 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [Tarjan-Yannakakis MCS background](literature/tarjan-yannakakis-1984-mcs.md): inspected primary abstract and independent completion-containment derivation.
 
 ## Local follow-up experiments
+
+- [0108: integrated completion exchanges](experiments/0108-integrated-completion-exchanges.md) — independent4096-neutral/block screen yields46wins, expected0.806016171; production cappedremoteA/B34172851165 in progress, not yet validated.
+
+- [0107: common-neighborhood block saturation](experiments/0107-common-neighborhood-block-saturation.md) — remote screen passed, including K4,3 cost105->78 and3950chordality checks;11public wins,10complementary to neutral exchange; integrated validation in0108.
 
 - [0087: stage-6 stream sampling](experiments/0087-stage6-move-sampling-metered-by-fill.md) — multi-set bundle failed; smaller pool/hygiene control completed but missed promotion. Current numbering replaces the local 0085 collision.
 - [0088: cross-candidate subtree transplant](experiments/0088-cross-candidate-subtree-transplant.md) — 600k bundle gained 9.10 dev bips and failed opaquely. Current numbering replaces the local 0086 collision.

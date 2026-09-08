@@ -149,6 +149,7 @@ use crate::Pattern;
 /// what-if scoring). Not compiled into the shipped binary.
 #[cfg(test)]
 mod probe;
+mod separator_repair;
 mod transplant_probe;
 
 pub mod rgreedy;
@@ -163,7 +164,9 @@ mod parallel;
 mod metric_sweep;
 mod minl;
 
-use feral::ordering::amd::permute_pattern;
+mod symmetric_permute;
+mod metric_cache;
+use symmetric_permute::permute_pattern;
 use feral::ordering::elimination_tree::EliminationTree;
 use feral::sparse::csc::CscPattern as ScoringPattern;
 use feral::symbolic::column_counts_gnp;
@@ -1836,8 +1839,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // skipped (ported pattern: mid α won the heavy-tier movers, and the
             // same α-sensitivity holds for these walks). Stays inside the
             // measured light envelope; post-cascade placement unchanged.
-            for alpha in [10.0f64, 5.0, 2.5, 1.0] {
-                consider!(move || custom_metrics::order_variant(&core, alpha, true, variant));
+            let alphas = [10.0f64, 5.0, 2.5, 1.0];
+            let cells = metric_cache::alpha_cells(n, &col_deg, &alphas);
+            // Keep every original replay slot, including duplicates of the
+            // incumbent: the runner-up ledger can observe those duplicates.
+            for (alpha, cell) in alphas.into_iter().zip(cells) {
+                consider!(move || cell.get_or_init(||
+                    custom_metrics::order_variant(&core, alpha, true, variant)
+                ).clone());
             }
         }
         // The 15 `metric_sweep` specs are NOT queued here: on the light tier every
@@ -3824,6 +3833,18 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     parallel::phase_mark("15.peel", _tph, best_flops);
     #[cfg(test)]
     let _tph = std::time::Instant::now();
+
+    // A neutral completion exchange can unlock strict fill deletions after
+    // the earlier inclusion-minimal descent. Retain the incumbent unless the
+    // original-pattern exact scorer confirms a strict improvement.
+    for candidate in separator_repair::refine(&scoring_pat, &best_perm) {
+        if is_bijection(&candidate, n) {
+            let f = score(&candidate);
+            if f < best_flops { best_flops = f; best_perm = candidate; }
+        }
+    }
+    #[cfg(test)]
+    parallel::phase_mark("16.exchange", _tph, best_flops);
 
     #[cfg(test)]
     transplant_probe::capture(&runner_up.borrow());

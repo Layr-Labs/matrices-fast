@@ -2260,6 +2260,27 @@ pub(crate) fn subtree_refine(
     parent: &[i32],
     cfg: SubCfg,
 ) -> usize {
+    subtree_refine_recorded(n, col_ptr, row_idx, perm, counts, parent, cfg, None)
+}
+
+/// Strict common-base subtree improvement, in original vertex ids.
+pub(crate) struct SubtreeReplacement {
+    start: usize,
+    gain: u64,
+    order: Vec<usize>,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn subtree_refine_recorded(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    perm: &mut [usize],
+    counts: &[u32],
+    parent: &[i32],
+    cfg: SubCfg,
+    mut retained: Option<&mut Vec<SubtreeReplacement>>,
+) -> usize {
     // Spend the ranked large-matrix budget on more D1 basins without adding
     // trajectories: 32 blocks get both streams and the next 64 get D1 only.
     let split_ranked_streams =
@@ -2341,14 +2362,14 @@ pub(crate) fn subtree_refine(
     let nthreads = 4.max(1).min(blocks.len());
     let perm_ro: &[usize] = perm;
     let blocks_ro: &[(usize, usize)] = &blocks;
-    let parts: Vec<Vec<(usize, Vec<usize>)>> = std::thread::scope(|sc| {
+    let parts: Vec<Vec<(usize, Vec<usize>, u64)>> = std::thread::scope(|sc| {
         let handles: Vec<_> = (0..nthreads)
             .map(|t| {
                 sc.spawn(move || {
                     let mut local: Vec<u32> = vec![u32::MAX; n];
                     let mut touched: Vec<usize> = Vec::new();
                     let mut verts: Vec<usize> = Vec::new();
-                    let mut got: Vec<(usize, Vec<usize>)> = Vec::new();
+                    let mut got: Vec<(usize, Vec<usize>, u64)> = Vec::new();
                     let max_sub_bound = cfg.max_sub.min(MAX_N);
                     let max_adj_words = max_sub_bound.saturating_mul(max_sub_bound.div_ceil(64));
                     let mut adj0: Vec<u64> = vec![0u64; max_adj_words];
@@ -2445,9 +2466,10 @@ pub(crate) fn subtree_refine(
                                 }
                             }
                         }
-                        if let Some((ord, _)) = best {
+                        if let Some((ord, f)) = best {
                             if ord.len() == ssz {
-                                got.push((a, ord.iter().map(|&li| verts[li]).collect()));
+                                got.push((a, ord.iter().map(|&li| verts[li]).collect(),
+                                    seed_flops.saturating_sub(f)));
                             }
                         }
                     }
@@ -2463,12 +2485,120 @@ pub(crate) fn subtree_refine(
 
     let mut improved = 0usize;
     for part in parts {
-        for (a, ord) in part {
+        for (a, ord, gain) in part {
             perm[a..a + ord.len()].copy_from_slice(&ord);
             improved += 1;
+            if gain > 0 {
+                if let Some(records) = retained.as_deref_mut() {
+                    // Disjoint blocks: move at most n entries per call.
+                    records.push(SubtreeReplacement { start: a, gain, order: ord });
+                }
+            }
         }
     }
     improved
+}
+
+/// Maximum-weight laminar antichain on a common postordered forest.
+/// Validate intervals and vertex sets before composing. Eliminating a subtree
+/// leaves the same Schur graph above its vertex set regardless of internal
+/// order, so disjoint subtree gains add. The caller still exact-scores once.
+/// Linear in n plus retained entries; no searches or scores here.
+pub(crate) fn fuse_subtree_replacements(
+    base: &[usize],
+    parent: &[i32],
+    records: &[SubtreeReplacement],
+    minimum_gain: u64,
+) -> Option<Vec<usize>> {
+    let n = base.len();
+    if parent.len() != n || records.is_empty() {
+        return None;
+    }
+    let mut inverse = vec![usize::MAX; n];
+    for (j, &v) in base.iter().enumerate() {
+        if v >= n || inverse[v] != usize::MAX {
+            return None;
+        }
+        inverse[v] = j;
+    }
+    let mut size = vec![1usize; n];
+    let mut first: Vec<usize> = (0..n).collect();
+    for j in 0..n {
+        // Increasing parents and no holes certify contiguous subtrees.
+        if size[j] != j + 1 - first[j] {
+            return None;
+        }
+        let p = parent[j];
+        if p >= 0 {
+            let p = p as usize;
+            if p <= j || p >= n {
+                return None;
+            }
+            size[p] += size[j];
+            first[p] = first[p].min(first[j]);
+        } else if p != -1 {
+            return None;
+        }
+    }
+    let mut best_record = vec![usize::MAX; n];
+    let mut seen = vec![usize::MAX; n];
+    let mut entries = 0usize;
+    for (i, r) in records.iter().enumerate() {
+        entries = entries.checked_add(r.order.len())?;
+        let end = r.start.checked_add(r.order.len())?;
+        if entries > n.saturating_mul(2) || r.order.is_empty()
+            || end > n || first[end - 1] != r.start || r.gain == 0
+        {
+            return None;
+        }
+        for &v in &r.order {
+            if v >= n || inverse[v] < r.start || inverse[v] >= end || seen[v] == i {
+                return None;
+            }
+            seen[v] = i;
+        }
+        let old = best_record[end - 1];
+        // Stable ties prefer the first configuration, never completion order.
+        if old == usize::MAX || r.gain > records[old].gain {
+            best_record[end - 1] = i;
+        }
+    }
+    let mut gain = vec![0u64; n];
+    let mut take = vec![false; n];
+    let mut total = 0u64;
+    for j in 0..n {
+        let i = best_record[j];
+        if i != usize::MAX && records[i].gain > gain[j] {
+            gain[j] = records[i].gain;
+            take[j] = true;
+        }
+        if parent[j] >= 0 {
+            let p = parent[j] as usize;
+            gain[p] = gain[p].checked_add(gain[j])?;
+        } else {
+            total = total.checked_add(gain[j])?;
+        }
+    }
+    if total <= minimum_gain {
+        return None;
+    }
+    let mut fused = base.to_vec();
+    let mut end = n;
+    while end > 0 {
+        let j = end - 1;
+        if take[j] {
+            let r = &records[best_record[j]];
+            fused[r.start..end].copy_from_slice(&r.order);
+            end = r.start; // Exclude all descendants of a selected ancestor.
+        } else {
+            end -= 1;
+        }
+    }
+    Some(fused)
+}
+
+pub(crate) fn subtree_replacement_gain(records: &[SubtreeReplacement]) -> u64 {
+    records.iter().map(|r| r.gain).sum()
 }
 
 /// Gating and budget for [`subtree_refine`].

@@ -4107,12 +4107,18 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             .iter()
             .map(|p| p.map_or(-1, |j| j as i32))
             .collect();
+        // Reuse just the existing two searches. This structural gate bounds
+        // added input work, not elapsed time; native resource checks still apply.
+        let fuse = n.saturating_add(nnz) <= 100_000;
+        let mut replacements = Vec::new();
+        let mut single_gain = 0u64;
         for cfg in [
             subtree_cfg_for(n, nnz),
             terminal_deep_subtree_cfg(n, nnz, cur_flops, amd_flops),
         ] {
             let mut candidate = base_cand.clone();
-            let improved = rgreedy::subtree_refine(
+            let record_start = replacements.len();
+            let improved = rgreedy::subtree_refine_recorded(
                 n,
                 &pattern.col_ptr,
                 &pattern.row_idx,
@@ -4120,12 +4126,31 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 &counts,
                 &parent,
                 cfg,
+                if fuse { Some(&mut replacements) } else { None },
             );
+            single_gain = single_gain.max(rgreedy::subtree_replacement_gain(
+                &replacements[record_start..],
+            ));
             if improved > 0 && is_bijection(&candidate, n) {
                 let f = score(&candidate);
                 if f < cur_flops {
                     cur_flops = f;
                     best_perm = candidate;
+                }
+            }
+        }
+        if fuse {
+            if let Some(candidate) = rgreedy::fuse_subtree_replacements(
+                &base_cand, &parent, &replacements, single_gain,
+            ) {
+                if candidate != best_perm && is_bijection(&candidate, n) {
+                    // At most one extra exact score; must beat both originals
+                    // and the pre-round incumbent. Preserve fallback otherwise.
+                    let f = score(&candidate);
+                    if f < cur_flops {
+                        cur_flops = f;
+                        best_perm = candidate;
+                    }
                 }
             }
         }

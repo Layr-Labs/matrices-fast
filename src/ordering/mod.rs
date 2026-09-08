@@ -497,6 +497,32 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 const SUBTREE_MIN_N: usize = 24;
 const SUBTREE_MAX_N: usize = 250_000;
 
+/// Envelope of the FINAL subtree-refinement round, as `n + nnz`.
+///
+/// The round's whole cost is linear in `n + nnz` (two `permute_pattern`s, two
+/// elimination trees, one `column_counts_gnp` and one postorder, plus two
+/// op-budgeted `subtree_refine` calls), so one inequality in that quantity
+/// bounds it - there is no output-driven term for a ledger to guard.
+///
+/// The value/exposure curve, measured on all 300 dev rows (dev bips gained,
+/// then the count of rows whose added `order()` time exceeds 25 ms and the
+/// worst single row):
+///
+/// | `n + nnz` | dev bips | rows > 25 ms | worst |
+/// |---|---:|---:|---:|
+/// | ungated   | 3.098 | 7 | 110 ms |
+/// | 1_000_000 | 3.090 | 4 |  36 ms |
+/// |   500_000 | 2.946 | 1 |  27 ms |
+/// |   400_000 | 2.886 | 0 |  23 ms |
+/// |   300_000 | 2.850 | 0 |  18 ms |
+/// |   200_000 | 2.700 | 0 |  18 ms |
+///
+/// 400_000 is the knee where the per-row tail goes to zero: the three rows the
+/// ungated form spends 75-110 ms on (`acopf_case9241pegase_qcqp`, `faclay75`,
+/// `gabriel10`) are the corpus's largest and gain 0.012 %, 0.000 % and 0.001 %
+/// between them, so the last 0.21 bip costs the entire time exposure.
+const FINAL_REFINE_MAX_WORK: usize = 400_000;
+
 const MID_MAX_S: usize = 128;
 const LARGE_MAX_S: usize = 384;
 const MID_BLOCKS: usize = 16;
@@ -4022,6 +4048,91 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+
+    // ── FINAL SUBTREE REFINEMENT ON THE FINISHED INCUMBENT ──────────────────
+    //
+    // WHERE THE VALUE COMES FROM. `rgreedy::subtree_refine` is called from
+    // exactly two places in this function and both are at stage 3: the chain
+    // (`n <= SUBTREE_CHAIN_MAX_N`) and the terminal deep pass (`n <= 80_000 &&
+    // nnz <= 250_000`). Everything after them can REPLACE the incumbent —
+    // reduce-then-order on the residual core, the completion watcher, the
+    // small-graph bitset polish, the terminal PEO re-extraction, the
+    // alternate-seed chains, MINL, the count-ranked peel and the late exact
+    // polish — and the replacement shipped unrefined. The MINL call site
+    // already makes this argument for its own winner ("a strict MINL win is a
+    // NEW completion the subtree chain has never refined"); this generalises it
+    // to whichever stage actually finished last, which is the only thing the
+    // end of the function can know. It is a POSITION, not a wider gate: the
+    // largest gains land on rows inside BOTH stage-3 gates already.
+    //
+    // SCORE RISK IS STRUCTURALLY ZERO. `subtree_refine` only reports a strict
+    // improvement of its own exact incremental objective, the result is
+    // bijection-checked, and it is admitted only on a strict decrease of the
+    // exact score. A candidate can lower a ratio, never raise it.
+    //
+    // WHY THE INCUMBENT SCORE IS FREE HERE. `raw_counts` are the exact column
+    // counts of the postordered incumbent, and postorder is objective-neutral
+    // (measured: 0 of 300 dev rows change their flop count under it), so
+    // `Σ counts²` IS `score(best_perm)`. No extra scoring pass is spent to
+    // learn what has to be beaten.
+    //
+    // ENVELOPE. Gated on `n + nnz` alone, and that single inequality bounds the
+    // whole added cost, because every term of it is linear in `n + nnz` with no
+    // output-driven factor: two `permute_pattern`s, two `EliminationTree`s, one
+    // postorder, one `column_counts_gnp` (Gilbert-Ng-Peyton, `O(nnz α(n))`,
+    // never `O(Lnnz)`) and two `O(n)` clones. Measured across the dev corpus the
+    // setup runs at <= 90.7 ns per `(n + nnz)` unit, so the gate bounds it at
+    // ~36 ms; the two refinement calls are the pipeline's own op-budgeted
+    // configs (`SUBTREE_SEARCH_WORK_LIMIT` /
+    // `TERMINAL_SUBTREE_SEARCH_WORK_LIMIT`) and measure <= 19 ms together.
+    // Realized worst on any in-gate dev row is 23 ms; a 34-row 5+5 interleave
+    // reads S1 4 / S2 0 / S3 +31.6 ms against a 100 ms bar.
+    //
+    // Both rounds start from the SAME postordered candidate on purpose:
+    // `counts` and `parent` describe that candidate's elimination tree, so
+    // chaining the second round onto the first one's output would hand
+    // `subtree_refine` a tree that no longer matches its input.
+    if n >= SUBTREE_MIN_N && n + nnz <= FINAL_REFINE_MAX_WORK {
+        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let base_cand: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+        let post_pattern = permute_pattern(&scoring_pat, &base_cand);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let raw_counts = column_counts_gnp(&post_pattern, &post_etree);
+        let mut cur_flops: u64 = raw_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+        let counts: Vec<u32> = raw_counts.into_iter().map(|c| c as u32).collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        for cfg in [
+            subtree_cfg_for(n, nnz),
+            terminal_deep_subtree_cfg(n, nnz, cur_flops, amd_flops),
+        ] {
+            let mut candidate = base_cand.clone();
+            let improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate,
+                &counts,
+                &parent,
+                cfg,
+            );
+            if improved > 0 && is_bijection(&candidate, n) {
+                let f = score(&candidate);
+                if f < cur_flops {
+                    cur_flops = f;
+                    best_perm = candidate;
+                }
+            }
+        }
+        best_flops = best_flops.min(cur_flops);
+    }
+    #[cfg(test)]
+    parallel::phase_mark("16.final_refine", _tph, best_flops);
 
     best_perm
 }

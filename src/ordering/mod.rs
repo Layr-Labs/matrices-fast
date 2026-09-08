@@ -4219,11 +4219,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.
-        const LT1K: usize = 1_000;
-        const LT1K_FOUR_OPS: i64 = 32_000_000;
-        const LT1K_TRIPLE_OPS: i64 = 32_000_000;
+        // iter140c: surgical widen n<=1100 for lop97icx; nnz<=20k skips maxcsp.
+        // c59baaf n<=1200 FAIL; n<=1000 only −0.22. No rebuild3 widen. No mid-n cfg_agg.
+        const LT1K: usize = 1_100;
+        const LT1K_FOUR_OPS: i64 = 40_000_000;
+        const LT1K_TRIPLE_OPS: i64 = 40_000_000;
         const LT1K_TRIPLE_SWEEPS: usize = 4;
-        const LT1K_PAIR_OPS: i64 = 64_000_000;
+        const LT1K_PAIR_OPS: i64 = 80_000_000;
         const LT1K_PAIR_SWEEPS: usize = 4;
         if n >= 5 && n <= FINAL_FIVE_MAX_N && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
             let before_five = best_flops;
@@ -4260,7 +4262,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        if n >= 4 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
+        if n >= 4 && n <= LT1K && nnz > 0 && nnz <= 20_000 {
             if let Some(cand) = rgreedy::adjacent_four_descent(
                 n,
                 &pattern.col_ptr,
@@ -4277,7 +4279,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        if n >= 3 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
+        if n >= 3 && n <= LT1K && nnz > 0 && nnz <= 20_000 {
             if let Some(cand) = rgreedy::adjacent_triple_descent(
                 n,
                 &pattern.col_ptr,
@@ -4320,34 +4322,52 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // n<=1000 so this cannot see the cap rows. The mid-band 2M watcher
     // previously stacked here failed the hidden 2 s cap (f606aae) and is
     // not retried.
+    // iter140c: density-split SmallScore + completion 2M n<=1000 nnz<=20k only.
     if n >= 12 && n <= 1_000 {
         let mut cand = cutoff_plateau_refine(
             pattern,
             cutoff_paired_swap_refine(pattern, best_perm.clone()),
             true,
         );
-        // Second independent restart from the new incumbent. Same RNG stream,
-        // different seed perm, so the neighbourhood is not a byte replay.
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
+        if nnz <= 12_000 {
+            cand = cutoff_plateau_refine(
+                pattern,
+                cutoff_paired_swap_refine(pattern, cand),
+                true,
+            );
+            cand = cutoff_plateau_refine(
+                pattern,
+                cutoff_paired_swap_refine(pattern, cand),
+                true,
+            );
+            cand = cutoff_plateau_refine(
+                pattern,
+                cutoff_paired_swap_refine(pattern, cand),
+                true,
+            );
+        }
         if is_bijection(&cand, n) {
             let f = score(&cand);
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
+            }
+        }
+    }
+    if n >= 16 && n <= 1_000 && nnz <= 20_000 {
+        let pp = permute_pattern(&scoring_pat, &best_perm);
+        let et = EliminationTree::from_pattern(&pp);
+        let counts = column_counts_gnp(&pp, &et);
+        if let Some(candidate) = completion::refine_limited(
+            n, &pattern.col_ptr, &pattern.row_idx,
+            &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm, 2_000_000,
+        ) {
+            if is_bijection(&candidate, n) {
+                let f = score(&candidate);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = candidate;
+                }
             }
         }
     }

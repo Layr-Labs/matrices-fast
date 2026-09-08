@@ -260,7 +260,15 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
-    for cap in [usize::MAX, 9usize, 3usize] {
+    // iter156g: base caps always; extra 20/7 only on dense full patterns
+    // (gams05 needs them for Scotch Schur; lee4 sparse must not pay thread contention).
+    let dense_input = nnz >= 12 * n;
+    let caps: &[usize] = if dense_input {
+        &[usize::MAX, 20, 15, 9, 7, 5, 3]
+    } else {
+        &[usize::MAX, 15, 9, 5, 3]
+    };
+    for &cap in caps {
         let mut in_x = greedy_independent_set(sp, cap);
         budget_trim(sp, &mut in_x, max_pairs);
         let xs = in_x.iter().filter(|&&b| b).count();
@@ -300,7 +308,11 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
                     let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
                     feral_amf::amf_order_opts(&ccore, &o).ok()?.0
                 }
-                _ => feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok()?.0,
+                2 => feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok()?.0,
+                _ => {
+                    // iter156f: Scotch ND on dense-input Schur cores only
+                    feral_scotch::scotch_order(&ccore).ok()?
+                }
             };
             let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
             if !super::is_bijection(&cp, cn) {
@@ -326,6 +338,13 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         let dense = cnnz >= 20 * cn;
         let use_amf = cnnz <= GIANT_CORE_NNZ && !dense;
         let use_metis = cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ;
+        // iter156g: Scotch only when the FULL pattern is dense-ish (gams05 ~14.6
+        // nnz/n wins; lee4 ~6.8 nnz/n paid wall for zero score) AND the Schur
+        // core itself is dense enough. Prefer target ≤1.10.
+        let use_scotch = nnz >= 12 * n
+            && cnnz >= 8 * cn
+            && cn <= 16_000
+            && cnnz <= 300_000;
         let mut pass_ids: Vec<usize> = vec![0];
         if use_amf {
             pass_ids.push(1);
@@ -333,9 +352,57 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         if use_metis {
             pass_ids.push(2);
         }
+        if use_scotch {
+            pass_ids.push(3);
+        }
         let mut best_here: Option<(u64, Vec<usize>)> = None;
         for k in pass_ids {
             if let Some((f, cp)) = run_pass(k) {
+                let total = il.prefix_flops.saturating_add(f);
+                if best_here.as_ref().map_or(true, |(bf, _)| total < *bf) {
+                    best_here = Some((total, splice(&il, &cp)));
+                }
+            }
+        }
+        // iter157a: 2-seed relabelled AMF on small sparse Schur cores (0143 untested follow-up)
+        if use_amf && cn <= 3_000 && cnnz <= 30_000 {
+            let mut inv = vec![0usize; cn];
+            let mix = |mut x: u64| -> u64 {
+                x = x.wrapping_add(0x9E3779B97F4A7C15);
+                x = (x ^ (x >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+                x = (x ^ (x >> 27)).wrapping_mul(0x94D049BB133111EB);
+                x ^ (x >> 31)
+            };
+            for seed in 1u64..=2 {
+                let mut q: Vec<usize> = (0..cn).collect();
+                let mut s = seed;
+                for i in (1..cn).rev() {
+                    s = mix(s);
+                    let j = (s as usize) % (i + 1);
+                    q.swap(i, j);
+                }
+                for (ni, &ov) in q.iter().enumerate() {
+                    inv[ov] = ni;
+                }
+                let mut b_ptr: Vec<usize> = Vec::with_capacity(cn + 1);
+                let mut b_idx: Vec<usize> = Vec::with_capacity(cnnz);
+                b_ptr.push(0);
+                for &old in &q {
+                    let s0 = il.core_col_ptr[old];
+                    let s1 = il.core_col_ptr[old + 1];
+                    let mut col: Vec<usize> = il.core_row_idx[s0..s1].iter().map(|&w| inv[w]).collect();
+                    col.sort_unstable();
+                    b_idx.extend(col);
+                    b_ptr.push(b_idx.len());
+                }
+                let bcp: Vec<i32> = match b_ptr.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>() { Some(v) => v, None => continue };
+                let bri: Vec<i32> = match b_idx.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>() { Some(v) => v, None => continue };
+                let Some(bcore) = feral_ordering_core::CscPattern::new(cn, &bcp, &bri) else { continue; };
+                let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
+                let Ok((pb, ..)) = feral_amf::amf_order_opts(&bcore, &o) else { continue; };
+                let cp: Vec<usize> = pb.into_iter().map(|x| q[x as usize]).collect();
+                if !super::is_bijection(&cp, cn) { continue; }
+                let f = super::flops_of(&core_pat, &cp);
                 let total = il.prefix_flops.saturating_add(f);
                 if best_here.as_ref().map_or(true, |(bf, _)| total < *bf) {
                     best_here = Some((total, splice(&il, &cp)));

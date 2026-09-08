@@ -1,3 +1,17 @@
+
+## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
+- iter14 PEO ledger 2.5M→4M: **0.806156** null; reverted.
+
+- `4aa9f8f` failed (n/a): MINL re-enable on nnz≤80k after core hit sparse gt_10k.
+- Resubmit `fd9829c`: densify kept; MINL gate `n<10k && nnz≤80k`; local **0.806157** (−0.86 bip), gt_10k identical, worst 1.188 s.
+
+
+## 2026-09-07 evening PT — 0098 submit
+- Base tip `c6b0311` / lead hidden 0.850463 / local 0.806243.
+- Shipped: sub-10k EXTRA_METRICS densify + MINL re-enable nnz≤80k after core + 2 medium exact tickets.
+- Local **0.806135** (−1.08 bip), 7/1 movers, worst 1.198 s. Submission `4aa9f8f8` validating.
+- Closed negatives: mid K4/5 (+1.1 bip), ND AMF leaves (0), heavy AMF α (0), thin all-n Ammf (−0.04).
+
 # Log
 
 Chronological record, one line per session. **Append-only, newest at the
@@ -126,3 +140,17 @@ round, so note the round if you know it.
 2026-09-07 | 7f5a20d dev 0.808139 -> **0.807622** (−5.17 bips), fill →0.930861 | fourteen sub-10k relabelled lotteries (SqPure@5/10/2.5, DegDivNvSqrtWf@10/5, SqDiv@5/2.5, DegP075@5/2.5, DegP125@5/2.5, DegDivNvWfP15@5, DegPlusDegme@10/5; n<10000 gate leaves gt_10k bit-identical so hidden gt is preserved structurally; disjoint 40k+ streams, same 120k/nnz cap-6 post-cascade slot) | **WIN locally.** 1k_10k 0.8479→0.845970, gt control 0.7173; 71 tests; worst 0.659 s; all-n predecessor hidden-worse, closed ([0096](experiments/0096-sub10k-lotteries.md)) [restored: this block was overwritten by the e7f15a87 graft and is put back in 0097]
 
 2026-09-07 | 0097 on fcb74a7 (e7f15a87, hidden 0.851366; dev 0.807259 pod) | MINL lnnz gate 1.5M → 600k (only crudeoil_lee4_10's fruitless partial scan removed: −0.10 s worst row, +0.18 bips: arki0013 −0.15 lost); gdonninelli's fourteen sub-10k relabelled lotteries (c0f8ab1, hidden −1.4 on 7f5a20d) restored verbatim; four more all-n relabelled families DegPlusDegme@10 / DegDivNvDegme@10 / SqDiv@1 / DegP075@1 (−2.2 bips, 3/1, +0.06 s) | dev **0.806788** (−5.8 bips, 12 better / 9 worse), worst 1.601 s, harness 300/300 rows OK (bijection + determinism gates, `order()` twice per row), score 0.8068 (lt_1k 0.8897 / 1k_10k 0.8455 / gt_10k 0.7156, fill tiebreak 0.9306), 4 min 38 s wall on the pod. Not shipped: lnnz gate 400k (drops transswitch2736spr −0.57), relabel budget 240k (one row, +0.14 s).
+
+2026-09-07 | fd package 0.806157 → **0.806156** (null) | PEO_OVERSIZE_LEDGER 2.5M→4M (iter14) | **NULL / not shipped.** Score unchanged within noise; extra oversize PEO spend is pure timing risk. Reverted to 2.5M. Standing: both jonathan308 submits failed hidden (4aa9f8f MINL-after-core sparse gt; fd9829c likely 2s despite local ~1.19s). Prefer ≤1.0–1.1s worst + gt_10k bit-identical densify; no MINL-after-core.
+
+2026-09-07 | tip 0.806243 → **0.806143** (−1.00 bip) | max sub-10k EXTRA_METRICS densify (14 specs × α{10,5,2.5,1}) + medium tickets; tip-strict MINL (no after-core); PEO ledger reverted | **WIN locally, not submitted** — safer than failed fd/4aa9 but still thin vs hidden 0.850463; gt_10k print-identical ([0099](experiments/0099-max-densify-nominl.md))
+
+2026-09-07 | 0.806143 → **0.805888** (−2.55 bip beyond densify; −3.55 vs tip) | MinFill 8k/40k + METIS n<10k switches + DegDivNvDegme/Ammf/AmindNorm lotteries | **WIN score / FAIL timing** worst 1.375s (crudeoil_lee1_07); not submitted ([0100](experiments/0100-minfill-metis-lottery-densify.md))
+
+2026-09-07 | tip 0.806243 → **0.805951** (−2.92 bip) | METIS densify n<3k (nd_to_amd {50,150,300,800}+imb0.15) + tip EXTRA_METRICS; no medium+2 | **WIN score.** nuclear25a 0.635→0.561 from METIS densify alone. worst **1.109 s** (crudeoil_lee1_07). At parent 1.05–1.10 ceiling — not submitted ([0101](experiments/0101-metis-densify-n3k.md))
+
+2026-09-07 | 0.805951 → **0.805990** (+0.39 bip regress) | medium_exact_gate n≤6000→**n≤3500** (drop crudeoil from rgreedy) on 0101 base | **score regress**, timing probe pending. crudeoil 0.770→0.774. Aim worst ≤1.05s for submit margin ([0102](experiments/0102-medium-gate-n3500.md))
+
+2026-09-07 | tip 0.806243 → **0.805890** (−3.53 bip) | medium +2 exact-search tickets on medium_exact_gate else-branch + METIS densify n<3k {50,150,300,800} + tip EXTRA | **WIN score/breadth** 5/0 (nuclear25a, rsyn0815, sfacloc2_4_80, crudeoil, kall). worst **1.141 s** — timing fail vs parent ≤1.10 ([0103](experiments/0103-medium2-metis.md))
+
+2026-09-07 | 0.805890 → **0.805904** (+0.14 bip) | gate medium +2 to **n>4000** (skip crudeoil n=3670) | 4/0 wins (drop crudeoil). timing probe pending ([0104](experiments/0104-medium2-n4k-gate.md))

@@ -8,6 +8,9 @@
 
 ## 2026-09-07 checkpoint
 
+- [0099: max densify no MINL-after-core](experiments/0099-max-densify-nominl.md): tip 0.806243 → **0.806143** (−1.00 bip); not submitted.
+- [0098: sub-10k sweep densify + cheap MINL re-enable + medium tickets](experiments/0098-sub10k-sweep-minl-medium.md): tip `c6b0311` local 0.806243 → **0.806135** (−1.08 bips); submitted `4aa9f8f8` validating; worst probe 1.198 s.
+
 - [0097: fill gate on the completion descent; sub-10k lotteries restored](experiments/0097-descent-fill-gate-and-restored-sub10k-lotteries.md): the descent's L-nonzero gate 1.5M → 600k (removes only scans the 40M budget covers < 15 % of: crudeoil_lee4_10, −0.10 s on the slowest row, +0.18 bips); gdonninelli's 0096 sub-10k block (overwritten by the e7f15a87 graft) put back verbatim; four more all-n relabelled families (DegPlusDegme@10, DegDivNvDegme@10, SqDiv@1, DegP075@1). On `fcb74a7` (dev 0.807259): **0.806788** (−5.8 bips, 12 better / 9 worse), worst 1.601 s vs 1.634 s.
 - [0096: sub-10k relabelled lotteries](experiments/0096-sub10k-lotteries.md) — 7f5a20d dev 0.808139 → **0.807622** (−5.17 bips, 1k_10k; gt_10k bit-identical by n-gate construction); 14 further variant×α lotteries the shipped seven never drew; 71 tests, worst 0.659 s; hub-free-all-n predecessor graded hidden-worse (donor reshuffle), closed.
 - [0096: MINL scan profiled — cheaper descent, exact re-testing, kept partial rounds, one refinement round, three more lottery families](experiments/0096-minl-scan-profile-and-cheaper-descent.md): a budget-break bug discarded every partial descent (big-fill rows); grouped-stamp scan halves the ops per edge; dirty-endpoint re-test; one subtree round on a completed strict win; SqPure@10 / DegP125@1 / DegDivNvSqrtWf@10 in the relabelled lottery. On tip `7f5a20d` (dev 0.808139): **0.807259** (−10.9 bips, 30 better / 2 worse), worst 1.634 s vs 1.561 s.

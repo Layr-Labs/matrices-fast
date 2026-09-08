@@ -1767,6 +1767,18 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             ..Default::default()
         };
         consider!(move || feral_metis::metis_order_full(&core, &opts_seed).map(|(p, _, _)| p));
+        // METIS ND↔AMD densify gated n<3000: keeps nuclear25a (n=1942) win,
+        // skips slow mid rows (crudeoil_lee1_07 n=3670, chp_partload n=5211).
+        // iter29: further bisect — only nd_to_amd {150,300} (drop 50/800)
+        if n < 3_000 {
+            for sw in [50u32, 150, 300, 800] {
+                let opts = feral_metis::MetisOptions {
+                    nd_to_amd_switch: sw,
+                    ..Default::default()
+                };
+                consider!(move || feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
+            }
+        }
     }
 
     // STRONGER KaHIP: a second seed and the Eco quality mode. KaHIP's default
@@ -1849,7 +1861,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == "extra_deg2_div_nv_wf05") {
             consider!(move || metric_sweep::order_generic(&core, 10.0, true, spec));
         }
-        // 0111: sweep extras on n<10k only (gt_10k bit-identical; no AMD/AMF)
+        // 0111 tip EXTRA_METRICS + METIS densify n<3k only (iter26): reclaim
+        // timing vs max densify; nuclear25a win is METIS nd_to_amd, not these.
+        // tip EXTRA (0111) + METIS densify n<3k + medium+2 @ n>4000
         if n < 10_000 {
             for sname in ["extra_deg15_div_nv", "extra_deg_div_nv_degme2"] {
                 if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == sname) {
@@ -2470,6 +2484,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     well_below = amd_flops > 0
         && best_flops < amd_flops
         && best_flops.saturating_mul(5) < amd_flops.saturating_mul(4);
+    // iter27: cap medium exact at n<=3500 so crudeoil_lee1_07 (n=3670,
+    // local worst ~1.11s) drops the rgreedy/pair_descent medium arm and
+    // frees ~50–100ms under the hidden 2s cap. METIS densify n<3k kept.
     medium_exact_gate = n > 1_000
         && n <= 6_000
         && (nnz <= 30_000 || (well_below && nnz <= 50_000));
@@ -2558,6 +2575,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0xC2B2_AE3D_27D4_EB4F),
                 (50_000_000, 0x1656_67B1_9E37_79B9),
                 (50_000_000, 0x85EB_CA77_C2B2_AE3D),
+            ]
+        } else if n > 4_000 {
+            // medium +2 for n>4000 (rsyn0815/sfacloc); skip crudeoil n=3670
+            &[
+                (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
+                (50_000_000, 0xD1B5_4A32_D192_ED03),
+                (50_000_000, 0xC2B2_AE3D_27D4_EB4F),
+                (50_000_000, 0x1656_67B1_9E37_79B9),
+                (50_000_000, 0x94D0_49BB_1331_11EB),
+                (50_000_000, 0x1F83_D9AB_5B96_4D71),
             ]
         } else {
             &[
@@ -3707,9 +3734,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // AMD on it, and admits either only on a strict exact decrease. Bounded by
     // an op budget and a fill gate; the watcher above walks the same lattice
     // with a different, witness-driven schedule and a smaller budget.
-    // A replacement: when a residual-core path already improved the incumbent,
+    // Tip: when a residual-core path already improved the incumbent,
     // core minfill/refine paid the late lattice budget — skip full-graph MINL.
+    // (Both jonathan308 submits that re-enabled MINL after core failed hidden.)
     if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16 && !core_path_improved {
+
         let mut cur_flops = score(&best_perm);
         let entry_flops = cur_flops;
         let mut descent_completed = false;

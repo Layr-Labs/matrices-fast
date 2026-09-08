@@ -175,6 +175,15 @@ use feral::symbolic::column_counts_gnp;
 /// same one, under a per-matrix work ledger: per-round cost is linear in the reconstruction,
 /// two MCS passes and two exact scores, so charging each round against a fixed allowance
 /// bounds the added time by structure alone.
+/// Terminal SmallScore restart cap (iter113). The chain exits exactly when a
+/// restart reproduces its input, so this bounds only the still-improving tail.
+/// Insertion-neighbourhood sample cap per pass (iter113); the work budget below
+/// is the binding limit on every row that is expensive per sample.
+const INSERTION_ITERS: usize = 8192;
+/// Hard word-op ceiling for one insertion pass. Fail-closed and structure-
+/// independent, so a dense hidden lt_1k row cannot spend more than a cheap one.
+const INSERTION_WORK_BUDGET: u64 = 6_000_000;
+const TERMINAL_SMALL_RESTARTS: usize = 8;
 const PEO_LARGE_MAX_NNZ: usize = 1_500_000;
 const PEO_LARGE_MAX_LNNZ: usize = 20_000_000;
 const PEO_LARGE_ROUNDS: usize = 8;
@@ -928,6 +937,42 @@ impl SmallScore {
         }
         total
     }
+    /// `flops_bounded` that also charges the caller for the word-operations it
+    /// performs. The insertion walk needs a bound that holds regardless of
+    /// structure: measured cost per call varies ~20x across lt_1k rows at the
+    /// same `n` (qapw n=705 nnz=87496 is cheap because near-complete graphs cut
+    /// off early; maxcsp-langford-3-11 n=660 nnz=29646 is 20x worse), so neither
+    /// `n` nor `nnz` is a usable proxy. Counting the actual inner loop is.
+    fn flops_bounded_work(&self, perm: &[usize], bound: u64, work: &mut u64) -> u64 {
+        let mut rows = self.rows.clone();
+        let words = (self.n + 63) / 64;
+        *work += (self.n * words) as u64;
+        let mut total = 0;
+        for (step, &v) in perm.iter().enumerate() {
+            let neighbors = rows[v];
+            let count = 1 + neighbors[..words].iter().map(|x| x.count_ones() as u64).sum::<u64>();
+            total += count * count;
+            let d = count - 1;
+            let suffix_floor = d * (d + 1) * (2 * d + 1) / 6
+                + (self.n - step - 1) as u64 - d;
+            if total + suffix_floor > bound {
+                return bound.saturating_add(1);
+            }
+            for w in 0..words {
+                let mut bits = neighbors[w];
+                while bits != 0 {
+                    let u = w * 64 + bits.trailing_zeros() as usize;
+                    bits &= bits - 1;
+                    *work += words as u64;
+                    for k in 0..words { rows[u][k] |= neighbors[k]; }
+                    rows[u][u / 64] &= !(1 << (u % 64));
+                    rows[u][v / 64] &= !(1 << (v % 64));
+                }
+            }
+        }
+        total
+    }
+
     fn flops_bounded(&self, perm: &[usize], bound: u64) -> u64 {
         let mut rows = self.rows.clone();
         let words = (self.n+63)/64;
@@ -1020,6 +1065,48 @@ fn cutoff_paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usi
         candidate.swap(positions[2], positions[3]);
         let f = scoring.flops_bounded(&candidate,best_f);
         if f < best_f { best_f = f; best = candidate; }
+    }
+    best
+}
+
+// Walk INSERTION moves: lift the pivot at position `a` and re-seat it at `b`,
+// sliding the span between them. The paired-swap and plateau passes are both
+// transposition neighbourhoods -- they can only exchange two positions, leaving
+// every other pivot's index fixed. An elimination order is sequence-sensitive,
+// so relocating one pivot across a span shifts its relationship with every pivot
+// it crosses at once. That reaches permutations no transposition neighbourhood
+// contains, which is why it is worth its own pass rather than more restarts of
+// the existing two. Fixed seed, strict-improvement acceptance, pure function of
+// `(pattern, start)`.
+fn cutoff_insertion_refine(pattern: &Pattern, start: Vec<usize>) -> Vec<usize> {
+    let n = start.len();
+    if n < 3 { return start; }
+    let scoring = SmallScore::new(pattern);
+    let mut best = start;
+    let mut best_f = scoring.flops(&best);
+    let mut current = best.clone();
+    let mut state = 0x5deece6du64;
+    let mut work: u64 = 0;
+    for _ in 0..INSERTION_ITERS {
+        if work > INSERTION_WORK_BUDGET { break; }
+        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+        let a = state as usize % n;
+        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+        let b = state as usize % n;
+        if a == b { continue; }
+        let v = current.remove(a);
+        current.insert(b, v);
+        let f = scoring.flops_bounded_work(&current, best_f, &mut work);
+        if f < best_f {
+            best_f = f;
+            best = current.clone();
+        } else if f > best_f {
+            // Strictly worse: revert. Score-NEUTRAL relocations are kept, which
+            // is what lets the walk cross a plateau instead of stalling on it --
+            // the same reason `cutoff_plateau_refine` takes `neutral`.
+            let v = current.remove(b);
+            current.insert(a, v);
+        }
     }
     best
 }
@@ -4321,28 +4408,31 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // previously stacked here failed the hidden 2 s cap (f606aae) and is
     // not retried.
     if n >= 12 && n <= 1_000 {
-        let mut cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, best_perm.clone()),
-            true,
-        );
-        // Second independent restart from the new incumbent. Same RNG stream,
-        // different seed perm, so the neighbourhood is not a byte replay.
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
+        // iter113: the crown ran exactly FOUR blind restarts and scored only the
+        // final permutation, paying all four even after the chain stopped moving.
+        // Both refine passes carry FIXED RNG seeds (0x917ad73 / 0xa839d37), so each
+        // is a deterministic function of its input: the moment a restart returns
+        // its own input unchanged, every later restart is byte-identical and the
+        // chain has PROVABLY converged. Exiting there is exact, not heuristic.
+        // The saved restarts pay for a deeper tail on the rows still moving, so
+        // rows that converge early cost strictly less than the crown while rows
+        // that keep converting get more. Strict exact admit -> 0 worse, and
+        // n <= 1_000 means no cap-critical row can see this block.
+        let mut cand = best_perm.clone();
+        for _ in 0..TERMINAL_SMALL_RESTARTS {
+            let next = cutoff_insertion_refine(
+                pattern,
+                cutoff_plateau_refine(
+                    pattern,
+                    cutoff_paired_swap_refine(pattern, cand.clone()),
+                    true,
+                ),
+            );
+            if next == cand {
+                break;
+            }
+            cand = next;
+        }
         if is_bijection(&cand, n) {
             let f = score(&cand);
             if f < best_flops {

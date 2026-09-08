@@ -1,3 +1,10 @@
+
+## 2026-09-07 evening PT — 0098 submit
+- Base tip `c6b0311` / lead hidden 0.850463 / local 0.806243.
+- Shipped: sub-10k EXTRA_METRICS densify + MINL re-enable nnz≤80k after core + 2 medium exact tickets.
+- Local **0.806135** (−1.08 bip), 7/1 movers, worst 1.198 s. Submission `4aa9f8f8` validating.
+- Closed negatives: mid K4/5 (+1.1 bip), ND AMF leaves (0), heavy AMF α (0), thin all-n Ammf (−0.04).
+
 # Log
 
 Chronological record, one line per session. **Append-only, newest at the

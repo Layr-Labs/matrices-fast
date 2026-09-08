@@ -4072,6 +4072,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // iter110: chained rebuild round after a FINAL_REFINE win (refine_core shape).
         // Independent cfgs above leave a new tree unsearched; one conditioned rebuild
         // buys depth only where a strict gain already paid for the row.
+        let before_rebuild = cur_flops;
         if cur_flops < best_flops_before_final {
             let permuted2 = permute_pattern(&scoring_pat, &best_perm);
             let etree2 = EliminationTree::from_pattern(&permuted2);
@@ -4108,6 +4109,51 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f2 < cur_flops {
                     cur_flops = f2;
                     best_perm = cand2;
+                }
+            }
+            best_flops = best_flops.min(cur_flops);
+        }
+
+        // Second chained rebuild, conditioned on the FIRST rebuild's strict
+        // gain (not just FINAL_REFINE's): the rebuilt tree is itself new and
+        // deserves one more bounded search, bought only where round one paid.
+        // Halved budget, narrower blocks, strict admit. One mechanism.
+        if cur_flops < before_rebuild {
+            let permuted3 = permute_pattern(&scoring_pat, &best_perm);
+            let etree3 = EliminationTree::from_pattern(&permuted3);
+            let post3 = etree3.postorder();
+            let base3: Vec<usize> = post3.iter().map(|&j| best_perm[j]).collect();
+            let post_pat3 = permute_pattern(&scoring_pat, &base3);
+            let post_et3 = EliminationTree::from_pattern(&post_pat3);
+            let raw3 = column_counts_gnp(&post_pat3, &post_et3);
+            let counts3: Vec<u32> = raw3.into_iter().map(|c| c as u32).collect();
+            let parent3: Vec<i32> = post_et3.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+            let mut cfg3 = subtree_cfg_for(n, nnz);
+            cfg3.round = 1;
+            cfg3.max_blocks = 16;
+            cfg3.min_s = 16;
+            cfg3.budget = 4_000_000;
+            if n >= 1_000 {
+                cfg3.budget /= 2;
+            }
+            if (1_000..10_000).contains(&n) {
+                cfg3.max_s = 256;
+            }
+            let mut cand3 = base3;
+            let improved3 = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut cand3,
+                &counts3,
+                &parent3,
+                cfg3,
+            );
+            if improved3 > 0 && is_bijection(&cand3, n) {
+                let f3 = score(&cand3);
+                if f3 < cur_flops {
+                    cur_flops = f3;
+                    best_perm = cand3;
                 }
             }
             best_flops = best_flops.min(cur_flops);

@@ -1,12 +1,3 @@
-[0143: independent-set-first lift](experiments/0143-independent-set-first-lift.md):
-eliminate a greedy maximal independent set first, order the exact Schur complement
-with AMD / AMF / METIS; full-dev 0.804851 -> **0.798697** on `fb851f6`, 10/1
-improved/regressed, worst 0.978 -> 1.057 s (stage cost <= 0.25 s, METIS-bound).
-
-[0142: certified reuse and exact subset windows](experiments/0142-certified-reuse-window-dp.md):
-full-dev 0.804851 -> **0.804632**, 52/0 improved/regressed, worst local
-1.159 -> **1.027 s**, 101 active tests passed; remote validation pending.
-
 [Latest Codex residual-core revision](experiments/0075-residual-core-minfill.md)
 
 [Latest Codex bounded-work revision](experiments/0074-shared-terminal-cleanup-budget.md)

@@ -4117,6 +4117,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // (c7c1a8a) and the ungated copy (5f4e82b) both failed hidden
             // timing. lt_1k cannot see lee1_07 / lee4_09.
             if cur_flops < before_rebuild && n <= 1_000 {
+                let before_rebuild2 = cur_flops;
                 let permuted3 = permute_pattern(&scoring_pat, &best_perm);
                 let etree3 = EliminationTree::from_pattern(&permuted3);
                 let post3 = etree3.postorder();
@@ -4156,6 +4157,46 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
                 best_flops = best_flops.min(cur_flops);
+
+                // Third gain-conditioned rebuild, n<=1000 only. 186c507
+                // stacked this with leftover n<=1500 + a watcher and died;
+                // fc7c3ce showed the leftover widen was the killer. One extra
+                // etree on graphs rebuild2 already paid for, never on n>1000.
+                if cur_flops < before_rebuild2 {
+                    let permuted4 = permute_pattern(&scoring_pat, &best_perm);
+                    let etree4 = EliminationTree::from_pattern(&permuted4);
+                    let post4 = etree4.postorder();
+                    let base4: Vec<usize> = post4.iter().map(|&j| best_perm[j]).collect();
+                    let post_pat4 = permute_pattern(&scoring_pat, &base4);
+                    let post_et4 = EliminationTree::from_pattern(&post_pat4);
+                    let raw4 = column_counts_gnp(&post_pat4, &post_et4);
+                    let counts4: Vec<u32> = raw4.into_iter().map(|c| c as u32).collect();
+                    let parent4: Vec<i32> =
+                        post_et4.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+                    let mut cfg4 = subtree_cfg_for(n, nnz);
+                    cfg4.round = 1;
+                    cfg4.max_blocks = 8;
+                    cfg4.min_s = 16;
+                    cfg4.budget = 2_000_000;
+                    let mut cand4 = base4;
+                    let improved4 = rgreedy::subtree_refine(
+                        n,
+                        &pattern.col_ptr,
+                        &pattern.row_idx,
+                        &mut cand4,
+                        &counts4,
+                        &parent4,
+                        cfg4,
+                    );
+                    if improved4 > 0 && is_bijection(&cand4, n) {
+                        let f4 = score(&cand4);
+                        if f4 < cur_flops {
+                            cur_flops = f4;
+                            best_perm = cand4;
+                        }
+                    }
+                    best_flops = best_flops.min(cur_flops);
+                }
             }
         }
     }
@@ -4260,6 +4301,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
+        // Leftover four/triple/pair, then an exact LNS walk on the shipped
+        // tree. Early rgreedy::search ran before these replacements; late
+        // polish only covers nnz<=12k. fc7c3ce proved leftover n<=1500 is
+        // the hidden 2 s killer; keep LT1K=1000.
         if n >= 4 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
             if let Some(cand) = rgreedy::adjacent_four_descent(
                 n,
@@ -4306,6 +4351,32 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f < best_flops {
                     best_flops = f;
                     best_perm = cand;
+                }
+            }
+        }
+        // Dense lt_1k hole: n<=400 nnz>30k never saw early exact (30k cap)
+        // or late polish (12k cap). n>400 serial/par walks put
+        // maxcsp-langford-3-11 (n=660) at 1.88 s locally — skip them.
+        // 24M serial moved qap; 40M at n=341 moved qspp_0_11. Preserve both
+        // by splitting the budget at n=300.
+        const LT1K_DENSE_EXACT_SEED: u64 = 0x7E57_51DE_A1B2_C3D4;
+        if n >= 16 && n <= 400 && nnz > 30_000 {
+            let budget = if n <= 300 { 24_000_000 } else { 40_000_000 };
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                budget,
+                LT1K_DENSE_EXACT_SEED,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
                 }
             }
         }

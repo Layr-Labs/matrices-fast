@@ -19,9 +19,18 @@ passes 101 active tests; 31 opt-in probes are ignored by the ordinary invocation
 The relevant timing and window probes were run explicitly. Three scoped
 read-only reviews found no significant issues.
 
-These are public-dev observations. The base's reported hidden score was
-0.848742; no claim of hidden improvement is made before remote validation.
-Timing is a single-machine comparison subject to load.
+These are public-dev observations. Timing is a single-machine comparison
+subject to load.
+
+## Official result
+
+Submission **05685a47-a036-4133-bb07-c3278ff7f354** was **promoted** with hidden
+score **0.848556** versus **0.848742**, and hidden fill ratio **0.947341**.
+Benchmark metadata confirmed this as the current best, at source
+`f7f60dc7eee3b7fa9b3ed057dfb53905d4777aef`.
+[Grading run](https://github.com/Layr-Labs/matrices-fast/actions/runs/34281380111)
+completed successfully; [submission PR](https://github.com/Layr-Labs/matrices-fast/pull/366).
+The challenge remains open, so this does not imply a permanent lead.
 
 ## Changes
 
@@ -92,8 +101,7 @@ not a chordality certificate. No instance recognition is used.
 
 ## Follow-up
 
-Remote acceptance remains to be checked. An additional CPU research direction
-is computing window-boundary unions through adjacency-signature histograms and
+An additional CPU research direction is computing window-boundary unions through adjacency-signature histograms and
 subset zeta sums instead of materializing every bitset union. That idea is not
 implemented or claimed as a measured improvement here.
 

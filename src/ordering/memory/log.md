@@ -1,6 +1,8 @@
 
 ## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
 
+2026-09-08 | **PROMOTED** `b604027` / `2fef69b` hidden **0.850005** (−0.05% vs 0.850463) | iter74d timing-cut package. New lead is US.
+2026-09-08 | tip 0.806243 → **0.805518** (−7.25 bip) | **iter76** lean densify + narrow PEO_ALT 3k≤n<8k (fix mpbp_15); worst **1.047s**, 24/3 movers. Submitted `4ecc26ea` validating to push own lead.
 2026-09-08 | tip 0.806243 → **0.805536** (−7.07 bip) | **iter74d timing-cut of iter72 family** — danger skip core-exact + late polish cost>20M skip + densify lean + medium 4-ticket floor on danger + PEO_ALT skip n≥2500 nnz≥9k | **24/4 movers**, worst **1.087s** (confirm 1.093). Submitted `b6040276` validating. Prior iter72 0.805384 / 29/0 / 1.196s FAIL; iter73 gated polish regress.
 - iter14 PEO ledger 2.5M→4M: **0.806156** null; reverted.
 
@@ -169,4 +171,60 @@ round, so note the round if you know it.
 
 2026-09-08 | densify/LexBFS/Sloan/tie-ticket cluster maxed ~7 movers (iter61–65) | **LEAP iter66**: residual-core exact LNS + once-per-row work ledger ([0108](experiments/0108-residual-core-exact-lns.md)). Target ≥15 movers + worst ≤1.10s.
 
-2026-09-08 | 0fb513b dev 0.805518 -> **0.805234** (−2.84 bips, ~55 movers: 5 lt_1k / 30 1k_10k / 20 gt_10k) [same block priced on three consecutive frontiers: c6b0311 −3.03 / 64 movers, 2fef69b −2.89 / 55, 0fb513b −2.84; the two intervening promotions took 0.19 bip of it, all at the small end] | FINAL subtree-refinement round on the FINISHED incumbent (`n + nnz <= 400_000`): both existing configs (`subtree_cfg_for`, `terminal_deep_subtree_cfg`) re-run on the permutation `leader_order` is about to return, from ONE shared postorder, strict-decrease accept. `rgreedy::subtree_refine` is called from exactly two places and both are at stage 3, while core-lift / completion / polish / PEO / alt-seeds / transplant / MINL / count-ranked peel / late polish all replace the incumbent afterwards — so what ships was never refined | **WIN**: 0 rows worse (strict accept), biggest crudeoil_lee1_07 −1.71 %, rsyn0820m04m −0.89 %, crudeoil_pooling_dt2 −0.70 %, multiplants_stg1 −0.55 %, pinene200 −0.37 %. Added cost measured directly by a `#[cfg(test)]` probe over `order()`'s own output (no differencing): mean +6.1 ms, worst +23 ms, 0 of 300 rows > 25 ms; ungated it reaches +110 ms on acopf for +0.21 bip, not bought. 34-row 5+5 interleave S1 4 / S2 0 / S3 +31.6 ms against a same-code null of 23 / 10 / +136.2 ms — identical code is noisier than the change. The incumbent's score is FREE here: postorder is objective-neutral (0 of 300 rows change flops under it), so Σcounts² of the setup IS score(best_perm). It is a POSITION, not a gate widening — the biggest winners are inside both stage-3 gates already. Negative on gt_10k, all measured against the full shipped result: relabelled residual-core lottery above n=10k **0 of 45**, +8 AMD/+8 AMF lottery tickets per row **1 of 45** (acopf, 0.119 bips at 0.38 s/ticket), METIS×3 + Scotch ungated **0 of 45** (ratios 1.0–9519x) — the `n < 10_000` self-gating is correct, not an oversight ([0110](experiments/0110-final-subtree-refinement-round.md))
+2026-09-08 | reclaim `dc1f98b` validating (iter83 0.805494 / 26/3 / 1.082s) vs Xo1otl 0.849495 | **LEAP iter84**: dual core-exact shots + widen cn≤2200/core_nnz≤18k lean new-band ([0111](experiments/0111-iter84-widen-dual-core-exact.md)). Prefer worst ≤1.05.
+
+2026-09-08 | iter84 submitted `71b8941` validating (0.805493 / 1.026s / 27/3) after `dc1f98b` FAIL | **LEAP iter85**: chained residual-core LNS from improved plateaus ([0112](experiments/0112-iter85-chained-core-lns.md)).
+
+2026-09-08 | iter85 0.805491 / 1.018s / 27/3 (+syn micro vs 84) | **LEAP iter86**: mid-cost late polish 1→3 streams + descent densify ([0113](experiments/0113-iter86-mid-late-densify.md)). Hold submit on `71b8941`.
+
+2026-09-08 | iter86 submit blocked (1 in flight=`71b8941`) | **LEAP iter87**: mid stream trim 12/10/8→10/8/6 chase prefer ≤1.05 ([0114](experiments/0114-iter87-mid-trim-timing.md)).
+
+2026-09-08 | `71b8941` FAIL; submitted **iter87** reclaim validating (0.805478 / 1.026s / 28/2) ([0114](experiments/0114-iter87-mid-trim-timing.md)).
+
+2026-09-08 | submitted iter87 `7503ec1` validating | **LEAP iter88**: core_exact_shots 2→3 ([0115](experiments/0115-iter88-triple-core-exact.md)).
+
+2026-09-08 | watching `7503ec1`; iter88 NULL revert; **LEAP iter89**: skip faclay AMF α-1 (nnz≥1.2M) + cheap late 6→8 ([0116](experiments/0116-iter89-faclay-cut-cheap8.md)). Prefer ≤1.00 if FAIL.
+
+2026-09-08 | iter89 null movers; **LEAP iter90**: cheap late simplicial + mid-core 3rd stream ([0117](experiments/0117-iter90-simplicial-late-midcore3.md)).
+
+2026-09-08 | `7503ec1` FAIL; **LEAP iter91**: mid-band simplicial late ([0118](experiments/0118-iter91-mid-simplicial.md)). Submit when bars + prefer-ish timing.
+
+2026-09-08 | submitted **iter91** `65da821` validating (0.805473 / 1.024s / 28/2) after `7503ec1` FAIL. Jonathan auto-submit confirmed.
+
+2026-09-08 | `65da821` validating | **LEAP iter92**: skip robust AMD nnz≥1.2M for faclay ≤1.00 ([0119](experiments/0119-iter92-faclay-robust-skip.md)).
+
+2026-09-08 | watching `65da821`; iter92 ready ≤1.00 | **LEAP iter93**: REDUCE_EXTRA +depth 3 ([0120](experiments/0120-iter93-reduce-depth3.md)).
+
+2026-09-08 | iter93 depth3 NULL revert; hold **iter92** (0.805473/1.000/28/2) for submit if `65da821` FAIL.
+
+2026-09-08 | `65da821` FAIL; submitted **iter92** `3a6ef2d` validating (0.805473 / 1.000s / 28/2 prefer≤1.00).
+
+2026-09-08 | `3a6ef2d` validating; **LEAP iter94**: cost 20–28M one micro late stream for rsyn0815 breadth ([0121](experiments/0121-iter94-cost28m-micro.md)).
+
+2026-09-08 | iter94 NULL revert; watching `3a6ef2d` iter92 (≤1.00).
+
+2026-09-08 | `3a6ef2d` FAIL at ≤1.00 — diagnose late polish absent on tip | **LEAP iter95**: strip all late polish; keep core-exact+faclay cuts ([0122](experiments/0122-iter95-strip-late-polish.md)).
+
+2026-09-08 | 5× FAIL incl ≤1.00 | **LEAP iter96**: shots=1 + lean late 4/2 ([0123](experiments/0123-iter96-lean-hidden-load.md)).
+
+2026-09-08 | submitted **iter96** `8346ffe` validating (0.805534 / 1.006 / 25/2 lean). After 5× FAIL incl ≤1.00.
+
+2026-09-08 | watching `8346ffe` iter96 | **LEAP iter97**: drop chain LNS + mid-core 3→2 + late mid1/cheap3 skip>16M ([0124](experiments/0124-iter97-tip-minimal-late.md)).
+
+2026-09-08 | `8346ffe` FAIL; submitting **iter97** 0.805574 / 0.982s / 19/3 ([0124](experiments/0124-iter97-tip-minimal-late.md)).
+
+2026-09-08 | `8346ffe` FAIL; submitted **iter97** `cc07a1b` validating (0.805574 / 0.982 / 19/3). Invent iter98 cheap-only late ([0125](experiments/0125-iter98-cheap-only-late.md)).
+
+2026-09-08 | iter98 local 0.805573 / 1.016 / 19/3 (cheap-only late). **LEAP iter99**: lean core streams 4/3→2 ([0126](experiments/0126-iter99-lean-core-streams.md)). Watching `cc07a1b`.
+
+2026-09-08 | iter99 local **0.805573** / **0.998s** / **19/3** bars MET; hold for `cc07a1b` ([0126](experiments/0126-iter99-lean-core-streams.md)).
+
+2026-09-08 | `cc07a1b` FAIL; submitting **iter99** 0.805573 / 0.998 / 19/3 ([0126](experiments/0126-iter99-lean-core-streams.md)).
+
+2026-09-08 | `cc07a1b` FAIL; submitted **iter99** validating. Invent **iter100** core_exact=0 ([0127](experiments/0127-iter100-no-core-exact.md)).
+
+2026-09-08 | iter100 0.805925/1.019/17/3. **LEAP iter101**: drop n<3k EXTRA densify 14×4 ([0128](experiments/0128-iter101-drop-n3k-extra-densify.md)). Watching `96f5839`.
+
+2026-09-08 | iter101 local **0.805608** / 1.019 / **16/4** bars MET ([0128](experiments/0128-iter101-drop-n3k-extra-densify.md)). Watching `96f5839`.
+
+2026-09-08 | `96f5839` FAIL; submitting **iter101** 0.805608 / 1.019 / 16/4 ([0128](experiments/0128-iter101-drop-n3k-extra-densify.md)).

@@ -497,32 +497,6 @@ const SUBTREE_CFG: rgreedy::SubCfg = rgreedy::SubCfg {
 const SUBTREE_MIN_N: usize = 24;
 const SUBTREE_MAX_N: usize = 250_000;
 
-/// Envelope of the FINAL subtree-refinement round, as `n + nnz`.
-///
-/// The round's whole cost is linear in `n + nnz` (two `permute_pattern`s, two
-/// elimination trees, one `column_counts_gnp` and one postorder, plus two
-/// op-budgeted `subtree_refine` calls), so one inequality in that quantity
-/// bounds it - there is no output-driven term for a ledger to guard.
-///
-/// The value/exposure curve, measured on all 300 dev rows (dev bips gained,
-/// then the count of rows whose added `order()` time exceeds 25 ms and the
-/// worst single row):
-///
-/// | `n + nnz` | dev bips | rows > 25 ms | worst |
-/// |---|---:|---:|---:|
-/// | ungated   | 3.098 | 7 | 110 ms |
-/// | 1_000_000 | 3.090 | 4 |  36 ms |
-/// |   500_000 | 2.946 | 1 |  27 ms |
-/// |   400_000 | 2.886 | 0 |  23 ms |
-/// |   300_000 | 2.850 | 0 |  18 ms |
-/// |   200_000 | 2.700 | 0 |  18 ms |
-///
-/// 400_000 is the knee where the per-row tail goes to zero: the three rows the
-/// ungated form spends 75-110 ms on (`acopf_case9241pegase_qcqp`, `faclay75`,
-/// `gabriel10`) are the corpus's largest and gain 0.012 %, 0.000 % and 0.001 %
-/// between them, so the last 0.21 bip costs the entire time exposure.
-const FINAL_REFINE_MAX_WORK: usize = 400_000;
-
 const MID_MAX_S: usize = 128;
 const LARGE_MAX_S: usize = 384;
 const MID_BLOCKS: usize = 16;
@@ -1469,7 +1443,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             let amf_a = feral_amf::AmfOptions { dense_alpha: da, ..Default::default() };
             consider!(move || feral_amf::amf_order_opts(&core, &amf_a).map(|(p, ..)| p));
         }
-    } else if n < AMF_SWEEP_MAX_N && nnz >= 400_000 && nnz < AMF_SWEEP_MAX_NNZ {
+    } else if n < AMF_SWEEP_MAX_N && nnz >= 400_000 && nnz < AMF_SWEEP_MAX_NNZ
+        // iter89: skip ultra-giant AMF α-1 (nnz≥1.2M, faclay class) — DegDivNvWfP15
+        // hub metric already carries the faclay win; α-1 was pure wall-clock on crown.
+        && nnz < 1_200_000
+    {
         let amf_nd = feral_amf::AmfOptions { dense_alpha: -1.0, ..Default::default() };
         consider!(move || feral_amf::amf_order_opts(&core, &amf_nd).map(|(p, ..)| p));
     }
@@ -1481,7 +1459,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // eligible matrix STRICTLY below the slowest tier (`nnz ≥ 163 k`), where a
     // few AMD passes are milliseconds — so the worst-case time is held
     // byte-for-byte. Best-of floor makes all three variants pure upside.
-    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ {
+    if n < ROBUST_MAX_N && nnz < ROBUST_MAX_NNZ
+        // iter92: skip robust AMD envelope on ultra-giants (nnz≥1.2M / faclay).
+        // Hub metric already owns the faclay win; AMD α10 here is crown wall-clock.
+        && nnz < 1_200_000
+    {
         let amd_robust = feral_amd::AmdOptions {
             aggressive: false,
             dense_alpha: 10.0,
@@ -1912,30 +1894,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        if n < 3_000 {
-            for sname in [
-                "extra_deg3_div_nv",
-                "extra_deg2_div_nv_degme05",
-                "extra_deg_div_nv_wf05",
-                "extra_deg_p175",
-                "extra_deg_plus_wf01",
-                "extra_deg_div_nv_p05",
-                "extra_deg2_div_nv_wf002",
-                "extra_deg_plus_wf",
-                "extra_deg_p15",
-                "extra_deg_mul_nv",
-                "extra_deg_div_nv_wf01",
-                "extra_deg_div_nv_wf2",
-                "extra_deg15_div_nv",
-                "extra_deg_div_nv_degme2",
-            ] {
-                if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == sname) {
-                    for &alpha in &[10.0f64, 5.0, 2.5, 1.0] {
-                        consider!(move || metric_sweep::order_generic(&core, alpha, true, spec));
-                    }
-                }
-            }
-        }
+        // iter101: drop n<3k EXTRA densify grid (14×4 considers) — hidden-load suspect.
+        // Keep n<10k tip EXTRA pair above.
     }
 
     // ── RELABELLED QUOTIENT-METRIC MULTISTART (new lotteries, same 0005 form) ──
@@ -3255,6 +3215,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // across reduction depths in call order.
         let core_minfill_ledger = std::cell::Cell::new(CORE_MINFILL_LEDGER);
         // iter71: once-per-row small-core exact LNS (iter67 form).
+        // iter96: single core-exact shot (widen+chain kept) — cut hidden work vs dual.
         let core_exact_shots = std::cell::Cell::new(1i64);
         let mut order_core = |cl: &core_lift::CoreLift, alphas: &[f64], threads: bool, recurse: bool, incumbent: u64| -> Option<(u64, Vec<usize>)> {
             let cn = cl.core_n();
@@ -3375,41 +3336,54 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     minfill_pick = Some(p);
                 }
             }
-            // iter74b: SKIP residual-core exact on danger (n≥1800 nnz≥9k).
-            // Lean streams still left crudeoil_lee1_07 at 1.112s; killers need
-            // full skip. Cheap/small-core breadth (cn≤1500 off-danger) kept.
+            // iter74b/76: SKIP residual-core exact on danger (n≥1800 nnz≥9k).
+            // iter84: up to 2 shots/row; second shot half budget + seed XOR for a
+            // distinct plateau lottery. Widen admit to cn≤2200 / core_nnz≤18k
+            // (new cores beyond the 1500/14k band). New-band cn>1500 uses a lean
+            // single stream so faclay/crudeoil killers stay untouched (n gate).
             if core_exact_shots.get() > 0
                 && n < 12_000
-                && (50..=1_500).contains(&cn)
-                && cl.core_nnz() <= 14_000
+                && (50..=2_200).contains(&cn)
+                && cl.core_nnz() <= 18_000
                 && !(n >= 1_800 && nnz >= 9_000)
             {
-                core_exact_shots.set(0);
-                let budget = CORE_EXACT_CALL_CAP;
+                let remaining = core_exact_shots.get();
+                core_exact_shots.set(remaining - 1);
+                let budget = if remaining >= 2 {
+                    CORE_EXACT_CALL_CAP
+                } else {
+                    CORE_EXACT_CALL_CAP / 2
+                };
+                let seed_rot: u64 = if remaining >= 2 {
+                    0
+                } else {
+                    0x9E37_79B9_7F4A_7C15
+                };
                 let incumbent = minfill_pick.as_deref().unwrap_or(base_perm);
                 let mut best_c = flops_of(&core_pat, incumbent);
                 let mut best_p: Option<Vec<usize>> = None;
+                // iter99: lean core-exact streams under hidden 2× (on top of iter98 cheap-only late)
                 let streams: &[(i64, u64)] = if cn <= 400 {
                     &[
                         (budget, 0xA1B2_C3D4_E5F6_7788u64),
                         (budget / 2, 0x1234_5678_9ABC_DEF0),
-                        (budget / 2, 0x0F1E_2D3C_4B5A_6978),
-                        (budget / 3, 0xDEAD_BEEF_CAFE_BABEu64),
                     ]
                 } else if cn <= 900 {
                     &[
                         (budget, 0xA1B2_C3D4_E5F6_7788u64),
                         (budget / 2, 0x1234_5678_9ABC_DEF0),
-                        (budget / 2, 0x0F1E_2D3C_4B5A_6978),
                     ]
-                } else {
+                } else if cn <= 1_500 {
                     &[
                         (budget, 0xA1B2_C3D4_E5F6_7788u64),
                         (budget / 2, 0x1234_5678_9ABC_DEF0),
                     ]
+                } else {
+                    &[(budget / 2, 0xA1B2_C3D4_E5F6_7788u64)]
                 };
-                for &(bgt, seed) in streams {
+                for &(bgt, seed0) in streams {
                     if bgt <= 0 { continue; }
+                    let seed = seed0 ^ seed_rot;
                     if let Some((cand, f)) = rgreedy::search(
                         cn, &cl.core_col_ptr, &cl.core_row_idx,
                         incumbent, best_c, bgt, seed,
@@ -3435,9 +3409,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 ) {
                     if is_bijection(&cand, cn) {
                         let f = flops_of(&core_pat, &cand);
-                        if f < best_c { best_p = Some(cand); }
+                        if f < best_c { best_c = f; best_p = Some(cand); }
                     }
                 }
+                // iter97: drop chained LNS (hidden-load cut; tip has none)
                 if let Some(cp) = best_p { minfill_pick = Some(cp); }
             }
             let core_perm: &[usize] = minfill_pick.as_deref().unwrap_or(base_perm);
@@ -3750,7 +3725,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
             if final_flops == incumbent_flops { break; }
         }
-    } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ {
+    } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ
+        // iter92: skip PEO_LARGE on ultra-giants (nnz≥1.2M) — faclay crown timing.
+        && nnz < 1_200_000
+    {
         // Above the gate the incumbent completion has had no cleanup at all: neither the
         // bounded watcher nor the re-extraction above reaches these rows. The same strict-gain
         // chain applies, since a PEO of the incumbent's completion H eliminates the original
@@ -3984,155 +3962,45 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     #[cfg(test)]
     transplant_probe::capture(&runner_up.borrow());
 
-    // iter74: LATE exact polish with COST-SCALED budgets.
-    // Restore breadth toward iter72 (n<3000 nnz≤12k) but starve the known
-    // killers (n·nnz ≳ 20M → chimera_selby / crudeoil_pooling_ct3). Cheap rows
-    // keep multi-stream LNS; danger rows get one micro-stream + light descent.
+    // iter98: cheap-only late polish — strip mid band entirely (hidden 2×).
+    // cost≤8M: 4 streams + descent + simplicial; cost>8M: skip all late.
     if n >= 16 && n < 3_000 && nnz <= 12_000 {
         let cost = (n as u64).saturating_mul(nnz as u64);
-        // iter74b: skip cost>20M entirely (chimera_selby / crudeoil_pooling_ct3).
-        if cost > 20_000_000 {
-            // no late polish on known timing killers
-        } else {
-            let late_streams: &[(i64, u64)] = if cost > 8_000_000 {
-                &[
-                    (12_000_000i64, 0xC0FF_EE00_BADC_0FFEu64),
-                    (8_000_000, 0x0D15_EA5E_FEED_FACEu64),
-                ]
-            } else {
-                &[
-                    (20_000_000i64, 0xC0FF_EE00_BADC_0FFEu64),
-                    (20_000_000, 0x0D15_EA5E_FEED_FACEu64),
-                    (15_000_000, 0xCAFE_BABE_DEAD_BEEFu64),
-                    (15_000_000, 0xFEED_FACE_C0DE_1234u64),
-                    (10_000_000, 0x1111_2222_3333_4444u64),
-                ]
-            };
+        if cost <= 8_000_000 {
+            let late_streams: &[(i64, u64)] = &[
+                (20_000_000i64, 0xC0FF_EE00_BADC_0FFEu64),
+                (15_000_000, 0x0D15_EA5E_FEED_FACEu64),
+                (12_000_000, 0xCAFE_BABE_DEAD_BEEFu64),
+                (10_000_000, 0x1111_2222_3333_4444u64),
+            ];
             for &(budget, rng_seed) in late_streams {
                 if let Some((cand, _)) = rgreedy::search(
-                    n,
-                    &pattern.col_ptr,
-                    &pattern.row_idx,
-                    &best_perm,
-                    best_flops,
-                    budget,
-                    rng_seed,
+                    n, &pattern.col_ptr, &pattern.row_idx,
+                    &best_perm, best_flops, budget, rng_seed,
                 ) {
                     if is_bijection(&cand, n) {
                         let f = score(&cand);
-                        if f < best_flops {
-                            best_flops = f;
-                            best_perm = cand;
-                        }
+                        if f < best_flops { best_flops = f; best_perm = cand; }
                     }
                 }
             }
-            let (d_rounds, d_budget) = if cost > 8_000_000 {
-                (1usize, (n as i64).saturating_mul(3_000).min(3_000_000))
-            } else {
-                (2usize, (n as i64).saturating_mul(6_000).min(6_000_000))
-            };
             if let Some(cand) = rgreedy::adjacent_pair_descent(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &best_perm,
-                d_rounds,
-                d_budget,
+                n, &pattern.col_ptr, &pattern.row_idx,
+                &best_perm, 2, (n as i64).saturating_mul(5_000).min(5_000_000),
             ) {
                 let f = score(&cand);
-                if f < best_flops {
-                    best_flops = f;
-                    best_perm = cand;
+                if f < best_flops { best_flops = f; best_perm = cand; }
+            }
+            if let Some(cand) = rgreedy::simplicial_promotion(
+                n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 3_000_000,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_flops { best_flops = f; best_perm = cand; }
                 }
             }
         }
     }
-
-    // ── FINAL SUBTREE REFINEMENT ON THE FINISHED INCUMBENT ──────────────────
-    //
-    // WHERE THE VALUE COMES FROM. `rgreedy::subtree_refine` is called from
-    // exactly two places in this function and both are at stage 3: the chain
-    // (`n <= SUBTREE_CHAIN_MAX_N`) and the terminal deep pass (`n <= 80_000 &&
-    // nnz <= 250_000`). Everything after them can REPLACE the incumbent —
-    // reduce-then-order on the residual core, the completion watcher, the
-    // small-graph bitset polish, the terminal PEO re-extraction, the
-    // alternate-seed chains, MINL, the count-ranked peel and the late exact
-    // polish — and the replacement shipped unrefined. The MINL call site
-    // already makes this argument for its own winner ("a strict MINL win is a
-    // NEW completion the subtree chain has never refined"); this generalises it
-    // to whichever stage actually finished last, which is the only thing the
-    // end of the function can know. It is a POSITION, not a wider gate: the
-    // largest gains land on rows inside BOTH stage-3 gates already.
-    //
-    // SCORE RISK IS STRUCTURALLY ZERO. `subtree_refine` only reports a strict
-    // improvement of its own exact incremental objective, the result is
-    // bijection-checked, and it is admitted only on a strict decrease of the
-    // exact score. A candidate can lower a ratio, never raise it.
-    //
-    // WHY THE INCUMBENT SCORE IS FREE HERE. `raw_counts` are the exact column
-    // counts of the postordered incumbent, and postorder is objective-neutral
-    // (measured: 0 of 300 dev rows change their flop count under it), so
-    // `Σ counts²` IS `score(best_perm)`. No extra scoring pass is spent to
-    // learn what has to be beaten.
-    //
-    // ENVELOPE. Gated on `n + nnz` alone, and that single inequality bounds the
-    // whole added cost, because every term of it is linear in `n + nnz` with no
-    // output-driven factor: two `permute_pattern`s, two `EliminationTree`s, one
-    // postorder, one `column_counts_gnp` (Gilbert-Ng-Peyton, `O(nnz α(n))`,
-    // never `O(Lnnz)`) and two `O(n)` clones. Measured across the dev corpus the
-    // setup runs at <= 90.7 ns per `(n + nnz)` unit, so the gate bounds it at
-    // ~36 ms; the two refinement calls are the pipeline's own op-budgeted
-    // configs (`SUBTREE_SEARCH_WORK_LIMIT` /
-    // `TERMINAL_SUBTREE_SEARCH_WORK_LIMIT`) and measure <= 19 ms together.
-    // Realized worst on any in-gate dev row is 23 ms; a 34-row 5+5 interleave
-    // reads S1 4 / S2 0 / S3 +31.6 ms against a 100 ms bar.
-    //
-    // Both rounds start from the SAME postordered candidate on purpose:
-    // `counts` and `parent` describe that candidate's elimination tree, so
-    // chaining the second round onto the first one's output would hand
-    // `subtree_refine` a tree that no longer matches its input.
-    if n >= SUBTREE_MIN_N && n + nnz <= FINAL_REFINE_MAX_WORK {
-        let permuted = permute_pattern(&scoring_pat, &best_perm);
-        let etree = EliminationTree::from_pattern(&permuted);
-        let post = etree.postorder();
-        let base_cand: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
-        let post_pattern = permute_pattern(&scoring_pat, &base_cand);
-        let post_etree = EliminationTree::from_pattern(&post_pattern);
-        let raw_counts = column_counts_gnp(&post_pattern, &post_etree);
-        let mut cur_flops: u64 = raw_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
-        let counts: Vec<u32> = raw_counts.into_iter().map(|c| c as u32).collect();
-        let parent: Vec<i32> = post_etree
-            .parent
-            .iter()
-            .map(|p| p.map_or(-1, |j| j as i32))
-            .collect();
-        for cfg in [
-            subtree_cfg_for(n, nnz),
-            terminal_deep_subtree_cfg(n, nnz, cur_flops, amd_flops),
-        ] {
-            let mut candidate = base_cand.clone();
-            let improved = rgreedy::subtree_refine(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &mut candidate,
-                &counts,
-                &parent,
-                cfg,
-            );
-            if improved > 0 && is_bijection(&candidate, n) {
-                let f = score(&candidate);
-                if f < cur_flops {
-                    cur_flops = f;
-                    best_perm = candidate;
-                }
-            }
-        }
-        best_flops = best_flops.min(cur_flops);
-    }
-    #[cfg(test)]
-    parallel::phase_mark("16.final_refine", _tph, best_flops);
 
     best_perm
 }

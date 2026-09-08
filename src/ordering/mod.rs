@@ -4159,6 +4159,43 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     best_perm = cand;
                 }
             }
+            // iter111: four/five-pivot on shipped incumbent (same gate as pair).
+            for _ in 0..2 {
+                let mut round_improved = false;
+                if n >= 5 {
+                    if let Some(cand) = rgreedy::adjacent_five_descent(
+                        n,
+                        &pattern.col_ptr,
+                        &pattern.row_idx,
+                        &best_perm,
+                        FINAL_PAIR_OPS,
+                    ) {
+                        let f = score(&cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
+                            round_improved = true;
+                        }
+                    }
+                }
+                if let Some(cand) = rgreedy::adjacent_four_descent(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    FINAL_PAIR_OPS,
+                ) {
+                    let f = score(&cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                        round_improved = true;
+                    }
+                }
+                if !round_improved {
+                    break;
+                }
+            }
         }
     }
 

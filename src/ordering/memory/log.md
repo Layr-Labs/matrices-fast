@@ -174,3 +174,5 @@ round, so note the round if you know it.
 2026-09-08 | submitted **iter108b** `603ac76` validating (0.805234 / 1.003 / 62/3). Invent iter109 gate500k if need ([0134](experiments/0134-iter109-final-refine-500k.md)).
 
 2026-09-08 | invent iter110 on 108b: **0.804984** (−2.50 bip vs 108b) / 47/0 / worst 1.023s — chained FINAL_REFINE rebuild + terminal simp/pair. Ready on 603ac76 settle. iter109 500k micro abandoned.
+
+2026-09-08 | 603ac76 FAIL; submitted iter110 `4f0719d` (0.804984/1.023/59/0). Invent iter111 four/five: **0.804873**/1.057/26/0 vs 110 — ready next.

@@ -4260,6 +4260,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
+        // Leftover four/triple/pair, then an exact LNS walk on the shipped
+        // tree. Early rgreedy::search ran before these replacements; late
+        // polish only covers nnz<=12k. fc7c3ce proved leftover n<=1500 is
+        // the hidden 2 s killer; keep LT1K=1000.
         if n >= 4 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
             if let Some(cand) = rgreedy::adjacent_four_descent(
                 n,
@@ -4306,6 +4310,33 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f < best_flops {
                     best_flops = f;
                     best_perm = cand;
+                }
+            }
+        }
+        // Dense lt_1k hole: n<=400 nnz>30k never saw early exact (30k cap)
+        // or late polish (12k cap). n>400 serial/par walks put
+        // maxcsp-langford-3-11 (n=660) at 1.88 s locally — skip them.
+        // 24M serial moved qap; 40M at n=341 moved qspp_0_11.
+        // 39af0ad stacked rebuild3 on this and failed hidden; rebuild3
+        // is dropped. Leftover n<=1000 unchanged.
+        const LT1K_DENSE_EXACT_SEED: u64 = 0x7E57_51DE_A1B2_C3D4;
+        if n >= 16 && n <= 400 && nnz > 30_000 {
+            let budget = if n <= 300 { 24_000_000 } else { 40_000_000 };
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                budget,
+                LT1K_DENSE_EXACT_SEED,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
                 }
             }
         }

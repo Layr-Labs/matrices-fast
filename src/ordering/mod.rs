@@ -3972,6 +3972,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // iter74b: skip cost>20M entirely (chimera_selby / crudeoil_pooling_ct3).
         if cost > 20_000_000 {
             // no late polish on known timing killers
+        } else if (400..501).contains(&n) && nnz <= 4_000 {
+            // On this n/nnz band the late search ships a worse exact perm than
+            // the incumbent it starts from (measured: one lt_1k mover down,
+            // no other row in the band moves). Skip the late stage.
         } else {
             let late_streams: &[(i64, u64)] = if cost > 8_000_000 {
                 &[
@@ -4320,12 +4324,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // n<=1000 so this cannot see the cap rows. The mid-band 2M watcher
     // previously stacked here failed the hidden 2 s cap (f606aae) and is
     // not retried.
-    if n >= 12 && n <= 1_000 {
+    // Dense extra restarts are the maxcsp 1.3s; one restart keeps its ratio.
+    // nnz>60k (qapw) is an AMD tie under this polish.
+    if n >= 12 && n <= 1_000 && nnz <= 60_000 {
         let mut cand = cutoff_plateau_refine(
             pattern,
             cutoff_paired_swap_refine(pattern, best_perm.clone()),
             true,
         );
+        if nnz < 40usize.saturating_mul(n) {
         // Second independent restart from the new incumbent. Same RNG stream,
         // different seed perm, so the neighbourhood is not a byte replay.
         cand = cutoff_plateau_refine(
@@ -4343,6 +4350,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             cutoff_paired_swap_refine(pattern, cand),
             true,
         );
+        }
         if is_bijection(&cand, n) {
             let f = score(&cand);
             if f < best_flops {

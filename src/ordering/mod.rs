@@ -3159,7 +3159,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // core (recurse) when cn is in the exact/safe band; when any core path
     // strictly improves the incumbent, full-graph MINL is skipped as a
     // replacement (core minfill/refine already paid). Residual-core (B): open
-    // a third mid band for cheap from-scratch K=2 only (not nested).
+    // a third mid band for cheap from-scratch K=2/K=4 (not nested; shared nnz cap).
     let mut core_path_improved = false;
     if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
         let flops_before_core = best_flops;
@@ -3432,21 +3432,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // passes cost a few ms) and DENSE mid-large graphs (nnz > REDUCE_EXTRA_MIN_NNZ and
             // nnz >= 6 n, where the robust-envelope gate has given time back). The band between
             // them is the crown's slowest class and stays exactly as the crown has it.
-            // Two historical bands (0064) plus (B) a mid below-anchor K=2-only
+            // Two historical bands (0064) plus (B) a mid below-anchor K=2/K=4
             // band: 60k < nnz <= 200k and best_flops < amd_flops. Mid attempts
-            // use a tight one-shot work cap so the crown's slow class stays
-            // bounded; depths other than 2 skip via continue (not nested).
+            // share a one-shot nnz work cap (K=4 then K=2 in REDUCE_EXTRA_DEPTHS
+            // order); depths other than 2/4 skip via continue (not nested).
             let small_band = nnz <= REDUCE_SMALL_MAX_NNZ;
             let dense_band = nnz > REDUCE_EXTRA_MIN_NNZ && nnz >= 6 * n;
-            let mid_k2 = depth == 2
+            let mid_band = (depth == 2 || depth == 4)
                 && nnz > REDUCE_SMALL_MAX_NNZ
                 && nnz <= REDUCE_EXTRA_MIN_NNZ
                 && best_flops < amd_flops;
-            if !(small_band || dense_band || mid_k2) {
+            if !(small_band || dense_band || mid_band) {
                 continue;
             }
-            let work_cap = if mid_k2 && !(small_band || dense_band) {
-                // Exactly one mid-band K=2 attempt worth of CSC entries.
+            let work_cap = if mid_band && !(small_band || dense_band) {
+                // Shared mid-band ledger: one attempt worth of CSC entries (nnz).
                 nnz
             } else {
                 REDUCE_WORK_NNZ

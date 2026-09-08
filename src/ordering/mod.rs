@@ -2015,6 +2015,42 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // IDEA3 measure: THIN α=10 DegDivNvWfP15@10 + DegP075@10, passcap 2, seeds 60k
+    // (the tickets that moved score in fat/thin idea1), gated to either small-nnz
+    // (<8k: wastewater-class) OR mid-large n (n>=4500: chp-class) so timing-critical
+    // mid rows (lee1_07 n=3670, chimera n≈2k) are excluded. gt_10k bit-identical.
+    if heavy_arm_enabled()
+        && n < 10_000
+        && nnz < METRIC_LIGHT_MAX_NNZ
+        && (nnz < 8_000 || n >= 4_500)
+    {
+        const THIN_BUDGET: usize = 120_000;
+        const THIN_MAX_PASSES: usize = 2;
+        for (w, (variant, alpha)) in [
+            (custom_metrics::ScoreVariant::DegDivNvWfP15, 10.0f64),
+            (custom_metrics::ScoreVariant::DegP075, 10.0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let passes = (THIN_BUDGET / nnz.max(1)).clamp(1, THIN_MAX_PASSES);
+            for r in 0..passes {
+                let seed = 60_000u64 + (w as u64) * 1_000 + r as u64;
+                consider!(move || {
+                    let q = relabel(n, seed);
+                    let b = permute_pattern(sp_ref, &q);
+                    let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+                    let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+                    let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri)
+                        .ok_or(feral_ordering_core::OrderingError::MalformedInput)?;
+                    let pb =
+                        custom_metrics::order_variant(&bcore, alpha, true, variant)?;
+                    Ok(pb.iter().map(|&x| q[x as usize] as i32).collect())
+                });
+            }
+        }
+    }
+
     // ── EXTRA AMF α VALUES (win D) ──────────────────────────────────────────
     // See `D_MAX_NNZ` / `D_WIDE_*`. Pure additions under the best-of floor.
     if heavy_arm_enabled() && n < AMF_MAX_N && nnz < AMF_MAX_NNZ {

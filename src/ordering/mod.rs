@@ -338,6 +338,8 @@ const NDFM_MAX_NNZ: usize = 130_000;
 /// → zero-downside.
 const MINFILL_MAX_N: usize = 3_000;
 const MINFILL_MAX_NNZ: usize = 12_000;
+/// Budget (nnz-units) for MinFill relabel draws across the full MinFill gate.
+const MINFILL_RELABEL_BUDGET: usize = 180_000;
 
 /// METIS runtime is structure-dependent and can explode on large/dense patterns
 /// (measured: 6.2 s at nnz≈1.38M). Bound it by nnz PRIMARILY (the cost driver),
@@ -888,12 +890,13 @@ fn forest_certificate(p: &Pattern) -> Option<Vec<usize>> {
     if perm.len()==n {Some(perm)} else {None}
 }
 
-// Fixed-width exact elimination scorer for the <=300-vertex refinement gate.
-struct SmallScore { rows: Vec<[u64; 5]>, n: usize }
+// Fixed-width exact elimination scorer (iter62: 16 words → n<=1024).
+const SMALL_SCORE_WORDS: usize = 16; // was 5 (n<=320)
+struct SmallScore { rows: Vec<[u64; SMALL_SCORE_WORDS]>, n: usize }
 impl SmallScore {
     fn new(p: &Pattern) -> Self {
-        assert!(p.n <= 300);
-        let mut rows = vec![[0u64; 5]; p.n];
+        assert!(p.n <= SMALL_SCORE_WORDS * 64);
+        let mut rows = vec![[0u64; SMALL_SCORE_WORDS]; p.n];
         for c in 0..p.n {
             for &r in &p.row_idx[p.col_ptr[c]..p.col_ptr[c+1]] {
                 if r != c { rows[c][r/64] |= 1 << (r%64); rows[r][c/64] |= 1 << (c%64); }
@@ -1600,25 +1603,27 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         consider!(move || {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(minfill_order(pattern))
         });
-        if n < 2_000 && nnz < 10_000 {
-            let minfill_restarts = if n <= 1_000 && nnz <= 5_000 {
-                24
-            } else {
-                6
+        // Tip tiny/small relabel schedule (restore 24/6 — iter60 budget cut caused losses).
+        let minfill_restarts: u64 = if n <= 1_000 && nnz <= 5_000 {
+            24
+        } else if n < 2_000 && nnz < 10_000 {
+            6
+        } else {
+            // iter61: only the NEW 2–3k band gets budgeted extra draws.
+            (MINFILL_RELABEL_BUDGET / nnz.max(1)).clamp(2, 8) as u64
+        };
+        for seed in 1..=minfill_restarts {
+            let q = relabel(n, seed);
+            let b = permute_pattern(&scoring_pat, &q);
+            let b_pat = Pattern {
+                n,
+                col_ptr: b.col_ptr,
+                row_idx: b.row_idx,
             };
-            for seed in 1..=minfill_restarts {
-                let q = relabel(n, seed);
-                let b = permute_pattern(&scoring_pat, &q);
-                let b_pat = Pattern {
-                    n,
-                    col_ptr: b.col_ptr,
-                    row_idx: b.row_idx,
-                };
-                consider!(move || {
-                    let pb = minfill_order(&b_pat);
-                    Ok(pb.into_iter().map(|x| q[x as usize] as i32).collect())
-                });
-            }
+            consider!(move || {
+                let pb = minfill_order(&b_pat);
+                Ok(pb.into_iter().map(|x| q[x as usize] as i32).collect())
+            });
         }
     }
 
@@ -1768,6 +1773,27 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         };
         consider!(move || feral_metis::metis_order_full(&core, &opts_seed).map(|(p, _, _)| p));
     }
+    // METIS densify n<3k (iter67/71 nuclear carrier).
+    // iter74: on danger-band (n≥1800 nnz≥9k) drop imb + outer switches; keep
+    // the two mid switches that historically carry nuclear/rsyn movers.
+    if part_extra2 && n < 3_000 && nnz < METIS_VAR_MAX_NNZ {
+        let danger = n >= 1_800 && nnz >= 9_000;
+        let switches: &[u32] = if danger { &[150u32, 300] } else { &[50, 150, 300, 800] };
+        for &sw in switches {
+            let opts = feral_metis::MetisOptions {
+                nd_to_amd_switch: sw,
+                ..Default::default()
+            };
+            consider!(move || feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
+        }
+        if !danger {
+            let opts_imb = feral_metis::MetisOptions {
+                max_imbalance: 0.15,
+                ..Default::default()
+            };
+            consider!(move || feral_metis::metis_order_full(&core, &opts_imb).map(|(p, _, _)| p));
+        }
+    }
 
     // STRONGER KaHIP: a second seed and the Eco quality mode. KaHIP's default
     // `Fast` mode does a single multilevel pass; `Eco` adds a V-cycle with flow
@@ -1849,11 +1875,35 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == "extra_deg2_div_nv_wf05") {
             consider!(move || metric_sweep::order_generic(&core, 10.0, true, spec));
         }
-        // 0111: sweep extras on n<10k only (gt_10k bit-identical; no AMD/AMF)
+        // tip EXTRA on n<10k + densify n<3000 (restored iter69)
         if n < 10_000 {
             for sname in ["extra_deg15_div_nv", "extra_deg_div_nv_degme2"] {
                 if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == sname) {
                     for &alpha in &[10.0f64, 5.0, 1.0] {
+                        consider!(move || metric_sweep::order_generic(&core, alpha, true, spec));
+                    }
+                }
+            }
+        }
+        if n < 3_000 {
+            for sname in [
+                "extra_deg3_div_nv",
+                "extra_deg2_div_nv_degme05",
+                "extra_deg_div_nv_wf05",
+                "extra_deg_p175",
+                "extra_deg_plus_wf01",
+                "extra_deg_div_nv_p05",
+                "extra_deg2_div_nv_wf002",
+                "extra_deg_plus_wf",
+                "extra_deg_p15",
+                "extra_deg_mul_nv",
+                "extra_deg_div_nv_wf01",
+                "extra_deg_div_nv_wf2",
+                "extra_deg15_div_nv",
+                "extra_deg_div_nv_degme2",
+            ] {
+                if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == sname) {
+                    for &alpha in &[10.0f64, 5.0, 2.5, 1.0] {
                         consider!(move || metric_sweep::order_generic(&core, alpha, true, spec));
                     }
                 }
@@ -2536,7 +2586,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // The same serial exact search above its original size gate. Two fixed
         // nominal budgets keep the added work bounded; uncovers additional
         // plateaus on irregular combinatorial graphs with a third stream on small below-anchor instances.
-        let budgets: &[(i64, u64)] = if well_below {
+        // iter74c: danger-band (n≥1800 nnz≥9k) forced to tip 4-ticket floor —
+        // the n≤3k/nnz≤18k 6-ticket branch was ~0.32s search on chimera_selby.
+        let danger_timing = n >= 1_800 && nnz >= 9_000;
+        let budgets: &[(i64, u64)] = if well_below && !danger_timing {
             &[
                 (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
                 (100_000_000, 0x27BB_2EE6_87B0_B0FD),
@@ -2550,7 +2603,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0x94D0_49BB_1331_11EB),
                 (50_000_000, 0x1F83_D9AB_5B96_4D71),
             ]
-        } else if best_flops < amd_flops && n <= 3_000 && nnz <= 18_000 {
+        } else if best_flops < amd_flops && n <= 3_000 && nnz <= 18_000 && !danger_timing {
             &[
                 (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
                 (50_000_000, 0xD1B5_4A32_D192_ED03),
@@ -2560,6 +2613,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0x85EB_CA77_C2B2_AE3D),
             ]
         } else {
+            // tip 4-ticket floor (also forced on danger_timing).
             &[
                 (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
                 (50_000_000, 0xD1B5_4A32_D192_ED03),
@@ -3173,6 +3227,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // One shared exact-minimum-fill allowance for the whole row, spent
         // across reduction depths in call order.
         let core_minfill_ledger = std::cell::Cell::new(CORE_MINFILL_LEDGER);
+        // iter71: once-per-row small-core exact LNS (iter67 form).
+        let core_exact_shots = std::cell::Cell::new(1i64);
         let mut order_core = |cl: &core_lift::CoreLift, alphas: &[f64], threads: bool, recurse: bool, incumbent: u64| -> Option<(u64, Vec<usize>)> {
             let cn = cl.core_n();
             let core_pat = ScoringPattern {
@@ -3291,6 +3347,71 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 {
                     minfill_pick = Some(p);
                 }
+            }
+            // iter74b: SKIP residual-core exact on danger (n≥1800 nnz≥9k).
+            // Lean streams still left crudeoil_lee1_07 at 1.112s; killers need
+            // full skip. Cheap/small-core breadth (cn≤1500 off-danger) kept.
+            if core_exact_shots.get() > 0
+                && n < 12_000
+                && (50..=1_500).contains(&cn)
+                && cl.core_nnz() <= 14_000
+                && !(n >= 1_800 && nnz >= 9_000)
+            {
+                core_exact_shots.set(0);
+                let budget = CORE_EXACT_CALL_CAP;
+                let incumbent = minfill_pick.as_deref().unwrap_or(base_perm);
+                let mut best_c = flops_of(&core_pat, incumbent);
+                let mut best_p: Option<Vec<usize>> = None;
+                let streams: &[(i64, u64)] = if cn <= 400 {
+                    &[
+                        (budget, 0xA1B2_C3D4_E5F6_7788u64),
+                        (budget / 2, 0x1234_5678_9ABC_DEF0),
+                        (budget / 2, 0x0F1E_2D3C_4B5A_6978),
+                        (budget / 3, 0xDEAD_BEEF_CAFE_BABEu64),
+                    ]
+                } else if cn <= 900 {
+                    &[
+                        (budget, 0xA1B2_C3D4_E5F6_7788u64),
+                        (budget / 2, 0x1234_5678_9ABC_DEF0),
+                        (budget / 2, 0x0F1E_2D3C_4B5A_6978),
+                    ]
+                } else {
+                    &[
+                        (budget, 0xA1B2_C3D4_E5F6_7788u64),
+                        (budget / 2, 0x1234_5678_9ABC_DEF0),
+                    ]
+                };
+                for &(bgt, seed) in streams {
+                    if bgt <= 0 { continue; }
+                    if let Some((cand, f)) = rgreedy::search(
+                        cn, &cl.core_col_ptr, &cl.core_row_idx,
+                        incumbent, best_c, bgt, seed,
+                    ) {
+                        if is_bijection(&cand, cn) && f < best_c {
+                            best_c = f; best_p = Some(cand);
+                        }
+                    }
+                }
+                let polish_base: &[usize] = best_p.as_deref().unwrap_or(incumbent);
+                if let Some(cand) = rgreedy::adjacent_pair_descent(
+                    cn, &cl.core_col_ptr, &cl.core_row_idx, polish_base, 3,
+                    (cn as i64).saturating_mul(10_000).min(10_000_000),
+                ) {
+                    if is_bijection(&cand, cn) {
+                        let f = flops_of(&core_pat, &cand);
+                        if f < best_c { best_c = f; best_p = Some(cand); }
+                    }
+                }
+                if let Some(cand) = rgreedy::simplicial_promotion(
+                    cn, &cl.core_col_ptr, &cl.core_row_idx,
+                    best_p.as_deref().unwrap_or(incumbent), 6_000_000,
+                ) {
+                    if is_bijection(&cand, cn) {
+                        let f = flops_of(&core_pat, &cand);
+                        if f < best_c { best_p = Some(cand); }
+                    }
+                }
+                if let Some(cp) = best_p { minfill_pick = Some(cp); }
             }
             let core_perm: &[usize] = minfill_pick.as_deref().unwrap_or(base_perm);
             let mut cand = core_lift::splice(cl, core_perm);
@@ -3551,7 +3672,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if f < best_flops { best_perm = p; }
         }
     }
-    if n >= 12 && n <= 300 && pattern.nnz() <= 3_000 {
+    // iter62 LEAP: local paired-swap / plateau refine on full lt_1k (SmallScore
+    // widened to 1024 verts). Tip capped at n<=300; cheap matrices only.
+    if n >= 12 && n <= 1_000 && pattern.nnz() <= 8_000 {
         best_perm = cutoff_paired_swap_refine(pattern, best_perm);
         best_perm = cutoff_plateau_refine(pattern, best_perm, true);
     }
@@ -3646,7 +3769,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // 0.21 s) the chains ran to their ledger and changed nothing, while all of
     // their measured wins sit at n < 50k (mpbp_34 -0.19, mpbp_35 -0.08,
     // arki0013 -0.05, gabriel09 -0.03).
-    if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER {
+    // iter74d: skip PEO_ALT on danger-band mid rows (n≥2500 nnz≥9k).
+    // crudeoil_lee1_07 spent ~0.14s here with ZERO score change; that alone
+    // pushed worst order() over 1.10s after other killers were cut.
+    let peo_alt_danger = n >= 2_500 && nnz >= 9_000;
+    if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
+        && !peo_alt_danger
+    {
         let seeds = runner_up.borrow().clone();
         if !seeds.is_empty() {
             let mut ledger: u64 = 0;
@@ -3827,6 +3956,72 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     #[cfg(test)]
     transplant_probe::capture(&runner_up.borrow());
+
+    // iter74: LATE exact polish with COST-SCALED budgets.
+    // Restore breadth toward iter72 (n<3000 nnz≤12k) but starve the known
+    // killers (n·nnz ≳ 20M → chimera_selby / crudeoil_pooling_ct3). Cheap rows
+    // keep multi-stream LNS; danger rows get one micro-stream + light descent.
+    if n >= 16 && n < 3_000 && nnz <= 12_000 {
+        let cost = (n as u64).saturating_mul(nnz as u64);
+        // iter74b: skip cost>20M entirely (chimera_selby / crudeoil_pooling_ct3).
+        if cost > 20_000_000 {
+            // no late polish on known timing killers
+        } else {
+            let late_streams: &[(i64, u64)] = if cost > 8_000_000 {
+                &[
+                    (12_000_000i64, 0xC0FF_EE00_BADC_0FFEu64),
+                    (8_000_000, 0x0D15_EA5E_FEED_FACEu64),
+                ]
+            } else {
+                &[
+                    (20_000_000i64, 0xC0FF_EE00_BADC_0FFEu64),
+                    (20_000_000, 0x0D15_EA5E_FEED_FACEu64),
+                    (15_000_000, 0xCAFE_BABE_DEAD_BEEFu64),
+                    (15_000_000, 0xFEED_FACE_C0DE_1234u64),
+                    (10_000_000, 0x1111_2222_3333_4444u64),
+                ]
+            };
+            for &(budget, rng_seed) in late_streams {
+                if let Some((cand, _)) = rgreedy::search(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    best_flops,
+                    budget,
+                    rng_seed,
+                ) {
+                    if is_bijection(&cand, n) {
+                        let f = score(&cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
+                        }
+                    }
+                }
+            }
+            let (d_rounds, d_budget) = if cost > 8_000_000 {
+                (1usize, (n as i64).saturating_mul(3_000).min(3_000_000))
+            } else {
+                (2usize, (n as i64).saturating_mul(6_000).min(6_000_000))
+            };
+            if let Some(cand) = rgreedy::adjacent_pair_descent(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                d_rounds,
+                d_budget,
+            ) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
+            }
+        }
+    }
+
     best_perm
 }
 
@@ -3846,6 +4041,8 @@ const CORE_MINFILL_MAX_CORE_NNZ: usize = 30_000;
 /// `minfill_order`'s degree-pair budget: a word AND + popcount over two
 /// sequential rows, against a random byte probe into an `n·n` matrix.
 const CORE_MINFILL_LEDGER: i64 = 16_000_000;
+/// iter69: one small-core exact LNS shot/row; call cap.
+const CORE_EXACT_CALL_CAP: i64 = 55_000_000;
 
 /// Set bits of one bitset row, ascending.
 fn bitset_row_bits(slice: &[u64], out: &mut Vec<usize>) {

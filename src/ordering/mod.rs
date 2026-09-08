@@ -4227,12 +4227,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         const LT1K_PAIR_SWEEPS: usize = 4;
         if n >= 5 && n <= FINAL_FIVE_MAX_N && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
             let before_five = best_flops;
+            // Richer first-five only (five2 keeps shared 32M): deeper first
+            // pass finds strictly more on 2–4k rows; second round unchanged.
+            const FIVE1_OPS: i64 = 64_000_000;
             if let Some(cand) = rgreedy::adjacent_five_descent(
                 n,
                 &pattern.col_ptr,
                 &pattern.row_idx,
                 &best_perm,
-                FINAL_FIVE_OPS,
+                FIVE1_OPS,
             ) {
                 if is_bijection(&cand, n) {
                     let f = score(&cand);

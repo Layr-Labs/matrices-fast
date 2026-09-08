@@ -1,7 +1,9 @@
-//! Two linear-work PEO tie variations of one incumbent chordal completion.
+//! Two linear-work PEO searches of one incumbent chordal completion.
 //!
 //! This is a sibling of the terminal fill-edge watcher: it never erases edges
 //! or changes the watcher's candidate, tie order, or work allowance.
+
+mod lexbfs;
 
 pub(super) const MAX_N: usize = 30_000;
 pub(super) const MAX_INPUT_NNZ: usize = 180_000;
@@ -18,7 +20,7 @@ pub(super) fn candidates(
     candidates_bounded(n, cp, ri, parent, counts, incumbent, MAX_N, MAX_INPUT_NNZ, MAX_LNNZ)
 }
 
-/// The same two MCS extractions under caller-supplied structural limits (dimension,
+/// MCS and LexBFS extractions under caller-supplied structural limits (dimension,
 /// input nonzeros, factor nonzeros). Limits are structure, never identity.
 pub(super) fn candidates_bounded(
     n: usize,
@@ -33,11 +35,11 @@ pub(super) fn candidates_bounded(
 ) -> Option<[Vec<usize>; 2]> {
     let adj = reconstruct(n, cp, ri, parent, counts, incumbent, max_n, max_nnz, max_lnnz)?;
     let forward = mcs_peo(&adj, incumbent, false);
-    let reverse = mcs_peo(&adj, incumbent, true);
-    if !super::is_bijection(&forward, n) || !super::is_bijection(&reverse, n) {
+    let lexicographic = lexbfs::peo(&adj, incumbent)?;
+    if !super::is_bijection(&forward, n) || !super::is_bijection(&lexicographic, n) {
         return None;
     }
-    Some([forward, reverse])
+    Some([forward, lexicographic])
 }
 
 fn reconstruct(
@@ -227,8 +229,11 @@ mod tests {
                     }
                     let baseline = flops_of(&pat, &incumbent);
                     let mut best = baseline;
-                    for reverse in [false, true] {
-                        let candidate = mcs_peo(&reconstructed, &incumbent, reverse);
+                    for candidate in [
+                        mcs_peo(&reconstructed, &incumbent, false),
+                        mcs_peo(&reconstructed, &incumbent, true),
+                        lexbfs::peo(&reconstructed, &incumbent).unwrap(),
+                    ] {
                         assert!(is_peo(&filled, &candidate));
                         // Independent symbolic scorer, not MCS weights/counts.
                         let f = flops_of(&pat, &candidate);
@@ -240,6 +245,30 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn lexbfs_has_a_distinct_clique_sum_trajectory() {
+        // An operator fixture, not a claim that the full pipeline reaches
+        // this already chordal graph after its fill-free certificate.
+        let mut graph = vec![vec![false; 8]; 8];
+        for (u, v) in [(0, 1), (1, 2), (1, 3), (2, 4), (4, 5), (4, 6), (5, 6)] {
+            graph[u][v] = true;
+            graph[v][u] = true;
+        }
+        let incumbent = vec![0, 5, 6, 4, 2, 3, 1, 7];
+        assert!(is_peo(&graph, &incumbent));
+        let pat = pattern(&graph);
+        let pp = permute_pattern(&pat, &incumbent);
+        let et = EliminationTree::from_pattern(&pp);
+        let counts = column_counts_gnp(&pp, &et);
+        let adj = reconstruct(8, &pp.col_ptr, &pp.row_idx, &et.parent, &counts,
+            &incumbent, MAX_N, MAX_INPUT_NNZ, MAX_LNNZ).unwrap();
+        let lex = lexbfs::peo(&adj, &incumbent).unwrap();
+        assert!(is_peo(&graph, &lex));
+        assert_ne!(lex, mcs_peo(&adj, &incumbent, false));
+        assert_ne!(lex, mcs_peo(&adj, &incumbent, true));
+        assert_eq!(flops_of(&pat, &lex), flops_of(&pat, &incumbent));
     }
 
     #[test]

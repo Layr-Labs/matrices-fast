@@ -6,6 +6,12 @@
 
 # Index
 
+## 2026-09-07: latest measured experiment
+
+- [0098: clique-floor pruning and fresh MINL cache epochs](experiments/0098-clique-floor-and-minl-epochs.md): base `e88316d` dev **0.806560 → 0.806483**, fill **0.930670 → 0.930538**; 33 better / 30 worse / 237 unchanged; 78 candidate tests pass, paired worst 0.691763 → 0.692231 s. Small and fragile gain: opposite-sign corpus halves and drop-top-one regression. Hidden result pending; earlier checkpoints below are historical.
+- [Luce and Ng (2013): minimum FLOPs differs from minimum fill](literature/luce-ng-2013-minimum-flops.md): exact objective selection and admissible bounded-search pruning.
+- [Ost, Schulz and Strash (2020): data reduction before nested dissection](literature/ost-schulz-strash-2020-data-reduction.md): structural reductions and limits of transferring fill guarantees to FLOPs.
+
 ## 2026-09-07 checkpoint
 
 - [0097: fill gate on the completion descent; sub-10k lotteries restored](experiments/0097-descent-fill-gate-and-restored-sub10k-lotteries.md): the descent's L-nonzero gate 1.5M → 600k (removes only scans the 40M budget covers < 15 % of: crudeoil_lee4_10, −0.10 s on the slowest row, +0.18 bips); gdonninelli's 0096 sub-10k block (overwritten by the e7f15a87 graft) put back verbatim; four more all-n relabelled families (DegPlusDegme@10, DegDivNvDegme@10, SqDiv@1, DegP075@1). On `fcb74a7` (dev 0.807259): **0.806788** (−5.8 bips, 12 better / 9 worse), worst 1.601 s vs 1.634 s.

@@ -38,6 +38,14 @@
 
 #![allow(dead_code)]
 
+mod component_cleanup;
+pub(crate) use component_cleanup::descent as component_interleaving_descent;
+
+#[cfg(test)]
+mod accounting_tests;
+#[cfg(test)]
+mod bound_tests;
+
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
     fn mul(words: &mut [u64; 6], factor: u64) {
         let mut carry = 0u128;
@@ -82,6 +90,10 @@ pub(crate) fn rank_alpha_three_quarters_cmp(
 /// lower and is chosen for TIME, not memory.
 pub(crate) const MAX_N: usize = 12_000;
 
+// Public-dev tuning: preserve cheap small-problem trajectories; larger root
+// problems use the stronger bound in both whole-graph and subtree searches.
+const CLIQUE_PRUNING_MIN_N: usize = 1_024;
+
 /// Pivot selection switches from a linear scan over the live set to degree
 /// buckets above this `n`. Swept on the full small tier at the shipped budget:
 /// scan-always -0.002359, crossover 700 -0.002406, **crossover 1500
@@ -110,7 +122,9 @@ fn below(s: &mut u64, m: u32) -> u32 {
 ///
 /// Invariant: `adj[u]` holds exactly `u`'s neighbours in the CURRENT fill graph
 /// restricted to LIVE vertices (never `u` itself, never an eliminated vertex),
-/// and `deg[u] == popcount(adj[u])` for every live `u`.
+/// and `deg[u] == popcount(adj[u])` for every live eligible `u`. During a
+/// degree-only partial run, permanently live boundary rows may be stale;
+/// deficiency policies reset and maintain the full graph.
 pub(crate) struct Game<'a> {
     n: usize,
     w: usize,
@@ -120,6 +134,9 @@ pub(crate) struct Game<'a> {
     /// the old ops charge because it is part of the deterministic run budget.
     deg0: Vec<u32>,
     deg: Vec<u32>,
+    /// Exact remaining edges for whole-graph games only.
+    edges0: usize,
+    edges: usize,
     /// Live set as a dense array with position index (the linear-scan path).
     livelist: Vec<u32>,
     pos: Vec<u32>,
@@ -137,6 +154,11 @@ pub(crate) struct Game<'a> {
     /// Only vertices `< nelim` may be eliminated (see `new_partial`). Equal to
     /// `n` for a whole-matrix game.
     nelim: usize,
+    /// Root-problem policy, also inherited by its smaller subtree games.
+    clique_pruning: bool,
+    /// Deficiency policies need full boundary adjacency; degree-only runs
+    /// need exact rows only for vertices that may become pivots.
+    maintain_boundary: bool,
     /// Which pivot-selection structure this game uses. MEASURED, not assumed:
     /// the linear scan is a tight, cache-friendly sweep over two dense arrays,
     /// and below n≈3000 it beats the buckets outright despite being O(n) per
@@ -222,9 +244,12 @@ impl<'a> Game<'a> {
                 .map(|word| word.count_ones())
                 .sum();
         }
+        let edges0 = deg0.iter().map(|&d| d as usize).sum::<usize>() / 2;
         Some(Game {
             n,
             w,
+            edges0,
+            edges: edges0,
             adj: adj0[..n * w].to_vec(),
             adj0,
             deg0,
@@ -238,6 +263,8 @@ impl<'a> Game<'a> {
             mind: 0,
             nlive: 0,
             nelim: n,
+            clique_pruning: n >= CLIQUE_PRUNING_MIN_N,
+            maintain_boundary: true,
             nlist: Vec::with_capacity(n),
             cand: Vec::with_capacity(n),
             tmp: vec![0u64; w],
@@ -245,8 +272,14 @@ impl<'a> Game<'a> {
         })
     }
 
+    fn reset_ops(&self) -> usize {
+        let rows = if self.maintain_boundary { self.n } else { self.nelim };
+        (self.n + rows) * self.w + 8 * self.n
+    }
+
     fn reset(&mut self) {
-        self.adj.copy_from_slice(&self.adj0[..self.n * self.w]);
+        let rows = if self.maintain_boundary { self.n } else { self.nelim };
+        self.adj[..rows * self.w].copy_from_slice(&self.adj0[..rows * self.w]);
         self.bhead.fill(-1);
         self.livelist.clear();
         self.deg.copy_from_slice(&self.deg0);
@@ -264,12 +297,15 @@ impl<'a> Game<'a> {
         }
         self.mind = 0;
         self.nlive = self.nelim;
+        self.edges = self.edges0;
         // Charged to match measured cost: the bitset copy and the per-vertex
         // popcount pass are both `n·w`, plus a fixed per-vertex bookkeeping term
         // (bucket insertion). Without the linear term the budget massively
         // undercharges tiny `n` (where `w == 1`), and a constant ops budget
         // then costs 3x more wall time at n=64 than at n=800.
-        self.ops += (2 * self.n * self.w + 8 * self.n) as i64;
+        // Discount only skipped boundary-row copies; retain all degree and
+        // bucket bookkeeping charges. Full-policy reset restores every row.
+        self.ops += self.reset_ops() as i64;
     }
 
     #[inline]
@@ -329,9 +365,17 @@ impl<'a> Game<'a> {
         // `v` leaves the live set first: it is never in `N(v)`, so the
         // neighbour loop below cannot touch its bucket links.
         let vbit = 1u64 << (v & 63);
+        // Boundary vertices never pivot. Their rows are unnecessary for
+        // degree-only runs; eligible rows still retain every boundary bit.
+        let mut updated = 0usize;
+        let mut degree_delta = 0i64;
         // Clique N(v): each u in N(v) absorbs N(v), minus itself and minus v.
         for i in 0..self.nlist.len() {
             let u = self.nlist[i] as usize;
+            if !self.maintain_boundary && u >= self.nelim {
+                continue;
+            }
+            updated += 1;
             let base = u * w;
             let mut d = 0u32;
             for k in 0..w {
@@ -344,6 +388,9 @@ impl<'a> Game<'a> {
             self.adj[base + (u >> 6)] &= !(1u64 << (u & 63));
             self.adj[base + vw] &= !vbit;
             let nd = d - 2;
+            if self.clique_pruning && self.nelim == self.n {
+                degree_delta += nd as i64 - self.deg[u] as i64;
+            }
             if self.use_buckets && u < self.nelim {
                 let od = self.deg[u];
                 if nd != od {
@@ -356,7 +403,16 @@ impl<'a> Game<'a> {
             }
             self.deg[u] = nd;
         }
-        self.ops += ((self.nlist.len() + 1) * (3 * w + 6) + 24) as i64;
+        if self.clique_pruning && self.nelim == self.n {
+            // Removing the pivot's row plus its neighbors' degree changes
+            // updates twice the undirected edge count exactly.
+            self.edges = (self.edges as i64
+                + (degree_delta - self.nlist.len() as i64) / 2) as usize;
+            self.ops += self.nlist.len() as i64;
+        }
+        // Keep the full neighbor-enumeration charge, discount only the
+        // bitset row updates/popcounts actually omitted on the boundary.
+        self.ops += ((updated + 1) * 3 * w + (self.nlist.len() + 1) * 6 + 24) as i64;
         for k in 0..w {
             self.adj[v * w + k] = 0;
         }
@@ -436,6 +492,60 @@ impl Game<'_> {
     #[inline]
     fn elimination_ops(&self, v: usize) -> usize {
         (self.deg[v] as usize + 1) * (3 * self.w + 6) + 24
+            + if self.clique_pruning && self.nelim == self.n {
+                self.deg[v] as usize
+            } else {
+                0
+            }
+    }
+
+    /// The previous pivot made its live neighbors a clique. If `b` of
+    /// those neighbors are permanently live boundary vertices and `e` are
+    /// future pivots, those e columns cost at least
+    /// (b+1)^2 + ... + (b+e)^2, irrespective of their interleaving with
+    /// other pivots. Every other future column costs at least one.
+    fn prune_after_elimination(&mut self, flops: u64, bound: u64, cap: i64) -> bool {
+        // Small games are cheap to finish and keep their existing trajectories.
+        // Prune larger bitset states, where replaying a doomed suffix is costly.
+        if !self.clique_pruning {
+            return flops >= bound;
+        }
+        self.prune_clique_floor(flops, bound, cap)
+    }
+
+    fn prune_clique_floor(&mut self, flops: u64, bound: u64, cap: i64) -> bool {
+        if flops.saturating_add(self.nlive as u64) >= bound {
+            return true;
+        }
+        let d = self.nlist.len();
+        let e = if self.nelim == self.n {
+            d
+        } else {
+            if !self.fits_ops(d, cap) {
+                return true;
+            }
+            self.ops += d as i64;
+            self.nlist
+                .iter()
+                .filter(|&&v| (v as usize) < self.nelim)
+                .count()
+        };
+        let b = d - e;
+        let squares = |k: usize| {
+            let k = k as u64;
+            k * (k + 1) * (2 * k + 1) / 6
+        };
+        let mut floor = squares(d) - squares(b) + (self.nlive - e) as u64;
+        if self.clique_pruning && self.nelim == self.n && self.nlive > 0 {
+            // Every current edge contributes to a future column, and fill
+            // only adds edges. For a fixed sum, integer column widths have
+            // minimum squared sum when they differ by at most one.
+            let q = (self.edges / self.nlive + 1) as u64;
+            let r = (self.edges % self.nlive) as u64;
+            let edge_floor = self.nlive as u64 * q * q + r * (2 * q + 1);
+            floor = floor.max(edge_floor);
+        }
+        flops.saturating_add(floor) >= bound
     }
 
     /// One randomized greedy run. `fixed` is a prefix of pivots replayed
@@ -453,7 +563,10 @@ impl Game<'_> {
         out: &mut Vec<usize>,
     ) -> Option<u64> {
         out.clear();
-        if !self.fits_ops(2 * self.n * self.w + 8 * self.n, hard_cap) {
+        // A deficiency policy restores all rows, so switching back cannot
+        // observe stale boundary data from an earlier degree-only run.
+        self.maintain_boundary = pol.fill_tb || self.nelim == self.n;
+        if !self.fits_ops(self.reset_ops(), hard_cap) {
             return None;
         }
         self.reset();
@@ -465,7 +578,7 @@ impl Game<'_> {
             let c = self.eliminate(v);
             f += c * c;
             out.push(v);
-            if f >= bound {
+            if self.prune_after_elimination(f, bound, hard_cap) {
                 return None;
             }
         }
@@ -590,7 +703,7 @@ impl Game<'_> {
             let c = self.eliminate(pick);
             f += c * c;
             out.push(pick);
-            if f >= bound {
+            if self.prune_after_elimination(f, bound, hard_cap) {
                 return None;
             }
         }
@@ -712,7 +825,26 @@ pub(crate) fn search_with_nelim(
     rng_seed: u64,
     par: Params,
 ) -> Option<(Vec<usize>, u64)> {
+    search_with_nelim_pruned(
+        n, adj0, nelim, seed, seed_flops, budget, rng_seed, par,
+        n >= CLIQUE_PRUNING_MIN_N,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn search_with_nelim_pruned(
+    n: usize,
+    adj0: &[u64],
+    nelim: usize,
+    seed: &[usize],
+    seed_flops: u64,
+    budget: i64,
+    rng_seed: u64,
+    par: Params,
+    clique_pruning: bool,
+) -> Option<(Vec<usize>, u64)> {
     let mut g = Game::new_partial(n, adj0, nelim)?;
+    g.clique_pruning = clique_pruning;
     let mut rng = rng_seed | 1;
     let mut best = seed_flops;
     let mut best_ord: Vec<usize> = Vec::new();
@@ -1280,10 +1412,7 @@ impl TripleWork {
     }
 
     fn eliminate(&mut self, game: &mut Game<'_>, v: usize) -> bool {
-        let cost = (game.deg[v] as usize + 1)
-            .saturating_mul(3usize.saturating_mul(game.w).saturating_add(6))
-            .saturating_add(24);
-        if !self.charge(cost) {
+        if !self.charge(game.elimination_ops(v)) {
             return false;
         }
         game.eliminate(v);
@@ -2157,10 +2286,7 @@ pub(crate) fn simplicial_promotion(
         // would consume budget without changing the candidate.
         if k + 1 < n - 2 {
             let v = cur[k];
-            let eliminate_cost = (game.deg[v] as usize + 1)
-                .saturating_mul(3usize.saturating_mul(w).saturating_add(6))
-                .saturating_add(24);
-            if !work.charge(eliminate_cost) {
+            if !work.charge(game.elimination_ops(v)) {
                 return None;
             }
             game.eliminate(v);
@@ -2429,7 +2555,7 @@ pub(crate) fn subtree_refine(
                             {
                                 rng_seed ^= 0xE703_7ED1_A0B4_28DB;
                             }
-                            let r = search_with_nelim(
+                            let r = search_with_nelim_pruned(
                                 m,
                                 &adj0[..needed],
                                 ssz,
@@ -2438,6 +2564,7 @@ pub(crate) fn subtree_refine(
                                 cfg.budget,
                                 rng_seed,
                                 stream_params(k),
+                                n >= CLIQUE_PRUNING_MIN_N,
                             );
                             if let Some((o, f)) = r {
                                 if best.as_ref().is_none_or(|(_, bf)| f < *bf) {

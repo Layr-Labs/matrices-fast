@@ -173,8 +173,8 @@ use feral::symbolic::column_counts_gnp;
 /// gt_10k wins (e.g. pooling_*). This is the SAME envelope as the prior safe run.
 /// Terminal PEO re-extraction for rows above the 16..30k / 180k gate. The chain is the
 /// same one, under a per-matrix work ledger: per-round cost is linear in the reconstruction,
-/// two MCS passes and two exact scores, so charging each round against a fixed allowance
-/// bounds the added time by structure alone.
+/// two linear graph searches and two exact scores. Charging each round against
+/// a fixed allowance bounds the added time by structure alone.
 const PEO_LARGE_MAX_NNZ: usize = 1_500_000;
 const PEO_LARGE_MAX_LNNZ: usize = 20_000_000;
 const PEO_LARGE_ROUNDS: usize = 8;
@@ -3122,7 +3122,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if let Some(cand) = rgreedy::adjacent_four_descent(
+            if let Some(cand) = rgreedy::component_interleaving_descent(
                 n,
                 &pattern.col_ptr,
                 &pattern.row_idx,

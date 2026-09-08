@@ -7,6 +7,8 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Active
 
+- [ ] **Can certified pruning preserve useful search trajectories?** [0098](experiments/0098-clique-floor-and-minl-epochs.md) validates a clique floor and measures nearly unchanged runtime, but the small dev gain fails half-split/drop-top-one checks. Investigate RNG/restart coupling or overlap-safe reusable bounds without raising work caps; no hidden gain established.
+
 - [ ] **Work the residual core, not the full matrix (0062 substrate).** [0075](experiments/0075-residual-core-minfill.md) tested four-seed residual-core AMF/AMD relabels (no movers) and exact MinFill for `cn <= 1,000` (7 movers, now shipped). Still untested: multi-depth prefixes K in {2,4,5} (distinct cores only), and late phases run on the core under a per-call WORK budget as a REPLACEMENT of a late phase (never additive on rows >= 0.8 s). See [0062](experiments/0062-reduce-then-amf-terminal.md).
 - [ ] **Relabel the OTHER numbering-sensitive routines (top lead).**
       [0005](experiments/0005-relabelled-amf-multistart.md) established the general

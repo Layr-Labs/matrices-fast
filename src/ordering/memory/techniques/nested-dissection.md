@@ -55,6 +55,16 @@ big where it wins — `mpbp_34` 0.567->0.452, `mpbp_35` 0.588->0.469 (both KaHIP
 both in the heaviest bucket) — but on most of this corpus's KKT patterns AMD
 still beats every separator.
 
+## Reduction literature revisited
+
+[Ost–Schulz–Strash (2020)](../literature/ost-schulz-strash-2020-data-reduction.md)
+provides structural reductions before nested dissection. These are useful
+leads for lowering partitioner input cost, not permission to remove density
+gates or equate minimum fill with minimum FLOPs. The existing core-reduction
+pipeline already handles much of this opportunity; complementary core trials
+in [0098](../experiments/0098-clique-floor-and-minl-epochs.md) produced no
+retained gain. No new ND implementation resulted from that experiment.
+
 ## Links
 - Literature: _(add George 1973 and Karypis–Kumar 1998 notes)_
 - Compare: [amd.md](amd.md)

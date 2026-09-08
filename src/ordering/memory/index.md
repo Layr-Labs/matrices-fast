@@ -8,7 +8,15 @@
 
 ## 2026-09-08 checkpoint
 
-- [0137: n≤1000 leftover four/triple/pair + SmallScore](experiments/0137-n1k-leftover-pivots-smallscore.md): crown `7257386` local **0.804873** (−0.46 bip); lt_1k 0.887829 / 1k_10k 0.842581 / gt_10k 0.714375. Worst 0.989 s. No new work on n>1000.
+- [0145: deeper 3-cycle + 4-cycle in a004c1c band](experiments/0145-deeper-cycle-same-band.md): after `a004c1c` REJECT thin 0.848875, do not widen n. 2048 3-cycles + 4-orbit + second seed. Local **0.804866**. korcns 6629→6618.
+- [0144: 3-cycle 100≤n≤200 nnz≤2k](experiments/0144-n200-band-triple-cycle.md): after `a77d6de` FAIL, keep pooling 3-cycle in a ~23-row band. Local **0.804869**. **REJECTED thin** as `a004c1c` hidden 0.848875 (−0.08 bip; timing passed).
+- [0143: n≤200 3-cycle only](experiments/0143-n200-triple-cycle-only.md): after `197b79f` FAIL, drop lottery and n=200–400 extras. Local **0.804869**. **FAILED hidden** as `a77d6de`.
+- [0142: n≤400 3-cycle SmallScore](experiments/0142-n400-triple-cycle-smallscore.md): after `4dd8ca5` FAIL, 3-cycles + independent lottery n≤400. Local **0.804866**; **FAILED hidden** as `197b79f`.
+- [0141: dense exact n≤400, no rebuild3](experiments/0141-dense-exact-n400-no-rebuild3.md): after `39af0ad` FAIL, drop rebuild3; keep serial exact n≤400 nnz>30k. Local **0.804869**; **FAILED hidden** as `4dd8ca5`.
+- [0140: n≤1000 dense-hole exact + rebuild3](experiments/0140-n1k-dense-hole-exact-rebuild3.md): after `fc7c3ce` FAIL, clamp leftover to n≤1000; serial exact on n≤400 nnz>30k + rebuild3. Local **0.804869**; **FAILED hidden** as `39af0ad`.
+- [0139: n≤1500 leftover, no watcher/rebuild3](experiments/0139-n1500-leftover-no-watcher.md): after `186c507` FAIL, local **0.804857**; **FAILED hidden** as `fc7c3ce`. Leftover n≤1500 is the killer.
+- [0138: n≤1500 leftover + rebuild3 + n≤1500 watcher](experiments/0138-n1500-leftover-rebuild3-watcher.md): local **0.804839**; **FAILED hidden** as `186c507`.
+- [0137: n≤1000 leftover four/triple/pair + SmallScore](experiments/0137-n1k-leftover-pivots-smallscore.md): crown `7257386` local **0.804873** (−0.46 bip); lt_1k 0.887829 / 1k_10k 0.842581 / gt_10k 0.714375. **PROMOTED** `767130f` hidden 0.848883. Worst 0.989 s. No new work on n>1000.
 - [0136: gated rebuild2 + dual five n≤3000 + terminal SmallScore](experiments/0136-gated-rebuild2-dual-five-smallscore.md): local **0.804857**; **FAILED hidden** as `c7c1a8a`. Do not retry rebuild2/five2 above n=1000.
 - [0135: terminal SmallScore + mid-band watcher on shipped perm](experiments/0135-terminal-local-refine-mid-watcher.md): local **0.804898**; **FAILED hidden** as `f606aae` (mid-band watcher).
 

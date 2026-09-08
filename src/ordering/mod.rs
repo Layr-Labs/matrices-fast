@@ -4116,7 +4116,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Second gain-conditioned rebuild, n<=1000 only. The n<10k copy
             // (c7c1a8a) and the ungated copy (5f4e82b) both failed hidden
             // timing. lt_1k cannot see lee1_07 / lee4_09.
-            if cur_flops < before_rebuild && n <= 1_000 {
+            // iter139c: rebuild3 n<=1200 (still << lee1_07).
+            if cur_flops < before_rebuild && n <= 1_200 {
                 let permuted3 = permute_pattern(&scoring_pat, &best_perm);
                 let etree3 = EliminationTree::from_pattern(&permuted3);
                 let post3 = etree3.postorder();
@@ -4219,12 +4220,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.
-        const LT1K: usize = 1_000;
-        const LT1K_FOUR_OPS: i64 = 32_000_000;
-        const LT1K_TRIPLE_OPS: i64 = 32_000_000;
-        const LT1K_TRIPLE_SWEEPS: usize = 4;
-        const LT1K_PAIR_OPS: i64 = 64_000_000;
-        const LT1K_PAIR_SWEEPS: usize = 4;
+        // iter139c: widen leftover to n<=1200 nnz<=20k (rival 1500 FAIL; stay lean).
+        const LT1K: usize = 1_200;
+        const LT1K_FOUR_OPS: i64 = 48_000_000;
+        const LT1K_TRIPLE_OPS: i64 = 48_000_000;
+        const LT1K_TRIPLE_SWEEPS: usize = 5;
+        const LT1K_PAIR_OPS: i64 = 96_000_000;
+        const LT1K_PAIR_SWEEPS: usize = 5;
         if n >= 5 && n <= FINAL_FIVE_MAX_N && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
             let before_five = best_flops;
             if let Some(cand) = rgreedy::adjacent_five_descent(
@@ -4260,7 +4262,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        if n >= 4 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
+        // iter139c: leftover four/triple/pair nnz<=20k (skip maxcsp 29k).
+        if n >= 4 && n <= LT1K && nnz > 0 && nnz <= 20_000 {
             if let Some(cand) = rgreedy::adjacent_four_descent(
                 n,
                 &pattern.col_ptr,
@@ -4277,7 +4280,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        if n >= 3 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
+        if n >= 3 && n <= LT1K && nnz > 0 && nnz <= 20_000 {
             if let Some(cand) = rgreedy::adjacent_triple_descent(
                 n,
                 &pattern.col_ptr,
@@ -4320,35 +4323,92 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // n<=1000 so this cannot see the cap rows. The mid-band 2M watcher
     // previously stacked here failed the hidden 2 s cap (f606aae) and is
     // not retried.
+    // iter139c: SmallScore — 4 restarts sparse; 1 restart dense (avoid 1.6s bomb).
     if n >= 12 && n <= 1_000 {
         let mut cand = cutoff_plateau_refine(
             pattern,
             cutoff_paired_swap_refine(pattern, best_perm.clone()),
             true,
         );
-        // Second independent restart from the new incumbent. Same RNG stream,
-        // different seed perm, so the neighbourhood is not a byte replay.
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
-        cand = cutoff_plateau_refine(
-            pattern,
-            cutoff_paired_swap_refine(pattern, cand),
-            true,
-        );
+        if nnz <= 12_000 {
+            cand = cutoff_plateau_refine(
+                pattern,
+                cutoff_paired_swap_refine(pattern, cand),
+                true,
+            );
+            cand = cutoff_plateau_refine(
+                pattern,
+                cutoff_paired_swap_refine(pattern, cand),
+                true,
+            );
+            cand = cutoff_plateau_refine(
+                pattern,
+                cutoff_paired_swap_refine(pattern, cand),
+                true,
+            );
+        }
         if is_bijection(&cand, n) {
             let f = score(&cand);
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
             }
+        }
+    }
+
+    // iter139c: terminal n<=1200 nnz<=20k — completion + 5/4/3/2 after SmallScore.
+    // Skips maxcsp(29k). Rival n<=1500 FAIL. Prefer worst<=1.00; real bip; >=15 movers.
+    if n >= 16 && n <= 1_200 && nnz <= 20_000 {
+        let pp = permute_pattern(&scoring_pat, &best_perm);
+        let et = EliminationTree::from_pattern(&pp);
+        let counts = column_counts_gnp(&pp, &et);
+        if let Some(candidate) = completion::refine_limited(
+            n, &pattern.col_ptr, &pattern.row_idx,
+            &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm, 3_000_000,
+        ) {
+            if is_bijection(&candidate, n) {
+                let f = score(&candidate);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = candidate;
+                }
+            }
+        }
+    }
+    if n >= 5 && n <= 1_200 && nnz > 0 && nnz <= 20_000 {
+        if let Some(cand) = rgreedy::adjacent_five_descent(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 48_000_000,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops { best_flops = f; best_perm = cand; }
+            }
+        }
+    }
+    if n >= 4 && n <= 1_200 && nnz > 0 && nnz <= 20_000 {
+        if let Some(cand) = rgreedy::adjacent_four_descent(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 48_000_000,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops { best_flops = f; best_perm = cand; }
+            }
+        }
+    }
+    if n >= 3 && n <= 1_200 && nnz > 0 && nnz <= 20_000 {
+        if let Some(cand) = rgreedy::adjacent_triple_descent(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 5, 48_000_000,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops { best_flops = f; best_perm = cand; }
+            }
+        }
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 5, 96_000_000,
+        ) {
+            let f = score(&cand);
+            if f < best_flops { best_flops = f; best_perm = cand; }
         }
     }
 

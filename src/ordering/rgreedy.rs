@@ -147,6 +147,8 @@ pub(crate) struct Game<'a> {
     /// better (-0.000285 vs -0.000216).
     use_buckets: bool,
     nlist: Vec<u32>,
+    /// Nonzero pivot-row words, reused only on the sparse update path.
+    support: Vec<usize>,
     cand: Vec<u32>,
     tmp: Vec<u64>,
     /// Deterministic work counter, in word-operations. The ONLY budget signal —
@@ -239,6 +241,7 @@ impl<'a> Game<'a> {
             nlive: 0,
             nelim: n,
             nlist: Vec::with_capacity(n),
+            support: Vec::with_capacity(w),
             cand: Vec::with_capacity(n),
             tmp: vec![0u64; w],
             ops: 0,
@@ -313,11 +316,18 @@ impl<'a> Game<'a> {
     /// Eliminate `v`, returning its column count `c = 1 + |N(v)|`.
     fn eliminate(&mut self, v: usize) -> u64 {
         let w = self.w;
+        // Decide from a support upper bound, not an extra unmetered row scan.
+        // The same plan supplies all preflight ledgers and the execution charge.
+        let (sparse, cost) = self.elimination_plan(v);
         self.tmp.copy_from_slice(&self.adj[v * w..v * w + w]);
-        // Materialize N(v).
+        self.support.clear();
+        // Materialize N(v) in the original ascending order.
         self.nlist.clear();
         for k in 0..w {
             let mut word = self.tmp[k];
+            if sparse && word != 0 {
+                self.support.push(k);
+            }
             while word != 0 {
                 let b = word.trailing_zeros() as usize;
                 word &= word - 1;
@@ -333,14 +343,29 @@ impl<'a> Game<'a> {
         for i in 0..self.nlist.len() {
             let u = self.nlist[i] as usize;
             let base = u * w;
-            let mut d = 0u32;
-            for k in 0..w {
-                let nv = self.adj[base + k] | self.tmp[k];
-                self.adj[base + k] = nv;
-                d += nv.count_ones();
-            }
-            // `tmp` contains u (u ∈ N(v)) and `adj[u]` contained v; both are
-            // now set and both must go — hence the `-2`.
+            let d = if sparse {
+                let mut inserted = 0u32;
+                for &k in &self.support {
+                    let old = self.adj[base + k];
+                    let add = self.tmp[k] & !old;
+                    inserted += add.count_ones();
+                    self.adj[base + k] = old | self.tmp[k];
+                }
+                // Zero pivot words cannot add edges. All old edges outside
+                // support survive except v, removed explicitly below.
+                self.deg[u] + inserted
+            } else {
+                let mut total = 0u32;
+                for k in 0..w {
+                    let nv = self.adj[base + k] | self.tmp[k];
+                    self.adj[base + k] = nv;
+                    total += nv.count_ones();
+                }
+                total
+            };
+            // In either branch the union contains u (newly inserted) and v
+            // (already present). They are distinct, even in the same word.
+            // Remove both before updating degrees, including boundary rows.
             self.adj[base + (u >> 6)] &= !(1u64 << (u & 63));
             self.adj[base + vw] &= !vbit;
             let nd = d - 2;
@@ -356,7 +381,7 @@ impl<'a> Game<'a> {
             }
             self.deg[u] = nd;
         }
-        self.ops += ((self.nlist.len() + 1) * (3 * w + 6) + 24) as i64;
+        self.ops += cost as i64;
         for k in 0..w {
             self.adj[v * w + k] = 0;
         }
@@ -433,9 +458,31 @@ impl Game<'_> {
             .is_some_and(|total| total <= cap)
     }
 
+    /// Conservative word-work plan. A row of degree d has at most min(d,w)
+    /// nonzero words. Using that bound avoids scanning during preflight (and
+    /// doing unpaid work on rejection). Sparse charges include support setup,
+    /// indexed loads/stores, delta popcounts, and explicit bit removal. Dense
+    /// keeps its original full-width union/recount and bookkeeping charge.
+    /// This is an operation bound, not a claim about elapsed time.
+    #[inline]
+    fn elimination_plan(&self, v: usize) -> (bool, usize) {
+        let d = self.deg[v] as usize;
+        let support_bound = d.min(self.w);
+        let dense = (d + 1) * (3 * self.w + 6) + 24;
+        let sparse = 4 * self.w + support_bound
+            + d * (5 * support_bound + 10) + 30;
+        // Require savings even with pessimistic support and indirect-access
+        // costs; dense rows never build the support list.
+        if sparse < dense {
+            (true, sparse)
+        } else {
+            (false, dense)
+        }
+    }
+
     #[inline]
     fn elimination_ops(&self, v: usize) -> usize {
-        (self.deg[v] as usize + 1) * (3 * self.w + 6) + 24
+        self.elimination_plan(v).1
     }
 
     /// One randomized greedy run. `fixed` is a prefix of pivots replayed
@@ -1240,7 +1287,8 @@ mod atomic_budget_tests {
         let adj = Game::build_adj(n, &pat.col_ptr, &pat.row_idx).unwrap();
         let mut game = Game::new(n, &adj).unwrap();
         let reset = (2 * n * n.div_ceil(64) + 8 * n) as i64;
-        let first = ((game.deg0[0] as usize + 1) * (3 * game.w + 6) + 24) as i64;
+        game.deg.copy_from_slice(&game.deg0);
+        let first = game.elimination_ops(0) as i64;
         let cap = reset + first;
         let mut rng = 31;
         let mut out = Vec::new();
@@ -1280,9 +1328,7 @@ impl TripleWork {
     }
 
     fn eliminate(&mut self, game: &mut Game<'_>, v: usize) -> bool {
-        let cost = (game.deg[v] as usize + 1)
-            .saturating_mul(3usize.saturating_mul(game.w).saturating_add(6))
-            .saturating_add(24);
+        let cost = game.elimination_ops(v);
         if !self.charge(cost) {
             return false;
         }
@@ -2157,9 +2203,7 @@ pub(crate) fn simplicial_promotion(
         // would consume budget without changing the candidate.
         if k + 1 < n - 2 {
             let v = cur[k];
-            let eliminate_cost = (game.deg[v] as usize + 1)
-                .saturating_mul(3usize.saturating_mul(w).saturating_add(6))
-                .saturating_add(24);
+            let eliminate_cost = game.elimination_ops(v);
             if !work.charge(eliminate_cost) {
                 return None;
             }

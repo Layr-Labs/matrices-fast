@@ -6,6 +6,11 @@
 
 # Index
 
+## 2026-09-08 checkpoint
+
+- [0136: gated rebuild2 + dual five n≤3000 + terminal SmallScore](experiments/0136-gated-rebuild2-dual-five-smallscore.md): on tip `7257386` (hidden 0.84913) local **0.804857** (−0.62 bip); lt_1k 0.887865 / 1k_10k 0.842492 / gt_10k 0.714375 (gt control). Worst 1.021 s. Replaces 0135 after `f606aae` FAIL.
+- [0135: terminal SmallScore + mid-band watcher on shipped perm](experiments/0135-terminal-local-refine-mid-watcher.md): on tip `7257386` (hidden 0.84913) local **0.804898**; **FAILED hidden** as `f606aae` (mid-band watcher). Do not retry the watcher.
+
 ## 2026-09-07 checkpoint
 
 - [0099: max densify no MINL-after-core](experiments/0099-max-densify-nominl.md): tip 0.806243 → **0.806143** (−1.00 bip); not submitted.

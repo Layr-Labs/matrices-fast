@@ -1849,11 +1849,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == "extra_deg2_div_nv_wf05") {
             consider!(move || metric_sweep::order_generic(&core, 10.0, true, spec));
         }
-        // 0111: sweep extras on n<10k only (gt_10k bit-identical; no AMD/AMF)
+        // 0111 + densify: more unused EXTRA_METRICS on n<10k only
+        // (gt_10k bit-identical; no AMD/AMF mid-α; slow tail untouched).
         if n < 10_000 {
-            for sname in ["extra_deg15_div_nv", "extra_deg_div_nv_degme2"] {
+            for sname in [
+                "extra_deg15_div_nv",
+                "extra_deg_div_nv_degme2",
+                "extra_deg3_div_nv",
+                "extra_deg2_div_nv_degme05",
+                "extra_deg_div_nv_wf05",
+                "extra_deg_p175",
+                "extra_deg_plus_wf01",
+                "extra_deg_div_nv_p05",
+            ] {
                 if let Some(spec) = metric_sweep::EXTRA_METRICS.iter().find(|s| s.name == sname) {
-                    for &alpha in &[10.0f64, 5.0, 1.0] {
+                    for &alpha in &[10.0f64, 5.0, 2.5] {
                         consider!(move || metric_sweep::order_generic(&core, alpha, true, spec));
                     }
                 }
@@ -2565,6 +2575,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0xD1B5_4A32_D192_ED03),
                 (50_000_000, 0xC2B2_AE3D_27D4_EB4F),
                 (50_000_000, 0x1656_67B1_9E37_79B9),
+                // densify else-branch medium exact (n<=6k gate; not slow tail)
+                (50_000_000, 0x94D0_49BB_1331_11EB),
+                (75_000_000, 0x1F83_D9AB_5B96_4D71),
             ]
         };
         for &(budget, seed) in budgets {
@@ -3707,9 +3720,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // AMD on it, and admits either only on a strict exact decrease. Bounded by
     // an op budget and a fill gate; the watcher above walks the same lattice
     // with a different, witness-driven schedule and a smaller budget.
-    // A replacement: when a residual-core path already improved the incumbent,
-    // core minfill/refine paid the late lattice budget — skip full-graph MINL.
-    if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16 && !core_path_improved {
+    // Re-enable MINL after residual-core improve on cheap rows (nnz<=80k).
+    if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16
+        && (!core_path_improved || nnz <= 80_000)
+    {
         let mut cur_flops = score(&best_perm);
         let entry_flops = cur_flops;
         let mut descent_completed = false;

@@ -46,12 +46,9 @@
 //! thread count is hard-capped at [`PAR_MAX_THREADS`] rather than scaled with
 //! `available_parallelism`, so local timing on a bigger box does not silently
 //! model a different grader.
-//! The batch-local score memo also retains one exact comparison key per distinct
-//! permutation; all keys are released when the batch returns.
 
 use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
-use std::sync::{Arc, Mutex, OnceLock};
 
 use super::scoring_ws::ScoreWorkspace;
 use super::{is_bijection, ScoringPattern};
@@ -84,62 +81,10 @@ pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
 /// `consider` dropped on the floor. `perm == None` with `flops == Some(_)`
 /// means the candidate scored but was already known not to be the argmin and
 /// its permutation was released.
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default)]
 pub(crate) struct CandOut {
     pub(crate) flops: Option<u64>,
     pub(crate) perm: Option<Vec<usize>>,
-}
-
-struct ScoreEntry {
-    perm: Vec<usize>,
-    flops: Arc<OnceLock<u64>>,
-}
-
-#[derive(Default)]
-struct ScoreMemo {
-    entries: Mutex<std::collections::HashMap<u128, Vec<ScoreEntry>>>,
-}
-
-impl ScoreMemo {
-    fn flops(&self, perm: &[usize], compute: impl FnOnce() -> u64) -> u64 {
-        let mut a: u64 = 0x243F_6A88_85A3_08D3;
-        let mut b: u64 = 0x1319_8A2E_0370_7344;
-        for &v in perm {
-            let x = v as u64;
-            a = (a ^ x).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-            a ^= a >> 32;
-            b = (b ^ x).wrapping_mul(0xC2B2_AE3D_27D4_EB4F);
-            b ^= b >> 29;
-        }
-        self.flops_with_key(((a as u128) << 64) | b as u128, perm, compute)
-    }
-
-    fn flops_with_key(
-        &self,
-        key: u128,
-        perm: &[usize],
-        compute: impl FnOnce() -> u64,
-    ) -> u64 {
-        let memo = {
-            let Ok(mut entries) = self.entries.lock() else {
-                return compute();
-            };
-            let bucket = entries.entry(key).or_default();
-            if let Some(entry) = bucket.iter().find(|entry| entry.perm == perm) {
-                Arc::clone(&entry.flops)
-            } else {
-                let flops = Arc::new(OnceLock::new());
-                bucket.push(ScoreEntry {
-                    perm: perm.to_vec(),
-                    flops: Arc::clone(&flops),
-                });
-                flops
-            }
-        };
-        // Reserve before scoring, but do not hold the map lock during scoring.
-        // Exact key comparison makes reuse independent of hash collisions.
-        *memo.get_or_init(compute)
-    }
 }
 
 /// Generate + score `tasks` on up to [`PAR_MAX_THREADS`] threads.
@@ -216,10 +161,26 @@ fn run_generic(
     // Monotone shared upper bound on the final minimum. Only ever decreases.
     let gmin = AtomicU64::new(incumbent);
 
-    // One exact key and score cell per distinct permutation in this batch.
-    // Simultaneous aliases wait for the same symbolic pass rather than all
-    // missing a lookup-before-insert cache.
-    let dedup = ScoreMemo::default();
+    // Duplicate-score memoisation: a large share of produced candidates are
+    // exact duplicates (twin AMD passes, coincident relabel basins), and each
+    // would otherwise pay a full symbolic pass. Identical permutations have
+    // identical flops (the scorer is a pure function), so a 128-bit
+    // content-hash -> flops table lets duplicates reuse the score. The map
+    // stores no permutations, so memory stays flat on the giants.
+    let dedup: std::sync::Mutex<std::collections::HashMap<u128, u64>> =
+        std::sync::Mutex::new(std::collections::HashMap::new());
+    let hash_perm = |perm: &[usize]| -> u128 {
+        let mut a: u64 = 0x243F_6A88_85A3_08D3;
+        let mut b: u64 = 0x1319_8A2E_0370_7344;
+        for &v in perm {
+            let x = v as u64;
+            a = (a ^ x).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            a ^= a >> 32;
+            b = (b ^ x).wrapping_mul(0xC2B2_AE3D_27D4_EB4F);
+            b ^= b >> 29;
+        }
+        ((a as u128) << 64) | b as u128
+    };
 
     let eval = |i: usize, ws: &mut Option<ScoreWorkspace>| -> CandOut {
         let Some(perm) = produce(i) else {
@@ -228,10 +189,19 @@ fn run_generic(
         if !is_bijection(&perm, n) {
             return CandOut::default();
         }
-        let f = dedup.flops(&perm, || {
-            let w = ws.get_or_insert_with(|| ScoreWorkspace::new(n, nnz));
-            w.flops(sp, &perm)
-        });
+        let key = hash_perm(&perm);
+        let cached = dedup.lock().ok().and_then(|m| m.get(&key).copied());
+        let f = match cached {
+            Some(f) => f,
+            None => {
+                let w = ws.get_or_insert_with(|| ScoreWorkspace::new(n, nnz));
+                let f = w.flops(sp, &perm);
+                if let Ok(mut m) = dedup.lock() {
+                    m.insert(key, f);
+                }
+                f
+            }
+        };
         let prev = gmin.fetch_min(f, AtomicOrdering::Relaxed);
         CandOut {
             flops: Some(f),
@@ -369,43 +339,4 @@ pub(crate) fn phase_mark(label: &'static str, t0: std::time::Instant, flops: u64
 #[cfg(test)]
 pub(crate) fn phase_take() -> Vec<(&'static str, f64, u64)> {
     PHASE_MARKS.with(|m| std::mem::take(&mut *m.borrow_mut()))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Barrier;
-
-    #[test]
-    fn alias_score_cache_computes_once_across_workers() {
-        let memo = ScoreMemo::default();
-        let count = AtomicUsize::new(0);
-        let barrier = Barrier::new(PAR_MAX_THREADS);
-        std::thread::scope(|scope| {
-            let handles: Vec<_> = (0..PAR_MAX_THREADS)
-                .map(|_| {
-                    scope.spawn(|| {
-                        barrier.wait();
-                        memo.flops(&[2, 0, 1], || {
-                            count.fetch_add(1, AtomicOrdering::Relaxed);
-                            42
-                        })
-                    })
-                })
-                .collect();
-            for handle in handles {
-                assert_eq!(handle.join().unwrap(), 42);
-            }
-        });
-        assert_eq!(count.load(AtomicOrdering::Relaxed), 1);
-    }
-
-    #[test]
-    fn alias_score_cache_compares_colliding_keys_exactly() {
-        let memo = ScoreMemo::default();
-        assert_eq!(memo.flops_with_key(0, &[0, 1, 2], || 11), 11);
-        assert_eq!(memo.flops_with_key(0, &[2, 0, 1], || 22), 22);
-        assert_eq!(memo.flops_with_key(0, &[0, 1, 2], || panic!("rescored")), 11);
-        assert_eq!(memo.flops_with_key(0, &[2, 0, 1], || panic!("rescored")), 22);
-    }
 }

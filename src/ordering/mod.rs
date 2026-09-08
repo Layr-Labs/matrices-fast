@@ -4045,9 +4045,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         let mut cur_flops: u64 = raw_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
         let counts: Vec<u32> = raw_counts.into_iter().map(|c| c as u32).collect();
         let parent: Vec<i32> = post_etree.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+        // iter120: third independent aggressive cfg (refine_core round2 shape)
+        // on EVERY in-gate row — not only chained after a win. Buys breadth.
+        let mut cfg_agg = subtree_cfg_for(n, nnz);
+        cfg_agg.round = 1;
+        cfg_agg.max_blocks = 48;
+        cfg_agg.min_s = 12;
+        cfg_agg.budget = 12_000_000;
+        if n >= 1_000 {
+            cfg_agg.budget /= 2;
+        }
+        if (1_000..10_000).contains(&n) {
+            cfg_agg.max_s = 320;
+        }
         for cfg in [
             subtree_cfg_for(n, nnz),
             terminal_deep_subtree_cfg(n, nnz, cur_flops, amd_flops),
+            cfg_agg,
         ] {
             let mut candidate = base_cand.clone();
             let improved = rgreedy::subtree_refine(

@@ -4192,6 +4192,57 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // Terminal SmallScore local refine on the *shipped* incumbent, including
+    // any five-descent replacement above. Stage-11 paired-swap / plateau runs
+    // before PEO / MINL / FINAL_REFINE / simp / pair / five, so later
+    // replacements in the n<=1024 band currently ship unrefined. Strict exact
+    // admit → 0 worse. nnz 12k (vs the early 8k pass) covers denser lt_1k
+    // rows FINAL_REFINE actually moves. Measured on d62adc3: lt_1k 0.888091
+    // → 0.887975, structurally disjoint from five-descent's 1k_10k wins.
+    if n >= 12 && n <= 1_000 && nnz <= 12_000 {
+        let cand = cutoff_plateau_refine(
+            pattern,
+            cutoff_paired_swap_refine(pattern, best_perm.clone()),
+            true,
+        );
+        if is_bijection(&cand, n) {
+            let f = score(&cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
+
+    // Completion watcher on shipped trees five-descent never sees (n>4k).
+    // The early watcher runs before MINL / peel / FINAL_REFINE; this 2M-op
+    // pass sits after those replacements. Stay inside FINAL_REFINE's n+nnz
+    // envelope and below the crudeoil_lee4_09 / faclay cap rows (n<=15k).
+    if n > 4_000 && n <= 15_000 && nnz <= 180_000 && n + nnz <= FINAL_REFINE_MAX_WORK {
+        let pp = permute_pattern(&scoring_pat, &best_perm);
+        let et = EliminationTree::from_pattern(&pp);
+        let counts = column_counts_gnp(&pp, &et);
+        if let Some(q) = completion::refine_limited(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &pp.col_ptr,
+            &pp.row_idx,
+            &et.parent,
+            &counts,
+            &best_perm,
+            2_000_000,
+        ) {
+            if is_bijection(&q, n) {
+                let f = score(&q);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = q;
+                }
+            }
+        }
+    }
+
     best_perm
 }
 

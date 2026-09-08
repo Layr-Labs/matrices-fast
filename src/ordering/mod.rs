@@ -153,6 +153,7 @@ mod transplant_probe;
 
 pub mod rgreedy;
 mod completion;
+mod spectral;
 mod peo_extract;
 mod minl_watch;
 pub mod custom_metrics;
@@ -1535,6 +1536,29 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n < RCM_MAX_N && nnz < RCM_MAX_NNZ {
         consider!(move || {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(rcm_order(pattern))
+        });
+    }
+
+    // Spectral (Fiedler) ordering — a global continuous relaxation of the
+    // cut, unrelated to greedy elimination (AMD/AMF), separators
+    // (ND/partitioners), bandwidth (RCM) or profile (Sloan). One best-of
+    // ticket: can only win where every other family ties or misses.
+    // Narrowed to n<=2000 after the n<=4000 form died on the hidden cap;
+    // both measured winners live at n<=827. Deterministic (fixed start,
+    // fixed steps, index tie-breaks).
+    const SPECTRAL_MAX_N: usize = 2_000;
+    const SPECTRAL_MAX_NNZ: usize = 60_000;
+    if n >= 3 && n <= SPECTRAL_MAX_N && nnz <= SPECTRAL_MAX_NNZ {
+        let (scp, sri) = (pattern.col_ptr.clone(), pattern.row_idx.clone());
+        consider!(move || {
+            // Spectral returns Option; its internal fallback is degree
+            // order, but an empty pattern must not ship — fail the ticket.
+            match spectral::spectral_order(&scp, &sri, n) {
+                Some(p) => Ok::<Vec<i32>, feral_ordering_core::OrderingError>(p),
+                None => Err(feral_ordering_core::OrderingError::Internal(
+                    "spectral: empty pattern",
+                )),
+            }
         });
     }
 

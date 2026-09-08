@@ -4067,16 +4067,39 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        // iter148c NON-TICKET: no 145d ticket, no 146b rebuild.
-        // Retain tip leftovers: LT1K=1000, density SS, completion 4M only.
-        // iter148c: already stripped rebuild; ticket also removed (NON-TICKET family).
-        // Ultra-safe timing fallback if rebuild was the hidden bomb.
+        // iter150u: 146b-class TICKET ONLY (no rebuild) on 148c lead base — timing-safer bip
+        if (1_000..7_000).contains(&n) && nnz > 0 && nnz <= 17_000 {
+            let mut cfg_ch = subtree_cfg_for(n, nnz);
+            cfg_ch.round = 1;
+            cfg_ch.max_blocks = 48;
+            cfg_ch.min_s = 12;
+            cfg_ch.budget = if n >= 4_000 { 1_500_000 } else { 2_000_000 };
+            cfg_ch.max_s = 320;
+            let mut candidate = base_cand.clone();
+            let improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate,
+                &counts,
+                &parent,
+                cfg_ch,
+            );
+            if improved > 0 && is_bijection(&candidate, n) {
+                let f = score(&candidate);
+                if f < cur_flops {
+                    cur_flops = f;
+                    best_perm = candidate;
+                }
+            }
+        }
         best_flops = best_flops.min(cur_flops);
 
         // iter110: chained rebuild round after a FINAL_REFINE win (refine_core shape).
         // Independent cfgs above leave a new tree unsearched; one conditioned rebuild
         // buys depth only where a strict gain already paid for the row.
-        if cur_flops < best_flops_before_final {
+        let skip_ndcc_110 = n <= 1_000 && nnz > 4_000;
+        if cur_flops < best_flops_before_final && !skip_ndcc_110 {
             let before_rebuild = cur_flops;
             let permuted2 = permute_pattern(&scoring_pat, &best_perm);
             let etree2 = EliminationTree::from_pattern(&permuted2);
@@ -4266,7 +4289,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        if n >= 4 && n <= LT1K && nnz > 0 && nnz <= 20_000 {
+        if n >= 4 && n <= LT1K && nnz > 0 && nnz <= 4_000 /* iter150u */ {
             if let Some(cand) = rgreedy::adjacent_four_descent(
                 n,
                 &pattern.col_ptr,
@@ -4283,7 +4306,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        if n >= 3 && n <= LT1K && nnz > 0 && nnz <= 20_000 {
+        if n >= 3 && n <= LT1K && nnz > 0 && nnz <= 4_000 /* iter150u */ {
             if let Some(cand) = rgreedy::adjacent_triple_descent(
                 n,
                 &pattern.col_ptr,

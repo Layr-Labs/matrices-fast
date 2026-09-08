@@ -1679,11 +1679,13 @@ pub(crate) fn adjacent_four_descent(
 
 /// Exact component widths for a fixed five-pivot window. Only connected
 /// nonsingletons stream graph rows; singleton widths use cached live degrees.
-/// The topology and all scalar DP work are charged before metadata setup, and
-/// the topology-dependent word charge is paid before any row reduction.
+/// Setup/discovery is prepaid, then topology selects a prepaid solver charge.
+/// The topology-dependent word charge is paid before any row reduction.
 struct FiveWindow {
     internal_union: [u8; 32],
     component_width: [u32; 32],
+    components: [u8; 5],
+    component_count: usize,
 }
 
 // Logical work, not a CPU-instruction or wall-time bound: 8192 covers the
@@ -1693,6 +1695,29 @@ struct FiveWindow {
 // s <= 5 rows uses at most 3*s+3 <= 18 units per word including iterators;
 // round up to 20 per connected nonsingleton plus 16 word-overhead units.
 const FIVE_WINDOW_SCALAR_WORK: usize = 8192;
+// Partition the inherited scalar reservation: 2048 for topology/reduction
+// setup and arrays, 72 per transition (including up to five width-closure
+// iterations), and 384 for five incumbent widths and reconstruction.
+// Only absent cross-component transitions release their 72-unit reservation.
+// New discovery is charged on BOTH paths; disconnected reconstruction/merge
+// gets another 256 units. Word reductions and their charges are unchanged.
+const FIVE_WINDOW_SETUP_WORK: usize = 2048;
+const FIVE_WINDOW_DISCOVERY_WORK: usize = 256;
+
+fn five_window_solve_work(components: &[u8]) -> usize {
+    if components.len() == 1 {
+        FIVE_WINDOW_SCALAR_WORK - FIVE_WINDOW_SETUP_WORK
+    } else {
+        let transitions: usize = components
+            .iter()
+            .map(|mask| {
+                let size = mask.count_ones() as usize;
+                size * (1usize << (size - 1))
+            })
+            .sum();
+        384 + 256 + 72 * transitions
+    }
+}
 
 fn five_window_scan_work(words: usize, connected_nonsingletons: usize) -> usize {
     20usize
@@ -1703,7 +1728,7 @@ fn five_window_scan_work(words: usize, connected_nonsingletons: usize) -> usize 
 
 impl FiveWindow {
     fn new(game: &Game<'_>, verts: [usize; 5], work: &mut TripleWork) -> Option<Self> {
-        if !work.charge(FIVE_WINDOW_SCALAR_WORK) {
+        if !work.charge(FIVE_WINDOW_SETUP_WORK + FIVE_WINDOW_DISCOVERY_WORK) {
             return None;
         }
         let rows = verts.map(|v| &game.adj[v * game.w..(v + 1) * game.w]);
@@ -1719,6 +1744,31 @@ impl FiveWindow {
         for mask in 1usize..32 {
             let rest = mask & (mask - 1);
             internal_union[mask] = internal_union[rest] | inside[mask.trailing_zeros() as usize];
+        }
+        // Discover components in the CURRENT induced window, after any filled
+        // prefix. Outside vertices stay live: a shared outside neighbor is not
+        // an internal path and must not join these components.
+        let mut components = [0u8; 5];
+        let mut component_count = 0;
+        let mut unseen = 31u8;
+        while unseen != 0 {
+            let mut component = 1u8 << unseen.trailing_zeros();
+            loop {
+                let expanded = component | internal_union[component as usize];
+                if expanded == component {
+                    break;
+                }
+                component = expanded;
+            }
+            components[component_count] = component;
+            component_count += 1;
+            unseen &= !component;
+        }
+        // Reserve local transitions, incumbent, reconstruction and merge before
+        // doing any of that work. Connected windows retain the original solver
+        // reservation, plus the discovery charge already paid above.
+        if !work.charge(five_window_solve_work(&components[..component_count])) {
+            return None;
         }
         let mut connected = [false; 32];
         let mut q = 0;
@@ -1857,6 +1907,8 @@ impl FiveWindow {
         Some(Self {
             internal_union,
             component_width,
+            components,
+            component_count,
         })
     }
 
@@ -1876,6 +1928,9 @@ impl FiveWindow {
     // fit in u16, whose numeric order therefore gives global lexicographic ties.
     // An optimum tied with the incumbent always keeps the original order.
     fn solve(&self) -> ([usize; 5], u64, u64) {
+        if self.component_count > 1 {
+            return self.solve_disconnected();
+        }
         let mut best = [u64::MAX; 32];
         let mut path = [u16::MAX; 32];
         best[0] = 0;
@@ -1908,6 +1963,82 @@ impl FiveWindow {
             [0, 1, 2, 3, 4]
         };
         (order, best[31], incumbent)
+    }
+
+    // Eliminating a pivot only fills between its neighbors. With outside
+    // vertices held live, no elimination in one induced component can create
+    // an edge to another. Thus its pivot widths depend only on its own prefix,
+    // even if the components have common outside neighbors. Costs add, while
+    // all interleavings of component-optimal sequences have the same cost.
+    fn solve_disconnected(&self) -> ([usize; 5], u64, u64) {
+        let mut best = [u64::MAX; 32];
+        let mut path = [u16::MAX; 32];
+        let mut sequences = [[0usize; 5]; 5];
+        let mut lengths = [0usize; 5];
+        let mut total = 0u64;
+        best[0] = 0;
+        path[0] = 0;
+        for (index, &component) in self.components[..self.component_count].iter().enumerate() {
+            let full = component as usize;
+            let length = component.count_ones() as usize;
+            lengths[index] = length;
+            // Ascending submasks: no states containing vertices from other
+            // components, and no repeated closures for their interleavings.
+            // Nonzero submasks of distinct components never alias these arrays.
+            let mut mask = 0usize;
+            while mask != full {
+                let mut available = full & !mask;
+                while available != 0 {
+                    let pivot = available.trailing_zeros() as usize;
+                    let bit = 1usize << pivot;
+                    available &= available - 1;
+                    let width = self.width(mask as u8, pivot);
+                    let cost = best[mask] + width * width;
+                    let code = (path[mask] << 3) | pivot as u16;
+                    let next = mask | bit;
+                    if cost < best[next] || (cost == best[next] && code < path[next]) {
+                        best[next] = cost;
+                        path[next] = code;
+                    }
+                }
+                mask = mask.wrapping_sub(full) & full;
+            }
+            total += best[full];
+            let mut code = path[full];
+            for position in (0..length).rev() {
+                sequences[index][position] = (code & 7) as usize;
+                code >>= 3;
+            }
+        }
+        let incumbent = (0..5)
+            .map(|pivot| {
+                let width = self.width((1 << pivot) - 1, pivot);
+                width * width
+            })
+            .sum();
+        let mut order = [0, 1, 2, 3, 4];
+        if total < incumbent {
+            // Local paths use ORIGINAL position digits, not component ranks.
+            // Choosing the smallest available head gives the lexicographically
+            // smallest optimal shuffle; a tied incumbent is never shuffled.
+            let mut cursors = [0usize; 5];
+            for position in &mut order {
+                let mut selected = 0;
+                let mut smallest = usize::MAX;
+                for index in 0..self.component_count {
+                    if cursors[index] < lengths[index] {
+                        let pivot = sequences[index][cursors[index]];
+                        if pivot < smallest {
+                            smallest = pivot;
+                            selected = index;
+                        }
+                    }
+                }
+                *position = smallest;
+                cursors[selected] += 1;
+            }
+        }
+        (order, total, incumbent)
     }
 }
 
@@ -3466,16 +3597,27 @@ mod five_window_tests {
             let mut game = Game::new(130, &adj).unwrap();
             game.reset();
             let q = if clique { 26 } else { 0 };
-            let scalar = FIVE_WINDOW_SCALAR_WORK as i64;
+            let discovery = (FIVE_WINDOW_SETUP_WORK + FIVE_WINDOW_DISCOVERY_WORK) as i64;
+            let components: &[u8] = if clique { &[31] } else { &[1, 2, 4, 8, 16] };
+            let scalar = discovery + five_window_solve_work(components) as i64;
             let scan = five_window_scan_work(game.w, q) as i64;
-            for allowance in [scalar - 1, scalar + scan - 1, scalar + scan] {
+            for allowance in [
+                discovery - 1,
+                discovery,
+                scalar - 1,
+                scalar,
+                scalar + scan - 1,
+                scalar + scan,
+            ] {
                 let mut work = TripleWork {
                     remaining: allowance,
                 };
                 let result = FiveWindow::new(&game, [0, 1, 2, 3, 4], &mut work);
                 assert_eq!(result.is_some(), allowance == scalar + scan);
-                let charged = if allowance < scalar {
+                let charged = if allowance < discovery {
                     0
+                } else if allowance < scalar {
+                    discovery
                 } else if allowance < scalar + scan {
                     scalar
                 } else {
@@ -3499,7 +3641,10 @@ mod five_window_tests {
             + (2 * n * w + 13 * n + w)
             + (2 * n * w + 8 * n);
         // A five-window star has exactly 15 connected nonsingleton subsets.
-        let first_window = setup + FIVE_WINDOW_SCALAR_WORK + five_window_scan_work(w, 15);
+        let first_window = setup
+            + FIVE_WINDOW_SCALAR_WORK
+            + FIVE_WINDOW_DISCOVERY_WORK
+            + five_window_scan_work(w, 15);
         for budget in [0, 1, setup + FIVE_WINDOW_SCALAR_WORK - 1, first_window - 1] {
             assert!(
                 adjacent_five_descent(n, &pat.col_ptr, &pat.row_idx, &seed, budget as i64)

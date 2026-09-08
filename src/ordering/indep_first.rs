@@ -260,7 +260,8 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
-    for cap in [usize::MAX, 9usize, 3usize] {
+    // iter155a: extra caps 5 and 15 for more Schur shapes
+    for cap in [usize::MAX, 15usize, 9usize, 5usize, 3usize] {
         let mut in_x = greedy_independent_set(sp, cap);
         budget_trim(sp, &mut in_x, max_pairs);
         let xs = in_x.iter().filter(|&&b| b).count();

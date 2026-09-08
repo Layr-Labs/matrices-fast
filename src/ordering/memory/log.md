@@ -1,6 +1,8 @@
 
 ## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
 
+2026-09-08 | **PROMOTED** `b604027` / `2fef69b` hidden **0.850005** (−0.05% vs 0.850463) | iter74d timing-cut package. New lead is US.
+2026-09-08 | tip 0.806243 → **0.805518** (−7.25 bip) | **iter76** lean densify + narrow PEO_ALT 3k≤n<8k (fix mpbp_15); worst **1.047s**, 24/3 movers. Submitted `4ecc26ea` validating to push own lead.
 2026-09-08 | tip 0.806243 → **0.805536** (−7.07 bip) | **iter74d timing-cut of iter72 family** — danger skip core-exact + late polish cost>20M skip + densify lean + medium 4-ticket floor on danger + PEO_ALT skip n≥2500 nnz≥9k | **24/4 movers**, worst **1.087s** (confirm 1.093). Submitted `b6040276` validating. Prior iter72 0.805384 / 29/0 / 1.196s FAIL; iter73 gated polish regress.
 - iter14 PEO ledger 2.5M→4M: **0.806156** null; reverted.
 
@@ -169,4 +171,10 @@ round, so note the round if you know it.
 
 2026-09-08 | densify/LexBFS/Sloan/tie-ticket cluster maxed ~7 movers (iter61–65) | **LEAP iter66**: residual-core exact LNS + once-per-row work ledger ([0108](experiments/0108-residual-core-exact-lns.md)). Target ≥15 movers + worst ≤1.10s.
 
-2026-09-08 | 0fb513b dev 0.805518 -> **0.805234** (−2.84 bips, ~55 movers: 5 lt_1k / 30 1k_10k / 20 gt_10k) [same block priced on three consecutive frontiers: c6b0311 −3.03 / 64 movers, 2fef69b −2.89 / 55, 0fb513b −2.84; the two intervening promotions took 0.19 bip of it, all at the small end] | FINAL subtree-refinement round on the FINISHED incumbent (`n + nnz <= 400_000`): both existing configs (`subtree_cfg_for`, `terminal_deep_subtree_cfg`) re-run on the permutation `leader_order` is about to return, from ONE shared postorder, strict-decrease accept. `rgreedy::subtree_refine` is called from exactly two places and both are at stage 3, while core-lift / completion / polish / PEO / alt-seeds / transplant / MINL / count-ranked peel / late polish all replace the incumbent afterwards — so what ships was never refined | **WIN**: 0 rows worse (strict accept), biggest crudeoil_lee1_07 −1.71 %, rsyn0820m04m −0.89 %, crudeoil_pooling_dt2 −0.70 %, multiplants_stg1 −0.55 %, pinene200 −0.37 %. Added cost measured directly by a `#[cfg(test)]` probe over `order()`'s own output (no differencing): mean +6.1 ms, worst +23 ms, 0 of 300 rows > 25 ms; ungated it reaches +110 ms on acopf for +0.21 bip, not bought. 34-row 5+5 interleave S1 4 / S2 0 / S3 +31.6 ms against a same-code null of 23 / 10 / +136.2 ms — identical code is noisier than the change. The incumbent's score is FREE here: postorder is objective-neutral (0 of 300 rows change flops under it), so Σcounts² of the setup IS score(best_perm). It is a POSITION, not a gate widening — the biggest winners are inside both stage-3 gates already. Negative on gt_10k, all measured against the full shipped result: relabelled residual-core lottery above n=10k **0 of 45**, +8 AMD/+8 AMF lottery tickets per row **1 of 45** (acopf, 0.119 bips at 0.38 s/ticket), METIS×3 + Scotch ungated **0 of 45** (ratios 1.0–9519x) — the `n < 10_000` self-gating is correct, not an oversight ([0110](experiments/0110-final-subtree-refinement-round.md))
+2026-09-08 | reclaim `dc1f98b` validating (iter83 0.805494 / 26/3 / 1.082s) vs Xo1otl 0.849495 | **LEAP iter84**: dual core-exact shots + widen cn≤2200/core_nnz≤18k lean new-band ([0111](experiments/0111-iter84-widen-dual-core-exact.md)). Prefer worst ≤1.05.
+
+2026-09-08 | iter84 submitted `71b8941` validating (0.805493 / 1.026s / 27/3) after `dc1f98b` FAIL | **LEAP iter85**: chained residual-core LNS from improved plateaus ([0112](experiments/0112-iter85-chained-core-lns.md)).
+
+2026-09-08 | iter85 0.805491 / 1.018s / 27/3 (+syn micro vs 84) | **LEAP iter86**: mid-cost late polish 1→3 streams + descent densify ([0113](experiments/0113-iter86-mid-late-densify.md)). Hold submit on `71b8941`.
+
+2026-09-08 | iter86 submit blocked (1 in flight=`71b8941`) | **LEAP iter87**: mid stream trim 12/10/8→10/8/6 chase prefer ≤1.05 ([0114](experiments/0114-iter87-mid-trim-timing.md)).

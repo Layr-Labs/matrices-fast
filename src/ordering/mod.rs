@@ -175,6 +175,9 @@ use feral::symbolic::column_counts_gnp;
 /// same one, under a per-matrix work ledger: per-round cost is linear in the reconstruction,
 /// two MCS passes and two exact scores, so charging each round against a fixed allowance
 /// bounds the added time by structure alone.
+/// Extra gain-conditioned rebuild rounds on the FINAL_REFINE chain (iter111).
+/// Each round runs only after the previous one strictly improved.
+const FINAL_CHAIN_EXTRA_ROUNDS: usize = 8;
 const PEO_LARGE_MAX_NNZ: usize = 1_500_000;
 const PEO_LARGE_MAX_LNNZ: usize = 20_000_000;
 const PEO_LARGE_ROUNDS: usize = 8;
@@ -4073,6 +4076,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // Independent cfgs above leave a new tree unsearched; one conditioned rebuild
         // buys depth only where a strict gain already paid for the row.
         if cur_flops < best_flops_before_final {
+            let flops_before_r2 = cur_flops;
             let permuted2 = permute_pattern(&scoring_pat, &best_perm);
             let etree2 = EliminationTree::from_pattern(&permuted2);
             let post2 = etree2.postorder();
@@ -4110,6 +4114,71 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     best_perm = cand2;
                 }
             }
+
+            // iter111: gain-conditioned deeper rebuild on the FINAL_REFINE chain.
+            // The chain stopped at two rounds while the stage-5 terminal chain
+            // already runs three. Rather than pin a third round, keep rebuilding
+            // while each round pays a strict gain: depth is bought only on the
+            // rows that keep converting and the loop exits immediately (one
+            // comparison) everywhere else. Capped at three extra rounds and the
+            // same sparse gate as the stage-5 round 3, so worst-case added work
+            // is bounded. Strict exact admit -> structurally 0 worse.
+            {
+                let mut prev_flops = flops_before_r2;
+                for extra in 0..FINAL_CHAIN_EXTRA_ROUNDS {
+                    if cur_flops >= prev_flops {
+                        break;
+                    }
+                    if !((n < 10_000 && nnz <= 100_000)
+                        || (n >= 10_000 && nnz <= 80_000 && best_flops < amd_flops))
+                    {
+                        break;
+                    }
+                    prev_flops = cur_flops;
+                    let permuted3 = permute_pattern(&scoring_pat, &best_perm);
+                    let etree3 = EliminationTree::from_pattern(&permuted3);
+                    let post3 = etree3.postorder();
+                    let base3: Vec<usize> = post3.iter().map(|&j| best_perm[j]).collect();
+                    let post_pat3 = permute_pattern(&scoring_pat, &base3);
+                    let post_et3 = EliminationTree::from_pattern(&post_pat3);
+                    let raw3 = column_counts_gnp(&post_pat3, &post_et3);
+                    let counts3: Vec<u32> = raw3.into_iter().map(|c| c as u32).collect();
+                    let parent3: Vec<i32> = post_et3
+                        .parent
+                        .iter()
+                        .map(|p| p.map_or(-1, |j| j as i32))
+                        .collect();
+                    let mut cfg3 = subtree_cfg_for(n, nnz);
+                    cfg3.round = 2 + extra;
+                    cfg3.max_blocks = 32;
+                    cfg3.min_s = 16;
+                    cfg3.budget = 4_000_000;
+                    if n >= 1_000 {
+                        cfg3.budget /= 2;
+                    }
+                    if (1_000..10_000).contains(&n) {
+                        cfg3.max_s = 256;
+                    }
+                    let mut cand3 = base3;
+                    let improved3 = rgreedy::subtree_refine(
+                        n,
+                        &pattern.col_ptr,
+                        &pattern.row_idx,
+                        &mut cand3,
+                        &counts3,
+                        &parent3,
+                        cfg3,
+                    );
+                    if improved3 > 0 && is_bijection(&cand3, n) {
+                        let f3 = score(&cand3);
+                        if f3 < cur_flops {
+                            cur_flops = f3;
+                            best_perm = cand3;
+                        }
+                    }
+                }
+            }
+
             best_flops = best_flops.min(cur_flops);
         }
     }

@@ -6,6 +6,10 @@
 
 # Index
 
+## 2026-09-08 checkpoint
+
+- [0136: iter111 gain-conditioned deeper rebuild on the FINAL_REFINE chain](experiments/0136-iter111-gain-conditioned-chain.md): tip `7257386` (hidden 0.849130) dev 0.804919 → **0.804719** (−2.00 bip), 12 movers / 0 worse across nine families. Replaces the single chained round 2 with a strict-gain loop (cap 8; saturates on its own). Records the interleaved-A/B timing protocol — full-corpus probe times drift ~23% per session and are up to 4x isolated times, so never price a gate off them.
+
 ## 2026-09-07 checkpoint
 
 - [0099: max densify no MINL-after-core](experiments/0099-max-densify-nominl.md): tip 0.806243 → **0.806143** (−1.00 bip); not submitted.

@@ -3438,16 +3438,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // bounded; depths other than 2 skip via continue (not nested).
             let small_band = nnz <= REDUCE_SMALL_MAX_NNZ;
             let dense_band = nnz > REDUCE_EXTRA_MIN_NNZ && nnz >= 6 * n;
-            let mid_k2 = depth == 2
-                && nnz > REDUCE_SMALL_MAX_NNZ
+            let mid_band = nnz > REDUCE_SMALL_MAX_NNZ
                 && nnz <= REDUCE_EXTRA_MIN_NNZ
                 && best_flops < amd_flops;
-            if !(small_band || dense_band || mid_k2) {
+            let mid_k2 = depth == 2 && mid_band;
+            // EXP mid-K4: same below-anchor one-shot band as K2 (0064 census:
+            // wins lived at K=4/5 as well as K=2; from-scratch, not nested).
+            let mid_k4 = depth == 4 && mid_band;
+            if !(small_band || dense_band || mid_k2 || mid_k4) {
                 continue;
             }
-            let work_cap = if mid_k2 && !(small_band || dense_band) {
-                // Exactly one mid-band K=2 attempt worth of CSC entries.
-                nnz
+            let work_cap = if (mid_k2 || mid_k4) && !(small_band || dense_band) {
+                // One mid-band attempt per admitted depth (K=4 then K=2).
+                2 * nnz
             } else {
                 REDUCE_WORK_NNZ
             };

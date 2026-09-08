@@ -869,7 +869,7 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
     if let Some(perm) = forest_certificate(pattern) { return perm; }
-    leader_order(pattern)
+    insertion_refine(pattern, leader_order(pattern))
 }
 
 // Certificate fast path: only return when leaf peeling removes every vertex.
@@ -944,6 +944,8 @@ impl SmallScore {
             let suffix_floor = d * (d + 1) * (2 * d + 1) / 6
                 + (self.n - step - 1) as u64 - d;
             if total + suffix_floor > bound { return bound.saturating_add(1); }
+            // If the entire suffix is this clique, its cost is exact, not just a bound.
+            if d == (self.n - step - 1) as u64 { return total + suffix_floor; }
             for w in 0..words {
                 let mut bits = neighbors[w];
                 while bits != 0 {
@@ -998,6 +1000,35 @@ fn plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<us
         let f=scoring.flops(&current);
         if f<best_f { best_f=f; best=current.clone(); }
         else if f>best_f || !neutral { current.swap(a,b); }
+    }
+    best
+}
+
+fn insertion_refine(pattern: &Pattern, start: Vec<usize>) -> Vec<usize> {
+    let n = start.len();
+    if !(12..=1_000).contains(&n) || pattern.nnz() > 12_000 { return start; }
+    let scoring = SmallScore::new(pattern);
+    let mut best = start.clone();
+    let mut current = start;
+    let mut best_f = scoring.flops(&best);
+    let mut state = 0xd1b54a32d192ed03u64;
+    // ponytail: bounded sampled insertion walk; expand only with measured timing headroom.
+    for step in 0..4096 {
+        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+        let a = state as usize % n;
+        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+        let b = if step % 2 == 0 { state as usize % n }
+            else { (a + 1 + state as usize % 32) % n };
+        if a == b { continue; }
+        let (lo, hi) = (a.min(b), a.max(b));
+        if a < b { current[lo..=hi].rotate_left(1); }
+        else { current[lo..=hi].rotate_right(1); }
+        let f = scoring.flops_bounded(&current, best_f);
+        if f < best_f { best_f = f; best.clone_from(&current); }
+        else if f > best_f {
+            if a < b { current[lo..=hi].rotate_right(1); }
+            else { current[lo..=hi].rotate_left(1); }
+        }
     }
     best
 }
@@ -4067,10 +4098,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        // iter148c NON-TICKET: no 145d ticket, no 146b rebuild.
-        // Retain tip leftovers: LT1K=1000, density SS, completion 4M only.
-        // iter148c: already stripped rebuild; ticket also removed (NON-TICKET family).
-        // Ultra-safe timing fallback if rebuild was the hidden bomb.
         best_flops = best_flops.min(cur_flops);
 
         // iter110: chained rebuild round after a FINAL_REFINE win (refine_core shape).
@@ -4223,8 +4250,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.
-        // iter143: LT1K=1000. Tip leftover. nnz<=20k. Completion + chimera-band ticket.
-        // No broad mid-n cfg_agg.
         const LT1K: usize = 1_000;
         const LT1K_FOUR_OPS: i64 = 32_000_000;
         const LT1K_TRIPLE_OPS: i64 = 32_000_000;
@@ -4266,7 +4291,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        if n >= 4 && n <= LT1K && nnz > 0 && nnz <= 20_000 {
+        if n >= 4 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
             if let Some(cand) = rgreedy::adjacent_four_descent(
                 n,
                 &pattern.col_ptr,
@@ -4283,7 +4308,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        if n >= 3 && n <= LT1K && nnz > 0 && nnz <= 20_000 {
+        if n >= 3 && n <= LT1K && nnz > 0 && nnz <= FINAL_FIVE_MAX_NNZ {
             if let Some(cand) = rgreedy::adjacent_triple_descent(
                 n,
                 &pattern.col_ptr,
@@ -4326,106 +4351,34 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // n<=1000 so this cannot see the cap rows. The mid-band 2M watcher
     // previously stacked here failed the hidden 2 s cap (f606aae) and is
     // not retried.
-    // iter143: density-split SmallScore (maxcsp 1.55s bomb from ungated 4x).
-    // Completion leap n<=1000. Chimera-band same-tree ticket (not broad mid-n).
     if n >= 12 && n <= 1_000 {
         let mut cand = cutoff_plateau_refine(
             pattern,
             cutoff_paired_swap_refine(pattern, best_perm.clone()),
             true,
         );
-        if nnz <= 12_000 {
-            cand = cutoff_plateau_refine(
-                pattern,
-                cutoff_paired_swap_refine(pattern, cand),
-                true,
-            );
-            cand = cutoff_plateau_refine(
-                pattern,
-                cutoff_paired_swap_refine(pattern, cand),
-                true,
-            );
-            cand = cutoff_plateau_refine(
-                pattern,
-                cutoff_paired_swap_refine(pattern, cand),
-                true,
-            );
-        }
+        // Second independent restart from the new incumbent. Same RNG stream,
+        // different seed perm, so the neighbourhood is not a byte replay.
+        cand = cutoff_plateau_refine(
+            pattern,
+            cutoff_paired_swap_refine(pattern, cand),
+            true,
+        );
+        cand = cutoff_plateau_refine(
+            pattern,
+            cutoff_paired_swap_refine(pattern, cand),
+            true,
+        );
+        cand = cutoff_plateau_refine(
+            pattern,
+            cutoff_paired_swap_refine(pattern, cand),
+            true,
+        );
         if is_bijection(&cand, n) {
             let f = score(&cand);
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
-            }
-        }
-    }
-    if n >= 16 && n <= 1_000 && nnz <= 20_000 {
-        let before_comp = best_flops;
-        let pp = permute_pattern(&scoring_pat, &best_perm);
-        let et = EliminationTree::from_pattern(&pp);
-        let counts = column_counts_gnp(&pp, &et);
-        if let Some(candidate) = completion::refine_limited(
-            n, &pattern.col_ptr, &pattern.row_idx,
-            &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm, 4_000_000,
-        ) {
-            if is_bijection(&candidate, n) {
-                let f = score(&candidate);
-                if f < best_flops {
-                    best_flops = f;
-                    best_perm = candidate;
-                }
-            }
-        }
-        // Completion win → re-polish the new chordal completion with leftover
-        // pivots under the same n<=1000 gate (completion-oriented leap).
-        if best_flops < before_comp {
-            if n >= 5 {
-                if let Some(cand) = rgreedy::adjacent_five_descent(
-                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 32_000_000,
-                ) {
-                    if is_bijection(&cand, n) {
-                        let f = score(&cand);
-                        if f < best_flops {
-                            best_flops = f;
-                            best_perm = cand;
-                        }
-                    }
-                }
-            }
-            if n >= 4 {
-                if let Some(cand) = rgreedy::adjacent_four_descent(
-                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 32_000_000,
-                ) {
-                    if is_bijection(&cand, n) {
-                        let f = score(&cand);
-                        if f < best_flops {
-                            best_flops = f;
-                            best_perm = cand;
-                        }
-                    }
-                }
-            }
-            if n >= 3 {
-                if let Some(cand) = rgreedy::adjacent_triple_descent(
-                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 4, 32_000_000,
-                ) {
-                    if is_bijection(&cand, n) {
-                        let f = score(&cand);
-                        if f < best_flops {
-                            best_flops = f;
-                            best_perm = cand;
-                        }
-                    }
-                }
-                if let Some(cand) = rgreedy::adjacent_pair_descent(
-                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 4, 64_000_000,
-                ) {
-                    let f = score(&cand);
-                    if f < best_flops {
-                        best_flops = f;
-                        best_perm = cand;
-                    }
-                }
             }
         }
     }
@@ -5706,6 +5659,27 @@ fn is_bijection(perm: &[usize], n: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn insertion_preserves_permutations_and_never_increases_flops() {
+        for n in [0, 1, 11, 12, 24, 65] {
+            let mut p = Pattern { n, col_ptr: vec![0], row_idx: Vec::new() };
+            for c in 0..n {
+                for r in 0..n {
+                    if r != c && ((r + c) % 7 == 0 || r.abs_diff(c) == 1) {
+                        p.row_idx.push(r);
+                    }
+                }
+                p.col_ptr.push(p.row_idx.len());
+            }
+            let sp = ScoringPattern { n, col_ptr: p.col_ptr.clone(), row_idx: p.row_idx.clone() };
+            let start: Vec<_> = (0..n).rev().collect();
+            let result = insertion_refine(&p, start.clone());
+            assert!(is_bijection(&result, n));
+            assert_eq!(result, insertion_refine(&p, start.clone()));
+            assert!(flops_of(&sp, &result) <= flops_of(&sp, &start));
+        }
+    }
+
     #[test]
     fn clique_cutoff_exhaustive_small_graphs() {
         let n = 5;

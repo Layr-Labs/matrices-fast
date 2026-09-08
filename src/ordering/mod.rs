@@ -4113,10 +4113,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
             best_flops = best_flops.min(cur_flops);
 
-            // Second gain-conditioned rebuild, n<=1000 only. The n<10k copy
-            // (c7c1a8a) and the ungated copy (5f4e82b) both failed hidden
-            // timing. lt_1k cannot see lee1_07 / lee4_09.
-            if cur_flops < before_rebuild && n <= 1_000 {
+            // Second gain-conditioned rebuild, n<=1500 only. n<10k (c7c1a8a)
+            // and ungated (5f4e82b) failed hidden. 1500 stays below lee1_07
+            // (3670) / lee4_09 (15904). Crown 767130f used n<=1000.
+            if cur_flops < before_rebuild && n <= 1_500 {
                 let permuted3 = permute_pattern(&scoring_pat, &best_perm);
                 let etree3 = EliminationTree::from_pattern(&permuted3);
                 let post3 = etree3.postorder();
@@ -4216,10 +4216,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         const FINAL_FIVE_MAX_N: usize = 4_000;
         const FINAL_FIVE_MAX_NNZ: usize = 60_000;
         const FINAL_FIVE_OPS: i64 = 32_000_000;
-        // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
-        // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
-        // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.
-        const LT1K: usize = 1_000;
+        // Extra pivot work on n<=1500. five2 at n<=3000 (c7c1a8a) and
+        // four/triple at n<=4000 (69e3932) failed hidden. 1500 cannot see
+        // lee1_07 / lee4_09. Crown 767130f used 1000.
+        const LT1K: usize = 1_500;
         const LT1K_FOUR_OPS: i64 = 32_000_000;
         const LT1K_TRIPLE_OPS: i64 = 32_000_000;
         const LT1K_TRIPLE_SWEEPS: usize = 4;
@@ -4320,7 +4320,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // n<=1000 so this cannot see the cap rows. The mid-band 2M watcher
     // previously stacked here failed the hidden 2 s cap (f606aae) and is
     // not retried.
-    if n >= 12 && n <= 1_000 {
+    if n >= 12 && n <= 1_024 {
         let mut cand = cutoff_plateau_refine(
             pattern,
             cutoff_paired_swap_refine(pattern, best_perm.clone()),

@@ -167,7 +167,6 @@ mod prefix_score;
 mod chordal_certificate;
 /// Independent-set-first (normal-equations) lift: eliminate one KKT side first.
 mod indep_first;
-mod bit_kernels;
 
 use candidate_cache::Family as CandidateFamily;
 use prefix_score::PrefixScore as SmallScore;
@@ -265,9 +264,16 @@ const REDUCE_EXTRA_EXACT_MAX_CN: usize = 8_000;
 /// heavy-run profile. NOTE: `MEDIUM_MAX_NNZ` reaches into the slow tier
 /// (`nnz` up to 400 k), so this `n` cap is held fixed — raising it would put AMF
 /// passes onto dense large-n matrices and could move the worst case.
+/// Independent-set-first lift envelope (see `indep_first`). The ledger is in
+/// edge-touch units (measured ~15 ns each on the pod, 0.07 s for 4.6M on
+/// cont6-qq): 8M bounds each set at ~0.15 s, the three sets run on their own
+/// threads, and the pre-gates trim a set until its predicted Schur complement
+/// fits, so nothing is ever started and killed. 1.5M nnz admits the whole
+/// gt_10k tier the rest of the portfolio serves.
 const INDEP_MIN_N: usize = 32;
 const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
+/// Early-acceptance margin as `(num, den)`: `f * den <= incumbent * num`.
 const INDEP_EARLY_MARGIN: (u64, u64) = (49, 50);
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
@@ -2438,15 +2444,36 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     parallel::phase_mark("1.portfolio", _tph, best_flops);
     #[cfg(test)]
     let _tph = std::time::Instant::now();
+
+    // ── INDEPENDENT-SET-FIRST LIFT (the normal-equations family) ───────────
+    // Eliminate a whole independent set first (order-free exact cost), then
+    // order the exact Schur complement with AMD/AMF — see `indep_first`. It is
+    // the one classic KKT route (eliminate one side, factor the reduced
+    // system) that no minimum-degree, min-fill or separator candidate above
+    // takes, and it wins where the reduced graph is grid-like (PDE-constrained
+    // / discretised-control families: cont6-qq 0.798 -> 0.696, torsion50,
+    // glider400, gabriel*). Work-ledgered in edge touches so the added time is
+    // bounded by structure alone; compared directly against the incumbent
+    // (never through the runner-up ledger) so every non-winning row keeps its
+    // downstream trajectory bit-identical. Placed here so the terminal
+    // refinements below polish a lifted winner like any other incumbent.
+    // Dual track: a DECISIVE win (>= 2 % under the incumbent) replaces the
+    // incumbent here, so the terminal stages polish it; a marginal win is held
+    // back and applied LAST with strict accept instead, because the exact
+    // search / subtree lotteries downstream re-roll on a changed incumbent and
+    // a sub-2 % head start is inside their spread (measured: three sub-1.5 %
+    // early wins flipped to losses of 0.2-9 % after the re-roll; every >= 2 %
+    // early win stayed ahead).
     let mut indep_deferred: Option<(u64, Vec<usize>)> = None;
     if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
-        if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            indep_first::run(&scoring_pat, INDEP_WORK_LEDGER)
+        }));
+        if let Ok(Some((core_total, cand))) = r {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
                 if f < best_flops {
-                    if f.saturating_mul(INDEP_EARLY_MARGIN.1)
-                        <= best_flops.saturating_mul(INDEP_EARLY_MARGIN.0)
-                    {
+                    if f.saturating_mul(INDEP_EARLY_MARGIN.1) <= best_flops.saturating_mul(INDEP_EARLY_MARGIN.0) {
                         best_flops = f;
                         best_perm = cand;
                     } else {
@@ -4231,9 +4258,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 4_000;
-        const FINAL_FIVE_MAX_NNZ: usize = 60_000;
-        const FINAL_FIVE_OPS: i64 = 32_000_000;
+        const FINAL_FIVE_MAX_N: usize = 6_500;
+        const FINAL_FIVE_MAX_NNZ: usize = 100_000;
+        // iter155a: wide five on indep_first tip
+        const FINAL_FIVE_OPS: i64 = 128_000_000;
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.
@@ -4262,7 +4290,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if best_flops < before_five && n <= LT1K {
+            if best_flops < before_five && n <= 3_000 {
                 if let Some(cand) = rgreedy::adjacent_five_descent(
                     n,
                     &pattern.col_ptr,
@@ -4457,22 +4485,18 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
-    // Marginal lifts must not reroll the incumbent-dependent searches above.
-    if let Some((flops, candidate)) = indep_deferred {
-        if flops < best_flops {
-            best_flops = flops;
-            best_perm = candidate;
+
+    // Held-back marginal independent-set-first candidate (see the stage
+    // above): strict accept against the finished incumbent, exact flops
+    // already computed by the trusted scorer.
+    if let Some((f, cand)) = indep_deferred {
+        if f < best_flops {
+            best_flops = f;
+            best_perm = cand;
         }
     }
-    if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
-        if let Some(candidate) = rgreedy::subset_window_descent_step(
-            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
-        ) {
-            if score(&candidate) < best_flops {
-                best_perm = candidate;
-            }
-        }
-    }
+    let _ = best_flops;
+
     best_perm
 }
 

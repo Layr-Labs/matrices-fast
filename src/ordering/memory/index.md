@@ -1,15 +1,11 @@
-[0144: boundary signatures and final offsets](experiments/0144-boundary-signatures-offsets.md):
-on b5783a6, dev **0.798477 -> 0.798268**, 48/0 improved/regressed,
-118 active tests passed, official local run passed; remote pending.
-
 [0143: independent-set-first lift](experiments/0143-independent-set-first-lift.md):
-upstream promoted **b5783a6**, hidden **0.844675**; locally remeasured
-**0.798477**. Its deferred acceptance precedes the new final refinement.
+eliminate a greedy maximal independent set first, order the exact Schur complement
+with AMD / AMF / METIS; full-dev 0.804851 -> **0.798697** on `fb851f6`, 10/1
+improved/regressed, worst 0.978 -> 1.057 s (stage cost <= 0.25 s, METIS-bound).
 
 [0142: certified reuse and exact subset windows](experiments/0142-certified-reuse-window-dp.md):
 full-dev 0.804851 -> **0.804632**, 52/0 improved/regressed, worst local
-1.159 -> **1.027 s**, 101 active tests passed; **promoted 05685a47**, hidden
-**0.848556**, confirmed current leader.
+1.159 -> **1.027 s**, 101 active tests passed; remote validation pending.
 
 [Latest Codex residual-core revision](experiments/0075-residual-core-minfill.md)
 

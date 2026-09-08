@@ -4162,6 +4162,65 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // Terminal pivot descents (triple/four/five) on the *shipped* incumbent:
+    // same unrefined-replacement argument as simplicial/pair above, one level
+    // up. Triple/four/five currently run only pre-replacement (core polish at
+    // ~line 693/709, early terminal passes); any later replacement (reduce,
+    // PEO, MINL, transplant, FINAL_REFINE, late polish) ships without them.
+    // Strict exact admit → 0 worse. Same size class as FINAL_PAIR.
+    {
+        const FINAL_PIVOT_MAX_N: usize = 4_000;
+        const FINAL_PIVOT_MAX_NNZ: usize = 60_000;
+        if n >= 3 && n <= FINAL_PIVOT_MAX_N && nnz > 0 && nnz <= FINAL_PIVOT_MAX_NNZ {
+            if let Some(cand) = rgreedy::adjacent_five_descent(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                32_000_000,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+            if let Some(cand) = rgreedy::adjacent_four_descent(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                48_000_000,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+            if let Some(cand) = rgreedy::adjacent_triple_descent(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                4,
+                64_000_000,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
+    }
+
     best_perm
 }
 

@@ -174,3 +174,8 @@ round, so note the round if you know it.
 2026-09-08 | submitted **iter108b** `603ac76` validating (0.805234 / 1.003 / 62/3). Invent iter109 gate500k if need ([0134](experiments/0134-iter109-final-refine-500k.md)).
 
 2026-09-08 | invent iter110 on 108b: **0.804984** (−2.50 bip vs 108b) / 47/0 / worst 1.023s — chained FINAL_REFINE rebuild + terminal simp/pair. Ready on 603ac76 settle. iter109 500k micro abandoned.
+2026-09-07 | 68ec638 dev 0.806616 -> 0.806616 | hub-alpha 2nd objective re-test on new crown (same patch) | NEGATIVE, all 300 identical; mechanism absorbed, do not retry hub-alpha variants on this crown [our 0098 page in backup; upstream owns 0098+ numbers since 554cd51]
+2026-09-07 | e88316d dev 0.806560 -> 0.806560 | disagreement-gated MinFill pricing (probe-only, 419 admitted cores) | PRICE-FAILS, nothing shipped [our 0099 page in backup]
+2026-09-07 | c6b0311 dev 0.806243 -> **0.805858** (−3.85 bips) | A/B ablation (B-only −2.40, A-only −0.77, exactly additive) + mid-band K=4 in B's shape | **FAILED hidden 2 s cap** as f3eee2bd (cap kill ~95 s in, no score); reverted. Lesson: nnz caps bound entries, not wall time [our 0100 page in backup]
+2026-09-07 | c6b0311 dev 0.806243 -> 0.806243 | conditioned-K4 pricing (fires-only-after-K2) | PRICE-FAILS: 1 fire/300 rows, all-identical. Closed; reverted, no submit.
+2026-09-08 | d62adc3 dev 0.804984 -> **0.804905** (−0.79 bip) | terminal pivot descents 3/4/5 on shipped incumbent (jonathan's named next step from 4f0719d, unbuilt) | **SUBMITTED** as 69e39326 (+@jonathan308 coauthor) under user-authorized submit loop; 26 movers / 0 worse, halves −1.11/−0.42 same sign, worst ≤0.675 s local; validating.

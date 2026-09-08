@@ -4067,10 +4067,72 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
-        // iter148c NON-TICKET: no 145d ticket, no 146b rebuild.
-        // Retain tip leftovers: LT1K=1000, density SS, completion 4M only.
-        // iter148c: already stripped rebuild; ticket also removed (NON-TICKET family).
-        // Ultra-safe timing fallback if rebuild was the hidden bomb.
+        // iter149w: light ticket THEN rebuild in tight envelope (146b-shape, prefer-safer)
+        if (1_000..4_000).contains(&n) && nnz > 0 && nnz <= 14_000 {
+            let mut cfg_ch = subtree_cfg_for(n, nnz);
+            cfg_ch.round = 1;
+            cfg_ch.max_blocks = 24;
+            cfg_ch.min_s = 12;
+            cfg_ch.budget = 1_000_000;
+            cfg_ch.max_s = 192;
+            let mut candidate = base_cand.clone();
+            let improved = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut candidate,
+                &counts,
+                &parent,
+                cfg_ch,
+            );
+            if improved > 0 && is_bijection(&candidate, n) {
+                let f = score(&candidate);
+                if f < cur_flops {
+                    cur_flops = f;
+                    best_perm = candidate;
+                }
+            }
+        }
+        // iter149w: gain-cond tiny rebuild (149e) after optional ticket
+        if cur_flops < best_flops_before_final
+            && (1_000..4_000).contains(&n)
+            && nnz > 0
+            && nnz <= 14_000
+        {
+            let permuted2 = permute_pattern(&scoring_pat, &best_perm);
+            let etree2 = EliminationTree::from_pattern(&permuted2);
+            let post2 = etree2.postorder();
+            let base2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
+            let post_pat2 = permute_pattern(&scoring_pat, &base2);
+            let post_et2 = EliminationTree::from_pattern(&post_pat2);
+            let raw2 = column_counts_gnp(&post_pat2, &post_et2);
+            let counts2: Vec<u32> = raw2.into_iter().map(|c| c as u32).collect();
+            let parent2: Vec<i32> =
+                post_et2.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+            let mut cfg2 = subtree_cfg_for(n, nnz);
+            cfg2.round = 1;
+            cfg2.max_blocks = 16;
+            cfg2.min_s = 12;
+            cfg2.budget = 2_000_000;
+            cfg2.max_s = 192;
+            let mut cand2 = base2;
+            let improved2 = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut cand2,
+                &counts2,
+                &parent2,
+                cfg2,
+            );
+            if improved2 > 0 && is_bijection(&cand2, n) {
+                let f2 = score(&cand2);
+                if f2 < cur_flops {
+                    cur_flops = f2;
+                    best_perm = cand2;
+                }
+            }
+        }
         best_flops = best_flops.min(cur_flops);
 
         // iter110: chained rebuild round after a FINAL_REFINE win (refine_core shape).

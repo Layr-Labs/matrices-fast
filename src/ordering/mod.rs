@@ -4159,6 +4159,38 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     best_perm = cand;
                 }
             }
+            // iter114: lean four/five on ship — 1 round, 32M ops (111 failed timing at 128M×2).
+            {
+                const FINAL_PIVOT_OPS: i64 = 32_000_000;
+                if n >= 5 {
+                    if let Some(cand) = rgreedy::adjacent_five_descent(
+                        n,
+                        &pattern.col_ptr,
+                        &pattern.row_idx,
+                        &best_perm,
+                        FINAL_PIVOT_OPS,
+                    ) {
+                        let f = score(&cand);
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = cand;
+                        }
+                    }
+                }
+                if let Some(cand) = rgreedy::adjacent_four_descent(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    FINAL_PIVOT_OPS,
+                ) {
+                    let f = score(&cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
         }
     }
 

@@ -4258,9 +4258,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 4_000;
-        const FINAL_FIVE_MAX_NNZ: usize = 60_000;
-        const FINAL_FIVE_OPS: i64 = 32_000_000;
+        const FINAL_FIVE_MAX_N: usize = 6_500;
+        const FINAL_FIVE_MAX_NNZ: usize = 100_000;
+        // iter155a: wide five on indep_first tip
+        const FINAL_FIVE_OPS: i64 = 128_000_000;
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.
@@ -4289,7 +4290,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if best_flops < before_five && n <= LT1K {
+            if best_flops < before_five && n <= 3_000 {
                 if let Some(cand) = rgreedy::adjacent_five_descent(
                     n,
                     &pattern.col_ptr,

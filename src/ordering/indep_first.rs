@@ -260,7 +260,15 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
-    for cap in [usize::MAX, 9usize, 3usize] {
+    // iter156g: base caps always; extra 20/7 only on dense full patterns
+    // (gams05 needs them for Scotch Schur; lee4 sparse must not pay thread contention).
+    let dense_input = nnz >= 12 * n;
+    let caps: &[usize] = if dense_input {
+        &[usize::MAX, 20, 15, 9, 7, 5, 3]
+    } else {
+        &[usize::MAX, 15, 9, 5, 3]
+    };
+    for &cap in caps {
         let mut in_x = greedy_independent_set(sp, cap);
         budget_trim(sp, &mut in_x, max_pairs);
         let xs = in_x.iter().filter(|&&b| b).count();
@@ -300,7 +308,11 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
                     let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
                     feral_amf::amf_order_opts(&ccore, &o).ok()?.0
                 }
-                _ => feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok()?.0,
+                2 => feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok()?.0,
+                _ => {
+                    // iter156f: Scotch ND on dense-input Schur cores only
+                    feral_scotch::scotch_order(&ccore).ok()?
+                }
             };
             let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
             if !super::is_bijection(&cp, cn) {
@@ -326,12 +338,22 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         let dense = cnnz >= 20 * cn;
         let use_amf = cnnz <= GIANT_CORE_NNZ && !dense;
         let use_metis = cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ;
+        // iter156g: Scotch only when the FULL pattern is dense-ish (gams05 ~14.6
+        // nnz/n wins; lee4 ~6.8 nnz/n paid wall for zero score) AND the Schur
+        // core itself is dense enough. Prefer target ≤1.10.
+        let use_scotch = nnz >= 12 * n
+            && cnnz >= 8 * cn
+            && cn <= 16_000
+            && cnnz <= 300_000;
         let mut pass_ids: Vec<usize> = vec![0];
         if use_amf {
             pass_ids.push(1);
         }
         if use_metis {
             pass_ids.push(2);
+        }
+        if use_scotch {
+            pass_ids.push(3);
         }
         let mut best_here: Option<(u64, Vec<usize>)> = None;
         for k in pass_ids {

@@ -466,6 +466,15 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 5, &g_inf));
     }
+    // iter290a: extra first-colour caps on the gasprod early-accept band only.
+    // 274a shipped these WITH AmindNorm and hidden-failed; 276a isolated
+    // AmindNorm was thin 0.00%. Caps-only moved dt3 0.6919→0.6894 and does
+    // not touch lee4_09/10 (n<20k).
+    if n >= 20_000 && nnz <= 200_000 {
+        for &cap in &[6usize, 4, 2] {
+            candidates.push(greedy_independent_set(sp, cap));
+        }
+    }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
     for mut in_x in candidates {

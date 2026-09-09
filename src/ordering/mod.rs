@@ -3955,6 +3955,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
         best_flops = best_flops.min(cur_flops);
     }
+    // iter290a: snapshot so a second MINL can run on a NEW completion if
+    // FINAL_REFINE / late polish / subset-window strictly replace the incumbent.
+    // Tight n<=5k gate: 288a (n<=12k nnz<=70k) hidden-failed Benchmark on
+    // lee4_06-class; this hop keeps the 1k_10k leftover and stays off lee4/lee2.
+    let minl_exit_flops = best_flops;
     #[cfg(test)]
     parallel::phase_mark("15.minl", _tph, best_flops);
     #[cfg(test)]
@@ -4496,6 +4501,76 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         ) {
             if score(&candidate) < best_flops {
                 best_perm = candidate;
+            }
+        }
+    }
+
+    // iter290a: second MINL on the finished incumbent, only when a later stage
+    // produced a new completion the first MINL never saw. 288a used n<=12k
+    // nnz<=70k and hidden-failed Benchmark (lee4_06 in-gate, +114 ms). This
+    // hop tightens to n<=5k nnz<=50k: pooling_sppa0pq / chimera_selby /
+    // lee1_07 / ct3 stay in; lee4_06 (n=10429), lee2_06 (n=6418), mpbp_34
+    // stay out.
+    let finished = score(&best_perm);
+    if finished < minl_exit_flops
+        && n <= 5_000
+        && nnz <= 50_000
+        && n >= 16
+        && nnz > 0
+        && nnz < minl::MINL_MAX_NNZ
+        && !core_path_improved
+    {
+        let mut cur_flops = finished;
+        if let Some((cands, completed)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            minl::minl_candidates(&scoring_pat, &best_perm)
+        }))
+        .ok()
+        .flatten()
+        {
+            for cand in cands {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < cur_flops {
+                        cur_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+            if completed && cur_flops < finished && n <= SUBTREE_CHAIN_MAX_N {
+                let permuted_m = permute_pattern(&scoring_pat, &best_perm);
+                let etree_m = EliminationTree::from_pattern(&permuted_m);
+                let post_m = etree_m.postorder();
+                let mut candidate_m: Vec<usize> = post_m.iter().map(|&j| best_perm[j]).collect();
+                let post_pattern_m = permute_pattern(&scoring_pat, &candidate_m);
+                let post_etree_m = EliminationTree::from_pattern(&post_pattern_m);
+                let counts_m: Vec<u32> = column_counts_gnp(&post_pattern_m, &post_etree_m)
+                    .into_iter()
+                    .map(|c| c as u32)
+                    .collect();
+                let parent_m: Vec<i32> = post_etree_m
+                    .parent
+                    .iter()
+                    .map(|p| p.map_or(-1, |j| j as i32))
+                    .collect();
+                let mut cfg_m = subtree_cfg_for(n, nnz);
+                cfg_m.round = 5;
+                cfg_m.max_blocks = 32;
+                cfg_m.budget = MINL_SUBTREE_BUDGET;
+                let improved_m = rgreedy::subtree_refine(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &mut candidate_m,
+                    &counts_m,
+                    &parent_m,
+                    cfg_m,
+                );
+                if improved_m > 0 && is_bijection(&candidate_m, n) {
+                    let f = score(&candidate_m);
+                    if f < cur_flops {
+                        best_perm = candidate_m;
+                    }
+                }
             }
         }
     }

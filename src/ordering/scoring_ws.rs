@@ -397,10 +397,210 @@ impl ScoreWorkspace {
     }
 }
 
+/// One-entry exact cache for a single immutable scoring pattern. The owned
+/// workspace is never exposed mutably, so its inverse permutation, column
+/// counts, and elimination tree always belong to the cached score together.
+/// No permutation copy, hash, global state, or cross-pattern identity is used.
+pub(crate) struct FixedPatternScorer<'a> {
+    pattern: &'a ScoringPattern,
+    workspace: ScoreWorkspace,
+    last_flops: Option<u64>,
+    #[cfg(test)]
+    evaluations: usize,
+}
+
+impl<'a> FixedPatternScorer<'a> {
+    pub(crate) fn new(pattern: &'a ScoringPattern) -> Self {
+        Self {
+            pattern,
+            workspace: ScoreWorkspace::new(pattern.n, pattern.row_idx.len()),
+            last_flops: None,
+            #[cfg(test)]
+            evaluations: 0,
+        }
+    }
+
+    pub(crate) fn flops(&mut self, perm: &[usize]) -> u64 {
+        if let Some(flops) = self.last_flops {
+            let n = self.workspace.n;
+            // Probe the tail first, then fixed interior positions, to reject
+            // some long-prefix misses before walking the whole prefix. These
+            // checks only reject: every hit still needs the full exact proof.
+            // Short orders skip the extra probes.
+            if perm.len() == n
+                && (n < 8 || [n - 1, n / 2, n / 4, n - 1 - n / 4]
+                    .into_iter().all(|position| {
+                        self.workspace.inv_perm.get(perm[position]).copied()
+                            == Some(position as u32)
+                    }))
+                // Inverse entries identify the entire permutation exactly,
+                // including changes between all the sampled positions.
+                && perm.iter().enumerate().all(|(position, &vertex)| {
+                    self.workspace.inv_perm.get(vertex).copied() == Some(position as u32)
+                })
+            {
+                return flops;
+            }
+        }
+        // Invalidate before mutation, including if scoring unwinds.
+        self.last_flops = None;
+        #[cfg(test)]
+        { self.evaluations += 1; }
+        let flops = self.workspace.flops(self.pattern, perm);
+        self.last_flops = Some(flops);
+        flops
+    }
+
+    pub(crate) fn nnz_l(&self) -> u64 {
+        self.workspace.nnz_l()
+    }
+
+    /// A fill-free elimination reaches n + 3*edges + 2*triangles flops.
+    /// Equal scores attain the same optimum even if the permutations differ.
+    /// The caller supplies the edge count of this immutable simple pattern.
+    pub(crate) fn certifies_minimum(&self, flops: u64, edges: usize) -> bool {
+        self.last_flops == Some(flops)
+            && self.workspace.nnz_l() == (self.pattern.n + edges) as u64
+    }
+
+    pub(crate) fn probe_post(&self) -> &[u32] {
+        self.workspace.probe_post()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Pattern;
+
+    fn assert_cached_symbolic_state(
+        cached: &FixedPatternScorer<'_>,
+        expected: &ScoreWorkspace,
+    ) {
+        assert_eq!(cached.workspace.inv_perm, expected.inv_perm);
+        assert_eq!(cached.workspace.pcol_ptr, expected.pcol_ptr);
+        assert_eq!(cached.workspace.prow_idx, expected.prow_idx);
+        assert_eq!(cached.workspace.probe_parent(), expected.probe_parent());
+        assert_eq!(cached.workspace.probe_counts(), expected.probe_counts());
+        assert_eq!(cached.probe_post(), expected.probe_post());
+        assert_eq!(cached.nnz_l(), expected.nnz_l());
+    }
+
+    #[test]
+    fn last_exact_score_cache_preserves_tree_and_one_entry_semantics() {
+        // These path orderings have equal scores but different parent/post
+        // arrays. A score-only or stale-incumbent shortcut would be unsound.
+        let pattern = Pattern::from_edges(4, &[(0, 1), (1, 2), (2, 3)]);
+        let sp = scoring_pattern(&pattern);
+        let a = vec![0, 1, 2, 3];
+        let b = vec![0, 3, 1, 2];
+        let mut cached = FixedPatternScorer::new(&sp);
+        let mut expected = ScoreWorkspace::new(sp.n, sp.row_idx.len());
+        let mut first_parent = Vec::new();
+        let mut first_post = Vec::new();
+        for (step, perm) in [&a, &b, &a].into_iter().enumerate() {
+            let expected_flops = expected.flops(&sp, perm);
+            assert_eq!(expected_flops, super::super::flops_of(&sp, perm));
+            assert_eq!(expected_flops, 13);
+            assert_eq!(cached.flops(perm), expected_flops);
+            assert_eq!(cached.evaluations, step + 1, "changed order must miss");
+            assert_cached_symbolic_state(&cached, &expected);
+            if step == 0 {
+                first_parent = expected.probe_parent().to_vec();
+                first_post = expected.probe_post().to_vec();
+            } else if step == 1 {
+                assert_ne!(expected.probe_parent(), first_parent);
+                assert_ne!(expected.probe_post(), first_post);
+            }
+            // Equal contents in a distinct allocation must hit and preserve
+            // all caller-observable symbolic state without recomputing it.
+            let copy = perm.to_vec();
+            assert_eq!(cached.flops(&copy), expected_flops);
+            assert_eq!(cached.evaluations, step + 1, "exact repeat must hit");
+            assert_cached_symbolic_state(&cached, &expected);
+        }
+    }
+
+    #[test]
+    fn last_exact_score_cache_sample_collisions_still_require_full_match() {
+        let n = 17;
+        let edges: Vec<_> = (0..n - 1).map(|v| (v, v + 1)).collect();
+        let pattern = Pattern::from_edges(n, &edges);
+        let sp = scoring_pattern(&pattern);
+        let base: Vec<_> = (0..n).collect();
+        let mut collision = base.clone();
+        collision.swap(13, 14);
+        let samples = [n - 1, n / 2, n / 4, n - 1 - n / 4];
+        for position in samples {
+            assert_eq!(collision[position], base[position]);
+        }
+        // Both the sampled positions and a long prefix match, but this
+        // interior change introduces fill and must trigger a real score.
+        let mut cached = FixedPatternScorer::new(&sp);
+        let mut expected = ScoreWorkspace::new(n, sp.row_idx.len());
+        let base_flops = expected.flops(&sp, &base);
+        assert_eq!(cached.flops(&base), base_flops);
+        let collision_flops = expected.flops(&sp, &collision);
+        assert_ne!(collision_flops, base_flops);
+        assert_eq!(cached.flops(&collision), collision_flops);
+        assert_eq!(cached.evaluations, 2, "sample equality must not certify a hit");
+        assert_cached_symbolic_state(&cached, &expected);
+        assert_eq!(cached.flops(&collision.clone()), collision_flops);
+        assert_eq!(cached.evaluations, 2, "the full exact repeat must still hit");
+        assert_cached_symbolic_state(&cached, &expected);
+
+        // A tail probe rejects this miss directly, even though its true score
+        // equals the base score. Restore all symbolic state for the new order.
+        let mut tail_change = base.clone();
+        tail_change.swap(n - 3, n - 1);
+        assert_ne!(tail_change[n - 1], collision[n - 1]);
+        let tail_flops = expected.flops(&sp, &tail_change);
+        assert_eq!(tail_flops, base_flops);
+        assert_eq!(cached.flops(&tail_change), tail_flops);
+        assert_eq!(cached.evaluations, 3);
+        assert_cached_symbolic_state(&cached, &expected);
+        assert_eq!(cached.flops(&tail_change.clone()), tail_flops);
+        assert_eq!(cached.evaluations, 3);
+    }
+
+    #[test]
+    fn last_exact_score_cache_starts_empty_and_is_pattern_local() {
+        // Empty and singleton inverses can match before any scoring; None
+        // must still force the first real evaluation.
+        for n in [0, 1] {
+            let p = Pattern::from_edges(n, &[]);
+            let sp = scoring_pattern(&p);
+            let perm: Vec<_> = (0..n).collect();
+            let mut cached = FixedPatternScorer::new(&sp);
+            let mut expected = ScoreWorkspace::new(n, sp.row_idx.len());
+            let flops = expected.flops(&sp, &perm);
+            assert_eq!(cached.flops(&perm), flops);
+            assert_eq!(cached.evaluations, 1);
+            assert_cached_symbolic_state(&cached, &expected);
+            assert_eq!(cached.flops(&perm), flops);
+            assert_eq!(cached.evaluations, 1);
+        }
+
+        // Same dimensions, nnz, and permutation; different patterns/costs.
+        // Each wrapper is lifetime-bound to one immutable pattern.
+        let p = Pattern::from_edges(4, &[(0, 1), (1, 2), (2, 3)]);
+        let q = Pattern::from_edges(4, &[(0, 1), (0, 2), (0, 3)]);
+        let sp = scoring_pattern(&p);
+        let sq = scoring_pattern(&q);
+        assert_eq!(sp.row_idx.len(), sq.row_idx.len());
+        let mut a = FixedPatternScorer::new(&sp);
+        let mut b = FixedPatternScorer::new(&sq);
+        let perm = [0, 1, 2, 3];
+        assert_eq!(a.flops(&perm), 13);
+        assert_eq!(b.flops(&perm), 30);
+        assert_eq!(a.flops(&perm), 13);
+        assert_eq!(b.flops(&perm), 30);
+        assert_eq!(a.evaluations, 1);
+        assert_eq!(b.evaluations, 1);
+        let mut expected = ScoreWorkspace::new(sq.n, sq.row_idx.len());
+        assert_eq!(expected.flops(&sq, &perm), 30);
+        assert_cached_symbolic_state(&b, &expected);
+    }
 
     #[test]
     fn fill_free_certificate_exhaustive() {
@@ -418,13 +618,16 @@ mod tests {
             let lower_bound = (n + 3*edges.len() + 2*triangles) as u64;
             let pat = Pattern::from_edges(n, &edges);
             let sp = scoring_pattern(&pat);
-            let mut ws = ScoreWorkspace::new(n, pat.nnz());
+            let mut ws = FixedPatternScorer::new(&sp);
+            assert!(!ws.certifies_minimum(lower_bound, edges.len()));
             let mut perm: Vec<_> = (0..n).collect();
             loop {
                 let exact = super::super::flops_of(&sp, &perm);
                 assert!(exact >= lower_bound);
-                assert_eq!(ws.flops(&sp, &perm), exact);
-                if ws.nnz_l() == (n + edges.len()) as u64 {
+                assert_eq!(ws.flops(&perm), exact);
+                assert_eq!(ws.certifies_minimum(exact, edges.len()), ws.nnz_l() == (n + edges.len()) as u64);
+                assert!(!ws.certifies_minimum(exact + 1, edges.len()));
+                if ws.certifies_minimum(exact, edges.len()) {
                     assert_eq!(exact, lower_bound);
                     certificates += 1;
                 }

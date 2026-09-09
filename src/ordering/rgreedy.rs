@@ -40,7 +40,10 @@
 
 mod window_dp;
 mod window_signatures;
-pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step};
+pub(crate) use window_dp::{
+    subset_window_descent, subset_window_descent_step, subset_window_descent_neutral,
+    subset_window_descent_neutral_rolling, neutral_change_can_fit,
+};
 
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
     fn mul(words: &mut [u64; 6], factor: u64) {
@@ -273,6 +276,17 @@ impl<'a> Game<'a> {
 
     fn reset(&mut self) {
         self.adj.copy_from_slice(&self.adj0[..self.n * self.w]);
+        self.reset_metadata();
+    }
+
+    /// Only immediately after Game::new/new_partial: adjacency is already a
+    /// pristine copy. Retain the full reset charge while avoiding its second
+    /// identical copy. Later sweeps must use the ordinary reset.
+    fn reset_fresh(&mut self) {
+        self.reset_metadata();
+    }
+
+    fn reset_metadata(&mut self) {
         self.bhead.fill(-1);
         self.livelist.clear();
         self.deg.copy_from_slice(&self.deg0);
@@ -612,6 +626,40 @@ mod game_cpu_tests {
         assert_eq!(actual.cand, expected.cand);
         assert_eq!(actual.tmp, expected.tmp);
         assert_eq!(actual.ops, expected.ops);
+    }
+
+    #[test]
+    fn fresh_reset_matches_full_reset_and_preserves_work_charges() {
+        for n in [1usize, 6, 65, 257, 1603] {
+            let edges: Vec<_> = (0..n).flat_map(|v| {
+                [1usize, 3, 7].into_iter().filter_map(move |d| {
+                    (v + d < n).then_some((v, v + d))
+                })
+            }).collect();
+            let p = Pattern::from_edges(n, &edges);
+            let adj = Game::build_adj(n, &p.col_ptr, &p.row_idx).unwrap();
+            for nelim in [0, n / 2, n] {
+                let mut actual = Game::new_partial(n, &adj, nelim).unwrap();
+                let mut expected = Game::new_partial(n, &adj, nelim).unwrap();
+                actual.reset_fresh();
+                expected.reset();
+                same_state(&actual, &expected);
+                assert_eq!(actual.known_clique, expected.known_clique);
+                assert_eq!(actual.nonzero_words, expected.nonzero_words);
+                for v in (0..nelim).rev().take(32) {
+                    assert_eq!(actual.eliminate(v), expected.eliminate(v));
+                    same_state(&actual, &expected);
+                    assert_eq!(actual.known_clique, expected.known_clique);
+                    assert_eq!(actual.nonzero_words, expected.nonzero_words);
+                }
+                // A later reset must still restore mutated adjacency.
+                actual.reset();
+                expected.reset();
+                same_state(&actual, &expected);
+                assert_eq!(actual.known_clique, expected.known_clique);
+                assert_eq!(actual.nonzero_words, expected.nonzero_words);
+            }
+        }
     }
 
     fn check_sequence(p: &Pattern, nelim: usize, order: &[usize]) -> GameCpuStats {
@@ -1143,7 +1191,16 @@ pub(crate) fn search_with_nelim(
     rng_seed: u64,
     par: Params,
 ) -> Option<(Vec<usize>, u64)> {
-    let mut g = Game::new_partial(n, adj0, nelim)?;
+    search_with_nelim_spent(n, adj0, nelim, seed, seed_flops, budget, rng_seed, par).0
+}
+
+/// Return deterministic work even for searches that found no improvement.
+#[allow(clippy::too_many_arguments)]
+fn search_with_nelim_spent(
+    n: usize, adj0: &[u64], nelim: usize, seed: &[usize], seed_flops: u64,
+    budget: i64, rng_seed: u64, par: Params,
+) -> (Option<(Vec<usize>, u64)>, i64) {
+    let Some(mut g) = Game::new_partial(n, adj0, nelim) else { return (None, 0); };
     let mut rng = rng_seed | 1;
     let mut best = seed_flops;
     let mut best_ord: Vec<usize> = Vec::new();
@@ -1167,9 +1224,7 @@ pub(crate) fn search_with_nelim(
         .filter(|&i| par.pol_mask & (1 << i) != 0)
         .map(|i| POLICIES[i])
         .collect();
-    if pols.is_empty() {
-        return None;
-    }
+    if pols.is_empty() { return (None, 0); }
     // Total-ops ceiling: 1.25x the budget, so an over-long run can overshoot
     // by at most a quarter of the budget instead of by a whole run.
     let hard_cap = budget + budget / 4;
@@ -1291,11 +1346,12 @@ pub(crate) fn search_with_nelim(
         }
     }
 
-    if best < seed_flops && !best_ord.is_empty() {
+    let result = if best < seed_flops && !best_ord.is_empty() {
         Some((best_ord, best))
     } else {
         None
-    }
+    };
+    (result, g.ops)
 }
 
 /// The four parameter configurations the parallel fan-out runs, one per
@@ -2691,6 +2747,58 @@ pub(crate) fn subtree_refine(
     parent: &[i32],
     cfg: SubCfg,
 ) -> usize {
+    subtree_refine_impl(n, col_ptr, row_idx, perm, counts, parent, cfg, None).0
+}
+
+/// Reserve full trajectory hard caps in fixed block/stream rank order before
+/// dispatch, then refund unused work after joining. No scheduling decision can
+/// change ticket admission. Graph preparation is outside these search units.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn subtree_refine_limited(
+    n: usize, col_ptr: &[usize], row_idx: &[usize], perm: &mut [usize],
+    counts: &[u32], parent: &[i32], cfg: SubCfg, allowance: &mut i64,
+) -> usize {
+    if *allowance <= 0 || cfg.budget <= 0 { return 0; }
+    let (improved, spent) = subtree_refine_impl(
+        n, col_ptr, row_idx, perm, counts, parent, cfg, Some(*allowance),
+    );
+    *allowance = allowance.saturating_sub(spent);
+    improved
+}
+
+struct SubtreeReservations {
+    streams: Vec<usize>,
+    reserved: i64,
+    per_ticket: i64,
+}
+
+fn reserve_subtree_tickets(
+    eligible: &[bool], streams: usize, split_ranked_streams: bool,
+    budget: i64, allowance: i64,
+) -> SubtreeReservations {
+    let mut tickets = vec![0usize; eligible.len()];
+    let per_ticket = budget.checked_add(budget / 4).unwrap_or(0);
+    if budget <= 0 || per_ticket <= 0 || allowance <= 0 {
+        return SubtreeReservations { streams: tickets, reserved: 0, per_ticket: 0 };
+    }
+    let mut remaining = allowance;
+    for (rank, &can_run) in eligible.iter().enumerate() {
+        if !can_run { continue; }
+        let first = usize::from(split_ranked_streams && rank >= 32);
+        let wanted = streams.max(1).saturating_sub(first);
+        let accepted = ((remaining / per_ticket) as usize).min(wanted);
+        tickets[rank] = accepted;
+        remaining -= accepted as i64 * per_ticket;
+        if accepted < wanted { break; }
+    }
+    SubtreeReservations { streams: tickets, reserved: allowance - remaining, per_ticket }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn subtree_refine_impl(
+    n: usize, col_ptr: &[usize], row_idx: &[usize], perm: &mut [usize],
+    counts: &[u32], parent: &[i32], cfg: SubCfg, allowance: Option<i64>,
+) -> (usize, i64) {
     // Spend the ranked large-matrix budget on more D1 basins without adding
     // trajectories: 32 blocks get both streams and the next 64 get D1 only.
     let split_ranked_streams =
@@ -2757,9 +2865,22 @@ pub(crate) fn subtree_refine(
                 .map(|(a, b, _)| (a, b)),
         );
     }
-    if blocks.is_empty() {
-        return 0;
-    }
+    if blocks.is_empty() { return (0, 0); }
+
+    let reservations = allowance.map(|cap| {
+        // Only limited calls pay this bounded eligibility census. Oversized
+        // S-plus-boundary blocks do not consume tickets.
+        let mut local = vec![u32::MAX; n];
+        let mut touched = Vec::new();
+        let mut verts = Vec::new();
+        let eligible: Vec<bool> = blocks.iter().map(|&(a, b)| {
+            collect_subtree_vertices(col_ptr, row_idx, &perm[a..=b], cfg.max_sub,
+                &mut local, &mut touched, &mut verts)
+        }).collect();
+        reserve_subtree_tickets(&eligible, cfg.streams, split_ranked_streams, cfg.budget, cap)
+    });
+    if reservations.as_ref().is_some_and(|r| r.reserved == 0) { return (0, 0); }
+    let reservations_ro = reservations.as_ref();
 
     // ── search the blocks, in parallel over BLOCKS ──────────────────────────
     // Blocks are disjoint position ranges and each builds its own local
@@ -2772,7 +2893,13 @@ pub(crate) fn subtree_refine(
     let nthreads = 4.max(1).min(blocks.len());
     let perm_ro: &[usize] = perm;
     let blocks_ro: &[(usize, usize)] = &blocks;
-    let parts: Vec<Vec<(usize, Vec<usize>)>> = std::thread::scope(|sc| {
+    // A panicking worker cannot report actual work. Charge its full assigned
+    // reservation instead of refunding an unknown amount.
+    let fallback_spent: Vec<i64> = (0..nthreads).map(|t| {
+        reservations_ro.map_or(0, |r| (t..blocks.len()).step_by(nthreads)
+            .map(|rank| r.streams[rank] as i64 * r.per_ticket).sum())
+    }).collect();
+    let parts: Vec<(Vec<(usize, Vec<usize>)>, i64)> = std::thread::scope(|sc| {
         let handles: Vec<_> = (0..nthreads)
             .map(|t| {
                 sc.spawn(move || {
@@ -2780,6 +2907,7 @@ pub(crate) fn subtree_refine(
                     let mut touched: Vec<usize> = Vec::new();
                     let mut verts: Vec<usize> = Vec::new();
                     let mut got: Vec<(usize, Vec<usize>)> = Vec::new();
+                    let mut spent = 0i64;
                     let max_sub_bound = cfg.max_sub.min(MAX_N);
                     let max_adj_words = max_sub_bound.saturating_mul(max_sub_bound.div_ceil(64));
                     let mut adj0: Vec<u64> = vec![0u64; max_adj_words];
@@ -2789,6 +2917,11 @@ pub(crate) fn subtree_refine(
                         let (a, b) = blocks_ro[bi];
                         bi += nthreads;
                         let ssz = b + 1 - a;
+                        let first_stream = usize::from(split_ranked_streams && block_rank >= 32);
+                        let end_stream = reservations_ro.map_or(cfg.streams.max(1), |r| {
+                            first_stream + r.streams[block_rank]
+                        });
+                        if first_stream == end_stream { continue; }
                         if !collect_subtree_vertices(
                             col_ptr,
                             row_idx,
@@ -2834,9 +2967,7 @@ pub(crate) fn subtree_refine(
                             .sum();
                         let seed: Vec<usize> = (0..ssz).collect();
                         let mut best: Option<(Vec<usize>, u64)> = None;
-                        let first_stream =
-                            usize::from(split_ranked_streams && block_rank >= 32);
-                        for k in first_stream..cfg.streams.max(1) {
+                        for k in first_stream..end_stream {
                             // Keep the same two searches and uniform-prefix
                             // stream-1 policy, but use PEP's promoted second
                             // seed to sample an independent subtree basin.
@@ -2860,7 +2991,7 @@ pub(crate) fn subtree_refine(
                             {
                                 rng_seed ^= 0xE703_7ED1_A0B4_28DB;
                             }
-                            let r = search_with_nelim(
+                            let (r, used) = search_with_nelim_spent(
                                 m,
                                 &adj0[..needed],
                                 ssz,
@@ -2870,6 +3001,7 @@ pub(crate) fn subtree_refine(
                                 rng_seed,
                                 stream_params(k),
                             );
+                            spent = spent.saturating_add(used);
                             if let Some((o, f)) = r {
                                 if best.as_ref().is_none_or(|(_, bf)| f < *bf) {
                                     best = Some((o, f));
@@ -2882,24 +3014,26 @@ pub(crate) fn subtree_refine(
                             }
                         }
                     }
-                    got
+                    (got, spent)
                 })
             })
             .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().unwrap_or_default())
+        handles.into_iter().enumerate()
+            .map(|(t, h)| h.join().unwrap_or_else(|_| (Vec::new(), fallback_spent[t])))
             .collect()
     });
 
     let mut improved = 0usize;
-    for part in parts {
+    let mut spent = 0i64;
+    for (part, used) in parts {
+        spent = spent.saturating_add(used);
         for (a, ord) in part {
             perm[a..a + ord.len()].copy_from_slice(&ord);
             improved += 1;
         }
     }
-    improved
+    if let Some(r) = reservations { debug_assert!(spent <= r.reserved); }
+    (improved, spent)
 }
 
 /// Gating and budget for [`subtree_refine`].
@@ -3992,5 +4126,112 @@ mod five_window_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod late_subtree_allowance_tests {
+    use super::*;
+
+    #[test]
+    fn tickets_reserve_in_rank_order_and_count_every_stream() {
+        let r = reserve_subtree_tickets(&[false, true, true, true], 2, false, 100, 375);
+        assert_eq!(r.streams, vec![0, 2, 1, 0]);
+        assert_eq!(r.reserved, 375);
+        assert_eq!(r.per_ticket, 125);
+        let r = reserve_subtree_tickets(&vec![true; 96], 2, true, 100, 8_250);
+        assert!(r.streams[..32].iter().all(|&v| v == 2));
+        assert_eq!(&r.streams[32..35], &[1, 1, 0]);
+        assert!(r.streams[34..].iter().all(|&v| v == 0));
+        assert_eq!(r.reserved, 8_250);
+        for cap in [0, -1, 124] {
+            let r = reserve_subtree_tickets(&[true, true], 2, false, 100, cap);
+            assert_eq!(r.streams, vec![0, 0]);
+            assert_eq!(r.reserved, 0);
+        }
+        let r = reserve_subtree_tickets(&[true], 1, false, i64::MAX, i64::MAX);
+        assert_eq!(r.reserved, 0);
+    }
+
+    fn cliques() -> (crate::Pattern, Vec<u32>, Vec<i32>) {
+        let n = 24;
+        let edges: Vec<_> = (0..n).flat_map(|a| {
+            (a + 1..n).filter(move |&b| a / 6 == b / 6).map(move |b| (a, b))
+        }).collect();
+        let p = crate::Pattern::from_edges(n, &edges);
+        let counts = (0..n).map(|v| (6 - v % 6) as u32).collect();
+        let parent = (0..n).map(|v| if v % 6 == 5 { -1 } else { (v + 1) as i32 }).collect();
+        (p, counts, parent)
+    }
+
+    #[test]
+    fn no_gain_spends_work_and_refunds_unused_reservation_deterministically() {
+        let (p, counts, parent) = cliques();
+        let seed: Vec<_> = (0..p.n).collect();
+        let cfg = SubCfg {
+            min_s: 2, max_s: 3, max_sub: 6, max_blocks: 4,
+            budget: 10_000, streams: 2, rank_blocks: true, round: 0,
+        };
+        // Three full-cap tickets fit: two on the first eligible rank and one
+        // on the second. Every clique ordering is already optimal.
+        let initial = 37_500;
+        let mut observed = None;
+        for _ in 0..4 {
+            let mut perm = seed.clone();
+            let mut remaining = initial;
+            let changed = subtree_refine_limited(
+                p.n, &p.col_ptr, &p.row_idx, &mut perm, &counts, &parent, cfg, &mut remaining,
+            );
+            assert_eq!(changed, 0);
+            assert_eq!(perm, seed);
+            assert!(remaining > 0 && remaining < initial,
+                "no-gain work must be charged, and unused reservation refunded");
+            if let Some(previous) = observed { assert_eq!(remaining, previous); }
+            observed = Some(remaining);
+        }
+        let mut perm = seed.clone();
+        let mut empty = 0;
+        assert_eq!(subtree_refine_limited(
+            p.n, &p.col_ptr, &p.row_idx, &mut perm, &counts, &parent, cfg, &mut empty,
+        ), 0);
+        assert_eq!(empty, 0);
+        assert_eq!(perm, seed);
+
+        // Eligibility must be checked before any reservation. Every block has
+        // a six-vertex S-plus-boundary graph, so max_sub=5 rejects all four.
+        let mut tight_cfg = cfg;
+        tight_cfg.max_sub = 5;
+        let mut remaining = initial;
+        assert_eq!(subtree_refine_limited(
+            p.n, &p.col_ptr, &p.row_idx, &mut perm, &counts, &parent, tight_cfg, &mut remaining,
+        ), 0);
+        assert_eq!(remaining, initial);
+        assert_eq!(perm, seed);
+    }
+
+    #[test]
+    fn generous_allowance_preserves_original_subtree_results() {
+        let n = 32;
+        let edges: Vec<_> = (0..n).flat_map(|a| (a + 1..n)
+            .filter(move |&b| (a * 17 + b * 7) % 13 < 3).map(move |b| (a, b))).collect();
+        let p = crate::Pattern::from_edges(n, &edges);
+        let sp = super::super::ScoringPattern { n, col_ptr: p.col_ptr.clone(), row_idx: p.row_idx.clone() };
+        let et = super::super::EliminationTree::from_pattern(&sp);
+        let post = et.postorder();
+        let pp = super::super::permute_pattern(&sp, &post);
+        let pet = super::super::EliminationTree::from_pattern(&pp);
+        let counts: Vec<u32> = feral::symbolic::column_counts_gnp(&pp, &pet)
+            .into_iter().map(|x| x as u32).collect();
+        let parent: Vec<i32> = pet.parent.iter().map(|p| p.map_or(-1, |v| v as i32)).collect();
+        let cfg = SubCfg { min_s: 2, max_s: 12, max_sub: 32, max_blocks: 8,
+            budget: 100_000, streams: 2, rank_blocks: true, round: 0 };
+        let mut original = post.clone();
+        let expected = subtree_refine(n, &p.col_ptr, &p.row_idx, &mut original, &counts, &parent, cfg);
+        let mut limited = post;
+        let mut remaining = 2_000_000;
+        let actual = subtree_refine_limited(n, &p.col_ptr, &p.row_idx, &mut limited, &counts, &parent, cfg, &mut remaining);
+        assert_eq!(actual, expected);
+        assert_eq!(limited, original);
+        assert!(remaining >= 0);
     }
 }

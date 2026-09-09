@@ -1698,7 +1698,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         consider!(move || feral_kahip::kahip_order(&core));
     }
     flush!();
-    let part_extra2 = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
+    // iter572a: tight pe2 force on 475 tip (no 488 five widen) — CI-safer stack.
+    let part_extra2 = (n <= 4_000 && nnz <= 20_000)
+        || n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
 
     // METIS PARAMETER variants. Every METIS candidate above varies only the
     // amount of WORK (initial partitionings, FM passes); these vary the SHAPE of

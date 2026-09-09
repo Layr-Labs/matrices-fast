@@ -466,6 +466,15 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 5, &g_inf));
     }
+    // iter274a: extra first-colour caps on the gasprod early-accept band only.
+    // Census: popdynm200 g4/ddnsw 0.9562 vs shipped g3 0.9694; gabriel09
+    // g2/degsqrt 0.9234 vs shipped 0.9353. lee4_09/10 are n<20k — they do
+    // not pay these AMD walks.
+    if n >= 20_000 && nnz <= 200_000 {
+        for &cap in &[6usize, 4, 2] {
+            candidates.push(greedy_independent_set(sp, cap));
+        }
+    }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
     for mut in_x in candidates {
@@ -526,8 +535,14 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // died in that band.
     let metis_k = if nnz >= 300_000 { 2 } else { METIS_TOP_CORES };
     let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metis_k).any(|&j| j == i)).collect();
-    // iter273a: METRIC top-4 only on n<=16k (lee4_09 class); else top-3 — protect lee4_10 timing
-    let metric_k = if n <= 16_000 { 4 } else { METRIC_TOP_CORES };
+    // iter273a: METRIC top-4 on n<=16k (lee4_09). iter274a: also top-4 on the
+    // x-set band (n<=18k && nnz<=80k) so edgecross24-115's x9 core is walked;
+    // lee4_10 (nnz=120k) stays top-3.
+    let metric_k = if n <= 16_000 || (n <= 18_000 && nnz <= 80_000) {
+        4
+    } else {
+        METRIC_TOP_CORES
+    };
     let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metric_k).any(|&j| j == i)).collect();
 
     // Phase 2: the expensive passes on competitive cores, one flat task list.
@@ -549,6 +564,12 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             // iter265a RC: broader quotient-metric family (0145 census winners)
             for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
                 tasks.push((i, Pass::Metric(v)));
+            }
+            // iter274a: AmindNorm only on the x-set band. Census leftover:
+            // edgecross24-115 x9/amind 0.796 vs pipe 0.817 (portfolio-tied).
+            // lee4_09/10 (nnz>80k) do not pay this walk.
+            if n <= 18_000 && nnz <= 80_000 {
+                tasks.push((i, Pass::Metric(V::AmindNorm)));
             }
         }
     }

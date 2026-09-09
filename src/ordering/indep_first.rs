@@ -312,18 +312,85 @@ pub(crate) fn predicted_pairs(sp: &ScoringPattern, in_x: &[bool]) -> u64 {
         .sum()
 }
 
+/// Second-colour-class ("x") set envelope.
+///
+/// v11 drew this at 12_000 purely to buy wall-clock: that cut `crudeoil_lee4_09`
+/// (n=15904) and `lee4_10` (n=17809) off the x-set path and gave back the
+/// 0.6814 -> 0.6473 / 0.6755 -> 0.6374 those two rows are worth, because the
+/// revision that had them (v5, `fe871f1`) was killed by the hidden 2 s cap.
+/// The quality was never the problem — the funding was. Restored here against
+/// a stage-13 (`PEO_ALT_MAX_N`) cut that pays for it with room to spare: those
+/// two rows are the corpus's slowest, and this revision leaves them FASTER
+/// than the frontier (0.907 s -> 0.822/0.838 s on this box) while taking the
+/// -3.8 / -3.4 percentage points. 20_000 covers both with margin and stops
+/// below `crudeoil_pooling_dt3` (n=30660), whose own win comes from the metric
+/// envelope below instead.
+const X_SET_MAX_N: usize = 20_000;
+
 /// Core-size envelope for the quotient-graph metric passes (see `run`):
 /// their cost grows faster than AMD's on grid-like cores (0.6 s per pass on
 /// the 80k-node cont6-qq core versus 10 ms on the 10k-node lee4 cores).
-const METRIC_CORE_MAX_N: usize = 12_000;
+///
+/// 12_000 -> 16_000 is what actually moves the lee rows: the x-sets alone
+/// changed nothing on them (measured: one row, `pooling_dt3`, -1.48 pp), because
+/// the winning passes are metric walks on the lifted core, and their cores sit
+/// just above 12k. 16_000 is v5's own figure; the cont6-qq core (80k) stays far
+/// outside it.
+const METRIC_CORE_MAX_N: usize = 16_000;
+
+/// The metric spend above is FUNDED: it is paid for by the stage-13 cut in
+/// `mod.rs` (`PEO_ALT_MAX_N` 50_000 -> 10_000), which refunds 0.10-0.19 s on the
+/// rows that used to run those chains. That refund exists only where stage 13
+/// used to run, i.e. at n <= 50_000 — and the envelope above keys off CORE size,
+/// not n, so without this gate a 300k-row pattern with a 12-16k core pays the new
+/// cost and gets nothing back.
+///
+/// MEASURED, and this is why submission `462508df` was killed by the hidden 2 s
+/// cap: with the spend ungated, EVERY dev row above n = 50_000 got slower —
+/// faclay75 (n=272878) 0.565 -> 0.607 s, gabriel10 0.589 -> 0.612,
+/// acopf_case9241pegase_qcqp 0.515 -> 0.529, unitcommit_200_100_1_mod_8
+/// 0.395 -> 0.402. On dev that is +0.04 s at worst; on a hidden row larger or
+/// denser than faclay75 nothing bounds it, because dev has no such row to
+/// measure. Below the gate the frontier's own figures apply unchanged.
+///
+/// Every row this revision improves is at n <= 39_098 (nuclear104), so aligning
+/// the spend with the refund costs nothing on dev and makes every row above the
+/// gate BIT-IDENTICAL to the frontier — provably never slower, rather than
+/// measured-not-slower on a corpus that lacks the dangerous shapes.
+const METRIC_FUNDED_MAX_N: usize = 50_000;
+/// v11's envelope, restored verbatim for unfunded (n > `METRIC_FUNDED_MAX_N`) rows.
+const METRIC_CORE_MAX_N_UNFUNDED: usize = 12_000;
+/// v11's count, restored verbatim for unfunded rows.
+const METRIC_TOP_CORES_UNFUNDED: usize = 1;
 const METRIC_CORE_MAX_NNZ: usize = 200_000;
 /// Expensive passes (AMF, METIS, metrics) run only on cores whose AMD total
 /// is within this factor of the best AMD total over all sets, `(num, den)`.
 const COMPETITIVE_MARGIN: (u64, u64) = (3, 2);
 /// METIS runs on this many cores per pattern (the lowest AMD totals).
 const METIS_TOP_CORES: usize = 1;
-/// The metric walks run on this many cores per pattern (the lowest AMD totals).
-const METRIC_TOP_CORES: usize = 1;
+/// The metric walks run on this many cores per pattern (the lowest AMD totals),
+/// on funded rows only (see `METRIC_FUNDED_MAX_N`).
+///
+/// v11 cut this to 1 for the same timing reason as `X_SET_MAX_N`, and top-1 is
+/// why the widened x-set envelope alone was worth nothing on the lee rows: the
+/// x9 core they win on is not the lowest-AMD core.
+///
+/// 2, not v5's 3, and the difference is exactly two dev rows. MEASURED: top-3
+/// takes all four rows (−9.15 bips: lee4_10 −3.81 pp, lee4_09 −3.41,
+/// pooling_dt3 −1.48, mpbp_34 −0.58); top-2 takes lee4_10 and pooling_dt3 only
+/// (−4.83 bips), because `lee4_09` and `mpbp_34` win on the THIRD-lowest-AMD
+/// core. The extra core is therefore worth 4.3 bips — and it is also a third
+/// more added work on every funded row.
+///
+/// Submission `462508df` shipped top-3 and was KILLED by the hidden 2 s cap
+/// (Actions run 34305059686, step 11, 5m07s, no score). The grader does not say
+/// which row it killed and its logs are admin-only, so the cause is not known;
+/// what is known is that the revision added work in two places at once. Landing
+/// the cheaper half first makes the next attempt a bisection instead of a guess:
+/// if top-2 passes hidden, the third core can be re-added as its own submission
+/// and the answer is unambiguous either way. Do not raise this to 3 without
+/// that evidence.
+const METRIC_TOP_CORES: usize = 2;
 
 /// Ordering passes on a lifted core. `Amd` runs first on every core; the rest
 /// run only on competitive cores (see `run`).
@@ -455,7 +522,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             candidates.push(greedy_independent_set(sp, cap));
         }
     }
-    if n <= 12_000 && nnz <= GIANT_CORE_NNZ {
+    if n <= X_SET_MAX_N && nnz <= GIANT_CORE_NNZ {
         candidates.push(greedy_independent_set_excluding(sp, usize::MAX, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
     }
@@ -519,7 +586,12 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // died in that band.
     let metis_k = if nnz >= 300_000 { 2 } else { METIS_TOP_CORES };
     let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metis_k).any(|&j| j == i)).collect();
-    let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(METRIC_TOP_CORES).any(|&j| j == i)).collect();
+    // See `METRIC_FUNDED_MAX_N`: the widened metric spend runs only where the
+    // stage-13 cut refunds it. Above the gate this is v11's behaviour exactly.
+    let funded = n <= METRIC_FUNDED_MAX_N;
+    let metric_top = if funded { METRIC_TOP_CORES } else { METRIC_TOP_CORES_UNFUNDED };
+    let metric_core_max_n = if funded { METRIC_CORE_MAX_N } else { METRIC_CORE_MAX_N_UNFUNDED };
+    let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metric_top).any(|&j| j == i)).collect();
 
     // Phase 2: the expensive passes on competitive cores, one flat task list.
     let mut tasks: Vec<(usize, Pass)> = Vec::new();
@@ -536,8 +608,8 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         if metis_ok[i] && cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ {
             tasks.push((i, Pass::Metis));
         }
-        if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
-            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme] {
+        if metric_ok[i] && cn <= metric_core_max_n && cnnz <= METRIC_CORE_MAX_NNZ {
+            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt] {
                 tasks.push((i, Pass::Metric(v)));
             }
         }

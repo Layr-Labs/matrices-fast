@@ -1,3 +1,11 @@
+[0146: stage 13 funds the lee rows' metric cores](experiments/0146-stage13-funds-lee-metric-cores.md):
+the top-3 form (−9.15 bip) FAILED hidden timing as `462508df`; the retry at
+**0.795388** (−4.83 bip) fences the spend to n <= 50_000 (where the stage-13 cut
+refunds it) and uses metric top-2. Worst row **0.911x** the frontier (min-of-3).
+Stage prices: 9.reduce **+54.59 bip**, 3.search +3.52 (all lt_1k), 13.alt +0.19.
+Two traps recorded: phase marks report stale `best_flops` after stage 11, and
+single-run timings on this box carry ±0.18 s.
+
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so

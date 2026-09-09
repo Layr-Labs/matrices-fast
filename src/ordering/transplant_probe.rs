@@ -20,7 +20,9 @@ pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
 /// Production terminal cross-candidate subtree transplant with verification
 /// reservation (0090 screen). Strict-accept only; ledger-bounded; structural
 /// gates only. Donors are displaced portfolio orderings already retained.
-const TRANSPLANT_LEDGER: u64 = 250_000;
+// iter647a NEW BASE: larger ledger + finer widths; open sparse-large AMD-ties
+// (facility/transswitch class at ratio≈1) that tip's below-anchor gate skips.
+const TRANSPLANT_LEDGER: u64 = 1_000_000;
 
 pub(super) fn refine_with_donors(
     sp: &ScoringPattern,
@@ -36,9 +38,14 @@ pub(super) fn refine_with_donors(
     }
     let mut ws = scoring_ws::ScoreWorkspace::new(n, nnz);
     let inc_f = ws.flops(sp, incumbent);
-    // Prefer below-anchor rows: every 0090 winner sat there, and it cuts paid
-    // work without losing the measured gains.
-    if amd_flops > 0 && inc_f >= amd_flops {
+    let below = amd_flops > 0 && inc_f < amd_flops;
+    // Sparse-large near-AMD ties: tip skipped these (inc_f >= amd). Open them.
+    let sparse_large_tie = (15_000..120_000).contains(&n)
+        && (40_000..500_000).contains(&nnz)
+        && nnz <= 6 * n
+        && amd_flops > 0
+        && inc_f.saturating_mul(100) <= amd_flops.saturating_mul(101);
+    if !below && !sparse_large_tie {
         return None;
     }
     let donor_perms: Vec<&[usize]> = donors.iter().map(|(_, p)| p.as_slice()).collect();
@@ -83,7 +90,7 @@ fn transplant_pass(
     let mut best_f = inc_f;
     let mut best_perm = incumbent.to_vec();
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32] {
+    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
         let blks = blocks(&parent, 4, width.min(n));
         if blks.len() < 2 {
             continue;
@@ -195,7 +202,7 @@ fn terminal_pass(
     let mut scored_donors = 0usize;
     let mut stopped_partial = false;
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32] {
+    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
         let blocks = blocks(&parent, 4, width.min(n));
         if blocks.len() < 2 { continue; }
         let contribution: Vec<u64> = blocks.iter().map(|&(a, b)|

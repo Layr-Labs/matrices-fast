@@ -269,7 +269,7 @@ const INDEP_MIN_N: usize = 32;
 const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
 /// Immediate-acceptance margin at stage 1b as `(num, den)`: `f * den <= incumbent * num`.
-const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (3, 5);
+const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (19, 20); // iter218a: 5% early
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
 /// nnz cap for the THREE extra sweep-found AMF variants (α1/α16/α-1). The sweep

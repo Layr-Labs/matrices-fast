@@ -1,41 +1,9 @@
 //! Exact window search factored by connected components of the live graph.
 
-use super::window_signatures::{ChargeModel, SignatureEngine};
 use super::{Game, TripleWork};
 
-const MAX_WIDTH: usize = 14;
+const MAX_WIDTH: usize = 12;
 const MAX_DIMENSION: usize = super::MAX_N;
-
-#[cfg(test)]
-#[derive(Clone, Default)]
-struct WorkStats {
-    calls: [usize; 17],
-    completed: [usize; 17],
-    components: [usize; 17],
-    refused_components: usize,
-}
-
-#[cfg(test)]
-thread_local! {
-    static WORK_STATS: std::cell::RefCell<WorkStats> = std::cell::RefCell::new(WorkStats::default());
-}
-
-#[cfg(test)]
-struct WorkReport {
-    width: usize,
-    completed: bool,
-}
-
-#[cfg(test)]
-impl Drop for WorkReport {
-    fn drop(&mut self) {
-        WORK_STATS.with(|cell| {
-            let mut stats = cell.borrow_mut();
-            stats.calls[self.width] += 1;
-            stats.completed[self.width] += usize::from(self.completed);
-        });
-    }
-}
 
 fn solve_component(
     game: &Game<'_>,
@@ -51,12 +19,8 @@ fn solve_component(
             .saturating_add(24),
     );
     if !work.charge(cost) {
-        #[cfg(test)]
-        WORK_STATS.with(|cell| cell.borrow_mut().refused_components += 1);
         return None;
     }
-    #[cfg(test)]
-    WORK_STATS.with(|cell| cell.borrow_mut().components[k] += 1);
     let mut inside = vec![0u16; k];
     for (i, &v) in vertices.iter().enumerate() {
         for (j, &u) in vertices.iter().enumerate() {
@@ -140,13 +104,7 @@ fn solve_component(
     Some((order, best[states - 1], incumbent))
 }
 
-fn refine_window(
-    game: &Game<'_>,
-    window: &mut [usize],
-    work: &mut TripleWork,
-    engine: &mut Option<SignatureEngine>,
-    charge_model: ChargeModel,
-) -> Option<bool> {
+fn refine_window(game: &Game<'_>, window: &mut [usize], work: &mut TripleWork) -> Option<bool> {
     let k = window.len();
     if !work.charge(8 * k * k + 8 * k) {
         return None;
@@ -177,17 +135,7 @@ fn refine_window(
         }
         let positions: Vec<usize> = (0..k).filter(|&i| component & (1 << i) != 0).collect();
         let vertices: Vec<usize> = positions.iter().map(|&i| window[i]).collect();
-        let incident = vertices.iter().map(|&v| game.deg[v] as usize).sum();
-        let (union_cost, signature_cost) =
-            SignatureEngine::charge_costs(vertices.len(), game.w, incident);
-        let solution = if vertices.len() >= 5 && signature_cost < union_cost {
-            let engine = engine.get_or_insert_with(|| SignatureEngine::new(game.n));
-            engine.set_charge_model(charge_model);
-            engine.solve_component(game, &vertices, work)
-        } else {
-            solve_component(game, &vertices, work)
-        };
-        let Some((order, best, incumbent)) = solution else {
+        let Some((order, best, incumbent)) = solve_component(game, &vertices, work) else {
             return if changed { Some(true) } else { None };
         };
         if best < incumbent {
@@ -211,57 +159,9 @@ pub(crate) fn subset_window_descent(
     sweeps: usize,
     budget: i64,
 ) -> Option<Vec<usize>> {
-    subset_window_descent_config(
-        n,
-        col_ptr,
-        row_idx,
-        seed,
-        width,
-        sweeps,
-        (width / 2).max(1),
-        budget,
-        ChargeModel::UnionParity,
-    )
-}
-
-pub(crate) fn subset_window_descent_step(
-    n: usize,
-    col_ptr: &[usize],
-    row_idx: &[usize],
-    seed: &[usize],
-    width: usize,
-    sweeps: usize,
-    offset_step: usize,
-    budget: i64,
-) -> Option<Vec<usize>> {
-    subset_window_descent_config(
-        n,
-        col_ptr,
-        row_idx,
-        seed,
-        width,
-        sweeps,
-        offset_step,
-        budget,
-        ChargeModel::SignatureTrue,
-    )
-}
-
-fn subset_window_descent_config(
-    n: usize,
-    col_ptr: &[usize],
-    row_idx: &[usize],
-    seed: &[usize],
-    width: usize,
-    sweeps: usize,
-    offset_step: usize,
-    budget: i64,
-    charge_model: ChargeModel,
-) -> Option<Vec<usize>> {
     if n < 2
         || n > MAX_DIMENSION
         || !(2..=MAX_WIDTH).contains(&width)
-        || offset_step >= width
         || sweeps == 0
         || budget <= 0
         || seed.len() != n
@@ -269,11 +169,6 @@ fn subset_window_descent_config(
     {
         return None;
     }
-    #[cfg(test)]
-    let mut report = WorkReport {
-        width,
-        completed: false,
-    };
     let mut work = TripleWork { remaining: budget };
     if !work.charge(n + 1 + row_idx.len() + 2 * n)
         || col_ptr.first().copied() != Some(0)
@@ -297,7 +192,6 @@ fn subset_window_descent_config(
     }
     let pristine = Game::build_adj(n, col_ptr, row_idx)?;
     let mut game = Game::new(n, &pristine)?;
-    let mut engine = None;
     let mut current = seed.to_vec();
     let mut changed = false;
     for sweep in 0..sweeps {
@@ -305,7 +199,7 @@ fn subset_window_descent_config(
             return changed.then_some(current);
         }
         game.reset();
-        let offset = (sweep * offset_step) % width;
+        let offset = (sweep * (width / 2).max(1)) % width;
         for &v in current.iter().take(offset.min(n)) {
             if !work.eliminate(&mut game, v) {
                 return changed.then_some(current);
@@ -314,13 +208,7 @@ fn subset_window_descent_config(
         let mut start = offset;
         while start + 1 < n {
             let end = (start + width).min(n);
-            match refine_window(
-                &game,
-                &mut current[start..end],
-                &mut work,
-                &mut engine,
-                charge_model,
-            ) {
+            match refine_window(&game, &mut current[start..end], &mut work) {
                 Some(improved) => changed |= improved,
                 None => return changed.then_some(current),
             }
@@ -334,10 +222,6 @@ fn subset_window_descent_config(
             start = end;
         }
     }
-    #[cfg(test)]
-    {
-        report.completed = true;
-    }
     changed.then_some(current)
 }
 
@@ -345,115 +229,6 @@ fn subset_window_descent_config(
 mod tests {
     use super::*;
     use crate::Pattern;
-
-    #[test]
-    #[ignore]
-    fn probe_window_work() {
-        for (name, pattern) in crate::corpus::corpus() {
-            WORK_STATS.with(|cell| *cell.borrow_mut() = WorkStats::default());
-            let _ = super::super::window_signatures::take_probe_stats();
-            let permutation = crate::ordering::order(&pattern);
-            let flops = ssi_scoring::score(&pattern, &permutation).flops;
-            let stats = WORK_STATS.with(|cell| cell.borrow().clone());
-            let memo = super::super::window_signatures::take_probe_stats();
-            println!(
-                "SIGNATURE_MEMO\t{name}\t{}\t{}\t{}\t{}",
-                memo.probes, memo.hits, memo.inserted, memo.trivial,
-            );
-            println!(
-                "WINDOW_WORK\t{name}\t{}\t{}\t{flops}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:?}",
-                pattern.n,
-                pattern.nnz(),
-                stats.calls[8],
-                stats.completed[8],
-                stats.calls[10],
-                stats.completed[10],
-                stats.calls[12],
-                stats.completed[12],
-                stats.refused_components,
-                stats.components,
-            );
-        }
-    }
-
-    #[test]
-    #[ignore]
-    fn probe_next_windows() {
-        for (name, pattern) in crate::corpus::corpus() {
-            if pattern.n < 6 || pattern.n > MAX_DIMENSION || pattern.nnz() > 200_000 {
-                continue;
-            }
-
-            let incumbent = crate::ordering::order(&pattern);
-            let before = ssi_scoring::score(&pattern, &incumbent).flops;
-            for (width, sweeps, budget) in [
-                (12, 4, 64_000_000),
-                (14, 2, 48_000_000),
-                (14, 4, 96_000_000),
-            ] {
-                WORK_STATS.with(|cell| *cell.borrow_mut() = WorkStats::default());
-                let start = std::time::Instant::now();
-                let candidate = subset_window_descent(
-                    pattern.n,
-                    &pattern.col_ptr,
-                    &pattern.row_idx,
-                    &incumbent,
-                    width,
-                    sweeps,
-                    budget,
-                );
-                let seconds = start.elapsed().as_secs_f64();
-                let after = candidate
-                    .as_ref()
-                    .map_or(before, |p| ssi_scoring::score(&pattern, p).flops);
-                assert!(after <= before, "{name}: additional width {width}");
-                let completed = WORK_STATS.with(|cell| cell.borrow().completed[width]);
-                println!(
-                    "NEXT_WINDOW\t{name}\t{}\t{}\t{before}\t{after}\t{seconds:.6}\t{width}\t{sweeps}\t{budget}\t{completed}",
-                    pattern.n, pattern.nnz(),
-                );
-            }
-        }
-    }
-
-    #[test]
-    #[ignore]
-    fn probe_window_offsets() {
-        for (name, pattern) in crate::corpus::corpus() {
-            if pattern.n < 6 || pattern.n > MAX_DIMENSION || pattern.nnz() > 200_000 {
-                continue;
-            }
-            let incumbent = crate::ordering::order(&pattern);
-            let before = ssi_scoring::score(&pattern, &incumbent).flops;
-            for (width, step, budget) in [
-                (12, 1, 64_000_000),
-                (12, 5, 64_000_000),
-                (14, 1, 96_000_000),
-                (14, 5, 96_000_000),
-            ] {
-                let start = std::time::Instant::now();
-                let candidate = subset_window_descent_step(
-                    pattern.n,
-                    &pattern.col_ptr,
-                    &pattern.row_idx,
-                    &incumbent,
-                    width,
-                    4,
-                    step,
-                    budget,
-                );
-                let seconds = start.elapsed().as_secs_f64();
-                let after = candidate
-                    .as_ref()
-                    .map_or(before, |p| ssi_scoring::score(&pattern, p).flops);
-                assert!(after <= before, "{name}: offset {width}/{step}");
-                println!(
-                    "OFFSET_WINDOW\t{name}\t{}\t{}\t{before}\t{after}\t{seconds:.6}\t{width}\t{step}",
-                    pattern.n, pattern.nnz(),
-                );
-            }
-        }
-    }
 
     fn permutations(values: &mut [usize], i: usize, visit: &mut impl FnMut(&[usize])) {
         if i == values.len() {
@@ -520,27 +295,6 @@ mod tests {
                 .collect();
             verify_window(&Pattern::from_edges(4, &selected), &[], &[0, 1, 2, 3]);
         }
-    }
-
-    #[test]
-    fn window_dp_fourteen_pivots_preserves_ties_and_boundary_cost() {
-        let n = 17;
-        let edges: Vec<_> = (0..n)
-            .flat_map(|v| (v + 1..n).map(move |u| (v, u)))
-            .collect();
-        let p = Pattern::from_edges(n, &edges);
-        let pristine = Game::build_adj(n, &p.col_ptr, &p.row_idx).unwrap();
-        let mut game = Game::new(n, &pristine).unwrap();
-        game.reset();
-        game.eliminate(0);
-        let vertices: Vec<_> = (1..15).collect();
-        let mut work = TripleWork {
-            remaining: 10_000_000,
-        };
-        let (order, best, incumbent) = solve_component(&game, &vertices, &mut work).unwrap();
-        let expected: u64 = (3u64..=16).map(|c| c * c).sum();
-        assert_eq!((best, incumbent), (expected, expected));
-        assert_eq!(order, vertices);
     }
 
     #[test]
@@ -612,16 +366,10 @@ mod tests {
             1_000_000
         )
         .is_none());
-        assert!(subset_window_descent(
-            4,
-            &p.col_ptr,
-            &p.row_idx,
-            &[0, 1, 2, 3],
-            MAX_WIDTH + 1,
-            1,
-            1_000_000
-        )
-        .is_none());
+        assert!(
+            subset_window_descent(4, &p.col_ptr, &p.row_idx, &[0, 1, 2, 3], 13, 1, 1_000_000)
+                .is_none()
+        );
     }
 
     #[test]

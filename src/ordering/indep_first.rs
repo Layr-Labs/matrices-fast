@@ -122,6 +122,86 @@ pub(crate) fn greedy_independent_set(sp: &ScoringPattern, max_deg: usize) -> Vec
     in_x
 }
 
+/// Greedy maximal independent set by ascending predicted NEW FILL — the
+/// number of non-adjacent pairs in `N(v)` (exact for degree ≤ `exact_deg`,
+/// the all-pairs bound above it) — then `(degree, index)`. Eliminating a
+/// vertex whose neighbours are already mutually adjacent adds no edge to the
+/// Schur complement, so this prefers members that leave the core sparse
+/// rather than members that are merely cheap to eliminate.
+#[allow(dead_code)]
+pub(crate) fn fill_greedy_independent_set(sp: &ScoringPattern, max_deg: usize, exact_deg: usize) -> Vec<bool> {
+    let n = sp.n;
+    if n > u32::MAX as usize {
+        return vec![false; n];
+    }
+    let mut edges: EdgeSet = EdgeSet::with_capacity_and_hasher(sp.row_idx.len() / 2 + 16, Default::default());
+    for v in 0..n {
+        for &w in &sp.row_idx[sp.col_ptr[v]..sp.col_ptr[v + 1]] {
+            if w > v {
+                edges.insert(key(v as u32, w as u32));
+            }
+        }
+    }
+    let fill_of = |v: usize| -> u64 {
+        let nb = &sp.row_idx[sp.col_ptr[v]..sp.col_ptr[v + 1]];
+        let d = nb.len() as u64;
+        if nb.len() > exact_deg {
+            return d * d.saturating_sub(1) / 2;
+        }
+        let mut miss = 0u64;
+        for i in 0..nb.len() {
+            for j in (i + 1)..nb.len() {
+                if !edges.contains(&key(nb[i] as u32, nb[j] as u32)) {
+                    miss += 1;
+                }
+            }
+        }
+        miss
+    };
+    let mut keyed: Vec<(u64, usize, usize)> = (0..n)
+        .filter(|&v| sp.col_ptr[v + 1] - sp.col_ptr[v] <= max_deg)
+        .map(|v| (fill_of(v), sp.col_ptr[v + 1] - sp.col_ptr[v], v))
+        .collect();
+    keyed.sort_unstable();
+    let mut in_x = vec![false; n];
+    let mut blocked = vec![false; n];
+    for (_, _, v) in keyed {
+        if blocked[v] {
+            continue;
+        }
+        in_x[v] = true;
+        for &w in &sp.row_idx[sp.col_ptr[v]..sp.col_ptr[v + 1]] {
+            blocked[w] = true;
+        }
+    }
+    in_x
+}
+
+/// Greedy maximal independent set by ascending `(degree, index)` among the
+/// vertices NOT in `excluded` and not adjacent to any excluded vertex — the
+/// "second colour class" once `excluded` has been taken.
+pub(crate) fn greedy_independent_set_excluding(sp: &ScoringPattern, max_deg: usize, excluded: &[bool]) -> Vec<bool> {
+    let n = sp.n;
+    let mut order: Vec<usize> = (0..n).filter(|&v| !excluded[v]).collect();
+    order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
+    let mut in_x = vec![false; n];
+    let mut blocked = vec![false; n];
+    for v in order {
+        let d = sp.col_ptr[v + 1] - sp.col_ptr[v];
+        if d > max_deg {
+            break;
+        }
+        if blocked[v] {
+            continue;
+        }
+        in_x[v] = true;
+        for &w in &sp.row_idx[sp.col_ptr[v]..sp.col_ptr[v + 1]] {
+            blocked[w] = true;
+        }
+    }
+    in_x
+}
+
 /// Restrict a candidate independent set to its cheapest members: admit
 /// vertices in ascending `(degree, index)` while the clique-pair budget
 /// (Σ deg·(deg−1)/2) lasts. Hubs stay in the core, where they belong.
@@ -232,25 +312,114 @@ pub(crate) fn predicted_pairs(sp: &ScoringPattern, in_x: &[bool]) -> u64 {
         .sum()
 }
 
-/// Work-ledgered production driver. Tries the greedy maximal independent set
-/// at three degree caps (unbounded, 9, 3 — distinct Schur complements: the
-/// unbounded set is the whole-side / normal-equations route, the capped ones
-/// keep mid-degree vertices in the core), orders each exact core with AMD and
-/// AMF, ranks on the core, and returns the cheapest spliced ordering with its
-/// exact total. Every step is charged to `ledger` in edge-touch units, so the
-/// added time is bounded by structure alone: a set whose predicted pairs or
-/// core would exceed the remaining allowance is skipped, never started.
+/// Core-size envelope for the quotient-graph metric passes (see `run`):
+/// their cost grows faster than AMD's on grid-like cores (0.6 s per pass on
+/// the 80k-node cont6-qq core versus 10 ms on the 10k-node lee4 cores).
+const METRIC_CORE_MAX_N: usize = 16_000;
+const METRIC_CORE_MAX_NNZ: usize = 200_000;
+/// Expensive passes (AMF, METIS, metrics) run only on cores whose AMD total
+/// is within this factor of the best AMD total over all sets, `(num, den)`.
+const COMPETITIVE_MARGIN: (u64, u64) = (3, 2);
+/// METIS runs on this many cores per pattern (the lowest AMD totals).
+const METIS_TOP_CORES: usize = 2;
+/// The metric walks run on this many cores per pattern (the lowest AMD totals).
+const METRIC_TOP_CORES: usize = 3;
+
+/// Ordering passes on a lifted core. `Amd` runs first on every core; the rest
+/// run only on competitive cores (see `run`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pass {
+    Amd,
+    Amf,
+    Metis,
+    Metric(super::custom_metrics::ScoreVariant),
+}
+
+fn run_pass(ccore: &feral_ordering_core::CscPattern<'_>, pass: Pass) -> Option<Vec<i32>> {
+    match pass {
+        Pass::Amd => feral_amd::amd_order(ccore).ok(),
+        Pass::Amf => {
+            let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
+            feral_amf::amf_order_opts(ccore, &o).ok().map(|(p, ..)| p)
+        }
+        Pass::Metis => feral_metis::metis_order_full(ccore, &feral_metis::MetisOptions::default()).ok().map(|(p, ..)| p),
+        Pass::Metric(v) => super::custom_metrics::order_variant(ccore, 10.0, true, v).ok(),
+    }
+}
+
+/// Deterministic parallel map: `f(i)` for every `i < len` on up to
+/// `PAR_MAX_THREADS` scoped threads pulling indices from a shared counter;
+/// results are stored by index, so thread timing never reaches the output.
+fn par_map<T: Send>(len: usize, f: impl Fn(usize) -> T + Sync) -> Vec<Option<T>> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let mut out: Vec<Option<T>> = (0..len).map(|_| None).collect();
+    if len == 0 {
+        return out;
+    }
+    let nthreads = super::parallel::PAR_MAX_THREADS.min(len);
+    let next = AtomicUsize::new(0);
+    let slots: Vec<std::sync::Mutex<Option<T>>> = (0..len).map(|_| std::sync::Mutex::new(None)).collect();
+    std::thread::scope(|sc| {
+        for _ in 0..nthreads {
+            sc.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                if i >= len {
+                    break;
+                }
+                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(i))).ok();
+                if let Ok(mut g) = slots[i].lock() {
+                    *g = r;
+                }
+            });
+        }
+    });
+    for (i, slot) in slots.into_iter().enumerate() {
+        out[i] = slot.into_inner().ok().flatten();
+    }
+    out
+}
+
+/// A lifted core with its i32 CSC copy for the feral orderers.
+struct LiftedCore {
+    il: IndepLift,
+    core_pat: ScoringPattern,
+    ccp: Vec<i32>,
+    cri: Vec<i32>,
+}
+
+/// Work-ledgered production driver.
+///
+/// Sets: the greedy maximal independent set by `(degree, index)` at caps
+/// unbounded / 9 / 3 (the unbounded set is the whole-side / normal-equations
+/// route, the capped ones keep mid-degree vertices in the core) and the
+/// SECOND COLOUR CLASS — the greedy set among the vertices the unbounded set
+/// did not take, at caps unbounded / 9. On KKT patterns that is the other side
+/// of the bipartition, generalised to non-bipartite graphs; it is the set that
+/// exposes the crudeoil_lee family (lee4_06 0.660 -> 0.542).
+///
+/// Passes: AMD on every core first (one AMD-speed walk each, in parallel).
+/// Then, only on cores whose AMD total is within `COMPETITIVE_MARGIN` of the
+/// best — dense whole-side cores lose by 2-100x and never recover under any
+/// orderer — AMF (sparse non-giant cores), METIS (`METIS_CORE_*` envelope) and
+/// three quotient-graph metrics (`METRIC_CORE_*` envelope: DegDivNvSqrtWf,
+/// DegPlusDegme, DegSqrt — the ones that win on lifted cores; they beat
+/// minimum degree on the lee cores by 10-15 %). All passes are one flat task
+/// list on `PAR_MAX_THREADS` threads, ranked exactly on the core; the cheapest
+/// spliced ordering is returned with its exact total. Admission is charged to
+/// `ledger` in edge-touch units, so the added time is bounded by structure
+/// alone: a set whose predicted pairs or core would exceed the allowance is
+/// skipped, never started.
 pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    use super::custom_metrics::ScoreVariant as V;
     let n = sp.n;
     let nnz = sp.row_idx.len();
     if n < 32 || nnz == 0 {
         return None;
     }
-    // Admission is decided up front from the pattern alone: the sets run on
-    // their own threads, so each gets the whole ledger, and a set is trimmed
+    // Admission is decided up front from the pattern alone. A set is trimmed
     // (hubs back into the core) until its predicted lift + core work fits:
-    // lift ~ nnz + pairs, core ≤ nnz + 2·pairs, walked by two ordering passes
-    // and two exact scorings, i.e. 5·nnz + 9·pairs ≤ ledger. Two sets with
+    // lift ~ nnz + pairs, core ≤ nnz + 2·pairs, walked by the ordering passes
+    // and exact scorings, i.e. 5·nnz + 9·pairs ≤ ledger. Two sets with
     // identical size and pair sum are (in practice) the same set; the Schur
     // complement is not paid for twice.
     let share = ledger;
@@ -258,10 +427,21 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     if max_pairs == 0 {
         return None;
     }
+    let g_inf = greedy_independent_set(sp, usize::MAX);
+    let mut candidates: Vec<Vec<bool>> = vec![
+        greedy_independent_set(sp, 9),
+        greedy_independent_set(sp, 3),
+    ];
+    // The second colour class is a mid-size KKT phenomenon (hub side first);
+    // on giant patterns it only adds two more lifts and AMD walks.
+    if nnz <= GIANT_CORE_NNZ {
+        candidates.push(greedy_independent_set_excluding(sp, usize::MAX, &g_inf));
+        candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
+    }
+    candidates.insert(0, g_inf);
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
-    for cap in [usize::MAX, 9usize, 3usize] {
-        let mut in_x = greedy_independent_set(sp, cap);
+    for mut in_x in candidates {
         budget_trim(sp, &mut in_x, max_pairs);
         let xs = in_x.iter().filter(|&&b| b).count();
         if xs == 0 || xs == n {
@@ -283,8 +463,10 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         return None;
     }
     let max_core_edges = (share / 4) as usize;
-    let eval_set = |in_x: &[bool]| -> Option<(u64, Vec<usize>)> {
-        let il = lift(sp, in_x, max_core_edges)?;
+
+    // Phase 1: lift + AMD on every admitted set.
+    let phase1 = par_map(admitted.len(), |i| -> Option<(LiftedCore, u64, Vec<usize>)> {
+        let il = lift(sp, &admitted[i], max_core_edges)?;
         let cn = il.core_n();
         if cn < 2 || 4 * il.core_nnz() as u64 > share {
             return None;
@@ -292,79 +474,78 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         let core_pat = ScoringPattern { n: cn, col_ptr: il.core_col_ptr.clone(), row_idx: il.core_row_idx.clone() };
         let ccp: Vec<i32> = il.core_col_ptr.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>()?;
         let cri: Vec<i32> = il.core_row_idx.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>()?;
-        let run_pass = |k: usize| -> Option<(u64, Vec<usize>)> {
-            let ccore = feral_ordering_core::CscPattern::new(cn, &ccp, &cri)?;
-            let p: Vec<i32> = match k {
-                0 => feral_amd::amd_order(&ccore).ok()?,
-                1 => {
-                    let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
-                    feral_amf::amf_order_opts(&ccore, &o).ok()?.0
-                }
-                _ => feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok()?.0,
-            };
-            let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
-            if !super::is_bijection(&cp, cn) {
-                return None;
-            }
-            let f = super::flops_of(&core_pat, &cp);
-            Some((f, cp))
-        };
-        // Pass selection by core shape:
-        //  * AMD always (one AMD-speed walk).
-        //  * AMF only on sparse, non-giant cores: above `GIANT_CORE_NNZ` the
-        //    pass alone costs 0.15-0.3 s (cache misses; hub cores worse), and
-        //    on dense cores (nnz >= 20 n) it never beat AMD or METIS.
-        //  * METIS when the core is small enough in NODES: its cost tracks the
-        //    node count and hub structure, not nnz (measured: 12k-node /
-        //    872k-nnz pooling core 0.13 s; 138k-node faclay core 4.3 s; 200k-
-        //    node acopf core 1.1 s), so the gate is `cn <= 30k`, `nnz <= 1M`,
-        //    ~0.2 s worst. Nested dissection on the Schur complement is where
-        //    the family's largest wins are: arki0013 0.586 -> 0.439 (AMD/AMF on
-        //    the same core 0.62), pooling_sppc3pq 0.392 -> 0.283, sppc1pq
-        //    0.190 -> 0.168.
-        let cnnz = il.core_nnz();
-        let dense = cnnz >= 20 * cn;
-        let use_amf = cnnz <= GIANT_CORE_NNZ && !dense;
-        let use_metis = cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ;
-        let mut pass_ids: Vec<usize> = vec![0];
-        if use_amf {
-            pass_ids.push(1);
+        let ccore = feral_ordering_core::CscPattern::new(cn, &ccp, &cri)?;
+        let p = run_pass(&ccore, Pass::Amd)?;
+        let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+        if !super::is_bijection(&cp, cn) {
+            return None;
         }
-        if use_metis {
-            pass_ids.push(2);
-        }
-        let mut best_here: Option<(u64, Vec<usize>)> = None;
-        for k in pass_ids {
-            if let Some((f, cp)) = run_pass(k) {
-                let total = il.prefix_flops.saturating_add(f);
-                if best_here.as_ref().map_or(true, |(bf, _)| total < *bf) {
-                    best_here = Some((total, splice(&il, &cp)));
-                }
-            }
-        }
-        best_here
-    };
-    // One scoped thread per admitted set (at most three); results are merged
-    // by set index, so thread timing never reaches the output.
-    let results: Vec<Option<(u64, Vec<usize>)>> = std::thread::scope(|sc| {
-        let handles: Vec<_> = admitted
-            .iter()
-            .map(|in_x| {
-                let eval_set = &eval_set;
-                sc.spawn(move || {
-                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| eval_set(in_x))).ok().flatten()
-                })
-            })
-            .collect();
-        handles.into_iter().map(|h| h.join().ok().flatten()).collect()
+        let f = il.prefix_flops.saturating_add(super::flops_of(&core_pat, &cp));
+        Some((LiftedCore { il, core_pat, ccp, cri }, f, cp))
     });
-    let mut best: Option<(u64, Vec<usize>)> = None;
-    for r in results.into_iter().flatten() {
-        if best.as_ref().map_or(true, |(bf, _)| r.0 < *bf) {
-            best = Some(r);
+    let cores: Vec<(LiftedCore, u64, Vec<usize>)> = phase1.into_iter().flatten().flatten().collect();
+    if cores.is_empty() {
+        return None;
+    }
+    let best_amd = cores.iter().map(|c| c.1).min()?;
+    // METIS is the expensive pass (45-140 ms per core against ~10 ms for a
+    // metric walk); it runs on the two cores with the lowest AMD totals only.
+    // Every dev METIS win sits on one of those two (arki0013 cap-9, the
+    // pooling cap-inf / cap-9 pair); the third-best core never won.
+    let mut by_amd: Vec<usize> = (0..cores.len()).collect();
+    by_amd.sort_by_key(|&i| (cores[i].1, i));
+    let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(METIS_TOP_CORES).any(|&j| j == i)).collect();
+    let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(METRIC_TOP_CORES).any(|&j| j == i)).collect();
+
+    // Phase 2: the expensive passes on competitive cores, one flat task list.
+    let mut tasks: Vec<(usize, Pass)> = Vec::new();
+    for (i, (lc, amd_total, _)) in cores.iter().enumerate() {
+        if amd_total.saturating_mul(COMPETITIVE_MARGIN.1) > best_amd.saturating_mul(COMPETITIVE_MARGIN.0) {
+            continue;
+        }
+        let cn = lc.il.core_n();
+        let cnnz = lc.il.core_nnz();
+        let dense = cnnz >= 20 * cn;
+        if cnnz <= GIANT_CORE_NNZ && !dense {
+            tasks.push((i, Pass::Amf));
+        }
+        if metis_ok[i] && cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ {
+            tasks.push((i, Pass::Metis));
+        }
+        if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
+            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt] {
+                tasks.push((i, Pass::Metric(v)));
+            }
         }
     }
-    best
+    let phase2 = par_map(tasks.len(), |t| -> Option<(usize, u64, Vec<usize>)> {
+        let (i, pass) = tasks[t];
+        let lc = &cores[i].0;
+        let cn = lc.il.core_n();
+        let ccore = feral_ordering_core::CscPattern::new(cn, &lc.ccp, &lc.cri)?;
+        let p = run_pass(&ccore, pass)?;
+        let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+        if !super::is_bijection(&cp, cn) {
+            return None;
+        }
+        let f = lc.il.prefix_flops.saturating_add(super::flops_of(&lc.core_pat, &cp));
+        Some((i, f, cp))
+    });
+
+    // Rank: AMD results first (set order), then phase-2 results (task order).
+    let mut best: Option<(u64, usize, Vec<usize>)> = None;
+    for (i, (_, f, cp)) in cores.iter().enumerate() {
+        if best.as_ref().map_or(true, |(bf, _, _)| *f < *bf) {
+            best = Some((*f, i, cp.clone()));
+        }
+    }
+    for (i, f, cp) in phase2.into_iter().flatten().flatten() {
+        if best.as_ref().map_or(true, |(bf, _, _)| f < *bf) {
+            best = Some((f, i, cp));
+        }
+    }
+    let (f, i, cp) = best?;
+    Some((f, splice(&cores[i].0.il, &cp)))
 }
 
 /// prefix ++ core, mapped back to original ids.

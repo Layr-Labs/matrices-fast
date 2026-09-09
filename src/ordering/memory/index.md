@@ -1,3 +1,8 @@
+[0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
+on 691aad4 (hidden 0.844528), dev **0.798268 -> 0.795608**; crudeoil_lee4_06
+0.660 -> 0.504, lee4_09/10 -5 %, lee2_06 -9 %; lift adopted only if it beats
+the subtree-polished incumbent (mpbp_35 flip avoided); worst ~1.05-1.10 s.
+
 [0144: boundary signatures and final offsets](experiments/0144-boundary-signatures-offsets.md):
 on b5783a6, dev **0.798477 -> 0.798268**, 48/0 improved/regressed,
 118 active tests passed, official local run passed; remote pending.

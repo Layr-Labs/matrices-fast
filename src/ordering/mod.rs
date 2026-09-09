@@ -2464,7 +2464,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // iter265a RC: 235a + second-colour/metric expand (0145 family)
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
-                let gasprod_band = n >= 20_000;
+                let gasprod_band = n >= 15_000; // iter365a: earlier indep immediate
                 if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
@@ -2489,11 +2489,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     const PAIR_DESCENT_SWEEPS: usize = 4;
     const PAIR_DESCENT_OPS_BUDGET: i64 = 128_000_000;
     const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
-    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
+    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 64_000_000; // iter368a from 361a
 
+    // iter368a: stack mild pairdesc (keep max_deg) on gasband15k
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 30_000
+        && nnz <= 80_000
         && max_deg * 50 <= n;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0
@@ -2508,12 +2509,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     let medium_exact_gate;
 
     if pair_descent_gate {
+        let sweeps = if pair_descent_ext && n > PAIR_DESCENT_MAX_N { 6 } else { PAIR_DESCENT_SWEEPS };
         if let Some(cand) = rgreedy::adjacent_pair_descent(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,
             &best_perm,
-            PAIR_DESCENT_SWEEPS,
+            sweeps,
             pair_descent_ops_budget,
         ) {
             let f = score(&cand);

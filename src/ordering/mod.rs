@@ -199,7 +199,7 @@ const PEO_ALT_MAX_N: usize = 50_000;
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
 const MINL_SUBTREE_BUDGET: i64 = 8_000_000;
-const SUBTREE_CHAIN_MAX_N: usize = 45_000; // iter463a
+const SUBTREE_CHAIN_MAX_N: usize = 60_000; // iter477a: 45k→60k, one public row past the 463a cap
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 

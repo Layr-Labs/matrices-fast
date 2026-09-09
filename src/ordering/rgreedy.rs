@@ -40,7 +40,7 @@
 
 mod window_dp;
 mod window_signatures;
-pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step};
+pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step, TerminalAdjacency};
 
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
     fn mul(words: &mut [u64; 6], factor: u64) {
@@ -1700,6 +1700,8 @@ mod atomic_budget_tests {
 
 impl TripleWork {
     fn charge(&mut self, cost: usize) -> bool {
+        #[cfg(test)]
+        window_dp::terminal_charge(cost, self.remaining);
         let Ok(cost) = i64::try_from(cost) else {
             return false;
         };
@@ -1711,6 +1713,8 @@ impl TripleWork {
     }
 
     fn eliminate(&mut self, game: &mut Game<'_>, v: usize) -> bool {
+        #[cfg(test)]
+        window_dp::terminal_state("eliminate", game, &[v]);
         let cost = (game.deg[v] as usize + 1)
             .saturating_mul(3usize.saturating_mul(game.w).saturating_add(6))
             .saturating_add(24);
@@ -2465,6 +2469,8 @@ pub(crate) fn simplicial_promotion(
     }
     impl PrechargedBudget {
         fn charge(&mut self, cost: usize) -> bool {
+        #[cfg(test)]
+        window_dp::terminal_charge(cost, self.remaining);
             let Ok(cost) = i64::try_from(cost) else {
                 return false;
             };

@@ -180,6 +180,8 @@ fn refine_window(
         let incident = vertices.iter().map(|&v| game.deg[v] as usize).sum();
         let (union_cost, signature_cost) =
             SignatureEngine::charge_costs(vertices.len(), game.w, incident);
+        #[cfg(test)]
+        terminal_state("component", game, &vertices);
         let solution = if vertices.len() >= 5 && signature_cost < union_cost {
             let engine = engine.get_or_insert_with(|| SignatureEngine::new(game.n));
             engine.set_charge_model(charge_model);
@@ -187,6 +189,8 @@ fn refine_window(
         } else {
             solve_component(game, &vertices, work)
         };
+        #[cfg(test)]
+        terminal_component(vertices.len() >= 5 && signature_cost < union_cost, &vertices, &solution);
         let Some((order, best, incumbent)) = solution else {
             return if changed { Some(true) } else { None };
         };
@@ -247,6 +251,36 @@ pub(crate) fn subset_window_descent_step(
     )
 }
 
+/// Owns only the immutable input graph, never a working Game or signature memo.
+/// Binding the input borrows here prevents reuse for a different graph.
+pub(crate) struct TerminalAdjacency<'a> {
+    n: usize,
+    col_ptr: &'a [usize],
+    row_idx: &'a [usize],
+    pristine: Option<Vec<u64>>,
+}
+
+impl<'a> TerminalAdjacency<'a> {
+    pub(crate) fn new(n: usize, col_ptr: &'a [usize], row_idx: &'a [usize]) -> Self {
+        Self { n, col_ptr, row_idx, pristine: None }
+    }
+
+    pub(crate) fn parity(&mut self, seed: &[usize], width: usize, sweeps: usize,
+                         budget: i64) -> Option<Vec<usize>> {
+        subset_window_descent_owned(self.n, self.col_ptr, self.row_idx, seed,
+            width, sweeps, (width / 2).max(1), budget, ChargeModel::UnionParity,
+            &mut self.pristine, false)
+    }
+
+    // Consuming the owner makes the credited call terminal in its chain.
+    pub(crate) fn finish(mut self, seed: &[usize], width: usize, sweeps: usize,
+                         offset_step: usize, budget: i64) -> Option<Vec<usize>> {
+        subset_window_descent_owned(self.n, self.col_ptr, self.row_idx, seed,
+            width, sweeps, offset_step, budget, ChargeModel::SignatureTrue,
+            &mut self.pristine, true)
+    }
+}
+
 fn subset_window_descent_config(
     n: usize,
     col_ptr: &[usize],
@@ -257,6 +291,23 @@ fn subset_window_descent_config(
     offset_step: usize,
     budget: i64,
     charge_model: ChargeModel,
+) -> Option<Vec<usize>> {
+    subset_window_descent_owned(n, col_ptr, row_idx, seed, width, sweeps,
+        offset_step, budget, charge_model, &mut None, false)
+}
+
+fn subset_window_descent_owned(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    offset_step: usize,
+    budget: i64,
+    charge_model: ChargeModel,
+    owner: &mut Option<Vec<u64>>,
+    final_credit: bool,
 ) -> Option<Vec<usize>> {
     if n < 2
         || n > MAX_DIMENSION
@@ -292,15 +343,26 @@ fn subset_window_descent_config(
     }
     let words = n.div_ceil(64);
     let setup = 3 * n * words + 2 * row_idx.len() + 16 * n + words;
-    if !work.charge(setup) {
+    // The first three calls deliberately retain their full original charges.
+    // Only an actual final hit avoids (and credits) pristine zero-initialization.
+    let credit = if final_credit && owner.is_some() {
+        n.checked_mul(words)?
+    } else {
+        0
+    };
+    if !work.charge(setup.checked_sub(credit)?) {
         return None;
     }
-    let pristine = Game::build_adj(n, col_ptr, row_idx)?;
-    let mut game = Game::new(n, &pristine)?;
+    if owner.is_none() {
+        *owner = Some(Game::build_adj(n, col_ptr, row_idx)?);
+    }
+    let mut game = Game::new(n, owner.as_deref()?)?;
     let mut engine = None;
     let mut current = seed.to_vec();
     let mut changed = false;
     for sweep in 0..sweeps {
+        #[cfg(test)]
+        terminal_state("reset", &game, &current);
         if !work.charge(2 * n * words + 8 * n) {
             return changed.then_some(current);
         }
@@ -314,6 +376,8 @@ fn subset_window_descent_config(
         let mut start = offset;
         while start + 1 < n {
             let end = (start + width).min(n);
+            #[cfg(test)]
+            terminal_state("window", &game, &current);
             match refine_window(
                 &game,
                 &mut current[start..end],
@@ -683,5 +747,386 @@ mod tests {
                 pattern.nnz()
             );
         }
+    }
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum TerminalEvent {
+    Charge { cost: usize, remaining: i64, admitted: bool },
+    State { label: &'static str, vertices: Vec<usize>, adj: Vec<(usize, u64)>, deg: Vec<u32>,
+            live: Vec<u32>, pos: Vec<u32>, buckets: Vec<i32>, next: Vec<i32>,
+            prev: Vec<i32>, mind: usize, nlive: usize, ops: i64 },
+    Component { signature: bool, vertices: Vec<usize>, solution: Option<(Vec<usize>, u64, u64)> },
+}
+#[cfg(test)]
+thread_local! {
+    static TERMINAL_TRACE: std::cell::RefCell<Option<Vec<TerminalEvent>>> = const { std::cell::RefCell::new(None) };
+}
+#[cfg(test)]
+pub(super) fn terminal_charge(cost: usize, remaining: i64) {
+    TERMINAL_TRACE.with(|cell| {
+        if let Some(trace) = cell.borrow_mut().as_mut() {
+            trace.push(TerminalEvent::Charge { cost, remaining,
+                admitted: i64::try_from(cost).is_ok_and(|c| c <= remaining) });
+        }
+    });
+}
+#[cfg(test)]
+pub(super) fn terminal_state(label: &'static str, game: &Game<'_>, vertices: &[usize]) {
+    TERMINAL_TRACE.with(|cell| {
+        if let Some(trace) = cell.borrow_mut().as_mut() {
+            trace.push(TerminalEvent::State { label, vertices: vertices.to_vec(),
+                adj: game.adj.iter().copied().enumerate().filter(|(_, word)| *word != 0).collect(), deg: game.deg.clone(), live: game.livelist.clone(),
+                pos: game.pos.clone(), buckets: game.bhead.clone(), next: game.bnext.clone(),
+                prev: game.bprev.clone(), mind: game.mind, nlive: game.nlive, ops: game.ops });
+        }
+    });
+}
+#[cfg(test)]
+fn terminal_component(signature: bool, vertices: &[usize], solution: &Option<(Vec<usize>, u64, u64)>) {
+    TERMINAL_TRACE.with(|cell| {
+        if let Some(trace) = cell.borrow_mut().as_mut() {
+            trace.push(TerminalEvent::Component { signature, vertices: vertices.to_vec(), solution: solution.clone() });
+        }
+    });
+}
+
+#[cfg(test)]
+// Mechanically extracted from the pinned source; only test observation points added.
+fn original_pinned_config(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    offset_step: usize,
+    budget: i64,
+    charge_model: ChargeModel,
+) -> Option<Vec<usize>> {
+    if n < 2
+        || n > MAX_DIMENSION
+        || !(2..=MAX_WIDTH).contains(&width)
+        || offset_step >= width
+        || sweeps == 0
+        || budget <= 0
+        || seed.len() != n
+        || col_ptr.len() != n + 1
+    {
+        return None;
+    }
+    #[cfg(test)]
+    let mut report = WorkReport {
+        width,
+        completed: false,
+    };
+    let mut work = TripleWork { remaining: budget };
+    if !work.charge(n + 1 + row_idx.len() + 2 * n)
+        || col_ptr.first().copied() != Some(0)
+        || col_ptr.last().copied() != Some(row_idx.len())
+        || col_ptr.windows(2).any(|p| p[0] > p[1])
+        || row_idx.iter().any(|&v| v >= n)
+    {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    let words = n.div_ceil(64);
+    let setup = 3 * n * words + 2 * row_idx.len() + 16 * n + words;
+    if !work.charge(setup) {
+        return None;
+    }
+    let pristine = Game::build_adj(n, col_ptr, row_idx)?;
+    let mut game = Game::new(n, &pristine)?;
+    let mut engine = None;
+    let mut current = seed.to_vec();
+    let mut changed = false;
+    for sweep in 0..sweeps {
+        #[cfg(test)]
+        terminal_state("reset", &game, &current);
+        if !work.charge(2 * n * words + 8 * n) {
+            return changed.then_some(current);
+        }
+        game.reset();
+        let offset = (sweep * offset_step) % width;
+        for &v in current.iter().take(offset.min(n)) {
+            if !work.eliminate(&mut game, v) {
+                return changed.then_some(current);
+            }
+        }
+        let mut start = offset;
+        while start + 1 < n {
+            let end = (start + width).min(n);
+            #[cfg(test)]
+            terminal_state("window", &game, &current);
+            match refine_window(
+                &game,
+                &mut current[start..end],
+                &mut work,
+                &mut engine,
+                charge_model,
+            ) {
+                Some(improved) => changed |= improved,
+                None => return changed.then_some(current),
+            }
+            if end < n {
+                for &v in &current[start..end] {
+                    if !work.eliminate(&mut game, v) {
+                        return changed.then_some(current);
+                    }
+                }
+            }
+            start = end;
+        }
+    }
+    #[cfg(test)]
+    {
+        report.completed = true;
+    }
+    changed.then_some(current)
+}
+
+#[cfg(test)]
+mod implementation28_terminal_tests {
+    use super::*;
+    use crate::Pattern;
+    fn diagnostic(message: String) {
+        use std::io::Write;
+        writeln!(std::io::stdout(), "{message}").unwrap();
+    }
+
+    fn traced(f: impl FnOnce() -> Option<Vec<usize>>) -> (Option<Vec<usize>>, Vec<TerminalEvent>) {
+        TERMINAL_TRACE.with(|c| *c.borrow_mut() = Some(Vec::new()));
+        let result = f();
+        let events = TERMINAL_TRACE.with(|c| c.borrow_mut().take().unwrap());
+        (result, events)
+    }
+    fn original(p: &Pattern, seed: &[usize], width: usize, sweeps: usize, step: usize,
+                budget: i64, model: ChargeModel) -> Option<Vec<usize>> {
+        original_pinned_config(p.n, &p.col_ptr, &p.row_idx, seed, width, sweeps, step, budget, model)
+    }
+    fn exact(p: &Pattern, seed: &[usize], result: &Option<Vec<usize>>, trace: &[TerminalEvent]) -> (usize, usize, u64) {
+        let out = result.as_deref().unwrap_or(seed);
+        let mut sorted = out.to_vec(); sorted.sort_unstable();
+        assert_eq!(sorted, (0..p.n).collect::<Vec<_>>());
+        let before = ssi_scoring::score(p, seed).flops;
+        let after = ssi_scoring::score(p, out).flops;
+        let pristine = Game::build_adj(p.n, &p.col_ptr, &p.row_idx).unwrap();
+        let mut game = Game::new(p.n, &pristine).unwrap();
+        assert_eq!(before, game.replay_flops(seed));
+        assert_eq!(after, game.replay_flops(out));
+        let mut completed = 0; let mut refused = 0; let mut gain = 0;
+        for event in trace {
+            if let TerminalEvent::Component { solution, .. } = event {
+                if let Some((_, best, incumbent)) = solution {
+                    completed += 1;
+                    assert!(best <= incumbent);
+                    gain += incumbent - best;
+                } else { refused += 1; }
+            }
+        }
+        assert!(after <= before);
+        assert_eq!(before - after, gain, "sum of accepted component gains equals independent exact total delta");
+        (completed, refused, gain)
+    }
+    fn prefix(base: &[TerminalEvent], hit: &[TerminalEvent], credit: i64) {
+        let mut charges = 0;
+        for (i, b) in base.iter().enumerate() {
+            let mut h = hit.get(i).expect("lost funded baseline operation").clone();
+            if let TerminalEvent::Charge { cost, remaining, .. } = &mut h {
+                if charges == 1 { *cost += credit as usize; }
+                if charges > 1 { *remaining -= credit; }
+                charges += 1;
+            }
+            if let TerminalEvent::Charge { admitted: false, cost, remaining } = b {
+                if let TerminalEvent::Charge { cost: hc, remaining: hr, .. } = h {
+                    assert_eq!((*cost, *remaining), (hc, hr));
+                } else { panic!("different refusal operation"); }
+                return;
+            }
+            assert_eq!(b, &h, "trajectory divergence at event {i}");
+        }
+        assert_eq!(base.len(), hit.len(), "completed baseline must retain its schedule");
+    }
+    fn setup(p: &Pattern) -> i64 {
+        let n = p.n; let w = n.div_ceil(64);
+        (n + 1 + p.row_idx.len() + 2*n + 3*n*w + 2*p.row_idx.len() + 16*n + w) as i64
+    }
+    fn fixture(n: usize, kind: usize) -> Pattern {
+        let mut edges = Vec::new();
+        for v in 0..n {
+            if v % 12 == 0 || (kind == 0 && v % 12 == 6) {
+                for u in v+1..(v+6).min(n) { edges.push((v,u)); }
+            }
+            if kind == 1 && v+12 < n { edges.push((v,v+12)); }
+            if kind == 2 && v+1 < n { edges.push((v,v+1)); }
+        }
+        Pattern::from_edges(n, &edges)
+    }
+    #[test]
+    fn implementation28_lazy_validation_hit_miss() {
+        let p = fixture(65, 1); let seed: Vec<_> = (0..p.n).collect();
+        let mut owner = TerminalAdjacency::new(p.n, &p.col_ptr, &p.row_idx);
+        for budget in [0, 1, setup(&p)-1] {
+            assert!(owner.parity(&seed, 8, 2, budget).is_none());
+            assert!(owner.pristine.is_none());
+        }
+        let mut bad = seed.clone(); bad[1] = bad[0];
+        assert!(owner.parity(&bad, 8, 2, i64::MAX).is_none());
+        assert!(owner.pristine.is_none());
+        assert!(owner.parity(&seed, 8, 2, setup(&p)).is_none());
+        let ptr = owner.pristine.as_ref().unwrap().as_ptr();
+        for _ in 0..2 {
+            let _ = owner.parity(&seed, 12, 2, setup(&p));
+            assert_eq!(ptr, owner.pristine.as_ref().unwrap().as_ptr());
+        }
+        assert!(owner.parity(&bad, 8, 2, i64::MAX).is_none());
+        for budget in [1, setup(&p)-1, setup(&p), 100_000] {
+            let baseline = traced(|| original(&p, &seed, 12, 4, 5, budget, ChargeModel::SignatureTrue));
+            let miss = traced(|| TerminalAdjacency::new(p.n, &p.col_ptr, &p.row_idx).finish(&seed, 12, 4, 5, budget));
+            assert_eq!(baseline, miss, "miss must pay full setup");
+        }
+        for (n, cp, ri, s) in [
+            (4, vec![0], vec![], vec![0,1,2,3]),
+            (4, vec![0,0,2,1,2], vec![0,1], vec![0,1,2,3]),
+            (4, vec![0,0,0,0,1], vec![4], vec![0,1,2,3]),
+            (MAX_DIMENSION+1, vec![], vec![], vec![]),
+        ] {
+            let mut invalid = TerminalAdjacency::new(n, &cp, &ri);
+            assert!(invalid.parity(&s, 8, 2, i64::MAX).is_none());
+            assert!(invalid.pristine.is_none());
+        }
+    }
+    #[test]
+    fn implementation28_paired_terminal_trajectories() {
+        let mut extra = 0; let mut extra_gain = 0; let mut completions = [0;2]; let mut refusals = [0;2];
+        let mut branches = [false;2]; let mut partial = false;
+        for n in [24, 65, 257] {
+            for kind in 0..3 {
+                let p = fixture(n, kind);
+                for allowance in [0, 1, setup(&p)-1, setup(&p)+3000, 100_000, 1_000_000, 64_000_000] {
+                    let mut owner = TerminalAdjacency::new(n, &p.col_ptr, &p.row_idx);
+                    let mut seed: Vec<_> = (0..n).collect();
+                    for (width,budget) in [(8,16_000_000), (12,32_000_000), (10,24_000_000)] {
+                        let b = traced(|| original(&p, &seed, width, 2, width/2, budget, ChargeModel::UnionParity));
+                        let h = traced(|| owner.parity(&seed, width, 2, budget));
+                        assert_eq!(b,h, "first three charges, states, solves, and outputs");
+                        exact(&p, &seed, &h.0, &h.1);
+                        if let Some(next) = h.0 {
+                            if ssi_scoring::score(&p,&next).flops < ssi_scoring::score(&p,&seed).flops { seed=next; }
+                        }
+                    }
+                    let b = traced(|| original(&p, &seed, 12, 4, 5, allowance, ChargeModel::SignatureTrue));
+                    let h = traced(|| owner.finish(&seed, 12, 4, 5, allowance));
+                    let credit = (n*n.div_ceil(64)) as i64;
+                    prefix(&b.1, &h.1, credit);
+                    // Once validation/setup is admitted, exactly the credit explains
+                    // the entire extended run, not only its output or a prefix hash.
+                    if allowance >= setup(&p) {
+                        let extended = traced(|| original(&p, &seed, 12, 4, 5, allowance+credit, ChargeModel::SignatureTrue));
+                        assert_eq!(extended.0,h.0);
+                        let mut normalized = extended.1.clone(); let mut charges=0;
+                        for e in &mut normalized {
+                            if let TerminalEvent::Charge { cost, remaining, .. } = e {
+                                if charges < 2 { *remaining-=credit; }
+                                if charges == 1 { *cost-=credit as usize; }
+                                charges+=1;
+                            }
+                        }
+                        assert_eq!(normalized,h.1);
+                    }
+                    let bc = exact(&p,&seed,&b.0,&b.1); let hc = exact(&p,&seed,&h.0,&h.1);
+                    completions[0]+=bc.0; completions[1]+=hc.0;
+                    refusals[0]+=bc.1; refusals[1]+=hc.1;
+                    extra += hc.0.saturating_sub(bc.0);
+                    extra_gain += hc.2.saturating_sub(bc.2);
+                    assert!(hc.2 >= bc.2, "must preserve partial-window gains");
+                    for e in &h.1 {
+                        if let TerminalEvent::Component { signature, solution: Some(_), .. } = e { branches[usize::from(*signature)]=true; }
+                    }
+                    partial |= bc.1 > 0 && bc.2 > 0;
+                }
+            }
+        }
+        // Do not require a synthetic gain: counters describe actual executed work.
+        diagnostic(format!("implementation28 synthetic terminal completions={completions:?} refusals={refusals:?} extra={extra} extra_exact_gain={extra_gain} branches={branches:?} partial={partial}; public components unmeasured"));
+        assert!(branches[0]); // Signature arm is required separately below at cross-word scale.
+    }
+    #[test]
+    fn implementation28_signature_refusal_trajectory() {
+        let n: usize = 1729;
+        let edges: Vec<_> = [0, 6].into_iter().flat_map(|v| (v+1..v+6).map(move |u| (v,u))).collect();
+        let p=Pattern::from_edges(n,&edges); let seed: Vec<_>=(0..n).collect();
+        let w=n.div_ceil(64);
+        let (union,signature)=SignatureEngine::charge_costs(6,w,10);
+        assert!(signature<union);
+        let mut completed=[0usize;2]; let mut refused=[0usize;2]; let mut gains=[0u64;2];
+        for extra in [signature as i64-1, signature as i64+1] {
+            let budget=setup(&p)+(2*n*w+8*n+8*12*12+8*12) as i64+extra;
+            let mut owner=TerminalAdjacency::new(n,&p.col_ptr,&p.row_idx);
+            // The same full setup admission is used to warm the chain; these
+            // deliberately truncated calls leave the seed unchanged.
+            for width in [8,12,10] {
+                let b=traced(|| original(&p,&seed,width,2,width/2,setup(&p),ChargeModel::UnionParity));
+                let h=traced(|| owner.parity(&seed,width,2,setup(&p)));
+                assert_eq!(b,h);
+            }
+            let b=traced(|| original(&p,&seed,12,4,5,budget,ChargeModel::SignatureTrue));
+            let h=traced(|| owner.finish(&seed,12,4,5,budget));
+            prefix(&b.1,&h.1,(n*w) as i64);
+            let bc=exact(&p,&seed,&b.0,&b.1); let hc=exact(&p,&seed,&h.0,&h.1);
+            assert!(hc.2>=bc.2);
+            for (i,t) in [&b.1,&h.1].into_iter().enumerate() {
+                for e in t {
+                    if let TerminalEvent::Component {signature:true,solution,..}=e {
+                        if let Some((_,best,incumbent))=solution { completed[i]+=1; gains[i]+=incumbent-best; }
+                        else { refused[i]+=1; }
+                    }
+                }
+            }
+        }
+        diagnostic(format!("implementation28 signature synthetic completed={completed:?} refused={refused:?} exact_gains={gains:?}; not public-score evidence"));
+        assert!(completed[1]>0 && refused[0]>0);
+        assert!(gains[1]>=gains[0]);
+    }
+    #[test]
+    fn implementation28_refusal_boundaries_and_partial_gains() {
+        let mut extra=0; let mut improving=0; let mut partial=0; let mut counts=[0usize;4];
+        // Two star components in the same window: the first gain must survive a
+        // refusal in the second. Cross-word dimension selects both solver arms.
+        for n in [24,257] {
+            let p=fixture(n,0); let seed: Vec<_>=(0..n).collect();
+            let full=traced(|| original(&p,&seed,12,4,5,1_000_000,ChargeModel::SignatureTrue));
+            let mut spent=0i64; let mut boundaries=Vec::new();
+            for event in &full.1 {
+                if let TerminalEvent::Charge {cost,admitted:true,..}=event {
+                    spent+=*cost as i64;
+                    if spent>=setup(&p) { boundaries.push(spent-1); }
+                }
+            }
+            for budget in boundaries.into_iter().take(120) {
+                let mut owner=TerminalAdjacency::new(n,&p.col_ptr,&p.row_idx);
+                let _=owner.parity(&seed,8,2,setup(&p));
+                let b=traced(|| original(&p,&seed,12,4,5,budget,ChargeModel::SignatureTrue));
+                let h=traced(|| owner.finish(&seed,12,4,5,budget));
+                prefix(&b.1,&h.1,(n*n.div_ceil(64)) as i64);
+                let bc=exact(&p,&seed,&b.0,&b.1); let hc=exact(&p,&seed,&h.0,&h.1);
+                assert!(hc.2>=bc.2);
+                counts[0]+=bc.0; counts[1]+=hc.0; counts[2]+=bc.1; counts[3]+=hc.1;
+                extra+=hc.0.saturating_sub(bc.0); improving+=usize::from(hc.2>bc.2);
+                partial+=usize::from(bc.1>0 && bc.2>0);
+                let mut repeat=TerminalAdjacency::new(n,&p.col_ptr,&p.row_idx);
+                let _=repeat.parity(&seed,8,2,setup(&p));
+                assert_eq!(h,traced(|| repeat.finish(&seed,12,4,5,budget)));
+            }
+        }
+        diagnostic(format!("implementation28 synthetic boundary completed_base/hit refused_base/hit={counts:?} extra_components={extra} improving_runs={improving} retained_partial_runs={partial}; not public-score evidence"));
+        assert!(partial>0, "exercise partial-window return rather than only plumbing");
     }
 }

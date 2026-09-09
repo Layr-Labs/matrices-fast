@@ -1,3 +1,13 @@
+2026-09-09 | 62654a5 (647a tip) conditioned terminal re-transplant isolate (Scoreboard LOCKED 0210; mod.rs only; ledger 1M/widths/AMD-tie/FF128M intact) | SCORE **0.791908** (tip 0.792300, Δ−0.000392); **17/0**; WORST **1.518s** ≤ tip same-window 1.560s | **KEEP/SUBMIT** ([0210](experiments/0210-conditioned-terminal-retransplant.md))
+2026-09-09 | 62654a5 (647a tip) cascading width-ladder transplant (rebuild etree after width commit; TRANSPLANT_LEDGER stays 1M) | SCORE **0.792271** (tip 0.792300, Δ−0.000029); 13 better / **6 worse**; WORST **1.494s** (lee4_10) > tip same-machine 1.483s | **MISS/REVERTED** cascade restored; no yukon; STOP — next MINL upper-n/LNNZ ([0209](experiments/0209-cascading-width-transplant.md))
+
+2026-09-09 | 62654a5 (647a tip) late completion n-gate n≤1000/nnz≤20k→n≤2500/nnz≤40k | SCORE **0.792300** (=tip); 0/0 movers; WORST **1.472s** (lee4_09) >1.14 | **MISS/REVERTED** gate restored; no yukon; late n-gate null ([0208](experiments/0208-completion-ngate-late-2500.md))
+
+2026-09-09 | 62654a5 (647a tip) INDEP_WORK_LEDGER 8M→12M | SCORE **0.792360** (tip 0.792300, Δ+0.000060 worse); WORST **1.564s** (nuclear104; lee4_09 1.440 / lee4_10 1.435) >1.14 | **MISS/REVERTED** ledger→8M; no yukon; abandon INDEP_WORK deepen ([0207](experiments/0207-indep-work-ledger-12m.md))
+
+2026-09-09 | tip `62654a5` / 647a @ 0.843173 | **0206 conditioned CORE_MINFILL gate cn≤2000 nnz≤15k (ledger 16M)** | **MISS/REVERTED** SCORE 0.793107 (+0.000807 worse) WORST 1.476s (lee4_09; >1.14) — no yukon; gate restored 4k/30k; abandon minfill deepen → next 0207 INDEP_WORK 8→16M ([0206](experiments/0206-conditioned-core-minfill-half-gate.md))
+2026-09-09 | tip `62654a5` / 647a @ 0.843173 | **0205 CORE_MINFILL_LEDGER 16M→32M** | **MISS/REVERTED** SCORE 0.792300 (=tip) WORST 1.454s (lee4_09; >1.14) — no submit; ledger restored 16M; 647a stack intact ([0205](experiments/0205-core-minfill-ledger-32m.md))
+2026-09-09 | 0.793834 → **0.793789** (−0.000045) | 488a PAIR48M peel + SUBTREE150k (mid7–22/48k + FF14k/100k@192M + REDUCE120/250 + PAIR48M + SUBTREE150k) | **MISS/NO SUBMIT** (board→62654a5/647a @0.843173), 14/0, score bar miss; reverted; rebase done ([0204](experiments/0204-488a-pair48m-peel.md))
 
 ## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
 

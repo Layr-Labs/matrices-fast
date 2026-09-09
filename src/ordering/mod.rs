@@ -269,7 +269,15 @@ const INDEP_MIN_N: usize = 32;
 const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
 /// Immediate-acceptance margin at stage 1b as `(num, den)`: `f * den <= incumbent * num`.
-const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10); // iter230a: 10% early on tip
+/// Default 10 % matches 273a: lee2_06 (13 % lead) and gams05 (32 % lead) need
+/// subtree on the lift (0.7586 / 0.5276). A global 40 % floor (v17) restored
+/// lee4_06's 4b path (0.5044) but re-rolled those two and lost the local score.
+const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10);
+/// On mid-size x-set KKTs (lee4_06: n=10429, nnz=55k, 21 % lead) a 10 % 1b
+/// accept runs subtree on the lift and later stages convert worse (0.5044→0.5074).
+/// Hold unless the lift is ≥ 40 % under, so 4b still fires. lee2_06 (n=6.4k)
+/// and gams05 (n=17k, nnz=253k) sit outside this band.
+const INDEP_IMMEDIATE_HOLD: (u64, u64) = (3, 5);
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
 /// nnz cap for the THREE extra sweep-found AMF variants (α1/α16/α-1). The sweep
@@ -2449,13 +2457,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // lift that led the raw portfolio by 8 % ends 22 % behind; when it gains
     // little (crudeoil_lee4: 0.687 -> 0.682) the lift's lead is real and the
     // remaining stages polish the lift instead (lee4_06 0.542 -> 0.504).
-    // The one exception is an OVERWHELMING lead (INDEP_IMMEDIATE_MARGIN): the
-    // largest pure downstream gain measured on any dev row is 32 % (mpbp_34,
-    // mpbp_35, nuclear10a, gams05, ringpack_20_2), so a lift 40 % ahead cannot
-    // be overtaken and is adopted at once — that also spares the subtree stage
-    // its most expensive case, a poor incumbent on a dense KKT (pooling_sppc3pq:
-    // lift 0.283 against a 0.494 portfolio best, subtree on the old incumbent
-    // 0.15 s).
+    // The one exception is an OVERWHELMING lead (INDEP_IMMEDIATE_MARGIN, 10 %
+    // globally / 40 % on the mid x-set hold band): pooling_sppc3pq (0.283 vs
+    // 0.494) is adopted at once so subtree does not run on the poor incumbent.
+    // lee2_06 (13 %) and gams05 (32 %) also 1b-accept so subtree polishes the
+    // lift. lee4_06's 21 % lead is held for 4b — 1b+subtree-on-lift is 0.5074
+    // against 4b's 0.5044.
     let mut indep_deferred: Option<(u64, Vec<usize>)> = None;
     if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
@@ -2465,7 +2472,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
                 let gasprod_band = n >= 20_000;
-                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // x-set envelope is n<=18k && nnz<=80k; inside it, n>=10k is the
+                // band where subtree-on-lift fights transplant/minl (lee4_06).
+                let mid_xset_hold = (10_000..12_000).contains(&n) && nnz <= 80_000;
+                let (imm_num, imm_den) = if mid_xset_hold {
+                    INDEP_IMMEDIATE_HOLD
+                } else {
+                    INDEP_IMMEDIATE_MARGIN
+                };
+                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(imm_den) <= best_flops.saturating_mul(imm_num) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {

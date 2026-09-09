@@ -4501,6 +4501,39 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // VOL-RR terminal seat: ruin-recreate with greedy min-fill repair (new
+    // generator) on the FINISHED incumbent. Beyond-5-window escape via
+    // strided 16/32/64/128-windows (16 deterministic attempts, hill-climbed,
+    // best-of exact, strict admit). Terminal placement: everything upstream
+    // runs on crown-identical state, so no cascade starvation (the seat the
+    // mid-pipeline form paid for with a +33 regression). Safe band only
+    // (n<=1000, nnz<=60k); per-attempt op budget 4M.
+    if n > 32 && n <= 1_000 && nnz > 0 && nnz <= 60_000 {
+        let mut best_rr = best_perm.clone();
+        let mut best_rr_f = best_flops;
+        for attempt in 0..16 {
+            if let Some(cand) = rgreedy::ruin_window_reconstruct(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_rr,
+                attempt,
+                4_000_000,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_rr_f {
+                        best_rr_f = f;
+                        best_rr = cand;
+                    }
+                }
+            }
+        }
+        if best_rr_f < best_flops {
+            best_flops = best_rr_f;
+            best_perm = best_rr;
+        }
+    }
     best_perm
 }
 

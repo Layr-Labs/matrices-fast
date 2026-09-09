@@ -40,7 +40,10 @@
 
 mod window_dp;
 mod window_signatures;
-pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step};
+pub(crate) use window_dp::{
+    subset_window_descent, subset_window_descent_step, subset_window_descent_neutral,
+    subset_window_descent_neutral_rolling,
+};
 
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
     fn mul(words: &mut [u64; 6], factor: u64) {
@@ -273,6 +276,17 @@ impl<'a> Game<'a> {
 
     fn reset(&mut self) {
         self.adj.copy_from_slice(&self.adj0[..self.n * self.w]);
+        self.reset_metadata();
+    }
+
+    /// Only immediately after Game::new/new_partial: adjacency is already a
+    /// pristine copy. Retain the full reset charge while avoiding its second
+    /// identical copy. Later sweeps must use the ordinary reset.
+    fn reset_fresh(&mut self) {
+        self.reset_metadata();
+    }
+
+    fn reset_metadata(&mut self) {
         self.bhead.fill(-1);
         self.livelist.clear();
         self.deg.copy_from_slice(&self.deg0);
@@ -612,6 +626,40 @@ mod game_cpu_tests {
         assert_eq!(actual.cand, expected.cand);
         assert_eq!(actual.tmp, expected.tmp);
         assert_eq!(actual.ops, expected.ops);
+    }
+
+    #[test]
+    fn fresh_reset_matches_full_reset_and_preserves_work_charges() {
+        for n in [1usize, 6, 65, 257, 1603] {
+            let edges: Vec<_> = (0..n).flat_map(|v| {
+                [1usize, 3, 7].into_iter().filter_map(move |d| {
+                    (v + d < n).then_some((v, v + d))
+                })
+            }).collect();
+            let p = Pattern::from_edges(n, &edges);
+            let adj = Game::build_adj(n, &p.col_ptr, &p.row_idx).unwrap();
+            for nelim in [0, n / 2, n] {
+                let mut actual = Game::new_partial(n, &adj, nelim).unwrap();
+                let mut expected = Game::new_partial(n, &adj, nelim).unwrap();
+                actual.reset_fresh();
+                expected.reset();
+                same_state(&actual, &expected);
+                assert_eq!(actual.known_clique, expected.known_clique);
+                assert_eq!(actual.nonzero_words, expected.nonzero_words);
+                for v in (0..nelim).rev().take(32) {
+                    assert_eq!(actual.eliminate(v), expected.eliminate(v));
+                    same_state(&actual, &expected);
+                    assert_eq!(actual.known_clique, expected.known_clique);
+                    assert_eq!(actual.nonzero_words, expected.nonzero_words);
+                }
+                // A later reset must still restore mutated adjacency.
+                actual.reset();
+                expected.reset();
+                same_state(&actual, &expected);
+                assert_eq!(actual.known_clique, expected.known_clique);
+                assert_eq!(actual.nonzero_words, expected.nonzero_words);
+            }
+        }
     }
 
     fn check_sequence(p: &Pattern, nelim: usize, order: &[usize]) -> GameCpuStats {

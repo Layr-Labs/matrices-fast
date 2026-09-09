@@ -170,6 +170,67 @@ fn replay(sp: &ScoringPattern, cap: &Captured, seeds: &[Vec<usize>], name: &str)
     (leader_flops, spend)
 }
 
+/// Check saved-score custody at the two late boundaries using the existing
+/// permutation capture and phase ledger. The oracle scores the captured
+/// permutation itself; it does not pin an expected ordering or corpus score.
+#[test]
+fn late_phase_scores_match_their_incumbents() {
+    struct CaptureGuard(bool);
+    impl Drop for CaptureGuard {
+        fn drop(&mut self) {
+            ACTIVE.with(|a| a.set(self.0));
+            reset();
+            let _ = parallel::phase_take();
+        }
+    }
+
+    // A self-contained non-chordal grid-like graph plus two bounded public
+    // regression fixtures exercising the alternate-completion path.
+    let n = 64;
+    let edges: Vec<_> = (0..n)
+        .flat_map(|v| [(v, (v + 1) % n), (v, (v + 8) % n)])
+        .collect();
+    let mut fixtures = vec![("circulant_grid_64".to_string(), Pattern::from_edges(n, &edges))];
+    fixtures.extend(crate::corpus::corpus().into_iter().filter(|(name, _)| {
+        matches!(name.as_str(), "mpbp_34" | "mpbp_35")
+    }));
+    assert_eq!(fixtures.len(), 3, "both public regression fixtures must be present");
+
+    for (name, pat) in fixtures {
+        let (result, cap, marks) = {
+            reset();
+            let _ = parallel::phase_take();
+            let _capture = CaptureGuard(ACTIVE.with(|a| a.replace(true)));
+            let result = order(&pat);
+            let cap = CAPTURED.with(|c| c.borrow_mut().take())
+                .expect("non-chordal fixture must reach the captured late boundary");
+            let marks = parallel::phase_take();
+            (result, cap, marks)
+        };
+        let sp = scoring_pattern(&pat);
+        let recorded = |label: &str| {
+            marks.iter().find(|(phase, _, _)| *phase == label)
+                .map(|(_, _, score)| *score)
+                .unwrap_or_else(|| panic!("{name}: missing phase {label}"))
+        };
+        let before_alt = flops_of(&sp, &cap.incumbent);
+        assert_eq!(recorded("12.peo"), before_alt,
+            "{name}: saved score must match the incumbent after terminal PEO");
+
+        // replay() implements the shared ledger and strict acceptance, but
+        // predates the outer size/danger gate. These fixtures must reach it.
+        assert!(cap.n <= PEO_ALT_MAX_N);
+        assert!(!((3_000..8_000).contains(&cap.n) && cap.nnz >= 9_000));
+        let seeds: Vec<_> = cap.shipped.iter().map(|(_, p)| p.clone()).collect();
+        let (after_alt, _) = replay(&sp, &cap, &seeds, &name);
+        assert_eq!(recorded("13.alt"), after_alt,
+            "{name}: saved score must match the incumbent after alternate PEO");
+        assert!(is_bijection(&result, pat.n), "{name}: returned permutation");
+        assert!(flops_of(&sp, &result) <= after_alt,
+            "{name}: later phases must preserve the actual alternate incumbent");
+    }
+}
+
 #[test]
 #[ignore]
 fn probe_alt_seed_lineage() {

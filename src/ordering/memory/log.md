@@ -1,3 +1,17 @@
+## 2026-09-09 — 0191 dens≤4 else seed on 0190 mid hole
+- Restack 0189 dens≤4 tip-4 else 50M seed (`0x6A09`) on kept 0190 package; 100M D1B5 unchanged; mid_k4 hole untouched.
+- Local **0.793589** (−0.000023) vs 0.793612; **2/0** (mpbp_46, rsyn0840m02m); uncapped worst **1.473s** ≤0190 1.511s (`/tmp/yukon-run-0191.log`, `/tmp/probe-timing-0191.log`).
+- **Reverted** 0191 seed; leave 0190. `4e4a7f6` **rejected** official **0.84349** (0.00%). No submit. ([0191](experiments/0191-0190-plus-dens4-seed.md))
+
+
+## 2026-09-09 — 0190 mid K4 dens≥4.5 + 110k–150k nnz hole
+
+- Locked scoreboard **0190**. Stopped 0189 restack until mid package is timing-safe.
+- Timing A/B tip vs 0188: tip WORST 1.509s / 0188 WORST 1.518s (probe clock ≠ crown ~1.115s). nuclear104 tip→0188 wall delta treated as noise (bit-identical flops; nnz outside mid).
+- Edit on 0188 package: `mid_k4 = dens≥4.5 && (nnz≥150k || nnz≤110k)` so nuclear10a + popdynm200 stay K4; lee4_10 (120632) stays K2. One mid depth, work_cap=nnz.
+- One local yukon running (`/tmp/yukon-run-0190.log`). Keep bar: >1 mover, beat 0.793834, 0 worse, same-machine uncapped probe worst ≤ tip.
+
+- Yukon **0.793612** (2/0 vs tip). Same-machine uncapped probe tip WORST 1.654s / 0190 WORST 1.511s → timing-safe KEEP. Submitted `4e4a7f6c` validating (no 0189 restack yet).
 
 ## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
 
@@ -186,3 +200,50 @@ round, so note the round if you know it.
 2026-09-08 | **0.798268 -> 0.795608** (−26.6 bip), gt_10k 0.7144 -> 0.6935 | independent-set-first lift v5: second-colour-class sets (x-inf, x9), DegDivNvSqrtWf/DegPlusDegme/DegSqrt metric passes on ≤16k-node cores, METIS on the two lowest-AMD cores, flat deterministic task pool; acceptance moved to after the subtree stage (strict), immediate only at ≥ 40 % lead | **7 better / 3 worse** (methanol400 +0.8 %, gasprod +0.7 %, graphpart +0.1 %), worst 1.055-1.095 s on this box (tip 1.040) ([0145](experiments/0145-second-colour-class-metric-cores.md)).
 
 2026-09-09 | fe871f1 **FAILED hidden Benchmark** (actions 34297482026, ~5 min, step 11). Local worst 1.055–1.126 s sat in the same band as 176a/173a timing deaths. v11 on 4d6d3d0: x-sets n≤12k, drop DegSqrt, METIS/metrics top-1 except nnz≥300k, extra 180a caps off giant-dense | probe **0.795871**, worst **1.026 s** (under tip 1.040); lee4_06 0.504 kept; pooling 0.282 restored; gams05 0.530, gabriel09 0.913 ([0145](experiments/0145-second-colour-class-metric-cores.md)).
+2026-09-09 | 0.793834 → **0.793827** (−0.000007) | first-round subtree chain replaces late PEO-large on 45k < n ≤ 150k, nnz < 1.2M | **KEEP, not submitted** — 3 n>45k better / 0 worse (cont6-qq, transswitch2736spr, transswitch2383wpr); delta under 0.0001 ([0163](experiments/0163-subtree-chain-past-45k.md))
+
+2026-09-09 | 0164 pending | iter74 late polish replaced by the same sequential streams on the shipped degree<=3 residual core (n<3k, nnz<=12k, real shrink only); not additive ([0164](experiments/0164-late-phase-on-core.md))
+2026-09-09 | 0.793834 → **0.793765** (−0.69 bip) | iter74 late polish on deg<=3 residual core | **MISS**, 8/3, bar missed, mod.rs reverted, not submitted ([0164](experiments/0164-late-phase-on-core.md))
+2026-09-09 | 0165 aborted, no yukon | DegSqrt absent from HEAVY_METRIC_ORDER, but sweep does not accept a DegSqrt/`cm_degsqrt` spec (only `cm_sqdiv`, `cm_sqpure`, EXTRA_METRICS); refused to invent a caller; no edit, not submitted ([0165](experiments/0165-heavy-metric-degsqrt.md))
+2026-09-09 | 0166 pending | last HEAVY_METRIC_ORDER ticket `extra_deg2_div_nv_wf002`/10.0 → `cm_sqdiv`/10.0 (existing arm, same count); SUBTREE_CHAIN_MAX_N stays 45_000 ([0166](experiments/0166-heavy-metric-cm-sqdiv.md))
+2026-09-09 | 0.793834 → **0.793834** (0.00) | last HEAVY_METRIC_ORDER ticket `extra_deg2_div_nv_wf002`/10.0 → `cm_sqdiv`/10.0 | **MISS**, 0/0, bar missed, mod.rs reverted, not submitted ([0166](experiments/0166-heavy-metric-cm-sqdiv.md))
+2026-09-09 | 0167 pending | SUBTREE_CHAIN_MAX_N 45_000 → 50_000 as first-round replacement of late PEO-large on 45k < n ≤ 50k, nnz < 1.2M; follow-ups and MINL ticket stay at 45_000 ([0167](experiments/0167-subtree-chain-50k.md))
+2026-09-09 | 0.793834 → **0.793834** (0.00) | first-round subtree chain replaces late PEO-large on 45k < n ≤ 50k, nnz < 1.2M | **MISS**, n>45k 0/0, no public row in that slice, bar missed, mod.rs reverted, not submitted ([0167](experiments/0167-subtree-chain-50k.md))
+2026-09-09 | 0168 pending | 0148 SqDiv↔DegP125 on n>16k + gasprod_band 16k (0167 ID taken by concurrent subtree-chain-50k miss) ([0168](experiments/0168-0148-sqdiv-degp125-gasband16k.md))
+2026-09-09 | 0.793834 → **0.793849** (+0.15 bip) | 0148 SqDiv↔DegP125 n>16k + gasprod_band 16k | **MISS**, 0/2 (pinene200, gabriel09), bar missed, reverted, not submitted ([0168](experiments/0168-0148-sqdiv-degp125-gasband16k.md))
+2026-09-09 | 0169 pending | gasprod_band 20k→16k isolate (0168 metric swap blamed for regression) ([0169](experiments/0169-gasband-16k-isolate.md))
+2026-09-09 | 0.793834 → **0.793834** (0.00) | gasprod_band 20k→16k isolate | **MISS**, 0/0, bar missed, mod.rs reverted, not submitted ([0169](experiments/0169-gasband-16k-isolate.md))
+2026-09-09 | 0170 pending | iter74 full-graph floor + deg≤3 residual-core polish (0164 follow-up); admit splice only if strictly better than floor; SUBTREE_CHAIN_MAX_N stays 45k ([0170](experiments/0170-iter74-core-polish-bestof-floor.md))
+2026-09-09 | 0.793834 → **0.793785** (−0.49 bip) | iter74 full-graph floor + deg≤3 residual-core polish | **MISS**, 6/1 flops, bar missed, mod.rs reverted, not submitted ([0170](experiments/0170-iter74-core-polish-bestof-floor.md))
+2026-09-09 | 0171 pending | lean 488-like mid_force+FINAL_FIVE(128M OPS)+REDUCE deep + 0154c conditioned re-transplant; timing-conservative ([0171](experiments/0171-lean-488-conditioned-retransplant.md))
+2026-09-09 | 0.793834 → **0.793785** (−0.49 bip) | lean 488-like mid_force+FINAL_FIVE(128M)+REDUCE deep + 0154c conditioned re-transplant | **MISS**, 8/0, bar missed, timing not probed, mod.rs reverted, not submitted ([0171](experiments/0171-lean-488-conditioned-retransplant.md))
+2026-09-09 | 0172 pending | 0171 base + SUBTREE_CHAIN 150k (0163) + additive AMF α{0.5,2.5} tickets; mod.rs only ([0172](experiments/0172-0171-base-subtree150k-amf-alpha-tickets.md))
+2026-09-09 | 0.793834 → **0.793808** (−0.26 bip) | 0171 base + SUBTREE_CHAIN 150k + additive AMF α{0.5,2.5} | **MISS**, 12/2, bar missed, mod.rs reverted, not submitted ([0172](experiments/0172-0171-base-subtree150k-amf-alpha-tickets.md))
+2026-09-09 | 0.793834 → **0.793755** (−0.79 bip) | 0171 A–D + FINAL_FIVE_OPS 192M + SUBTREE150k (no AMF) | **MISS**, 20/0, bar missed (need ≤0.793734 or ≥0.8 bip), timing not probed, mod.rs reverted, not submitted ([0173](experiments/0173-0171-ops192m-subtree150k.md))
+2026-09-09 | 0176 pending | drop extra-relabel 20/17 conjunct (and the n<=1000 nnz<=30000 alternative that only satisfied it); caps n<6000 nnz<=50000; restart 16/8 unchanged ([0176](experiments/0176-extra-relabel-drop-2017.md))
+2026-09-09 | 0.793834 → **0.793837** (+0.03 bip) | drop extra-relabel 20/17 conjunct (small-OR alternative dropped with it); caps n<6000 nnz<=50000; restart 16/8 | **MISS**, gate 0/1 (powerflow0118p +149), bar missed, predicate reverted, not submitted ([0176](experiments/0176-extra-relabel-drop-2017.md))
+2026-09-09 | 0177 pending | SIMPLICIAL_PROMOTION_MAX_N 6_000→10_000; drop pair-ext only on 6k<n≤10k ∩ nnz≤100k ∩ nnz≤24n ∩ pair-ext; no second simplicial call ([0177](experiments/0177-simplicial-on-6k-10k.md))
+2026-09-09 | 0.793834 → **0.793842** (+0.08 bip) | SIMPLICIAL_PROMOTION_MAX_N 6_000→10_000; drop pair-ext only on 6k<n≤10k ∩ nnz≤100k ∩ nnz≤24n ∩ pair-ext | **MISS**, class 2/4, bar missed, mod.rs reverted, not submitted ([0177](experiments/0177-simplicial-on-6k-10k.md))
+2026-09-09 | 0178 pending | else-floor 50M seed `0xD1B5_4A32_D192_ED03` → `0x6A09_E667_F3BC_C909`; 100M `0xD1B5` unchanged; well_below / n≤3k / small_streams untouched ([0178](experiments/0178-medium-exact-second-seed.md))
+2026-09-09 | 0.793834 → **0.793807** (−0.27 bip) | else-floor 50M seed `0xD1B5_4A32_D192_ED03` → `0x6A09_E667_F3BC_C909` | **MISS**, gate 4/1 (crudeoil_pooling_ct3 +1983), bar missed, seed reverted, not submitted ([0178](experiments/0178-medium-exact-second-seed.md))
+2026-09-09 | 0179 pending | quotient list DegP075 → DegDivNvWfP15 only on 16k<n≤20k; n≤16k and n>20k keep DegP075; same six variants; metric_k unchanged ([0179](experiments/0179-ndivwfp15-on-n-gt-16k.md))
+2026-09-09 | 0.793834 → **0.793834** (0.00) | quotient list DegP075 → DegDivNvWfP15 only on 16k<n≤20k; n≤16k and n>20k keep DegP075 | **MISS**, 0/0, band 0/11 moved, bar missed, indep_first.rs reverted, not submitted ([0179](experiments/0179-ndivwfp15-on-n-gt-16k.md))
+2026-09-09 | 0180 pending | skip AMF sweep α16 only on 1k<n≤25k && nnz≤4n && nnz<130k; one nd_order consider on that band; ND_MAX_N stays 1000 ([0180](experiments/0180-nd-replaces-amf16-sparse.md))
+2026-09-09 | 0.793834 → **0.793834** (0.00) | skip AMF sweep α16 only on 1k<n≤25k && nnz≤4n && nnz<130k; one nd_order consider on that band; ND_MAX_N stays 1000 | **MISS**, class 0/74, 0/0, bar missed, mod.rs reverted, not submitted ([0180](experiments/0180-nd-replaces-amf16-sparse.md))
+2026-09-09 | 0181 pending | skip AMF sweep α16 only on 1k<n≤25k && nnz≤4n && nnz<130k; one sloan_order(pattern, 2, 1) on that band; SLOAN_MAX_N stays 1000 ([0181](experiments/0181-sloan-replaces-amf16-sparse.md))
+2026-09-09 | 0.793834 → **0.793834** (0.00) | skip AMF sweep α16 only on 1k<n≤25k && nnz≤4n && nnz<130k; one sloan_order(pattern, 2, 1) on that band; SLOAN_MAX_N stays 1000 | **MISS**, class 0/74, 0/0, bar missed, mod.rs reverted, not submitted ([0181](experiments/0181-sloan-replaces-amf16-sparse.md))
+2026-09-09 | 0182 pending | light relabel `amf_alphas` [5.0, 2.0, -1.0, 1.0, 16.0] → [5.0, 2.0, -1.0, 1.0, 0.5]; length 5; sweep α16 and HEAVY_RELABEL_AMF untouched ([0182](experiments/0182-relabel-amf-alpha-05.md))
+2026-09-09 | 0.793834 -> **0.793837** (+0.000003) | light relabel `amf_alphas` [5.0, 2.0, -1.0, 1.0, 16.0] -> [5.0, 2.0, -1.0, 1.0, 0.5] | **MISS**, 0/1 (edgecross14-156 +1784), bar missed, mod.rs reverted, not submitted ([0182](experiments/0182-relabel-amf-alpha-05.md))
+2026-09-09 | 0183 pending | sc_ext `n > 18_000 && n <= 22_000 && nnz <= 80_000`: drop degree-cap 15, add one unbounded second-colour exclude; caps 15/9/5/3 stay elsewhere; n≤18k second-colour unchanged ([0183](experiments/0183-second-colour-18k-22k.md))
+2026-09-09 | 0.793834 → **0.793834** (0.00) | sc_ext drop degree-cap 15, one unbounded second-colour exclude on 18k<n≤22k && nnz≤80k | **MISS**, slice 0/2, 0/0, bar missed, indep_first.rs reverted, not submitted ([0183](experiments/0183-second-colour-18k-22k.md))
+2026-09-09 | 0184 pending | mid-band below-anchor admit depth 2→4 (mid_k4); nnz band + best<AMD + work_cap=nnz unchanged; REDUCE_EXTRA_DEPTHS untouched ([0184](experiments/0184-mid-band-k4.md))
+2026-09-09 | 0.793834 → **0.793881** (+0.000047) | mid-band below-anchor admit depth 2→4 (mid_k4); nnz band + best<AMD + work_cap=nnz | **MISS**, mid 3 movers (2 better / 1 worse crudeoil_pooling_dt2), overall 2/1, bar missed, mod.rs reverted, not submitted ([0184](experiments/0184-mid-band-k4.md))
+2026-09-09 | 0185 pending | heavy sparse relabel AMF α5.0→0.5 (dense 2.5); gates/budget/seeds untouched; light amf_alphas + REDUCE_ALPHAS untouched ([0185](experiments/0185-heavy-relabel-sparse-alpha-05.md))
+2026-09-09 | 0.793834 → **0.793834** (0.00) | heavy sparse relabel AMF α5.0→0.5 (dense 2.5) | **MISS**, sparse-heavy 0/2 tip-flat, overall 0/0, bar missed, mod.rs reverted, not submitted ([0185](experiments/0185-heavy-relabel-sparse-alpha-05.md))
+2026-09-09 | 0.793834 → **0.793834** (0.00) | heavy dense relabel AMF α2.5→0.5 (sparse stays 5.0) | **MISS**, dense-heavy 0/2 tip-flat, overall 0/0, bar missed, mod.rs reverted, not submitted ([0186](experiments/0186-heavy-relabel-dense-alpha-05.md))
+2026-09-09 | 0188 pending | density-selected mid K2/K4 inside existing mid-below-anchor gate (2*nnz>=9*n → depth4 else depth2); one-shot work_cap=nnz; REDUCE_EXTRA_DEPTHS untouched ([0188](experiments/0188-density-selected-mid-k4.md))
+2026-09-09 | 0.793834 → **0.793612** (−0.000222), fill 0.9258→0.9256 | density-selected mid K2/K4 (2*nnz>=9*n → depth4 else depth2); same one-shot work_cap=nnz | **KEEP**, 2/0 (nuclear10a, popdynm200; pooling_dt2 preserved), movers ≤1.06s, submitted `d6c204c9` validating ([0188](experiments/0188-density-selected-mid-k4.md))
+2026-09-09 | 0189 pending | tip-4 else 50M seed → `0x6A09_E667_F3BC_C909` only when nnz≤4n (ct3 dens≈4.32 outside; mpbp_46/rsyn0840m02m inside); 100M D1B5 unchanged; stacked on 0188 ([0189](experiments/0189-density-gated-else-seed.md))
+2026-09-09 | 0.793612 → **0.793589** (−0.000023), fill 0.925575→0.925571 | tip-4 else 50M seed → `0x6A09` only when nnz≤4n (ct3 outside); stacked on 0188 | **KEEP** locally, 2/0 (mpbp_46, rsyn0840m02m), worst order() 1.427s (0188 1.450s); **not submitted** (`d6c204c` validating) ([0189](experiments/0189-density-gated-else-seed.md))
+2026-09-09 | 0189 local KEEP 0.793589 (2/0) then **reverted** | `d6c204c` **failed** (official n/a); leave 0188 package intact; do not submit 0189 ([0189](experiments/0189-density-gated-else-seed.md))
+2026-09-09 | 0.793834 → **0.793811** (−0.000023), fill 0.9258 | dens≤4 else-floor 50M `0xD1B5` → `0x6A09` on clean tip mid_k2 (0190 mid hole reverted) | **KEEP**, 2/0 (mpbp_46, rsyn0840m02m), uncapped worst 1.516s ≤ tip 1.654s; submitted ([0192](experiments/0192-dens4-else-seed-on-tip.md))

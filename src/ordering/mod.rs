@@ -2652,8 +2652,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 (50_000_000, 0x1656_67B1_9E37_79B9),
                 (50_000_000, 0x85EB_CA77_C2B2_AE3D),
             ]
+        } else if nnz <= 4 * n {
+            // tip 4-ticket floor (also forced on danger_timing); dens≤4
+            // swaps the 50M D1B5 repeat for 6A09 (0189/0178 sparse wins).
+            &[
+                (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
+                (50_000_000, 0x6A09_E667_F3BC_C909),
+                (50_000_000, 0xC2B2_AE3D_27D4_EB4F),
+                (50_000_000, 0x1656_67B1_9E37_79B9),
+            ]
         } else {
-            // tip 4-ticket floor (also forced on danger_timing).
+            // tip 4-ticket floor (also forced on danger_timing); dens>4 keeps D1B5.
             &[
                 (100_000_000i64, 0xD1B5_4A32_D192_ED03u64),
                 (50_000_000, 0xD1B5_4A32_D192_ED03),

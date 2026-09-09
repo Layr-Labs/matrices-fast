@@ -1,3 +1,50 @@
+[0192: dens≤4 else-floor second seed on clean tip](experiments/0192-dens4-else-seed-on-tip.md):
+74b6ccd **0.793834 -> 0.793811** keep. 2/0 (mpbp_46, rsyn0840m02m); ct3 preserved; uncapped worst 1.516s ≤ tip 1.654s. 0190 mid hole reverted. submitted.
+
+[0191: 0190 + dens≤4 else-floor second seed](experiments/0191-0190-plus-dens4-seed.md):
+0190-package **0.793612 -> 0.793589** local keep bar met (2/0, worst 1.473s≤1.511s), then **reverted**. `4e4a7f6` **rejected** (0.84349, 0.00%). Not submitted; 0190 package intact.
+
+[0189: density-gated else-floor second seed](experiments/0189-density-gated-else-seed.md):
+0188-package **0.793612 -> 0.793589** local keep bar met (2/0), then **reverted**. `d6c204c` **failed** (n/a). Not submitted; 0188 package intact.
+
+[0188: density-selected mid-band K2/K4](experiments/0188-density-selected-mid-k4.md):
+74b6ccd **0.793834 -> 0.793612** keep. mid density gate: nuclear10a+popdynm200 better; crudeoil_pooling_dt2 preserved. 2/0. submitted `d6c204c9` validating.
+
+[0186: heavy dense relabel AMF α2.5→0.5](experiments/0186-heavy-relabel-dense-alpha-05.md):
+74b6ccd **0.793834 -> 0.793834** miss. dense-heavy 0/2 tip-flat (pooling_sppc1pq, pooling_sppb5pq), overall 0/0. mod.rs reverted; not submitted.
+
+[0185: heavy sparse relabel AMF α5.0→0.5](experiments/0185-heavy-relabel-sparse-alpha-05.md):
+74b6ccd **0.793834 -> 0.793834** miss. sparse-heavy 0/2 tip-flat (transswitch2383wpr, transswitch2736spr), overall 0/0. mod.rs reverted; not submitted.
+
+[0184: mid-band below-anchor gate K=2 → K=4](experiments/0184-mid-band-k4.md):
+74b6ccd **0.793834 -> 0.793881** miss. mid 3 movers (nuclear10a, popdynm200
+better; crudeoil_pooling_dt2 worse). 2/1 overall. mod.rs reverted; not submitted.
+
+[0183: second-colour unbounded exclude on 18k–22k nnz≤80k](experiments/0183-second-colour-18k-22k.md):
+74b6ccd **0.793834 -> 0.793834** miss. slice 0/2 moved (crudeoil_pooling_dt2, emfl100_5_5). indep_first.rs reverted; not submitted.
+
+[0182: light relabel AMF cycle α16 → 0.5](experiments/0182-relabel-amf-alpha-05.md):
+74b6ccd **0.793834 -> 0.793837** miss. light `amf_alphas` last entry 16.0 → 0.5
+(length 5). 0 better / 1 worse (edgecross14-156). mod.rs reverted; not submitted.
+Leave that alpha list alone.
+
+[0181: sparse sloan_order(2,1) replaces AMF α16](experiments/0181-sloan-replaces-amf16-sparse.md):
+74b6ccd **0.793834 -> 0.793834** miss. sloan_ext class 0/74 moved, 0 worse.
+mod.rs reverted; not submitted. Do not queue RCM or NDFM on this α16 payment.
+
+[0180: sparse nd_order replaces AMF α16](experiments/0180-nd-replaces-amf16-sparse.md):
+74b6ccd **0.793834 -> 0.793834** miss. nd_ext class 0/74 moved, 0 worse.
+AMF α16 unique-min check: 74/74 not unique. mod.rs reverted; not submitted.
+
+[0177: simplicial on 6k-10k, pair-ext payment](experiments/0177-simplicial-on-6k-10k.md):
+74b6ccd **0.793834 -> 0.793842** miss. Class 2 better / 4 worse
+(mpbp_07, rsyn0840m04m / crudeoil_lee2_06, rsyn0830m04m, syn40m04hfsg, rsyn0820m04m).
+mod.rs reverted; not submitted.
+
+[0176: drop extra-relabel 20/17 conjunct](experiments/0176-extra-relabel-drop-2017.md):
+74b6ccd **0.793834 -> 0.793837** miss. Gate 0 better / 1 worse
+(powerflow0118p). Predicate reverted; not submitted.
+
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so
@@ -267,9 +314,33 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 
 ## Local follow-up experiments
 
+- [0186: heavy dense relabel AMF α2.5→0.5](experiments/0186-heavy-relabel-dense-alpha-05.md) — dense α2.5→0.5 (sparse 5.0); 0.793834 tip-flat, dense-heavy 0/2; bar missed, mod.rs reverted, not submitted.
+
+- [0185: heavy sparse relabel AMF α5.0→0.5](experiments/0185-heavy-relabel-sparse-alpha-05.md) — sparse α5.0→0.5; 0.793834 tip-flat, sparse-heavy 0/2; bar missed, mod.rs reverted, not submitted.
+
+- [0183: second-colour unbounded exclude on 18k–22k nnz≤80k](experiments/0183-second-colour-18k-22k.md) — sc_ext drop cap-15, one unbounded exclude; 0.793834 → 0.793834, slice 0/2; bar missed, indep_first.rs reverted, not submitted.
+
+- [0182: light relabel AMF cycle α16 → 0.5](experiments/0182-relabel-amf-alpha-05.md) — `amf_alphas` [5.0, 2.0, -1.0, 1.0, 16.0] → [5.0, 2.0, -1.0, 1.0, 0.5]; 0.793834 → 0.793837, 0/1 (edgecross14-156); bar missed, mod.rs reverted, not submitted.
+
+- [0181: sparse sloan_order(2,1) replaces AMF α16](experiments/0181-sloan-replaces-amf16-sparse.md) — 0.793834 → 0.793834, class 0/74; bar missed, mod.rs reverted, not submitted.
+
 - [0087: stage-6 stream sampling](experiments/0087-stage6-move-sampling-metered-by-fill.md) — multi-set bundle failed; smaller pool/hygiene control completed but missed promotion. Current numbering replaces the local 0085 collision.
 - [0088: cross-candidate subtree transplant](experiments/0088-cross-candidate-subtree-transplant.md) — 600k bundle gained 9.10 dev bips and failed opaquely. Current numbering replaces the local 0086 collision.
 - [0089: production-core stage-6 screen](experiments/0089-production-core-stage6-screen.md) — exact frontier, 2 final winners / 0.07338 dev bips; below screen.
 - [0090: transplant verification reservation](experiments/0090-transplant-verification-reservation-screen.md) — 100k reservation retains partial donor gains, 26 winners / 0.93139 dev bips; below screen.
 - [0091: residual-core exact minimum fill](experiments/0091-residual-core-exact-minimum-fill.md) — a second OBJECTIVE on the cores the reduction already builds, 18.28998 dev bips, 6 wins / 0 losses; and the call-site work counter that priced it after a 300-row A/B could not.
 - [0094: light-tier α grid {10,5,2.5,1}](experiments/0094-light-alpha-grid.md) — aa5b471 dev 0.812247 → **0.811892** (−3.55 bips, all 1k_10k); ports the e7988e5 pattern atop relabelled lotteries (disjoint mid-α draws); 71 tests, worst 0.484 s.
+- [0163: subtree-chain past 45k](experiments/0163-subtree-chain-past-45k.md) — first-round chain replaces late PEO-large on 45k < n ≤ 150k, nnz < 1.2M; 0.793834 → 0.793827, 3 n>45k better / 0 worse; kept, not submitted.
+- [0164: late iter74 polish on deg<=3 core](experiments/0164-late-phase-on-core.md) — 0.793834 → 0.793765 (−0.69 bip), 8 better / 3 worse; reverted, not submitted.
+- [0165: DegSqrt into heavy-metric prefix](experiments/0165-heavy-metric-degsqrt.md) — DegSqrt not already in HEAVY_METRIC_ORDER; sweep has no legal DegSqrt/`cm_degsqrt` spec; no edit, no yukon, not submitted.
+- [0166: cm_sqdiv into heavy-metric prefix](experiments/0166-heavy-metric-cm-sqdiv.md) — last ticket `extra_deg2_div_nv_wf002`/10.0 → `cm_sqdiv`/10.0; 0.793834 → 0.793834, 0/0; bar missed, mod.rs reverted, not submitted.
+- [0167: subtree-chain to 50k](experiments/0167-subtree-chain-50k.md) — first-round chain replaces late PEO-large on 45k < n ≤ 50k, nnz < 1.2M; 0.793834 → 0.793834, n>45k 0/0; bar missed, mod.rs reverted, not submitted.
+- [0168: 0148 SqDiv↔DegP125 + gasband 16k](experiments/0168-0148-sqdiv-degp125-gasband16k.md) — 0.793834 → 0.793849, 0/2; reverted, not submitted.
+- [0169: gasband 16k isolate](experiments/0169-gasband-16k-isolate.md) — gasprod_band 20k→16k only; 0.793834 tip-flat 0/0; reverted, not submitted.
+- [0170: iter74 floor + deg≤3 core polish](experiments/0170-iter74-core-polish-bestof-floor.md) — 0.793834 → 0.793785 (−0.49 bip), 6 better / 1 worse; reverted, not submitted.
+- [0171: lean 488-like + conditioned re-transplant](experiments/0171-lean-488-conditioned-retransplant.md) — 0.793834 → 0.793785 (−0.49 bip), 8 better / 0 worse; bar missed, reverted, not submitted.
+- [0172: 0171 base + subtree150k + AMF α tickets](experiments/0172-0171-base-subtree150k-amf-alpha-tickets.md) — 0.793834 → 0.793808 (−0.26 bip), 12 better / 2 worse; reverted, not submitted.
+- [0173: 0171 + OPS192M + SUBTREE150k (no AMF)](experiments/0173-0171-ops192m-subtree150k.md) — 0.793834 → 0.793755 (−0.79 bip), 20 better / 0 worse; bar missed, reverted, not submitted.
+- [0177: simplicial on 6k-10k, pair-ext payment](experiments/0177-simplicial-on-6k-10k.md) — SIMPLICIAL_PROMOTION_MAX_N 6k→10k, pair-ext dropped on intersection; 0.793834 → 0.793842, class 2/4; reverted, not submitted.
+- [0178: medium exact else second seed](experiments/0178-medium-exact-second-seed.md) — else-floor 50M `0xD1B5` → `0x6A09_E667_F3BC_C909`; 0.793834 → 0.793807, gate 4/1; bar missed, seed reverted, not submitted.
+- [0179: DegP075→DegDivNvWfP15 on 16k<n≤20k](experiments/0179-ndivwfp15-on-n-gt-16k.md) — same-count last slot only on 16k<n≤20k; 0.793834 tip-flat 0/0, band 0/11 moved; reverted, not submitted.

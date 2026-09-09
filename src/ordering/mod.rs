@@ -4501,6 +4501,37 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // VOL-RR-NC terminal seat: ruin-recreate re-price on the 62654a5 crown
+    // (new recipient — transplant now wins rows the old crown didn't, so
+    // the recipient effect may open new basins). Same fenced generator
+    // (5-window, charged, nnz<=5000), terminal seat (nothing downstream).
+    // 16 attempts, best-of exact, strict admit.
+    if n > 32 && n <= 1_000 && nnz > 0 && nnz <= 5_000 {
+        let mut best_rr = best_perm.clone();
+        let mut best_rr_f = best_flops;
+        for attempt in 0..16 {
+            if let Some(cand) = rgreedy::ruin_window_reconstruct(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_rr,
+                attempt,
+                4_000_000,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_rr_f {
+                        best_rr_f = f;
+                        best_rr = cand;
+                    }
+                }
+            }
+        }
+        if best_rr_f < best_flops {
+            best_flops = best_rr_f;
+            best_perm = best_rr;
+        }
+    }
     best_perm
 }
 

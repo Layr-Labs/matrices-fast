@@ -1,3 +1,17 @@
+2026-09-09 | tip 62654a5 conditioned terminal re-transplant + skip second refine when n≥30k OR nnz≥200k (0210 hidden n/a timing fix; ledger/widths/AMD-tie/FF128M intact) | SCORE **0.791911** (tip 0.792300, Δ−0.000389); **22/0**; WORST **1.485s** ≤ tip 1.560 | **SUBMITTED** `c401dd13` validating ([0210b](experiments/0210b-conditioned-retransplant-large-skip.md))
+2026-09-09 | 0212 residual-core MINL bestof | **ABORTED** before probe — 0210 failed hidden n/a (timing); do not stack on failed package; 0212 edits reverted to 0210 then 0210b
+2026-09-09 | 0210 conditioned terminal re-transplant submit `9b18a070` | **FAILED hidden n/a (timing)** — pivot to 0210b large-row second-refine skip ([0210](experiments/0210-conditioned-terminal-retransplant.md))
+2026-09-09 | 0210 KEEP (62654a5+0210) residual-core late polish best-of floor (0164 follow-up; Inventor cp onto 0210) | SCORE **0.791859** (0210 0.791908, Δ−0.000049); **5/1** vs 0210 (chimera_lga-01 worse 497542→498683); WORST **1.469s** ≤0210 1.518 | **MISS/REVERTED** 0211 only; 0210 KEEP intact; no yukon/submit ([0211](experiments/0211-residual-core-late-polish-bestof.md))
+2026-09-09 | 62654a5 (647a tip) conditioned terminal re-transplant isolate (Scoreboard LOCKED 0210; mod.rs only; ledger 1M/widths/AMD-tie/FF128M intact) | SCORE **0.791908** (tip 0.792300, Δ−0.000392); **17/0**; WORST **1.518s** ≤ tip same-window 1.560s | **SUBMITTED** `9b18a070-5605-4224-a4b8-13c72381e2e6` validating ([0210](experiments/0210-conditioned-terminal-retransplant.md))
+2026-09-09 | 62654a5 (647a tip) cascading width-ladder transplant (rebuild etree after width commit; TRANSPLANT_LEDGER stays 1M) | SCORE **0.792271** (tip 0.792300, Δ−0.000029); 13 better / **6 worse**; WORST **1.494s** (lee4_10) > tip same-machine 1.483s | **MISS/REVERTED** cascade restored; no yukon; STOP — next MINL upper-n/LNNZ ([0209](experiments/0209-cascading-width-transplant.md))
+
+2026-09-09 | 62654a5 (647a tip) late completion n-gate n≤1000/nnz≤20k→n≤2500/nnz≤40k | SCORE **0.792300** (=tip); 0/0 movers; WORST **1.472s** (lee4_09) >1.14 | **MISS/REVERTED** gate restored; no yukon; late n-gate null ([0208](experiments/0208-completion-ngate-late-2500.md))
+
+2026-09-09 | 62654a5 (647a tip) INDEP_WORK_LEDGER 8M→12M | SCORE **0.792360** (tip 0.792300, Δ+0.000060 worse); WORST **1.564s** (nuclear104; lee4_09 1.440 / lee4_10 1.435) >1.14 | **MISS/REVERTED** ledger→8M; no yukon; abandon INDEP_WORK deepen ([0207](experiments/0207-indep-work-ledger-12m.md))
+
+2026-09-09 | tip `62654a5` / 647a @ 0.843173 | **0206 conditioned CORE_MINFILL gate cn≤2000 nnz≤15k (ledger 16M)** | **MISS/REVERTED** SCORE 0.793107 (+0.000807 worse) WORST 1.476s (lee4_09; >1.14) — no yukon; gate restored 4k/30k; abandon minfill deepen → next 0207 INDEP_WORK 8→16M ([0206](experiments/0206-conditioned-core-minfill-half-gate.md))
+2026-09-09 | tip `62654a5` / 647a @ 0.843173 | **0205 CORE_MINFILL_LEDGER 16M→32M** | **MISS/REVERTED** SCORE 0.792300 (=tip) WORST 1.454s (lee4_09; >1.14) — no submit; ledger restored 16M; 647a stack intact ([0205](experiments/0205-core-minfill-ledger-32m.md))
+2026-09-09 | 0.793834 → **0.793789** (−0.000045) | 488a PAIR48M peel + SUBTREE150k (mid7–22/48k + FF14k/100k@192M + REDUCE120/250 + PAIR48M + SUBTREE150k) | **MISS/NO SUBMIT** (board→62654a5/647a @0.843173), 14/0, score bar miss; reverted; rebase done ([0204](experiments/0204-488a-pair48m-peel.md))
 
 ## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
 
@@ -186,3 +200,11 @@ round, so note the round if you know it.
 2026-09-08 | **0.798268 -> 0.795608** (−26.6 bip), gt_10k 0.7144 -> 0.6935 | independent-set-first lift v5: second-colour-class sets (x-inf, x9), DegDivNvSqrtWf/DegPlusDegme/DegSqrt metric passes on ≤16k-node cores, METIS on the two lowest-AMD cores, flat deterministic task pool; acceptance moved to after the subtree stage (strict), immediate only at ≥ 40 % lead | **7 better / 3 worse** (methanol400 +0.8 %, gasprod +0.7 %, graphpart +0.1 %), worst 1.055-1.095 s on this box (tip 1.040) ([0145](experiments/0145-second-colour-class-metric-cores.md)).
 
 2026-09-09 | fe871f1 **FAILED hidden Benchmark** (actions 34297482026, ~5 min, step 11). Local worst 1.055–1.126 s sat in the same band as 176a/173a timing deaths. v11 on 4d6d3d0: x-sets n≤12k, drop DegSqrt, METIS/metrics top-1 except nnz≥300k, extra 180a caps off giant-dense | probe **0.795871**, worst **1.026 s** (under tip 1.040); lee4_06 0.504 kept; pooling 0.282 restored; gams05 0.530, gabriel09 0.913 ([0145](experiments/0145-second-colour-class-metric-cores.md)).
+
+2026-09-09 | **0217** fill-greedy indep late best-of on **0210b KEEP** (Inventor `on-0210b/`; tip-only package discarded). Probe pending vs 0.791911; KEEP bar ≥10/0 + worst≤0210b/tip; revert 0217-only on miss ([0217](experiments/0217-fill-greedy-indep-late-bestof.md)).
+
+2026-09-09 | **0217 MISS/REVERTED** on 0210b KEEP: SCORE **0.791911** (=0210b); 0/0 movers; WORST **1.737s** > 0210b 1.485 / tip 1.560. Restored 0210b package mod + tip indep_first; no submit ([0217](experiments/0217-fill-greedy-indep-late-bestof.md)).
+
+2026-09-09 | **0210b FAILED hidden n/a (timing)** (`c401dd13`); **0218 ABORTED** (was stacking on 0210b). Pivot **0210c**: same conditioned terminal re-transplant, second refine only when `n<12k && nnz<80k` on tip `62654a5`. Probe pending ([0210c](experiments/0210c-conditioned-retransplant-tighter-skip.md)).
+
+2026-09-09 | **0218 ABORTED** bipartite Schur lift on 0210b — base failed hidden; no measure/submit. Tree restored tip → 0210c ([0218](experiments/0218-bipartite-side-schur-lift-late-bestof.md)).

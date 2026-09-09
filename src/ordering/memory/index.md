@@ -1,3 +1,13 @@
+- [0217](experiments/0217-fill-greedy-indep-late-bestof.md) — Fill-greedy indep-first late best-of on **0210b KEEP**. **MISS/REVERTED** (SCORE=0210b 0.791911; 0/0; WORST 1.737>1.485; 0217-only revert).
+- [0210b](experiments/0210b-conditioned-retransplant-large-skip.md) — 0210 re-transplant + skip second refine n≥30k/nnz≥200k. **SUBMITTED** `c401dd13` SCORE 0.791911 (−0.000389; 22/0; WORST 1.485≤tip 1.560).
+- [0211](experiments/0211-residual-core-late-polish-bestof.md) — Residual-core late polish + best-of floor on 0210 KEEP. **MISS/REVERTED** (SCORE 0.791859 −0.000049 vs 0210; 5/1 chimera_lga-01; WORST 1.469; 0210 KEEP restored; no submit).
+- [0210](experiments/0210-conditioned-terminal-retransplant.md) — Conditioned terminal re-transplant isolate on 647a tip `62654a5` (Scoreboard LOCKED; snapshot+donor clone after phase-14; re-call before return iff best_flops < entry AND donors non-empty). **SUBMITTED** `9b18a070` (SCORE 0.791908 −0.000392; 17/0; WORST 1.518≤tip 1.560).
+- [0209](experiments/0209-cascading-width-transplant.md) — Cascading width-ladder transplant (rebuild etree after width commit; ledger stays 1M) on 647a tip `62654a5`. **MISS/REVERTED** (SCORE 0.792271 −0.000029; 13/6; WORST 1.494s>tip 1.483; cascade restored). Stop — next MINL upper-n/LNNZ (parent).
+- [0208](experiments/0208-completion-ngate-late-2500.md) — Late post-five completion n-gate n≤1000/nnz≤20k → n≤2500/nnz≤40k on 647a tip `62654a5`. **MISS/REVERTED** (SCORE=tip 0.792300; 0/0; WORST 1.472s>1.14; gate restored). Null late n-gate.
+- [0207](experiments/0207-indep-work-ledger-12m.md) — INDEP_WORK_LEDGER 8M→12M on 647a tip `62654a5`. **MISS/REVERTED** (SCORE 0.792360 worse; WORST 1.564s>1.14; ledger restored 8M). Abandon INDEP_WORK deepen → completion n-gate / MINL (0208).
+- [0206](experiments/0206-conditioned-core-minfill-half-gate.md) — Conditioned CORE_MINFILL fire gate 4k/30k→2k/15k on 647a tip `62654a5` (ledger 16M). **MISS/REVERTED** (SCORE 0.793107 worse; WORST 1.476s>1.14; gate restored). Abandon minfill deepen → 0207 INDEP_WORK.
+- [0205](experiments/0205-core-minfill-ledger-32m.md) — CORE_MINFILL_LEDGER 16M→32M on 647a tip `62654a5`. **MISS/REVERTED** (SCORE=tip 0.792300; WORST 1.454s>1.14; ledger restored 16M).
+[0204: 488a PAIR48M peel + SUBTREE150k](experiments/0204-488a-pair48m-peel.md): 0.793834→**0.793789**; **MISS/NO SUBMIT** 14/0; board moved; rebased 62654a5.
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so
@@ -266,6 +276,10 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [Tarjan-Yannakakis MCS background](literature/tarjan-yannakakis-1984-mcs.md): inspected primary abstract and independent completion-containment derivation.
 
 ## Local follow-up experiments
+
+- [0210c: conditioned re-transplant tighter skip n<12k/nnz<80k](experiments/0210c-conditioned-retransplant-tighter-skip.md) — after 0210/0210b both FAILED hidden n/a timing; probe pending. 0218 aborted.
+- [0218: bipartite Schur lift](experiments/0218-bipartite-side-schur-lift-late-bestof.md) — **ABORTED** (0210b failed).
+
 
 - [0087: stage-6 stream sampling](experiments/0087-stage6-move-sampling-metered-by-fill.md) — multi-set bundle failed; smaller pool/hygiene control completed but missed promotion. Current numbering replaces the local 0085 collision.
 - [0088: cross-candidate subtree transplant](experiments/0088-cross-candidate-subtree-transplant.md) — 600k bundle gained 9.10 dev bips and failed opaquely. Current numbering replaces the local 0086 collision.

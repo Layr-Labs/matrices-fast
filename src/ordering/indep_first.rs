@@ -331,6 +331,7 @@ const METRIC_TOP_CORES: usize = 3; // iter265a RC
 enum Pass {
     Amd,
     Amf,
+    Amf5,
     Metis,
     Metric(super::custom_metrics::ScoreVariant),
 }
@@ -340,6 +341,10 @@ fn run_pass(ccore: &feral_ordering_core::CscPattern<'_>, pass: Pass) -> Option<V
         Pass::Amd => feral_amd::amd_order(ccore).ok(),
         Pass::Amf => {
             let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
+            feral_amf::amf_order_opts(ccore, &o).ok().map(|(p, ..)| p)
+        }
+        Pass::Amf5 => {
+            let o = feral_amf::AmfOptions { dense_alpha: 5.0, ..Default::default() };
             feral_amf::amf_order_opts(ccore, &o).ok().map(|(p, ..)| p)
         }
         Pass::Metis => feral_metis::metis_order_full(ccore, &feral_metis::MetisOptions::default()).ok().map(|(p, ..)| p),
@@ -465,6 +470,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         candidates.push(greedy_independent_set_excluding(sp, 15, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 5, &g_inf));
+        candidates.push(greedy_independent_set_excluding(sp, 3, &g_inf));
     }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
@@ -521,19 +527,33 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // pooling cap-inf / cap-9 pair); the third-best core never won.
     let mut by_amd: Vec<usize> = (0..cores.len()).collect();
     by_amd.sort_by_key(|&i| (cores[i].1, i));
-    // Second METIS only on nnz-heavy patterns (pooling): lee4_09/10 stay at
-    // one METIS so their 1.03 s critical path does not grow. Hidden fe871f1
-    // died in that band.
-    let metis_k = if nnz >= 300_000 { 2 } else { METIS_TOP_CORES };
+    // Skip METIS on the lee4_09/10 band: it never won those cores (0.99-4.8×)
+    // and the 50 ms it costs is the slack we spend on DegDivNvSqrtWf, which
+    // DOES win (lee4_09 g3 0.681 → 0.645) without the x-set lifts that timed
+    // out hidden. Extra 265a mid-caps outrank g3 on AMD, so this band walks
+    // four cores at a 2× AMD margin. Second METIS stays on nnz-heavy pooling.
+    let skip_metis = (12_000..20_000).contains(&n) && nnz <= 150_000;
+    let metis_k = if skip_metis {
+        0
+    } else if nnz >= 300_000 {
+        2
+    } else {
+        METIS_TOP_CORES
+    };
+    let metric_k = if skip_metis {
+        4.max(METRIC_TOP_CORES)
+    } else {
+        METRIC_TOP_CORES
+    };
     let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metis_k).any(|&j| j == i)).collect();
-    // iter273a: METRIC top-4 only on n<=16k (lee4_09 class); else top-3 — protect lee4_10 timing
-    let metric_k = if n <= 16_000 { 4 } else { METRIC_TOP_CORES };
     let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metric_k).any(|&j| j == i)).collect();
+    let competitive_num = if skip_metis { 2u64 } else { COMPETITIVE_MARGIN.0 };
+    let competitive_den = if skip_metis { 1u64 } else { COMPETITIVE_MARGIN.1 };
 
     // Phase 2: the expensive passes on competitive cores, one flat task list.
     let mut tasks: Vec<(usize, Pass)> = Vec::new();
     for (i, (lc, amd_total, _)) in cores.iter().enumerate() {
-        if amd_total.saturating_mul(COMPETITIVE_MARGIN.1) > best_amd.saturating_mul(COMPETITIVE_MARGIN.0) {
+        if amd_total.saturating_mul(competitive_den) > best_amd.saturating_mul(competitive_num) {
             continue;
         }
         let cn = lc.il.core_n();
@@ -541,14 +561,25 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         let dense = cnnz >= 20 * cn;
         if cnnz <= GIANT_CORE_NNZ && !dense {
             tasks.push((i, Pass::Amf));
+            if cn <= 4_000 && cnnz <= 60_000 {
+                tasks.push((i, Pass::Amf5));
+            }
         }
         if metis_ok[i] && cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ {
             tasks.push((i, Pass::Metis));
         }
         if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
-            // iter265a RC: broader quotient-metric family (0145 census winners)
-            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
-                tasks.push((i, Pass::Metric(v)));
+            // lee4_09/10: DegDivNvSqrtWf on g3 is the win; extra metrics
+            // (DegSqrt/SqDiv/ddnd/DegP075) never paid there and pushed the
+            // row to 1.10 s. Keep the 265a five-metric menu off that band.
+            if skip_metis {
+                for v in [V::DegDivNvSqrtWf, V::DegPlusDegme] {
+                    tasks.push((i, Pass::Metric(v)));
+                }
+            } else {
+                for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
+                    tasks.push((i, Pass::Metric(v)));
+                }
             }
         }
     }

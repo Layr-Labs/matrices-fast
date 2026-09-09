@@ -36,11 +36,17 @@ pub(super) fn refine_limited(
 ) -> Option<Vec<usize>> {
     const MAX_LNNZ: usize = 300_000;
     const MAX_FILL: usize = 100_000;
+    // iter741a ARCH: higher completion budget only on mid-small dens≤6 (lee4_06 class)
+    const MAX_LNNZ_MID: usize = 550_000;
+    const MAX_FILL_MID: usize = 220_000;
     if n == 0 || n > 30_000 || counts.len() != n {
         return None;
     }
+    let mid_completion = n < 15_000 && n >= 5_000; // lee4_06 n≈10k; skip mpbp_48 n≈28k
+    let max_lnnz = if mid_completion { MAX_LNNZ_MID } else { MAX_LNNZ };
+    let max_fill = if mid_completion { MAX_FILL_MID } else { MAX_FILL };
     let lnnz = counts.iter().try_fold(0usize, |s, &x| s.checked_add(x))?;
-    if lnnz > MAX_LNNZ { return None; }
+    if lnnz > max_lnnz { return None; }
     let mut children = vec![Vec::<usize>::new(); n];
     for j in 0..n {
         if let Some(p) = parent[j] {
@@ -73,7 +79,7 @@ pub(super) fn refine_limited(
         // Check the reconstruction against exact symbolic column counts.
         if reach.len().checked_add(1)? != counts[j] { return None; }
         total = total.checked_add(reach.len())?;
-        if total > MAX_LNNZ { return None; }
+        if total > max_lnnz { return None; } // iter741a
         let v = perm[j];
         for &i in &reach {
             let w = perm[i as usize];
@@ -91,7 +97,7 @@ pub(super) fn refine_limited(
         for &w in &adj[v] {
             if (w as usize) > v && original.binary_search(&(w as usize)).is_err() {
                 fill.push((v as u32,w));
-                if fill.len() > MAX_FILL { return None; }
+                if fill.len() > max_fill { return None; } // iter741a
             }
         }
     }

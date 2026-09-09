@@ -90,7 +90,13 @@ fn transplant_pass(
     let mut best_f = inc_f;
     let mut best_perm = incumbent.to_vec();
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
+    // iter790a: 659-first denser n<12k; tip widths for n>=12k (protect lee4_09 time)
+    let widths: &[usize] = if n < 12_000 {
+        &[4096, 1024, 256, 64, 16, 8, 512, 128, 32]
+    } else {
+        &[4096, 512, 128, 32, 8]
+    };
+    'widths: for &width in widths {
         let blks = blocks(&parent, 4, width.min(n));
         if blks.len() < 2 {
             continue;
@@ -202,7 +208,13 @@ fn terminal_pass(
     let mut scored_donors = 0usize;
     let mut stopped_partial = false;
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
+    // iter790a: 659-first denser n<12k; tip widths for n>=12k (protect lee4_09 time)
+    let widths: &[usize] = if n < 12_000 {
+        &[4096, 1024, 256, 64, 16, 8, 512, 128, 32]
+    } else {
+        &[4096, 512, 128, 32, 8]
+    }; // iter790a-loop2
+    'widths: for &width in widths {
         let blocks = blocks(&parent, 4, width.min(n));
         if blocks.len() < 2 { continue; }
         let contribution: Vec<u64> = blocks.iter().map(|&(a, b)|

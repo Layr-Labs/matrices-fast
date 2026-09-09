@@ -4268,7 +4268,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a
         const FINAL_FIVE_MAX_NNZ: usize = 80_000;
         // iter180a: wide five on tip+176a
-        const FINAL_FIVE_OPS: i64 = 128_000_000;
+        const FINAL_FIVE_OPS: i64 = 160_000_000;
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.

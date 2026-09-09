@@ -3605,22 +3605,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // passes cost a few ms) and DENSE mid-large graphs (nnz > REDUCE_EXTRA_MIN_NNZ and
             // nnz >= 6 n, where the robust-envelope gate has given time back). The band between
             // them is the crown's slowest class and stays exactly as the crown has it.
-            // Two historical bands (0064) plus (B) a mid below-anchor K=2-only
-            // band: 60k < nnz <= 200k and best_flops < amd_flops. Mid attempts
-            // use a tight one-shot work cap so the crown's slow class stays
-            // bounded; depths other than 2 skip via continue (not nested).
+            // Two historical bands (0064) plus (B) a mid below-anchor band for
+            // K in {4, 2}: 60k < nnz <= 200k and best_flops < amd_flops. K=2
+            // cores are the biggest (barely reduced); K=4 cores run smaller
+            // and cheaper per the call-site timing probe, reaching basins
+            // neither K=2 nor K=3/K=6 sees. Mid attempts use a tight two-shot
+            // work cap so the crown's slow class stays bounded; other depths
+            // skip via continue (not nested). K=2 keeps its slot (never
+            // displace a shipped winner to test a candidate).
             let small_band = nnz <= REDUCE_SMALL_MAX_NNZ;
             let dense_band = nnz > REDUCE_EXTRA_MIN_NNZ && nnz >= 6 * n;
-            let mid_k2 = depth == 2
+            let mid_extra = (depth == 2 || depth == 4)
                 && nnz > REDUCE_SMALL_MAX_NNZ
                 && nnz <= REDUCE_EXTRA_MIN_NNZ
                 && best_flops < amd_flops;
-            if !(small_band || dense_band || mid_k2) {
+            if !(small_band || dense_band || mid_extra) {
                 continue;
             }
-            let work_cap = if mid_k2 && !(small_band || dense_band) {
-                // Exactly one mid-band K=2 attempt worth of CSC entries.
-                nnz
+            let work_cap = if mid_extra && !(small_band || dense_band) {
+                // Two mid-band attempts (K=4 then K=2 in loop order) worth of CSC entries.
+                2 * nnz
             } else {
                 REDUCE_WORK_NNZ
             };

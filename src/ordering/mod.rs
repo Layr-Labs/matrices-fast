@@ -2489,12 +2489,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     const PAIR_DESCENT_SWEEPS: usize = 4;
     const PAIR_DESCENT_OPS_BUDGET: i64 = 128_000_000;
     const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
-    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
+    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 96_000_000; // iter350a
 
+    // iter342a: EXT nnz<=80k WITHOUT max_deg gate (admit denser mid rows)
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 30_000
-        && max_deg * 50 <= n;
+        && nnz <= 80_000;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0
         && nnz <= PAIR_DESCENT_MAX_NNZ
@@ -2508,12 +2508,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     let medium_exact_gate;
 
     if pair_descent_gate {
+        // iter350a: deeper sweeps on EXT midband (8 vs tip 4)
+        let sweeps = if pair_descent_ext && n > PAIR_DESCENT_MAX_N { 8 } else { PAIR_DESCENT_SWEEPS };
         if let Some(cand) = rgreedy::adjacent_pair_descent(
             n,
             &pattern.col_ptr,
             &pattern.row_idx,
             &best_perm,
-            PAIR_DESCENT_SWEEPS,
+            sweeps,
             pair_descent_ops_budget,
         ) {
             let f = score(&cand);

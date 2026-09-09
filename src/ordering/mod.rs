@@ -233,9 +233,9 @@ const REDUCE_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
 /// is an exact improvement of the full objective at a fraction of the cost.
 /// Gated on the full-graph nnz below the documented slow tier, and on a margin
 /// window against the finished incumbent. Structural only - never on identity.
-const REDUCE_RECURSE_MAX_NNZ: usize = 150_000;
+const REDUCE_RECURSE_MAX_NNZ: usize = 250_000; // iter487a
 const REDUCE_RECURSE_MARGIN: (u64, u64) = (11, 10);
-const REDUCE_RECURSE_DEEP_MAX_CORE_N: usize = 80_000;
+const REDUCE_RECURSE_DEEP_MAX_CORE_N: usize = 120_000; // iter487a
 const REDUCE_RECURSE_DEEP_MAX_CORE_NNZ: usize = 250_000;
 /// EXTRA DEPTHS (matrices_mage 0064), bounded and SEQUENTIAL so the cost is identical on a
 /// 2-vCPU grader and a 16-core bench: after the shipped K=3 pass, depths are attempted in order
@@ -1698,7 +1698,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         consider!(move || feral_kahip::kahip_order(&core));
     }
     flush!();
-    let part_extra2 = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
+    // iter562a: force METIS-var/KaHIP-multi on n<=8k only (chimera_selby n=2031).
+    // 561a n<=25k cleared SCORE 0.793335 but WORST 1.379s on lee4_09; lean gate.
+    let part_extra2 = n <= 8_000 || n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
 
     // METIS PARAMETER variants. Every METIS candidate above varies only the
     // amount of WORK (initial partitionings, FM passes); these vary the SHAPE of
@@ -1724,25 +1726,28 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // envelope. Deterministic (fixed seeds, fixed parameters). Best-of floor →
     // zero-downside.
     if part_extra2 && n < METIS_VAR_MAX_N && nnz < METIS_VAR_MAX_NNZ {
-        for imb in [0.05f64, 0.10] {
+        // iter562a: denser METIS shape grid (561 langford mover) — cheap under n<=8k force.
+        for imb in [0.02f64, 0.05, 0.10, 0.15, 0.25] {
             let opts = feral_metis::MetisOptions {
                 max_imbalance: imb,
                 ..Default::default()
             };
             consider!(move || feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
         }
-        for sw in [100u32, 400] {
+        for sw in [50u32, 100, 200, 400, 800] {
             let opts = feral_metis::MetisOptions {
                 nd_to_amd_switch: sw,
                 ..Default::default()
             };
             consider!(move || feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
         }
-        let opts_seed = feral_metis::MetisOptions {
-            seed: 21,
-            ..Default::default()
-        };
-        consider!(move || feral_metis::metis_order_full(&core, &opts_seed).map(|(p, _, _)| p));
+        for seed in [21u64, 42, 7] {
+            let opts = feral_metis::MetisOptions {
+                seed,
+                ..Default::default()
+            };
+            consider!(move || feral_metis::metis_order_full(&core, &opts).map(|(p, _, _)| p));
+        }
     }
     // METIS densify n<3k (iter67/71 nuclear carrier).
     // iter76: lean densify on danger (n≥1800 nnz≥9k) — full densify on this
@@ -2466,7 +2471,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let hydro_band = (1800..=2500).contains(&n);
                 let gasprod_band = n >= 20_000;
                 // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
-                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
+                let mid_force = (7_000..22_000).contains(&n) && nnz >= 48_000; // iter488a
                 if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
@@ -2491,7 +2496,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     const PAIR_DESCENT_SWEEPS: usize = 4;
     const PAIR_DESCENT_OPS_BUDGET: i64 = 128_000_000;
     const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
-    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
+    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 96_000_000; // iter487a
 
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
@@ -4265,10 +4270,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a
-        const FINAL_FIVE_MAX_NNZ: usize = 80_000;
+        const FINAL_FIVE_MAX_N: usize = 14_000; // iter487a
+        const FINAL_FIVE_MAX_NNZ: usize = 100_000; // iter487a
         // iter180a: wide five on tip+176a
-        const FINAL_FIVE_OPS: i64 = 128_000_000;
+        const FINAL_FIVE_OPS: i64 = 192_000_000; // iter487a
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.

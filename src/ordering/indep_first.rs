@@ -533,7 +533,13 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         if cnnz <= GIANT_CORE_NNZ && !dense {
             tasks.push((i, Pass::Amf));
         }
-        if metis_ok[i] && cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ {
+        // iter211a: all-competitive METIS only on large-n patterns (arki); else tip top-k
+        let use_metis = if n >= 20_000 {
+            true
+        } else {
+            metis_ok[i]
+        };
+        if use_metis && cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ {
             tasks.push((i, Pass::Metis));
         }
         if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {

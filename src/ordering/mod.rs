@@ -199,7 +199,7 @@ const PEO_ALT_MAX_N: usize = 50_000;
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
 const MINL_SUBTREE_BUDGET: i64 = 8_000_000;
-const SUBTREE_CHAIN_MAX_N: usize = 45_000; // iter463a
+const SUBTREE_CHAIN_MAX_N: usize = 35_000;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 
@@ -2495,7 +2495,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 60_000 // iter475a
+        && nnz <= 50_000 // e5dcd-proven ceiling; 60k widening heated giants without dev wins
         && max_deg * 50 <= n;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0

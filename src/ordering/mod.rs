@@ -4464,11 +4464,35 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             best_perm = candidate;
         }
     }
+    // NOTE: the shipped block below assigns best_perm WITHOUT updating
+    // best_flops (harmless at function end, but a chained round cannot
+    // detect the first pass's win by comparison). Track wins explicitly
+    // with a flag — and repair the stale best_flops for correctness.
+    let mut final_won = false;
     if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = candidate;
+                final_won = true;
+            }
+        }
+    }
+    // Chained second final-offset pass, conditioned on the first pass's
+    // strict win (the gain-conditioned chaining shape that keeps working:
+    // FINAL_REFINE→rebuild→rebuild2). A first-pass win leaves a new perm
+    // whose offsets the first sweep pattern never visited; one more bounded
+    // round buys depth only where round one paid. Strict admit; same gate.
+    if final_won && n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
+        if let Some(candidate) = rgreedy::subset_window_descent_step(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
+        ) {
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
             }
         }

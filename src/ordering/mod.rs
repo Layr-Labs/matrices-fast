@@ -199,7 +199,7 @@ const PEO_ALT_MAX_N: usize = 50_000;
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
 const MINL_SUBTREE_BUDGET: i64 = 8_000_000;
-const SUBTREE_CHAIN_MAX_N: usize = 45_000; // iter463a
+const SUBTREE_CHAIN_MAX_N: usize = 35_000;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 
@@ -2464,10 +2464,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // iter265a RC: 235a + second-colour/metric expand (0145 family)
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
-                let gasprod_band = n >= 20_000;
-                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
-                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
-                if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                let gasprod_band = n >= 16_000; // 0154b: lee4_10 (17809) immediate; lee4_09 (15904) stays deferred
+                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -2495,7 +2493,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 60_000 // iter475a
+        && nnz <= 50_000 // 0154b tighten: 80k too slow (worst 1.389); KEEP max_deg*50<=n
         && max_deg * 50 <= n;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0
@@ -3382,9 +3380,29 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Accepted only on a strict decrease of the EXACT core objective, so
             // it can never lower the portfolio's own pick.
             let mut minfill_pick: Option<Vec<usize>> = None;
-            if (8..=CORE_MINFILL_MAX_CN).contains(&cn)
+            // Skip the minimum-fill spend when the degree-family passes agree:
+            // spread over the already-ranked exact flops is < 1%.
+            let mut agree_lo = u64::MAX;
+            let mut agree_hi = 0u64;
+            for r in results.iter().flatten() {
+                agree_lo = agree_lo.min(r.0);
+                agree_hi = agree_hi.max(r.0);
+            }
+            let passes_agree = agree_lo != u64::MAX
+                && agree_lo != 0
+                && agree_hi != u64::MAX
+                && (agree_hi as u128) * 100 < (agree_lo as u128) * 101;
+            let minfill_eligible = (8..=CORE_MINFILL_MAX_CN).contains(&cn)
                 && cl.core_nnz() <= CORE_MINFILL_MAX_CORE_NNZ
-                && core_minfill_ledger.get() > 0
+                && core_minfill_ledger.get() > 0;
+            // Bound reallocation: a skip preserves ledger for later depths, so
+            // cap what later depths may spend — a full carried allowance must
+            // not fund a pathological deep core past the time cap.
+            if minfill_eligible && passes_agree {
+                core_minfill_ledger.set(core_minfill_ledger.get().min(8_000_000));
+            }
+            if minfill_eligible
+                && !passes_agree
             {
                 let budget_before = core_minfill_ledger.get();
                 let (p, charged) = minfill_core_order(
@@ -3880,6 +3898,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // 0154c: snapshot post-transplant flops; re-call only if later stages improve
+    let transplant_entry_flops = best_flops;
 
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
@@ -4265,8 +4285,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a
-        const FINAL_FIVE_MAX_NNZ: usize = 80_000;
+        const FINAL_FIVE_MAX_N: usize = 6_500;
+        const FINAL_FIVE_MAX_NNZ: usize = 100_000;
         // iter180a: wide five on tip+176a
         const FINAL_FIVE_OPS: i64 = 128_000_000;
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
@@ -4496,8 +4516,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
+            }
+        }
+    }
+    // 0154c: terminal conditioned re-transplant (darthweenies shape). Fire only when
+    // post-transplant stages strictly improved the incumbent; same ledger/gates.
+    if best_flops < transplant_entry_flops {
+        let donors = runner_up.borrow();
+        if let Some(cand) = transplant_probe::refine_with_donors(
+            &scoring_pat, &best_perm, &donors, amd_flops,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
             }
         }
     }

@@ -233,9 +233,9 @@ const REDUCE_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
 /// is an exact improvement of the full objective at a fraction of the cost.
 /// Gated on the full-graph nnz below the documented slow tier, and on a margin
 /// window against the finished incumbent. Structural only - never on identity.
-const REDUCE_RECURSE_MAX_NNZ: usize = 150_000;
+const REDUCE_RECURSE_MAX_NNZ: usize = 250_000; // iter487a
 const REDUCE_RECURSE_MARGIN: (u64, u64) = (11, 10);
-const REDUCE_RECURSE_DEEP_MAX_CORE_N: usize = 80_000;
+const REDUCE_RECURSE_DEEP_MAX_CORE_N: usize = 120_000; // iter487a
 const REDUCE_RECURSE_DEEP_MAX_CORE_NNZ: usize = 250_000;
 /// EXTRA DEPTHS (matrices_mage 0064), bounded and SEQUENTIAL so the cost is identical on a
 /// 2-vCPU grader and a 16-core bench: after the shipped K=3 pass, depths are attempted in order
@@ -473,8 +473,8 @@ const RELABEL_AMF_MAX_NNZ: usize = 200_000;
 /// Structural window for the 0061 extra well-below relabel tickets (matrices_mage r6):
 /// on both corpora every conversion sat at n <= 5315 / nnz <= 42228 and none at n >= 6000
 /// or nnz > 50000, where the tickets cost 0.04-0.33 s per row for a bit-identical result.
-const EXTRA_RELABEL_MAX_N: usize = 6_000;
-const EXTRA_RELABEL_MAX_NNZ: usize = 50_000;
+const EXTRA_RELABEL_MAX_N: usize = 10_000; // iter491a
+const EXTRA_RELABEL_MAX_NNZ: usize = 100_000; // iter491a
 
 #[cfg(test)]
 const SUBTREE_SEARCH_WORK_LIMIT: i64 = 32_000_000;
@@ -2491,7 +2491,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     const PAIR_DESCENT_SWEEPS: usize = 4;
     const PAIR_DESCENT_OPS_BUDGET: i64 = 128_000_000;
     const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
-    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
+    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 96_000_000; // iter487a
 
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
@@ -4265,10 +4265,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a
-        const FINAL_FIVE_MAX_NNZ: usize = 80_000;
+        const FINAL_FIVE_MAX_N: usize = 14_000; // iter487a
+        const FINAL_FIVE_MAX_NNZ: usize = 100_000; // iter487a
         // iter180a: wide five on tip+176a
-        const FINAL_FIVE_OPS: i64 = 128_000_000;
+        const FINAL_FIVE_OPS: i64 = 192_000_000; // iter487a
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.

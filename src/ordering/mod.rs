@@ -268,8 +268,7 @@ const REDUCE_EXTRA_EXACT_MAX_CN: usize = 8_000;
 const INDEP_MIN_N: usize = 32;
 const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
-/// Immediate-acceptance margin at stage 1b as `(num, den)`: `f * den <= incumbent * num`.
-const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (3, 5);
+const INDEP_EARLY_MARGIN: (u64, u64) = (99, 100); // iter200a: 1% early accept
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
 /// nnz cap for the THREE extra sweep-found AMF variants (α1/α16/α-1). The sweep
@@ -2439,33 +2438,20 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     parallel::phase_mark("1.portfolio", _tph, best_flops);
     #[cfg(test)]
     let _tph = std::time::Instant::now();
-    // ── INDEPENDENT-SET-FIRST LIFT (see `indep_first`) ──────────────────────
-    // The candidate is scored here but NOT adopted yet: it is held through the
-    // descent / search / subtree stages, which polish the portfolio incumbent
-    // as before, and compared against the SUBTREE-POLISHED incumbent at 4b.
-    // The subtree stage is the pipeline's strongest polish and the best
-    // available predictor of what the later stages will do to an incumbent:
-    // when it gains a lot (mpbp_35: 0.469 -> 0.423, then 0.323 by the end) a
-    // lift that led the raw portfolio by 8 % ends 22 % behind; when it gains
-    // little (crudeoil_lee4: 0.687 -> 0.682) the lift's lead is real and the
-    // remaining stages polish the lift instead (lee4_06 0.542 -> 0.504).
-    // The one exception is an OVERWHELMING lead (INDEP_IMMEDIATE_MARGIN): the
-    // largest pure downstream gain measured on any dev row is 32 % (mpbp_34,
-    // mpbp_35, nuclear10a, gams05, ringpack_20_2), so a lift 40 % ahead cannot
-    // be overtaken and is adopted at once — that also spares the subtree stage
-    // its most expensive case, a poor incumbent on a dense KKT (pooling_sppc3pq:
-    // lift 0.283 against a 0.494 portfolio best, subtree on the old incumbent
-    // 0.15 s).
     let mut indep_deferred: Option<(u64, Vec<usize>)> = None;
     if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
-                if f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
-                    best_flops = f;
-                    best_perm = cand;
-                } else if f < best_flops {
-                    indep_deferred = Some((f, cand));
+                if f < best_flops {
+                    if f.saturating_mul(INDEP_EARLY_MARGIN.1)
+                        <= best_flops.saturating_mul(INDEP_EARLY_MARGIN.0)
+                    {
+                        best_flops = f;
+                        best_perm = cand;
+                    } else {
+                        indep_deferred = Some((f, cand));
+                    }
                 }
             }
         }
@@ -2979,20 +2965,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     #[cfg(test)]
     parallel::phase_mark("4.subtree", _tph, best_flops);
-    #[cfg(test)]
-    let _tph = std::time::Instant::now();
-    // Independent-set-first acceptance (see stage 1b): a lift that still beats
-    // the subtree-polished incumbent becomes the incumbent for the remaining
-    // stages. Every later stage is monotone, so a lift that loses here cannot
-    // win later; nothing is held back past this point.
-    if let Some((f, cand)) = indep_deferred {
-        if f < best_flops {
-            best_flops = f;
-            best_perm = cand;
-        }
-    }
-    #[cfg(test)]
-    parallel::phase_mark("4b.indep-accept", _tph, best_flops);
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // Replace the frontier's 24M independent terminal pass with a deeper 16M
@@ -4484,6 +4456,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     best_perm = candidate;
                 }
             }
+        }
+    }
+    // Marginal lifts must not reroll the incumbent-dependent searches above.
+    if let Some((flops, candidate)) = indep_deferred {
+        if flops < best_flops {
+            best_flops = flops;
+            best_perm = candidate;
         }
     }
     if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {

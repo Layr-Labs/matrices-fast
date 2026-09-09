@@ -199,7 +199,7 @@ const PEO_ALT_MAX_N: usize = 50_000;
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
 const MINL_SUBTREE_BUDGET: i64 = 8_000_000;
-const SUBTREE_CHAIN_MAX_N: usize = 35_000;
+const SUBTREE_CHAIN_MAX_N: usize = 45_000; // iter463a
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 
@@ -2465,7 +2465,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
                 let gasprod_band = n >= 20_000;
-                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
+                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
+                if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -4263,8 +4265,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 6_500;
-        const FINAL_FIVE_MAX_NNZ: usize = 100_000;
+        const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a
+        const FINAL_FIVE_MAX_NNZ: usize = 80_000;
         // iter180a: wide five on tip+176a
         const FINAL_FIVE_OPS: i64 = 128_000_000;
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and

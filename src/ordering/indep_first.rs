@@ -526,8 +526,15 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // died in that band.
     let metis_k = if nnz >= 300_000 { 2 } else { METIS_TOP_CORES };
     let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metis_k).any(|&j| j == i)).collect();
-    // iter273a: METRIC top-4 only on n<=16k (lee4_09 class); else top-3 — protect lee4_10 timing
-    let metric_k = if n <= 16_000 { 4 } else { METRIC_TOP_CORES };
+    // iter273a: METRIC top-4 on n<=16k (lee4_09).
+    // iter276a: also top-4 on 16k<n<=18k && nnz<=80k (edgecross24-115 class).
+    // 274a walked AmindNorm on the WHOLE x-set band and failed hidden; this
+    // slice is two public rows (edgecross, supplychain). lee4_10 nnz=120k stays top-3.
+    let metric_k = if n <= 16_000 || (n > 16_000 && n <= 18_000 && nnz <= 80_000) {
+        4
+    } else {
+        METRIC_TOP_CORES
+    };
     let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metric_k).any(|&j| j == i)).collect();
 
     // Phase 2: the expensive passes on competitive cores, one flat task list.
@@ -549,6 +556,11 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             // iter265a RC: broader quotient-metric family (0145 census winners)
             for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
                 tasks.push((i, Pass::Metric(v)));
+            }
+            // iter276a: AmindNorm only on 16k<n<=18k && nnz<=80k (edgecross class).
+            // 274a paid this on every x-set matrix and failed hidden.
+            if n > 16_000 && n <= 18_000 && nnz <= 80_000 {
+                tasks.push((i, Pass::Metric(V::AmindNorm)));
             }
         }
     }

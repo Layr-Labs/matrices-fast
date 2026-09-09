@@ -6,6 +6,46 @@ use super::{Game, TripleWork};
 const MAX_WIDTH: usize = 14;
 const MAX_DIMENSION: usize = super::MAX_N;
 
+/// Existing passes preserve neutral order; the alternate final pass explores
+/// largest local-index optimal orders before later overlapping windows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WindowPolicy {
+    Strict,
+    NeutralLargest,
+    NeutralRollingLargest,
+}
+
+impl WindowPolicy {
+    fn permits_neutral(self) -> bool {
+        matches!(self, Self::NeutralLargest | Self::NeutralRollingLargest)
+    }
+}
+
+/// A neutral trial cannot change any component until it pays validation,
+/// graph setup, the first reset, the first window census, and a two-vertex
+/// union DP. This lower bound can reject a futile trial before any allocation.
+/// Use wide arithmetic so even invalid, oversized public inputs cannot wrap.
+pub(crate) fn neutral_change_can_fit(
+    n: usize,
+    nnz: usize,
+    width: usize,
+    budget: i64,
+) -> bool {
+    if !(2..=MAX_DIMENSION).contains(&n)
+        || !(2..=MAX_WIDTH).contains(&width)
+        || budget <= 0
+    {
+        return false;
+    }
+    let words = n.div_ceil(64) as u128;
+    let window = width.min(n) as u128;
+    let n = n as u128;
+    let minimum = 5 * n * words + 27 * n + 3 * nnz as u128 + words + 1
+        + 8 * window * window + 8 * window
+        + 4 * (56 + 6 * words);
+    minimum <= budget as u128
+}
+
 #[cfg(test)]
 #[derive(Clone, Default)]
 struct WorkStats {
@@ -37,7 +77,7 @@ impl Drop for WorkReport {
     }
 }
 
-fn solve_component(
+fn solve_component_policy<const NEUTRAL: bool>(
     game: &Game<'_>,
     vertices: &[usize],
     work: &mut TripleWork,
@@ -104,10 +144,13 @@ fn solve_component(
     // A pivot sees the boundary of its eliminated-prefix component. Other
     // eliminated components cannot touch it, so no fill graph replay is needed.
     let mut best = vec![u64::MAX; states];
-    let mut path = vec![u64::MAX; states];
+    let mut path = vec![if NEUTRAL { 0 } else { u64::MAX }; states];
     best[0] = 0;
     path[0] = 0;
     for mask in 0..states - 1 {
+        if NEUTRAL && best[mask] == u64::MAX {
+            continue;
+        }
         for pivot in 0..k {
             let bit = 1usize << pivot;
             if mask & bit != 0 {
@@ -117,7 +160,8 @@ fn solve_component(
             let width = widths[components[next * k + pivot] as usize];
             let cost = best[mask] + width * width;
             let code = (path[mask] << 4) | pivot as u64;
-            if cost < best[next] || (cost == best[next] && code < path[next]) {
+            let preferred_tie = if NEUTRAL { code > path[next] } else { code < path[next] };
+            if cost < best[next] || (cost == best[next] && preferred_tie) {
                 best[next] = cost;
                 path[next] = code;
             }
@@ -130,7 +174,9 @@ fn solve_component(
             width * width
         })
         .sum();
-    let order = if best[states - 1] < incumbent {
+    let order = if best[states - 1] < incumbent
+        || (NEUTRAL && best[states - 1] == incumbent)
+    {
         (0..k)
             .map(|i| vertices[((path[states - 1] >> (4 * (k - i - 1))) & 15) as usize])
             .collect()
@@ -140,12 +186,22 @@ fn solve_component(
     Some((order, best[states - 1], incumbent))
 }
 
+fn solve_component(
+    game: &Game<'_>,
+    vertices: &[usize],
+    work: &mut TripleWork,
+) -> Option<(Vec<usize>, u64, u64)> {
+    solve_component_policy::<false>(game, vertices, work)
+}
+
 fn refine_window(
     game: &Game<'_>,
     window: &mut [usize],
     work: &mut TripleWork,
     engine: &mut Option<SignatureEngine>,
     charge_model: ChargeModel,
+    policy: WindowPolicy,
+    strict_gain: &mut bool,
 ) -> Option<bool> {
     let k = window.len();
     if !work.charge(8 * k * k + 8 * k) {
@@ -180,7 +236,11 @@ fn refine_window(
         let incident = vertices.iter().map(|&v| game.deg[v] as usize).sum();
         let (union_cost, signature_cost) =
             SignatureEngine::charge_costs(vertices.len(), game.w, incident);
-        let solution = if vertices.len() >= 5 && signature_cost < union_cost {
+        // Neutral results never enter the strict signature memo. Its keys and
+        // clique certificates therefore retain their existing exact semantics.
+        let solution = if policy.permits_neutral() {
+            solve_component_policy::<true>(game, &vertices, work)
+        } else if vertices.len() >= 5 && signature_cost < union_cost {
             let engine = engine.get_or_insert_with(|| SignatureEngine::new(game.n));
             engine.set_charge_model(charge_model);
             engine.solve_component(game, &vertices, work)
@@ -190,7 +250,14 @@ fn refine_window(
         let Some((order, best, incumbent)) = solution else {
             return if changed { Some(true) } else { None };
         };
-        if best < incumbent {
+        if best < incumbent
+            || (policy.permits_neutral()
+                && best == incumbent
+                && order != vertices)
+        {
+            *strict_gain |= best < incumbent;
+            // Preserve component interleaving: only permute the positions
+            // belonging to this connected component of the live window.
             for (&position, &v) in positions.iter().zip(&order) {
                 window[position] = v;
             }
@@ -221,6 +288,7 @@ pub(crate) fn subset_window_descent(
         (width / 2).max(1),
         budget,
         ChargeModel::UnionParity,
+        WindowPolicy::Strict,
     )
 }
 
@@ -244,6 +312,43 @@ pub(crate) fn subset_window_descent_step(
         offset_step,
         budget,
         ChargeModel::SignatureTrue,
+        WindowPolicy::Strict,
+    )
+}
+
+/// Bounded neutral moves are internal to this alternate pass. The caller
+/// must retain its seed unless the returned whole ordering strictly improves.
+pub(crate) fn subset_window_descent_neutral(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    offset_step: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    subset_window_descent_config(
+        n, col_ptr, row_idx, seed, width, sweeps, offset_step, budget,
+        ChargeModel::UnionParity, WindowPolicy::NeutralLargest,
+    )
+}
+
+/// Neutral windows overlap immediately. Only the outgoing prefix is
+/// eliminated before the next solve, preserving its exact live boundary.
+pub(crate) fn subset_window_descent_neutral_rolling(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    advance: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    subset_window_descent_config(
+        n, col_ptr, row_idx, seed, width, sweeps, advance, budget,
+        ChargeModel::UnionParity, WindowPolicy::NeutralRollingLargest,
     )
 }
 
@@ -257,11 +362,13 @@ fn subset_window_descent_config(
     offset_step: usize,
     budget: i64,
     charge_model: ChargeModel,
+    policy: WindowPolicy,
 ) -> Option<Vec<usize>> {
     if n < 2
         || n > MAX_DIMENSION
         || !(2..=MAX_WIDTH).contains(&width)
         || offset_step >= width
+        || (policy == WindowPolicy::NeutralRollingLargest && offset_step == 0)
         || sweeps == 0
         || budget <= 0
         || seed.len() != n
@@ -274,6 +381,11 @@ fn subset_window_descent_config(
         width,
         completed: false,
     };
+    if policy.permits_neutral()
+        && !neutral_change_can_fit(n, row_idx.len(), width, budget)
+    {
+        return None;
+    }
     let mut work = TripleWork { remaining: budget };
     if !work.charge(n + 1 + row_idx.len() + 2 * n)
         || col_ptr.first().copied() != Some(0)
@@ -300,11 +412,18 @@ fn subset_window_descent_config(
     let mut engine = None;
     let mut current = seed.to_vec();
     let mut changed = false;
+    let mut strict_gain = false;
     for sweep in 0..sweeps {
         if !work.charge(2 * n * words + 8 * n) {
             return changed.then_some(current);
         }
-        game.reset();
+        if sweep == 0 {
+            // Game::new just copied pristine adjacency. Keep the same logical
+            // charge and initialize metadata without copying it a second time.
+            game.reset_fresh();
+        } else {
+            game.reset();
+        }
         let offset = (sweep * offset_step) % width;
         for &v in current.iter().take(offset.min(n)) {
             if !work.eliminate(&mut game, v) {
@@ -320,18 +439,43 @@ fn subset_window_descent_config(
                 &mut work,
                 &mut engine,
                 charge_model,
+                policy,
+                &mut strict_gain,
             ) {
-                Some(improved) => changed |= improved,
+                // Keep neutral moves available to subsequent overlaps, but a
+                // production rolling result is useful only after a strict gain.
+                // Every completed component leaves the same suffix graph, so
+                // later neutral edits cannot undo an earlier strict decrease.
+                Some(improved) => changed |= if policy == WindowPolicy::NeutralRollingLargest {
+                    strict_gain
+                } else {
+                    improved
+                },
                 None => return changed.then_some(current),
             }
-            if end < n {
-                for &v in &current[start..end] {
+            if policy == WindowPolicy::NeutralRollingLargest {
+                // The final suffix has already been optimized; do not revisit
+                // progressively shorter copies of it or replay it pointlessly.
+                if end == n {
+                    break;
+                }
+                let next = start + offset_step;
+                for &v in &current[start..next] {
                     if !work.eliminate(&mut game, v) {
                         return changed.then_some(current);
                     }
                 }
+                start = next;
+            } else {
+                if end < n {
+                    for &v in &current[start..end] {
+                        if !work.eliminate(&mut game, v) {
+                            return changed.then_some(current);
+                        }
+                    }
+                }
+                start = end;
             }
-            start = end;
         }
     }
     #[cfg(test)]
@@ -465,6 +609,276 @@ mod tests {
                 values.swap(i, j);
             }
         }
+    }
+
+
+    fn verify_neutral_window(p: &Pattern, prefix: &[usize], window: &[usize]) {
+        let pristine = Game::build_adj(p.n, &p.col_ptr, &p.row_idx).unwrap();
+        let mut game = Game::new(p.n, &pristine).unwrap();
+        game.reset();
+        for &v in prefix { game.eliminate(v); }
+        let mut work = TripleWork { remaining: i64::MAX };
+        let (order, best, incumbent) =
+            solve_component_policy::<true>(&game, window, &mut work).unwrap();
+        let mut expected = u64::MAX;
+        let mut expected_code = 0u64;
+        let mut expected_order = Vec::new();
+        let mut original = 0;
+        permutations(&mut window.to_vec(), 0, &mut |candidate| {
+            game.reset();
+            for &v in prefix { game.eliminate(v); }
+            let cost: u64 = candidate.iter().map(|&v| game.eliminate(v).pow(2)).sum();
+            let code = candidate.iter().fold(0u64, |code, v| {
+                (code << 4) | window.iter().position(|w| w == v).unwrap() as u64
+            });
+            if candidate == window { original = cost; }
+            if cost < expected || (cost == expected && code > expected_code) {
+                expected = cost;
+                expected_code = code;
+                expected_order = candidate.to_vec();
+            }
+        });
+        assert_eq!((best, incumbent), (expected, original));
+        assert_eq!(order, expected_order);
+        game.reset();
+        for &v in prefix { game.eliminate(v); }
+        for &v in window { game.eliminate(v); }
+        let suffix = game.adj.clone();
+        game.reset();
+        for &v in prefix { game.eliminate(v); }
+        for &v in &order { game.eliminate(v); }
+        assert_eq!(game.adj, suffix);
+    }
+
+    #[test]
+    fn neutral_window_matches_exhaustive_cost_and_largest_local_tie() {
+        let edges: Vec<_> = (0..4)
+            .flat_map(|a| (a + 1..4).map(move |b| (a, b))).collect();
+        for mask in 0usize..1 << edges.len() {
+            let chosen: Vec<_> = edges.iter().enumerate()
+                .filter(|(i, _)| mask & (1 << i) != 0).map(|(_, &e)| e).collect();
+            verify_neutral_window(&Pattern::from_edges(4, &chosen), &[], &[2, 0, 3, 1]);
+        }
+        for n in [9usize, 70] {
+            for sample in 0..4 {
+                let edges: Vec<_> = (0..n).flat_map(|a| {
+                    (a + 1..n)
+                        .filter(move |&b| (a * 31 + b * 17 + sample * 13) % 11 < 3)
+                        .map(move |b| (a, b))
+                }).collect();
+                verify_neutral_window(
+                    &Pattern::from_edges(n, &edges), &[0, 1], &[6, 2, 5, 3, 7, 4],
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn neutral_window_handles_full_width_codes_and_component_interleaving() {
+        let n = 17;
+        let edges: Vec<_> = (0..n)
+            .flat_map(|a| (a + 1..n).map(move |b| (a, b))).collect();
+        let p = Pattern::from_edges(n, &edges);
+        let pristine = Game::build_adj(n, &p.col_ptr, &p.row_idx).unwrap();
+        let mut game = Game::new(n, &pristine).unwrap();
+        game.reset();
+        game.eliminate(0);
+        let vertices: Vec<_> = (1..15).collect();
+        let mut work = TripleWork { remaining: i64::MAX };
+        let (order, best, incumbent) =
+            solve_component_policy::<true>(&game, &vertices, &mut work).unwrap();
+        assert_eq!(best, incumbent);
+        assert_eq!(order, vertices.iter().copied().rev().collect::<Vec<_>>());
+
+        let p = Pattern::from_edges(4, &[(0, 2), (1, 3)]);
+        let pristine = Game::build_adj(4, &p.col_ptr, &p.row_idx).unwrap();
+        let mut game = Game::new(4, &pristine).unwrap();
+        game.reset();
+        let mut window = vec![0, 1, 2, 3];
+        let mut engine = None;
+        let mut work = TripleWork { remaining: 1_000_000 };
+        let mut strict_gain = false;
+        assert_eq!(refine_window(
+            &game, &mut window, &mut work, &mut engine, ChargeModel::UnionParity,
+            WindowPolicy::NeutralLargest, &mut strict_gain,
+        ), Some(true));
+        assert!(!strict_gain);
+        assert_eq!(window, vec![2, 3, 0, 1]);
+        assert!(engine.is_none(), "neutral orders must not enter the strict memo");
+    }
+
+    #[test]
+    fn neutral_ties_unlock_a_strict_gain_in_a_later_overlapping_window() {
+        let p = Pattern::from_edges(6, &[
+            (0, 1), (0, 2), (0, 3), (1, 4), (1, 5), (2, 4), (2, 5),
+        ]);
+        let seed = vec![0, 1, 2, 3, 4, 5];
+        let pristine = Game::build_adj(6, &p.col_ptr, &p.row_idx).unwrap();
+        let mut game = Game::new(6, &pristine).unwrap();
+        assert_eq!(game.replay_flops(&seed), 71);
+        // Both alternating pair offsets are locally tied in the seed.
+        assert!(subset_window_descent(
+            6, &p.col_ptr, &p.row_idx, &seed, 2, 3, 1_000_000,
+        ).is_none());
+        // One neutral sweep reverses the three tied pairs without changing cost.
+        let plateau = subset_window_descent_neutral(
+            6, &p.col_ptr, &p.row_idx, &seed, 2, 1, 1, 1_000_000,
+        ).unwrap();
+        assert_eq!(plateau, vec![1, 0, 3, 2, 5, 4]);
+        assert_eq!(game.replay_flops(&plateau), 71);
+        // The shifted window now exposes degree-one vertex 3 before vertex 0.
+        let improved = subset_window_descent(
+            6, &p.col_ptr, &p.row_idx, &plateau, 2, 2, 1_000_000,
+        ).unwrap();
+        assert_eq!(game.replay_flops(&improved), 50);
+    }
+
+    #[test]
+    fn neutral_descent_is_deterministic_and_nonworsening_with_partial_budgets() {
+        for n in [8usize, 17, 65] {
+            let edges: Vec<_> = (0..n).flat_map(|a| {
+                (a + 1..n).filter(move |&b| (a * 19 + b * 7) % 13 < 3)
+                    .map(move |b| (a, b))
+            }).collect();
+            let p = Pattern::from_edges(n, &edges);
+            let seed: Vec<_> = (0..n).rev().collect();
+            let pristine = Game::build_adj(n, &p.col_ptr, &p.row_idx).unwrap();
+            let mut game = Game::new(n, &pristine).unwrap();
+            let before = game.replay_flops(&seed);
+            for budget in [0, 1, 1_000, 10_000, 100_000, 1_000_000] {
+                let first = subset_window_descent_neutral(
+                    n, &p.col_ptr, &p.row_idx, &seed, 8, 4, 3, budget,
+                );
+                assert_eq!(first, subset_window_descent_neutral(
+                    n, &p.col_ptr, &p.row_idx, &seed, 8, 4, 3, budget,
+                ));
+                if let Some(order) = first {
+                    let mut sorted = order.clone();
+                    sorted.sort_unstable();
+                    assert_eq!(sorted, (0..n).collect::<Vec<_>>());
+                    assert!(game.replay_flops(&order) <= before);
+                }
+            }
+        }
+    }
+
+
+    #[test]
+    fn rolling_neutral_reaches_an_overlap_gain_in_its_first_sweep() {
+        let p = Pattern::from_edges(6, &[
+            (0, 1), (0, 2), (0, 3), (1, 4), (1, 5), (2, 4), (2, 5),
+        ]);
+        let seed = vec![0, 1, 2, 3, 4, 5];
+        let pristine = Game::build_adj(6, &p.col_ptr, &p.row_idx).unwrap();
+        let mut game = Game::new(6, &pristine).unwrap();
+        let disjoint = subset_window_descent_neutral(
+            6, &p.col_ptr, &p.row_idx, &seed, 2, 1, 1, 1_000_000,
+        ).unwrap();
+        assert_eq!(game.replay_flops(&disjoint), 71);
+        let rolling = subset_window_descent_neutral_rolling(
+            6, &p.col_ptr, &p.row_idx, &seed, 2, 1, 1, 1_000_000,
+        ).unwrap();
+        assert_eq!(game.replay_flops(&rolling), 50);
+    }
+
+    #[test]
+    fn rolling_neutral_discards_a_pure_plateau_and_stops_at_the_tail() {
+        let n = 10;
+        let edges: Vec<_> = (0..n)
+            .flat_map(|a| (a + 1..n).map(move |b| (a, b))).collect();
+        let p = Pattern::from_edges(n, &edges);
+        let seed: Vec<_> = (0..n).collect();
+        // A clique has no strict gain, including when the budget expires
+        // after some completed neutral edits.
+        for budget in [1, 1_000, 10_000, 100_000, 1_000_000] {
+            assert!(subset_window_descent_neutral_rolling(
+                n, &p.col_ptr, &p.row_idx, &seed, 8, 1, 3, budget,
+            ).is_none());
+        }
+        WORK_STATS.with(|cell| *cell.borrow_mut() = WorkStats::default());
+        assert!(subset_window_descent_neutral_rolling(
+            n, &p.col_ptr, &p.row_idx, &seed, 8, 1, 3, 1_000_000,
+        ).is_none());
+        // The two tied cliques occupy 0..8 and 3..10. Any extra shrinking
+        // tail would add another DP component and fail this check.
+        let stats = WORK_STATS.with(|cell| cell.borrow().clone());
+        assert_eq!(stats.components[8], 1);
+        assert_eq!(stats.components[7], 1);
+        assert_eq!(stats.components.iter().sum::<usize>(), 2);
+        assert_eq!(stats.completed[8], 1);
+        assert!(subset_window_descent_neutral_rolling(
+            n, &p.col_ptr, &p.row_idx, &seed, 8, 1, 0, 1_000_000,
+        ).is_none());
+    }
+
+    #[test]
+    fn rolling_neutral_is_deterministic_and_strictly_improves_with_partial_budgets() {
+        for n in [8usize, 17, 65] {
+            let edges: Vec<_> = (0..n).flat_map(|a| {
+                (a + 1..n).filter(move |&b| (a * 19 + b * 7) % 13 < 3)
+                    .map(move |b| (a, b))
+            }).collect();
+            let p = Pattern::from_edges(n, &edges);
+            let seed: Vec<_> = (0..n).rev().collect();
+            let pristine = Game::build_adj(n, &p.col_ptr, &p.row_idx).unwrap();
+            let mut game = Game::new(n, &pristine).unwrap();
+            let before = game.replay_flops(&seed);
+            for budget in [0, 1, 1_000, 10_000, 100_000, 1_000_000] {
+                let first = subset_window_descent_neutral_rolling(
+                    n, &p.col_ptr, &p.row_idx, &seed, 8, 3, 3, budget,
+                );
+                assert_eq!(first, subset_window_descent_neutral_rolling(
+                    n, &p.col_ptr, &p.row_idx, &seed, 8, 3, 3, budget,
+                ));
+                if let Some(order) = first {
+                    let mut sorted = order.clone();
+                    sorted.sort_unstable();
+                    assert_eq!(sorted, (0..n).collect::<Vec<_>>());
+                    assert!(game.replay_flops(&order) < before);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn neutral_work_lower_bound_is_tight_for_the_first_strict_change() {
+        let p = Pattern::from_edges(3, &[(0, 1), (0, 2)]);
+        let seed = vec![0, 1, 2];
+        // One-word graph, a two-vertex window, and the smallest nontrivial DP.
+        let validation = 3 * p.n + p.row_idx.len() + 1;
+        let setup = 3 * p.n + 2 * p.row_idx.len() + 16 * p.n + 1;
+        let first_reset = 2 * p.n + 8 * p.n;
+        let first_window = 8 * 2 * 2 + 8 * 2;
+        let first_component = 4 * (16 * 2 + 6 + 24);
+        let minimum = (validation + setup + first_reset + first_window
+            + first_component) as i64;
+        assert!(!neutral_change_can_fit(p.n, p.row_idx.len(), 2, minimum - 1));
+        assert!(subset_window_descent_neutral_rolling(
+            p.n, &p.col_ptr, &p.row_idx, &seed, 2, 1, 1, minimum - 1,
+        ).is_none());
+        assert!(neutral_change_can_fit(p.n, p.row_idx.len(), 2, minimum));
+        // The first strict swap survives refusal to replay the next prefix.
+        let order = subset_window_descent_neutral_rolling(
+            p.n, &p.col_ptr, &p.row_idx, &seed, 2, 1, 1, minimum,
+        ).unwrap();
+        assert_eq!(order, vec![1, 0, 2]);
+        let pristine = Game::build_adj(p.n, &p.col_ptr, &p.row_idx).unwrap();
+        let mut game = Game::new(p.n, &pristine).unwrap();
+        assert!(game.replay_flops(&order) < game.replay_flops(&seed));
+    }
+
+    #[test]
+    fn neutral_work_lower_bound_handles_limits_without_overflow() {
+        assert!(!neutral_change_can_fit(usize::MAX, 0, 8, i64::MAX));
+        assert!(!neutral_change_can_fit(3, usize::MAX, 2, i64::MAX));
+        assert!(!neutral_change_can_fit(1, 0, 2, i64::MAX));
+        assert!(!neutral_change_can_fit(3, 4, 0, i64::MAX));
+        assert!(!neutral_change_can_fit(3, 4, MAX_WIDTH + 1, i64::MAX));
+        assert!(!neutral_change_can_fit(3, 4, 2, 0));
+        assert!(!neutral_change_can_fit(3, 4, 2, -1));
+        assert!(!neutral_change_can_fit(4_865, 0, 8, 2_000_000));
+        assert!(!neutral_change_can_fit(12_000, 200_000, 8, 2_000_000));
+        assert!(neutral_change_can_fit(12_000, 200_000, 8, 32_000_000));
     }
 
     fn verify_window(p: &Pattern, prefix: &[usize], window: &[usize]) {

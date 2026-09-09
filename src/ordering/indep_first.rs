@@ -98,12 +98,54 @@ pub(crate) fn bipartite_sides(sp: &ScoringPattern) -> Option<Vec<u8>> {
     Some(colour)
 }
 
+/// Selected vertices, supplied in ascending id order, sorted by (degree, id).
+/// Stable counting by degree preserves the original tie break. Limit buckets
+/// to the number of selected vertices;
+/// unusually large degrees retain the comparison sort and its bounded space.
+fn degree_order(sp: &ScoringPattern, mut order: Vec<usize>) -> Vec<usize> {
+    if order.len() < 2 {
+        return order;
+    }
+    let mut max_degree = 0;
+    let mut previous_degree = 0;
+    let mut sorted = true;
+    for &v in &order {
+        let degree = sp.col_ptr[v + 1] - sp.col_ptr[v];
+        sorted &= previous_degree <= degree;
+        previous_degree = degree;
+        max_degree = max_degree.max(degree);
+    }
+    if sorted {
+        return order;
+    }
+    if max_degree >= order.len() {
+        order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
+        return order;
+    }
+    let mut next = vec![0usize; max_degree + 1];
+    for &v in &order {
+        next[sp.col_ptr[v + 1] - sp.col_ptr[v]] += 1;
+    }
+    let mut offset = 0;
+    for count in &mut next {
+        let len = *count;
+        *count = offset;
+        offset += len;
+    }
+    let mut by_degree = vec![0usize; order.len()];
+    for v in order {
+        let slot = &mut next[sp.col_ptr[v + 1] - sp.col_ptr[v]];
+        by_degree[*slot] = v;
+        *slot += 1;
+    }
+    by_degree
+}
+
 /// Greedy maximal independent set by ascending `(degree, index)`, restricted
 /// to vertices of degree ≤ `max_deg`.
 pub(crate) fn greedy_independent_set(sp: &ScoringPattern, max_deg: usize) -> Vec<bool> {
     let n = sp.n;
-    let mut order: Vec<usize> = (0..n).collect();
-    order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
+    let order = degree_order(sp, (0..n).collect());
     let mut in_x = vec![false; n];
     let mut blocked = vec![false; n];
     for v in order {
@@ -120,6 +162,42 @@ pub(crate) fn greedy_independent_set(sp: &ScoringPattern, max_deg: usize) -> Vec
         }
     }
     in_x
+}
+
+/// Derive a degree-capped greedy set without repeating the greedy traversal.
+///
+/// Both greedy constructors visit vertices in ascending (degree, index) order.
+/// Stopping at a degree cap therefore takes a prefix of the same traversal:
+/// later vertices cannot alter any earlier selection. Filtering the uncapped
+/// result is exact, including for a fixed excluded set.
+fn cap_independent_set(
+    sp: &ScoringPattern,
+    uncapped: &[bool],
+    max_deg: usize,
+) -> Vec<bool> {
+    uncapped
+        .iter()
+        .enumerate()
+        .map(|(v, &selected)| {
+            selected && sp.col_ptr[v + 1] - sp.col_ptr[v] <= max_deg
+        })
+        .collect()
+}
+
+/// Research-only exact equality check. Production admission intentionally
+/// chooses one representative per summary to bound work; matching summaries
+/// do not prove equal vertex sets or equal residual cores.
+#[cfg(test)]
+fn set_was_admitted(
+    admitted: &[Vec<bool>],
+    summaries: &[(usize, u64)],
+    candidate: &[bool],
+    summary: (usize, u64),
+) -> bool {
+    summaries
+        .iter()
+        .zip(admitted)
+        .any(|(&seen, set)| seen == summary && set.as_slice() == candidate)
 }
 
 /// Greedy maximal independent set by ascending predicted NEW FILL — the
@@ -182,8 +260,7 @@ pub(crate) fn fill_greedy_independent_set(sp: &ScoringPattern, max_deg: usize, e
 /// "second colour class" once `excluded` has been taken.
 pub(crate) fn greedy_independent_set_excluding(sp: &ScoringPattern, max_deg: usize, excluded: &[bool]) -> Vec<bool> {
     let n = sp.n;
-    let mut order: Vec<usize> = (0..n).filter(|&v| !excluded[v]).collect();
-    order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
+    let order = degree_order(sp, (0..n).filter(|&v| !excluded[v]).collect());
     let mut in_x = vec![false; n];
     let mut blocked = vec![false; n];
     for v in order {
@@ -206,9 +283,7 @@ pub(crate) fn greedy_independent_set_excluding(sp: &ScoringPattern, max_deg: usi
 /// vertices in ascending `(degree, index)` while the clique-pair budget
 /// (Σ deg·(deg−1)/2) lasts. Hubs stay in the core, where they belong.
 pub(crate) fn budget_trim(sp: &ScoringPattern, in_x: &mut [bool], max_pairs: u64) {
-    let n = sp.n;
-    let mut members: Vec<usize> = (0..n).filter(|&v| in_x[v]).collect();
-    members.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
+    let members = degree_order(sp, (0..sp.n).filter(|&v| in_x[v]).collect());
     let mut left = max_pairs;
     for v in members {
         let d = (sp.col_ptr[v + 1] - sp.col_ptr[v]) as u64;
@@ -387,6 +462,13 @@ struct LiftedCore {
     cri: Vec<i32>,
 }
 
+/// Exact scoring on a lifted, fixed core. Each parallel task owns its arena;
+/// no mutable scorer or symbolic state is shared between concurrent passes.
+fn lifted_core_flops(pattern: &ScoringPattern, perm: &[usize]) -> u64 {
+    let mut workspace = super::scoring_ws::ScoreWorkspace::new(pattern.n, pattern.row_idx.len());
+    workspace.flops(pattern, perm)
+}
+
 /// Work-ledgered production driver.
 ///
 /// Sets: the greedy maximal independent set by `(degree, index)` at caps
@@ -423,9 +505,9 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // Admission is decided up front from the pattern alone. A set is trimmed
     // (hubs back into the core) until its predicted lift + core work fits:
     // lift ~ nnz + pairs, core ≤ nnz + 2·pairs, walked by the ordering passes
-    // and exact scorings, i.e. 5·nnz + 9·pairs ≤ ledger. Two sets with
-    // identical size and pair sum are (in practice) the same set; the Schur
-    // complement is not paid for twice.
+    // and exact scorings, i.e. 5·nnz + 9·pairs ≤ ledger. As a work-limiting
+    // heuristic, keep only the first candidate for each (size, pair sum).
+    // Equal summaries do not imply equal sets or equal Schur complements.
     let share = ledger;
     let max_pairs = share.saturating_sub(5 * nnz as u64) / 9;
     if max_pairs == 0 {
@@ -434,8 +516,9 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     let g_inf = greedy_independent_set(sp, usize::MAX);
     // Degree-greedy caps. Extra mid-caps (15/5, plus 20/7 on dense inputs)
     // are the promoted 180a family; they only add AMD walks in phase 1 when
-    // the set is new, and they are skipped when (xs, pairs) matches a
-    // cheaper cap. Second-colour-class sets are gated to n<=12k so the
+    // a summary is new; matching (size, pair sum) is a representative-work
+    // heuristic, not proof of equivalence. Second-colour-class sets are
+    // gated to n<=12k so the
     // lee4_09/10 critical path (already 1.04 s on the tip) does not pay
     // two extra lifts + metric walks — that is what killed hidden timing
     // on fe871f1. lee4_06 (n=10429) and lee2_06 (n=6418) still get them.
@@ -444,6 +527,11 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // (pooling_sppc3pq) they add ~0.12 s of lift+AMD and crowd METIS off
     // the winning core — skip them there.
     let mut candidates: Vec<Vec<bool>> = vec![g_inf.clone()];
+    // Degree caps keep a prefix of the same (degree, index) order used by
+    // budget_trim. Later vertices cannot change earlier budget decisions,
+    // so trim once and derive every cap from that result. Keep g_inf itself
+    // untrimmed: the second colour must exclude the original greedy set.
+    budget_trim(sp, &mut candidates[0], max_pairs);
     if n <= 20_000 || nnz <= 400_000 {
         let dense_input = nnz >= 12 * n;
         let extra_caps: &[usize] = if dense_input {
@@ -452,24 +540,27 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             &[15, 9, 5, 3]
         };
         for &cap in extra_caps {
-            candidates.push(greedy_independent_set(sp, cap));
+            let capped = cap_independent_set(sp, &candidates[0], cap);
+            candidates.push(capped);
         }
     } else {
         for &cap in &[9usize, 3] {
-            candidates.push(greedy_independent_set(sp, cap));
+            let capped = cap_independent_set(sp, &candidates[0], cap);
+            candidates.push(capped);
         }
     }
     // iter265a RC: widen second-colour (was n<=12k). nnz<=80k excludes lee4_09/10.
     if n <= 18_000 && nnz <= 80_000 {
-        candidates.push(greedy_independent_set_excluding(sp, usize::MAX, &g_inf));
-        candidates.push(greedy_independent_set_excluding(sp, 15, &g_inf));
-        candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
-        candidates.push(greedy_independent_set_excluding(sp, 5, &g_inf));
+        let mut x_inf = greedy_independent_set_excluding(sp, usize::MAX, &g_inf);
+        budget_trim(sp, &mut x_inf, max_pairs);
+        candidates.push(x_inf.clone());
+        for &cap in &[15usize, 9, 5] {
+            candidates.push(cap_independent_set(sp, &x_inf, cap));
+        }
     }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
-    for mut in_x in candidates {
-        budget_trim(sp, &mut in_x, max_pairs);
+    for in_x in candidates {
         let xs = in_x.iter().filter(|&&b| b).count();
         if xs == 0 || xs == n {
             continue;
@@ -507,7 +598,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         if !super::is_bijection(&cp, cn) {
             return None;
         }
-        let f = il.prefix_flops.saturating_add(super::flops_of(&core_pat, &cp));
+        let f = il.prefix_flops.saturating_add(lifted_core_flops(&core_pat, &cp));
         Some((LiftedCore { il, core_pat, ccp, cri }, f, cp))
     });
     let cores: Vec<(LiftedCore, u64, Vec<usize>)> = phase1.into_iter().flatten().flatten().collect();
@@ -562,7 +653,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         if !super::is_bijection(&cp, cn) {
             return None;
         }
-        let f = lc.il.prefix_flops.saturating_add(super::flops_of(&lc.core_pat, &cp));
+        let f = lc.il.prefix_flops.saturating_add(lifted_core_flops(&lc.core_pat, &cp));
         Some((i, f, cp))
     });
 
@@ -592,9 +683,9 @@ fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usiz
     // their own threads, so each gets the whole ledger, and a set is trimmed
     // (hubs back into the core) until its predicted lift + core work fits:
     // lift ~ nnz + pairs, core ≤ nnz + 2·pairs, walked by two ordering passes
-    // and two exact scorings, i.e. 5·nnz + 9·pairs ≤ ledger. Two sets with
-    // identical size and pair sum are (in practice) the same set; the Schur
-    // complement is not paid for twice.
+    // and two exact scorings, i.e. 5·nnz + 9·pairs ≤ ledger. As a work-limiting
+    // heuristic, keep only the first candidate for each (size, pair sum).
+    // Equal summaries do not imply equal sets or equal Schur complements.
     let share = ledger;
     let max_pairs = share.saturating_sub(5 * nnz as u64) / 9;
     if max_pairs == 0 {
@@ -609,9 +700,10 @@ fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usiz
     } else {
         &[usize::MAX, 15, 9, 5, 3]
     };
+    let mut g_inf = greedy_independent_set(sp, usize::MAX);
+    budget_trim(sp, &mut g_inf, max_pairs);
     for &cap in caps {
-        let mut in_x = greedy_independent_set(sp, cap);
-        budget_trim(sp, &mut in_x, max_pairs);
+        let in_x = cap_independent_set(sp, &g_inf, cap);
         let xs = in_x.iter().filter(|&&b| b).count();
         if xs == 0 || xs == n {
             continue;
@@ -777,4 +869,350 @@ pub(crate) fn splice(il: &IndepLift, core_perm: &[usize]) -> Vec<usize> {
         out.push(il.core_ids[k]);
     }
     out
+}
+
+#[cfg(test)]
+mod lifted_core_score_tests {
+    use super::*;
+
+    fn core_pattern(lifted: &IndepLift) -> ScoringPattern {
+        ScoringPattern {
+            n: lifted.core_n(),
+            col_ptr: lifted.core_col_ptr.clone(),
+            row_idx: lifted.core_row_idx.clone(),
+        }
+    }
+
+    #[test]
+    fn fresh_workspace_matches_vendor_on_all_small_lifted_cores() {
+        let mut checks = 0;
+        for n in 2..=5 {
+            let edges: Vec<(usize, usize)> =
+                (0..n).flat_map(|a| ((a + 1)..n).map(move |b| (a, b))).collect();
+            for graph in 0usize..1usize << edges.len() {
+                let present: Vec<_> = edges.iter().enumerate()
+                    .filter(|(bit, _)| graph & (1usize << bit) != 0)
+                    .map(|(_, &edge)| edge).collect();
+                let p = crate::Pattern::from_edges(n, &present);
+                let sp = ScoringPattern { n, col_ptr: p.col_ptr, row_idx: p.row_idx };
+                for membership in 1usize..(1usize << n) - 1 {
+                    let in_x: Vec<_> = (0..n).map(|v| membership & (1usize << v) != 0).collect();
+                    let Some(lifted) = lift(&sp, &in_x, usize::MAX) else { continue; };
+                    let core = core_pattern(&lifted);
+                    let mut perm: Vec<_> = (0..core.n).collect();
+                    loop {
+                        let expected = super::super::flops_of(&core, &perm);
+                        assert_eq!(lifted_core_flops(&core, &perm), expected,
+                            "n={n} graph={graph} membership={membership} perm={perm:?}");
+                        assert_eq!(lifted.prefix_flops + expected,
+                            super::super::flops_of(&sp, &splice(&lifted, &perm)),
+                            "lifted score must equal the complete spliced ordering");
+                        checks += 1;
+                        let Some(i) = (0..core.n - 1).rev().find(|&i| perm[i] < perm[i + 1]) else { break; };
+                        let j = (i + 1..core.n).rev().find(|&j| perm[j] > perm[i]).unwrap();
+                        perm.swap(i, j);
+                        perm[i + 1..].reverse();
+                    }
+                }
+            }
+        }
+        assert!(checks > 1000);
+    }
+
+    #[test]
+    #[ignore]
+    fn probe_fresh_lifted_workspace_public_cores() {
+        // Read-only diagnostic on public corpus inputs. Timers include a fresh
+        // arena per score, exactly as the two parallel production sites do.
+        let only = std::env::var("SSI_PROBE_ONLY").unwrap_or_default();
+        let mut cores = 0;
+        let mut checks = 0;
+        let mut oracle_ns = 0;
+        let mut workspace_ns = 0;
+        for (name, pattern) in crate::corpus::corpus() {
+            if !only.is_empty() && !only.split(',').any(|s| s == name) {
+                continue;
+            }
+            let n = pattern.n;
+            let nnz = pattern.row_idx.len();
+            if n < 32 || nnz == 0 || nnz > 1_500_000 {
+                continue;
+            }
+            let ledger = 8_000_000u64;
+            let max_pairs = ledger.saturating_sub(5 * nnz as u64) / 9;
+            if max_pairs == 0 { continue; }
+            let sp = ScoringPattern { n, col_ptr: pattern.col_ptr, row_idx: pattern.row_idx };
+            let full = greedy_independent_set(&sp, usize::MAX);
+            for cap in [usize::MAX, 15, 9, 5, 3] {
+                let mut in_x = cap_independent_set(&sp, &full, cap);
+                budget_trim(&sp, &mut in_x, max_pairs);
+                let Some(lifted) = lift(&sp, &in_x, (ledger / 4) as usize) else { continue; };
+                if lifted.core_n() < 2 || 4 * lifted.core_nnz() as u64 > ledger {
+                    continue;
+                }
+                let core = core_pattern(&lifted);
+                let col: Vec<i32> = core.col_ptr.iter().map(|&x| i32::try_from(x).unwrap()).collect();
+                let row: Vec<i32> = core.row_idx.iter().map(|&x| i32::try_from(x).unwrap()).collect();
+                let ccore = feral_ordering_core::CscPattern::new(core.n, &col, &row).unwrap();
+                let amd: Vec<usize> = run_pass(&ccore, Pass::Amd).unwrap().into_iter().map(|v| v as usize).collect();
+                let reverse: Vec<usize> = (0..core.n).rev().collect();
+                for (ticket, perm) in [&amd, &reverse].into_iter().enumerate() {
+                    let (expected, actual);
+                    if ticket == 0 {
+                        let t = std::time::Instant::now();
+                        expected = super::super::flops_of(&core, perm);
+                        oracle_ns += t.elapsed().as_nanos();
+                        let t = std::time::Instant::now();
+                        actual = lifted_core_flops(&core, perm);
+                        workspace_ns += t.elapsed().as_nanos();
+                    } else {
+                        let t = std::time::Instant::now();
+                        actual = lifted_core_flops(&core, perm);
+                        workspace_ns += t.elapsed().as_nanos();
+                        let t = std::time::Instant::now();
+                        expected = super::super::flops_of(&core, perm);
+                        oracle_ns += t.elapsed().as_nanos();
+                    }
+                    assert_eq!(actual, expected, "{name} cap={cap} ticket={ticket}");
+                    checks += 1;
+                }
+                cores += 1;
+            }
+        }
+        assert!(cores > 0);
+        println!("LIFTED_WORKSPACE cores={cores} checks={checks} oracle_ns={oracle_ns} workspace_ns={workspace_ns}");
+    }
+}
+
+#[cfg(test)]
+mod degree_order_tests {
+    use super::*;
+
+    // Only column lengths are consumed by degree_order. Synthetic lengths
+    // exercise the large-degree fallback without allocating artificial edges.
+    fn check(degrees: &[usize]) {
+        let mut col_ptr = Vec::with_capacity(degrees.len() + 1);
+        col_ptr.push(0usize);
+        for &degree in degrees {
+            col_ptr.push(col_ptr.last().unwrap().checked_add(degree).unwrap());
+        }
+        let sp = ScoringPattern { n: degrees.len(), col_ptr, row_idx: Vec::new() };
+        for selection in 0..4 {
+            let selected = |v: usize| match selection {
+                0 => true,
+                1 => false,
+                2 => v % 2 == 0,
+                _ => v % 3 == 1,
+            };
+            let mut expected: Vec<usize> = (0..sp.n).filter(|&v| selected(v)).collect();
+            expected.sort_by_key(|&v| (degrees[v], v));
+            let supplied = (0..sp.n).filter(|&v| selected(v)).collect();
+            assert_eq!(degree_order(&sp, supplied), expected,
+                "degrees={degrees:?} selection={selection}");
+        }
+    }
+
+    #[test]
+    fn buckets_match_comparison_sort_for_exhaustive_small_degree_vectors() {
+        for n in 0..=7 {
+            for mut code in 0..4usize.pow(n as u32) {
+                let mut degrees = vec![0usize; n];
+                for degree in &mut degrees {
+                    *degree = code % 4;
+                    code /= 4;
+                }
+                check(&degrees);
+            }
+        }
+    }
+
+    #[test]
+    fn buckets_match_for_equal_degrees_hubs_and_large_degree_fallbacks() {
+        check(&vec![0; 257]);
+        check(&vec![256; 257]);
+        check(&(0..257).map(|v| (v * 37) % 13).collect::<Vec<_>>());
+        check(&(0..257).collect::<Vec<_>>());
+        check(&(0..257).rev().collect::<Vec<_>>());
+        let mut hub = vec![1; 257];
+        hub[0] = 256;
+        check(&hub);
+        check(&[20, 0, 0, 1, 3, 17]);
+        check(&[usize::MAX - 2, 0, 1]);
+    }
+}
+
+#[cfg(test)]
+mod capped_set_tests {
+    use super::*;
+
+    fn pattern_from_rows(rows: &[Vec<usize>]) -> ScoringPattern {
+        let mut col_ptr = Vec::with_capacity(rows.len() + 1);
+        let mut row_idx = Vec::new();
+        col_ptr.push(0);
+        for row in rows {
+            row_idx.extend_from_slice(row);
+            col_ptr.push(row_idx.len());
+        }
+        ScoringPattern { n: rows.len(), col_ptr, row_idx }
+    }
+
+    fn check_budget_prefix_equivalence(sp: &ScoringPattern, exhaustive: bool) {
+        let full = greedy_independent_set(sp, usize::MAX);
+        // The exclusion set must remain untrimmed, including at zero budget.
+        let second = greedy_independent_set_excluding(sp, usize::MAX, &full);
+        let all = vec![true; sp.n];
+        let mut caps: Vec<usize> = (0..=sp.n.min(21)).collect();
+        caps.extend([sp.n, usize::MAX]);
+        for uncapped in [&full, &second, &all] {
+            let pairs = predicted_pairs(sp, uncapped);
+            let mut budgets = if exhaustive {
+                (0..=pairs + 1).collect::<Vec<u64>>()
+            } else {
+                vec![0, 1, 2, 3, 6, 7, 15, 31, 127, pairs / 2,
+                     pairs.saturating_sub(1), pairs, pairs + 1]
+            };
+            budgets.push(u64::MAX);
+            budgets.sort_unstable();
+            budgets.dedup();
+            for budget in budgets {
+                let mut trimmed = uncapped.to_vec();
+                budget_trim(sp, &mut trimmed, budget);
+                for &cap in &caps {
+                    let actual = cap_independent_set(sp, &trimmed, cap);
+                    let mut expected = cap_independent_set(sp, uncapped, cap);
+                    budget_trim(sp, &mut expected, budget);
+                    assert_eq!(actual, expected,
+                        "trim/cap n={} cap={cap} budget={budget}", sp.n);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn budget_trim_commutes_with_caps_on_every_graph_through_five_vertices() {
+        for n in 0..=5 {
+            let edges: Vec<(usize, usize)> =
+                (0..n).flat_map(|a| ((a + 1)..n).map(move |b| (a, b))).collect();
+            for mask in 0usize..(1usize << edges.len()) {
+                let mut rows = vec![Vec::new(); n];
+                for (bit, &(a, b)) in edges.iter().enumerate() {
+                    if mask & (1usize << bit) != 0 {
+                        rows[a].push(b);
+                        rows[b].push(a);
+                    }
+                }
+                check_budget_prefix_equivalence(&pattern_from_rows(&rows), true);
+            }
+        }
+    }
+
+    fn check_equivalence(sp: &ScoringPattern) {
+        check_budget_prefix_equivalence(sp, false);
+        let full = greedy_independent_set(sp, usize::MAX);
+        let second = greedy_independent_set_excluding(sp, usize::MAX, &full);
+        let mut caps: Vec<usize> = (0..=sp.n.min(21)).collect();
+        caps.extend([sp.n, usize::MAX]);
+        for cap in caps {
+            let derived = cap_independent_set(sp, &full, cap);
+            let reference = greedy_independent_set(sp, cap);
+            assert_eq!(derived, reference, "first set n={} cap={cap}", sp.n);
+            assert_eq!(
+                cap_independent_set(sp, &second, cap),
+                greedy_independent_set_excluding(sp, cap, &full),
+                "second set n={} cap={cap}", sp.n,
+            );
+        }
+    }
+
+    #[test]
+    fn capped_sets_match_stopped_greedy_on_every_graph_through_five_vertices() {
+        for n in 0..=5 {
+            let edges: Vec<(usize, usize)> =
+                (0..n).flat_map(|a| ((a + 1)..n).map(move |b| (a, b))).collect();
+            for mask in 0usize..(1usize << edges.len()) {
+                let mut rows = vec![Vec::new(); n];
+                for (bit, &(a, b)) in edges.iter().enumerate() {
+                    if mask & (1usize << bit) != 0 {
+                        rows[a].push(b);
+                        rows[b].push(a);
+                    }
+                }
+                check_equivalence(&pattern_from_rows(&rows));
+            }
+        }
+    }
+
+    #[test]
+    fn capped_sets_match_for_hubs_dense_graphs_and_fixed_random_graphs() {
+        let mut state = 0x93d7_6452_cade_b017u64;
+        for n in [6usize, 17, 65, 129] {
+            for shape in 0..5 {
+                let mut rows = vec![Vec::new(); n];
+                for a in 0..n {
+                    for b in (a + 1)..n {
+                        state ^= state << 13;
+                        state ^= state >> 7;
+                        state ^= state << 17;
+                        let present = match shape {
+                            0 => a == 0,
+                            1 => b == a + 1 || (a == 0 && b == n - 1),
+                            2 => true,
+                            3 => state % 13 == 0,
+                            _ => state % 3 != 0,
+                        };
+                        if present {
+                            rows[a].push(b);
+                            rows[b].push(a);
+                        }
+                    }
+                }
+                // The transformation must not depend on sorted adjacency.
+                for row in &mut rows {
+                    row.reverse();
+                }
+                check_equivalence(&pattern_from_rows(&rows));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod exact_set_dedup_tests {
+    use super::*;
+
+    #[test]
+    fn equal_set_summaries_can_describe_different_schur_complements() {
+        // Vertex 0 has adjacent neighbours; vertex 1 has nonadjacent ones.
+        // Each singleton has degree two and the same predicted pair cost,
+        // but eliminating 1 creates a fill edge whereas eliminating 0 does not.
+        let sp = ScoringPattern {
+            n: 6,
+            col_ptr: vec![0, 2, 4, 6, 8, 9, 10],
+            row_idx: vec![2, 3, 4, 5, 0, 3, 0, 2, 1, 1],
+        };
+        let first = vec![true, false, false, false, false, false];
+        let second = vec![false, true, false, false, false, false];
+        let first_summary = (
+            first.iter().filter(|&&b| b).count(),
+            predicted_pairs(&sp, &first),
+        );
+        let second_summary = (
+            second.iter().filter(|&&b| b).count(),
+            predicted_pairs(&sp, &second),
+        );
+        assert_eq!(first_summary, second_summary);
+        assert_ne!(
+            lift(&sp, &first, 32).unwrap().core_nnz(),
+            lift(&sp, &second, 32).unwrap().core_nnz(),
+        );
+
+        let admitted = vec![first.clone()];
+        let summaries = vec![first_summary];
+        // Production deliberately keeps one summary representative, even
+        // though this second choice produces a different residual core.
+        assert!(summaries.contains(&second_summary));
+        assert!(set_was_admitted(&admitted, &summaries, &first, first_summary));
+        assert!(!set_was_admitted(&admitted, &summaries, &second, second_summary));
+        assert!(!set_was_admitted(&[], &[], &first, first_summary));
+    }
 }

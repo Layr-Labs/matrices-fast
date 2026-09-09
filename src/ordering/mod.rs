@@ -1143,6 +1143,25 @@ const HEAVY_RELABEL_AMF_DENSE_MAX_NNZ: usize = 700_000;
 const HEAVY_RELABEL_AMF_BUDGET: usize = 1_500_000;
 const HEAVY_RELABEL_AMF_MAX_PASSES: usize = 4;
 
+/// Retain the sorted, score-unique best seed ledger. An existing score keeps
+/// its earlier representative, matching stable append/sort/dedup/truncate.
+/// Check admission before cloning a potentially very large permutation.
+fn retain_runner_up(ledger: &mut Vec<(u64, Vec<usize>)>, score: u64, perm: &[usize]) {
+    let position = match ledger.binary_search_by_key(&score, |(value, _)| *value) {
+        Ok(_) => return,
+        Err(position) => position,
+    };
+    if position >= PEO_ALT_SEEDS {
+        return;
+    }
+    // Drop the displaced tail first so a full ledger need not grow its
+    // allocation just to truncate that same tail immediately afterward.
+    if ledger.len() == PEO_ALT_SEEDS {
+        ledger.pop();
+    }
+    ledger.insert(position, (score, perm.to_vec()));
+}
+
 /// Drain one portfolio batch: generate + score every queued producer on the
 /// worker threads, then REPLAY the sequential `consider` semantics in task
 /// order — the strict running-minimum acceptance and the runner-up ledger —
@@ -1174,10 +1193,11 @@ fn flush_batch<'a>(
             // different ordering converges to a different minimal triangulation,
             // and the leader's is not always the cheapest one.
             let mut r = runner_up.borrow_mut();
-            if f < *best_flops { r.push((*best_flops, best_perm.clone())); } else { r.push((f, perm.clone())); }
-            r.sort_by_key(|(s, _)| *s);
-            r.dedup_by_key(|(s, _)| *s);
-            r.truncate(PEO_ALT_SEEDS);
+            if f < *best_flops {
+                retain_runner_up(&mut r, *best_flops, best_perm);
+            } else {
+                retain_runner_up(&mut r, f, &perm);
+            }
         }
         if f < *best_flops {
             *best_flops = f;
@@ -1214,10 +1234,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         row_idx: pattern.row_idx.clone(),
     };
 
-    // One scratch arena serves all full-pattern scores in this invocation.
-    let score_workspace = std::cell::RefCell::new(scoring_ws::ScoreWorkspace::new(n, pattern.nnz()));
+    // One arena and one exact last-permutation cache serve this fixed pattern.
+    let score_workspace = std::cell::RefCell::new(scoring_ws::FixedPatternScorer::new(&scoring_pat));
     let score = |p: &[usize]| {
-        let f = score_workspace.borrow_mut().flops(&scoring_pat, p);
+        let f = score_workspace.borrow_mut().flops(p);
         #[cfg(test)]
         probe::alt_lineage::note_scored(f, p);
         f
@@ -3006,7 +3026,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // second used this narrow gate. Substitution makes total work lower than
     // the promoted frontier while retaining the stronger search allocation.
     if (SUBTREE_MIN_N..=80_000).contains(&n) && nnz <= 250_000 {
-        let incumbent_flops = score(&best_perm);
+        // The incumbent score is kept exact when its permutation changes.
+        let incumbent_flops = best_flops;
+        #[cfg(test)]
+        probe::alt_lineage::note_scored(incumbent_flops, &best_perm);
         let permuted = permute_pattern(&scoring_pat, &best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
@@ -3723,7 +3746,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if f < best_flops { best_perm = p; }
+            if f < best_flops { best_flops = f; best_perm = p; }
         }
     }
     // iter62 LEAP: local paired-swap / plateau refine on full lt_1k (SmallScore
@@ -3731,6 +3754,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n >= 12 && n <= 1_000 && pattern.nnz() <= 8_000 {
         best_perm = cutoff_paired_swap_refine(pattern, best_perm);
         best_perm = cutoff_plateau_refine(pattern, best_perm, true);
+        best_flops = score(&best_perm);
     }
     #[cfg(test)]
     parallel::phase_mark("11.corecand", _tph, best_flops);
@@ -3767,13 +3791,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
                 peo_extract::MAX_N, peo_extract::MAX_INPUT_NNZ, max_lnnz,
             ) else { break; };
-            // Earlier terminal stages can change best_perm without updating
-            // best_flops, so derive the incumbent's exact score afresh.
+            // The reconstruction already gives the incumbent's exact score.
             let incumbent_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
             let mut final_flops = incumbent_flops;
             for candidate in candidates {
                 let f = score(&candidate);
-                if f < final_flops { final_flops = f; best_perm = candidate; }
+                if f < final_flops { final_flops = f; best_flops = f; best_perm = candidate; }
             }
             if final_flops == incumbent_flops { break; }
         }
@@ -3803,7 +3826,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             let mut final_flops = incumbent_flops;
             for candidate in candidates {
                 let f = score(&candidate);
-                if f < final_flops { final_flops = f; best_perm = candidate; }
+                if f < final_flops { final_flops = f; best_flops = f; best_perm = candidate; }
             }
             if final_flops == incumbent_flops { break; }
         }
@@ -3833,7 +3856,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         let seeds = runner_up.borrow().clone();
         if !seeds.is_empty() {
             let mut ledger: u64 = 0;
-            let mut leader_flops = score(&best_perm);
+            let mut leader_flops = best_flops;
+            #[cfg(test)]
+            probe::alt_lineage::note_scored(leader_flops, &best_perm);
             for (_, seed) in seeds {
                 let mut cur = seed;
                 let mut cur_flops = u64::MAX;
@@ -3855,7 +3880,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     cur_flops = fin;
                     if fin == inc { break; }
                 }
-                if cur_flops < leader_flops { leader_flops = cur_flops; best_perm = cur; }
+                if cur_flops < leader_flops { leader_flops = cur_flops; best_flops = cur_flops; best_perm = cur; }
                 if ledger >= PEO_ALT_LEDGER { break; }
             }
         }
@@ -3893,7 +3918,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // A replacement: when a residual-core path already improved the incumbent,
     // core minfill/refine paid the late lattice budget — skip full-graph MINL.
     if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16 && !core_path_improved {
-        let mut cur_flops = score(&best_perm);
+        let mut cur_flops = best_flops;
+        #[cfg(test)]
+        probe::alt_lineage::note_scored(cur_flops, &best_perm);
         let entry_flops = cur_flops;
         let mut descent_completed = false;
         if let Some((cands, completed)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -3971,7 +3998,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // old challenge measured this move as the last −8% on pooling_sppc3pq
     // (0.427 → 0.393); every other terminal stage is gated off these rows.
     if nnz >= HEAVY_METRIC_GIANT_MIN_NNZ && nnz >= 20 * n && n >= 200 {
-        let mut cur_flops = score(&best_perm);
+        let mut cur_flops = best_flops;
+        #[cfg(test)]
+        probe::alt_lineage::note_scored(cur_flops, &best_perm);
         for &k in &[2usize, 16, 96] {
             if k >= n {
                 break;
@@ -4496,11 +4525,62 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let candidate_flops = score(&candidate);
+            if candidate_flops < best_flops {
+                best_flops = candidate_flops;
                 best_perm = candidate;
             }
         }
     }
+    #[cfg(test)]
+    parallel::phase_mark("16.final-strict", _tph, best_flops);
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
+    // Alternate plateau search only after the original pipeline has finished.
+    // Its internal neutral moves never replace an equal-scoring final result.
+    if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
+        && rgreedy::neutral_change_can_fit(n, nnz, 8, 2_000_000)
+    {
+        if let Some(candidate) = rgreedy::subset_window_descent_neutral_rolling(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 3, 3, 2_000_000,
+        ) {
+            let candidate_flops = score(&candidate);
+            if candidate_flops < best_flops {
+                best_flops = candidate_flops;
+                best_perm = candidate;
+            }
+        }
+    }
+    #[cfg(test)]
+    parallel::phase_mark("17.rolling", _tph, best_flops);
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
+    // A second, differently grouped rolling trial starts only after the raw
+    // rolling pass has finished, preserving every earlier accepted gain.
+    // The inherited window engine charges setup, replay and DP to this fixed
+    // allowance. Score-neutral postordering itself is checked explicitly.
+    if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
+        && rgreedy::neutral_change_can_fit(n, nnz, 8, 32_000_000)
+    {
+        // The latest score's tree may belong to a rejected trial. Refresh it
+        // for the actual incumbent before mapping its postorder to vertex ids.
+        let _ = score(&best_perm);
+        let post_seed: Vec<usize> = score_workspace.borrow().probe_post()
+            .iter().map(|&j| best_perm[j as usize]).collect();
+        if post_seed != best_perm && score(&post_seed) == best_flops {
+            if let Some(candidate) = rgreedy::subset_window_descent_neutral_rolling(
+                n, &pattern.col_ptr, &pattern.row_idx, &post_seed, 8, 3, 3, 32_000_000,
+            ) {
+                let candidate_flops = score(&candidate);
+                if candidate_flops < best_flops {
+                    best_flops = candidate_flops;
+                    best_perm = candidate;
+                }
+            }
+        }
+    }
+    #[cfg(test)]
+    parallel::phase_mark("19.postorder", _tph, best_flops);
     best_perm
 }
 
@@ -5777,6 +5857,65 @@ fn is_bijection(perm: &[usize], n: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn runner_up_admission_matches_stable_ledger_replay() {
+        fn check(scores: &[u64]) {
+            let mut actual = Vec::new();
+            let mut expected = Vec::new();
+            let mut actual_best = (u64::MAX, vec![0usize]);
+            let mut expected_best = actual_best.clone();
+            for (step, &score) in scores.iter().enumerate() {
+                // Distinct payloads reveal which stable tie representative
+                // survives, independently of any graph or ordering heuristic.
+                let candidate = vec![step + 1];
+                if score < expected_best.0 {
+                    expected.push(expected_best.clone());
+                } else {
+                    expected.push((score, candidate.clone()));
+                }
+                expected.sort_by_key(|(value, _)| *value);
+                expected.dedup_by_key(|(value, _)| *value);
+                expected.truncate(PEO_ALT_SEEDS);
+                if score < expected_best.0 {
+                    expected_best = (score, candidate.clone());
+                }
+
+                if score < actual_best.0 {
+                    retain_runner_up(&mut actual, actual_best.0, &actual_best.1);
+                    actual_best = (score, candidate);
+                } else {
+                    retain_runner_up(&mut actual, score, &candidate);
+                }
+                assert_eq!(actual, expected, "ledger at step {step}, score {score}");
+                assert_eq!(actual_best, expected_best, "incumbent at step {step}");
+            }
+        }
+
+        // The first tie stores a MAX-scoring candidate before a subsequent
+        // win displaces the initial MAX incumbent. The earlier candidate
+        // must survive that collision. Later events fill/evict the ledger,
+        // tie its cutoff, and collide with newly displaced incumbents.
+        check(&[
+            u64::MAX, u64::MAX - 1, u64::MAX - 1, 100, 105, 104, 103, 102,
+            101, 110, 109, 108, 107, 106, 108, 101, 100, 99, 98, 99, 0, 0,
+            u64::MAX,
+        ]);
+        for code in 0..256usize {
+            let alphabet = [0, 1, 2, u64::MAX];
+            let scores: Vec<_> = (0..4).map(|shift| alphabet[(code >> (2 * shift)) & 3]).collect();
+            check(&scores);
+        }
+        let mut state = 0x517cc1b727220a95u64;
+        let mut scores = Vec::new();
+        for step in 0..1024 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            scores.push(if step % 17 == 0 { u64::MAX } else { state % 257 });
+        }
+        check(&scores);
+    }
+
     #[test]
     fn clique_cutoff_exhaustive_small_graphs() {
         let n = 5;

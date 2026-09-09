@@ -39,8 +39,7 @@
 #![allow(dead_code)]
 
 mod window_dp;
-mod window_signatures;
-pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step};
+pub(crate) use window_dp::subset_window_descent;
 
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
     fn mul(words: &mut [u64; 6], factor: u64) {
@@ -403,15 +402,11 @@ impl<'a> Game<'a> {
                     }
                     d = self.deg[u] + added;
                 } else {
-                    // Same `deg[u] + newly-set-bits` identity as the sparse
-                    // branch above, backed by the struct invariant
-                    // `deg[u] == popcount(adj[u])` (see doc comment on
-                    // `Game`), instead of a fresh full popcount of the union.
-                    let added = super::bit_kernels::fused_or_assign_count_new(
-                        &mut self.adj[base..base + w],
-                        &self.tmp[..w],
-                    );
-                    d = self.deg[u] + added as u32;
+                    for k in 0..w {
+                        let nv = self.adj[base + k] | self.tmp[k];
+                        self.adj[base + k] = nv;
+                        d += nv.count_ones();
+                    }
                 }
                 // The union inserts u itself and retains v; remove both.
                 self.adj[base + (u >> 6)] &= !(1u64 << (u & 63));
@@ -705,33 +700,6 @@ mod game_cpu_tests {
                 }
             }
         }
-    }
-
-    /// `game_cpu_random_cross_word_and_partial_state` above tops out at
-    /// `n=257` (`w=5`), which never reaches the `bit_kernels` popcnt-dispatch
-    /// gate (`len >= 8` words). This forces `n=600` (`w=10`) with edge
-    /// probability high enough that every 64-bit word of a row holds a
-    /// neighbour from the start, so `nonzero_words.len() == w` and the
-    /// `Game::eliminate` dense branch (not sparse/clique) runs, exercising
-    /// whichever of `fused_or_assign_count_new`'s scalar/popcnt bodies the
-    /// host CPU selects against the naive `reference_eliminate` kernel.
-    #[test]
-    fn game_cpu_dense_branch_forced_multiword_state() {
-        let mut rng = 0x7f4a7c159e3779b9;
-        let n = 600;
-        let mut edges = Vec::new();
-        for u in 0..n {
-            for v in u + 1..n {
-                if xs64(&mut rng) % 16 < 6 {
-                    edges.push((u, v));
-                }
-            }
-        }
-        let p = Pattern::from_edges(n, &edges);
-        let mut order: Vec<_> = (0..n).collect();
-        shuffle(&mut order, &mut rng);
-        let stats = check_sequence(&p, n, &order);
-        assert!(stats.dense_eliminations > 0, "{stats:?}");
     }
 
     fn blocked_pattern(n: usize) -> Pattern {

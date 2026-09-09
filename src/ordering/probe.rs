@@ -2796,8 +2796,22 @@ fn probe_indep_variants() {
                 let o = feral_amf::AmfOptions { dense_alpha: a, ..Default::default() };
                 note(tag, feral_amf::amf_order_opts(&ccore, &o).ok().map(|(p, ..)| p));
             }
-            if il.core_nnz() < 300_000 {
+            if cn <= 30_000 && il.core_nnz() <= 1_000_000 {
                 note("metis", feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok().map(|(p, _, _)| p));
+                if std::env::var("SSI_INDEP_METIS_SHAPES").is_ok() {
+                    let shapes: [(&'static str, feral_metis::MetisOptions); 7] = [
+                        ("m-imb05", feral_metis::MetisOptions { max_imbalance: 0.05, ..Default::default() }),
+                        ("m-imb02", feral_metis::MetisOptions { max_imbalance: 0.02, ..Default::default() }),
+                        ("m-imb10", feral_metis::MetisOptions { max_imbalance: 0.10, ..Default::default() }),
+                        ("m-seed21", feral_metis::MetisOptions { seed: 21, ..Default::default() }),
+                        ("m-nip16", feral_metis::MetisOptions { niparts: 16, fm_passes: 20, ..Default::default() }),
+                        ("m-sw50", feral_metis::MetisOptions { nd_to_amd_switch: 50, ..Default::default() }),
+                        ("m-sw800", feral_metis::MetisOptions { nd_to_amd_switch: 800, ..Default::default() }),
+                    ];
+                    for (tag, o) in shapes.iter() {
+                        note(tag, feral_metis::metis_order_full(&ccore, o).ok().map(|(p, _, _)| p));
+                    }
+                }
             }
             for (v, tag) in [(custom_metrics::ScoreVariant::SqDiv, "sqdiv"), (custom_metrics::ScoreVariant::SqPure, "sqpure"), (custom_metrics::ScoreVariant::DegSqrt, "degsqrt")] {
                 note(tag, custom_metrics::order_variant(&ccore, 10.0, true, v).ok());
@@ -2831,7 +2845,9 @@ fn probe_indep_variants() {
             }
         }
         let secs = t0.elapsed().as_secs_f64();
-        let shipped = per_tag.get("amd").copied().unwrap_or(u64::MAX).min(per_tag.get("amf10").copied().unwrap_or(u64::MAX));
+        let shipped = per_tag.get("amd").copied().unwrap_or(u64::MAX)
+            .min(per_tag.get("amf10").copied().unwrap_or(u64::MAX))
+            .min(per_tag.get("metis").copied().unwrap_or(u64::MAX));
         let ref_f = pipeline.min(shipped);
         let mut line = format!("VAR\t{name}\t{n}\t{nnz}\t{secs:.3}\tpipe={:.4}\tshipped={:.4}", pipeline as f64 / base as f64, shipped as f64 / base as f64);
         for (tag, f) in &per_tag {
@@ -2847,6 +2863,155 @@ fn probe_indep_variants() {
     println!("--- marginal wins beyond pipeline ∧ shipped {{amd, amf10}} (count, Σ ln ratio) ---");
     for (tag, (c, s)) in &gains {
         println!("{tag:<10} {c:>4} {s:>9.4}");
+    }
+}
+
+/// Marginal value of alternative INDEPENDENT-SET CONSTRUCTIONS on top of the
+/// shipped ones (greedy by degree at caps inf / 9 / 3), each core ordered with
+/// the shipped menu (AMD; AMF on sparse cores; METIS inside its gate).
+/// Baseline finals from `SSI_BASELINE_COUNTS`.
+#[test]
+#[ignore]
+fn probe_indep_sets() {
+    let corpus = crate::corpus::corpus();
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|s| s.split(',').map(|x| x.trim().to_string()).collect());
+    let baseline: std::collections::HashMap<String, u64> = std::env::var("SSI_BASELINE_COUNTS")
+        .ok()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|s| {
+            s.lines()
+                .filter(|l| l.starts_with("COUNTS\t"))
+                .filter_map(|l| {
+                    let f: Vec<&str> = l.split('\t').collect();
+                    Some((f[1].to_string(), f[5].trim().parse::<u64>().ok()?))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let ledger: u64 = 8_000_000;
+    let mut gains: std::collections::BTreeMap<&'static str, (usize, f64)> = Default::default();
+    let mut total_secs: std::collections::BTreeMap<&'static str, f64> = Default::default();
+    for (name, pat) in &corpus {
+        if let Some(o) = &only {
+            if !o.contains(name) { continue; }
+        }
+        let n = pat.n;
+        if n < 32 { continue; }
+        let nnz = pat.nnz();
+        if nnz > 1_500_000 { continue; }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect();
+        let base = flops_of(&sp, &amd);
+        let pipeline = baseline.get(name).copied().unwrap_or(base);
+        let max_pairs = ledger.saturating_sub(5 * nnz as u64) / 9;
+        if max_pairs == 0 { continue; }
+        let g_inf = indep_first::greedy_independent_set(&sp, usize::MAX);
+        let mut sets: Vec<(&'static str, bool, Vec<bool>)> = vec![
+            ("g-inf", true, g_inf.clone()),
+            ("g9", true, indep_first::greedy_independent_set(&sp, 9)),
+            ("g3", true, indep_first::greedy_independent_set(&sp, 3)),
+            ("g4", false, indep_first::greedy_independent_set(&sp, 4)),
+            ("g6", false, indep_first::greedy_independent_set(&sp, 6)),
+            ("g16", false, indep_first::greedy_independent_set(&sp, 16)),
+            ("g2", false, indep_first::greedy_independent_set(&sp, 2)),
+            ("f-inf", false, indep_first::fill_greedy_independent_set(&sp, usize::MAX, 64)),
+            ("f9", false, indep_first::fill_greedy_independent_set(&sp, 9, 64)),
+            ("f3", false, indep_first::fill_greedy_independent_set(&sp, 3, 64)),
+            ("f16", false, indep_first::fill_greedy_independent_set(&sp, 16, 64)),
+            ("x-inf", false, indep_first::greedy_independent_set_excluding(&sp, usize::MAX, &g_inf)),
+            ("x9", false, indep_first::greedy_independent_set_excluding(&sp, 9, &g_inf)),
+        ];
+        let eval = |in_x: &mut Vec<bool>| -> Option<(u64, &'static str)> {
+            indep_first::budget_trim(&sp, in_x, max_pairs);
+            let xs = in_x.iter().filter(|&&b| b).count();
+            if xs == 0 || xs == n { return None; }
+            let pairs = indep_first::predicted_pairs(&sp, in_x);
+            if nnz as u64 + pairs + 4 * (nnz as u64 + 2 * pairs) > ledger { return None; }
+            let il = indep_first::lift(&sp, in_x, (ledger / 4) as usize)?;
+            let cn = il.core_n();
+            let cnnz = il.core_nnz();
+            if cn < 2 || 4 * cnnz as u64 > ledger { return None; }
+            let core_pat = ScoringPattern { n: cn, col_ptr: il.core_col_ptr.clone(), row_idx: il.core_row_idx.clone() };
+            let ccp: Vec<i32> = il.core_col_ptr.iter().map(|&x| x as i32).collect();
+            let cri: Vec<i32> = il.core_row_idx.iter().map(|&x| x as i32).collect();
+            let ccore = feral_ordering_core::CscPattern::new(cn, &ccp, &cri)?;
+            let dense = cnnz >= 20 * cn;
+            let mut best: Option<(u64, &'static str)> = None;
+            let detail = std::env::var("SSI_SETS_DETAIL").is_ok();
+            let mut tp = Instant::now();
+            let mut note = |tag: &'static str, p: Option<Vec<i32>>| {
+                let ord_s = tp.elapsed().as_secs_f64();
+                let Some(p) = p else { tp = Instant::now(); return; };
+                let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                if !is_bijection(&cp, cn) { tp = Instant::now(); return; }
+                let f = il.prefix_flops.saturating_add(flops_of(&core_pat, &cp));
+                if detail { println!("    PASS {tag:<8} {:.4} {ord_s:.3}s cn={cn} cnnz={cnnz}", f as f64 / base as f64); }
+                if best.map_or(true, |(b, _)| f < b) { best = Some((f, tag)); }
+                tp = Instant::now();
+            };
+            note("amd", feral_amd::amd_order(&ccore).ok());
+            if cnnz <= 600_000 && !dense {
+                let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
+                note("amf", feral_amf::amf_order_opts(&ccore, &o).ok().map(|(p, ..)| p));
+            }
+            if cn <= 30_000 && cnnz <= 1_000_000 {
+                note("metis", feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok().map(|(p, ..)| p));
+            }
+            if std::env::var("SSI_SETS_CM").is_ok() && cnnz <= 600_000 {
+                use custom_metrics::ScoreVariant as V;
+                for (v, tag) in [(V::SqDiv, "sqdiv"), (V::SqPure, "sqpure"), (V::Ammf, "ammf"), (V::AmindNorm, "amind"), (V::DegSqrt, "degsqrt"), (V::DegP075, "degp075"), (V::DegP125, "degp125"), (V::DegDivNvSqrtWf, "ddnsw"), (V::DegDivNvWfP15, "ddnw15"), (V::DegPlusDegme, "dpd"), (V::DegDivNvDegme, "ddnd")] {
+                    note(tag, custom_metrics::order_variant(&ccore, 10.0, true, v).ok());
+                }
+            }
+            best
+        };
+        let mut shipped_best = u64::MAX;
+        let mut results: Vec<(&'static str, bool, Option<(u64, &'static str)>, f64)> = Vec::new();
+        for (label, shipped, in_x) in sets.iter_mut() {
+            if std::env::var("SSI_SETS_DETAIL").is_ok() { println!("  SET {name} {label}"); }
+            let t = Instant::now();
+            let r = eval(in_x);
+            let secs = t.elapsed().as_secs_f64();
+            *total_secs.entry(label).or_insert(0.0) += secs;
+            if *shipped {
+                if let Some((f, _)) = r { shipped_best = shipped_best.min(f); }
+            }
+            results.push((label, *shipped, r, secs));
+        }
+        let reference = pipeline.min(shipped_best);
+        let mut line = format!("SETS\t{name}\t{n}\t{nnz}\tpipe={:.4}\tshipped={:.4}", pipeline as f64 / base as f64, shipped_best as f64 / base as f64);
+        let show_all = std::env::var("SSI_SETS_ALL").is_ok();
+        for (label, shipped, r, secs) in &results {
+            if show_all {
+                match r {
+                    Some((f, tag)) => line.push_str(&format!("\t{label}:{:.4}/{tag}({secs:.3}s)", *f as f64 / base as f64)),
+                    None => line.push_str(&format!("\t{label}:-")),
+                }
+                continue;
+            }
+            if *shipped { continue; }
+            if let Some((f, tag)) = r {
+                if *f < reference {
+                    line.push_str(&format!("\t{label}={:.4}/{tag}({secs:.3}s)", *f as f64 / base as f64));
+                    let e = gains.entry(label).or_insert((0, 0.0));
+                    e.0 += 1;
+                    e.1 += (*f as f64 / reference as f64).ln();
+                }
+            }
+        }
+        println!("{line}");
+    }
+    println!("--- marginal wins beyond pipeline ∧ shipped sets (count, Σ ln ratio, Σ secs) ---");
+    for (label, (c, s)) in &gains {
+        println!("{label:<8} {c:>4} {s:>9.4} {:>8.2}s", total_secs.get(label).copied().unwrap_or(0.0));
+    }
+    println!("--- total seconds per set label ---");
+    for (label, s) in &total_secs {
+        println!("{label:<8} {s:>8.2}s");
     }
 }
 
@@ -2920,7 +3085,7 @@ fn probe_indep_timing() {
             let use_amf = cnnz <= 600_000 && !dense;
             let use_metis = cn <= 30_000 && cnnz <= 1_000_000;
             let mut s = format!("cap={cap:<20} xs={xs:<7} cn={cn:<7} cnnz={cnnz:<8} prefix={:.4} sel={sel_s:.3} lift={lift_s:.3}", il.prefix_flops as f64 / base as f64);
-            let mut time_pass = |tag: &str, p: Option<Vec<i32>>, t: Instant, s: &mut String| {
+            let time_pass = |tag: &str, p: Option<Vec<i32>>, t: Instant, s: &mut String| {
                 let ord_s = t.elapsed().as_secs_f64();
                 let Some(p) = p else { s.push_str(&format!(" {tag}=ERR")); return; };
                 let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();

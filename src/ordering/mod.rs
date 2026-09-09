@@ -3595,6 +3595,43 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
 
+        // iter627a: shape-gated K=4 on CLEAN promoted tip (475a/74b6ccd).
+        // 618/622/625 built on local 488 (FINAL_FIVE_OPS=192M) — FAILED.
+        // Tip keeps OPS=128M. Gate excludes nuclear104/lee4.
+        let k4_sparse_large = nnz >= 150_000
+            && (60_000..=80_000).contains(&n)
+            && nnz <= 5 * n;
+        let k4_mid = (17_000..=25_000).contains(&n)
+            && (100_000..=180_000).contains(&nnz)
+            && (nnz <= 5 * n || nnz >= 8 * n);
+        if k4_sparse_large || k4_mid {
+            let lifted4 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                core_lift::reduce_checked(
+                    &scoring_pat,
+                    4,
+                    REDUCE_MAX_CORE_N,
+                    REDUCE_MAX_CORE_EDGES,
+                    REDUCE_PAIR_BUDGET,
+                )
+            }));
+            if let Ok(Some(cl4)) = lifted4 {
+                let cn4 = cl4.core_n();
+                let min_seen = seen_core_n.iter().copied().min().unwrap_or(n);
+                if cn4 > 0 && cn4 < n && cn4 * 10 <= min_seen * 9
+                    && cl4.core_nnz() <= REDUCE_MAX_CORE_NNZ
+                    && !seen_core_n.contains(&cn4)
+                {
+                    seen_core_n.push(cn4);
+                    if let Some((f, p)) = order_core(&cl4, &REDUCE_ALPHAS, true, false, best_flops) {
+                        if f < best_flops {
+                            best_flops = f;
+                            best_perm = p;
+                        }
+                    }
+                }
+            }
+        }
+
         // Extra depths: bounded, sequential, in a fixed order, only where the
         // robust-envelope gate above has given time back (nnz > 150k).
         let mut reduce_work: usize = 0;

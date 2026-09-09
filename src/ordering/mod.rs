@@ -1698,7 +1698,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         consider!(move || feral_kahip::kahip_order(&core));
     }
     flush!();
-    let part_extra2 = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
+    // iter428a: always run METIS-var/KaHIP multi lottery on mid-n (ignore base-separator gate).
+    let part_extra2 = n <= 20_000 || n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
 
     // METIS PARAMETER variants. Every METIS candidate above varies only the
     // amount of WORK (initial partitionings, FM passes); these vary the SHAPE of
@@ -4263,8 +4264,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 6_500;
-        const FINAL_FIVE_MAX_NNZ: usize = 100_000;
+        // iter429a: five alone to 12k/80k
+        const FINAL_FIVE_MAX_N: usize = 12_000;
+        const FINAL_FIVE_MAX_NNZ: usize = 80_000;
         // iter180a: wide five on tip+176a
         const FINAL_FIVE_OPS: i64 = 128_000_000;
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and

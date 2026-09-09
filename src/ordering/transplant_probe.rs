@@ -83,7 +83,11 @@ fn transplant_pass(
     let mut best_f = inc_f;
     let mut best_perm = incumbent.to_vec();
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32] {
+    // VOL-TW8 (re-applied): appended width-8 leg — finer donor segments
+    // where the ledger survives the coarser passes. Slow rows exhaust the
+    // ledger early, so this leg structurally cannot reach them (the fence
+    // that the killed re-run tickets lacked).
+    'widths: for width in [4096usize, 512, 128, 32, 8] {
         let blks = blocks(&parent, 4, width.min(n));
         if blks.len() < 2 {
             continue;

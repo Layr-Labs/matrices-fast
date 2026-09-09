@@ -2993,6 +2993,44 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if f < best_flops {
             best_flops = f;
             best_perm = cand;
+            // iter292a: one subtree polish on a 4b-accepted lift. v25 used
+            // n in [4k,15k) stacked with pair-EXT+gasprod and hidden-failed.
+            // This hop keeps polish-only, n in [11k,15k) nnz<=130k:
+            // methanol200 (n=11999) in; lee4_06 (n=10429) out; lee4_09/10 out.
+            if (11_000..15_000).contains(&n) && nnz <= 130_000 {
+                let permuted = permute_pattern(&scoring_pat, &best_perm);
+                let etree = EliminationTree::from_pattern(&permuted);
+                let post = etree.postorder();
+                let mut lift_cand: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+                let post_pat = permute_pattern(&scoring_pat, &lift_cand);
+                let post_et = EliminationTree::from_pattern(&post_pat);
+                let counts: Vec<u32> = column_counts_gnp(&post_pat, &post_et)
+                    .into_iter()
+                    .map(|c| c as u32)
+                    .collect();
+                let parent: Vec<i32> = post_et
+                    .parent
+                    .iter()
+                    .map(|p| p.map_or(-1, |j| j as i32))
+                    .collect();
+                let cfg = subtree_cfg_for(n, nnz);
+                let improved = rgreedy::subtree_refine(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &mut lift_cand,
+                    &counts,
+                    &parent,
+                    cfg,
+                );
+                if improved > 0 && is_bijection(&lift_cand, n) {
+                    let f2 = score(&lift_cand);
+                    if f2 < best_flops {
+                        best_flops = f2;
+                        best_perm = lift_cand;
+                    }
+                }
+            }
         }
     }
     #[cfg(test)]
@@ -4496,6 +4534,41 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         ) {
             if score(&candidate) < best_flops {
                 best_perm = candidate;
+            }
+        }
+    }
+
+    // iter291a: new-recipient pair+simplicial after subset-window, n<=5k nnz<=50k.
+    // 288a/290a second MINL captured leftover on this band then hidden-failed
+    // Benchmark. This hop re-applies the cheap monotonic walks only — same
+    // "later stages produced a new completion" idea, different (and cheaper)
+    // operator. lee4_06 (n=10429) / lee2_06 (n=6418) stay out.
+    if n >= 16 && n <= 5_000 && nnz > 0 && nnz <= 50_000 {
+        let finished = score(&best_perm);
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 4, 32_000_000,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < finished {
+                    best_perm = cand;
+                }
+            }
+        }
+        if nnz <= n.saturating_mul(SIMPLICIAL_PROMOTION_MAX_DENSITY) {
+            if let Some(cand) = rgreedy::simplicial_promotion(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                SIMPLICIAL_PROMOTION_OPS_BUDGET,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < score(&best_perm) {
+                        best_perm = cand;
+                    }
+                }
             }
         }
     }

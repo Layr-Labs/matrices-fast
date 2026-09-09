@@ -199,7 +199,7 @@ const PEO_ALT_MAX_N: usize = 50_000;
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
 const MINL_SUBTREE_BUDGET: i64 = 8_000_000;
-const SUBTREE_CHAIN_MAX_N: usize = 45_000; // iter463a
+const SUBTREE_CHAIN_MAX_N: usize = 35_000;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 
@@ -2464,10 +2464,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // iter265a RC: 235a + second-colour/metric expand (0145 family)
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
-                let gasprod_band = n >= 20_000;
-                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
-                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
-                if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                let gasprod_band = n >= 16_000; // 0154b: lee4_10 (17809) immediate; lee4_09 (15904) stays deferred
+                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -2495,7 +2493,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 60_000 // iter475a
+        && nnz <= 50_000 // 0154b tighten: 80k too slow (worst 1.389); KEEP max_deg*50<=n
         && max_deg * 50 <= n;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0
@@ -3880,6 +3878,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // 0154c: snapshot post-transplant flops; re-call only if later stages improve
+    let transplant_entry_flops = best_flops;
 
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
@@ -4265,8 +4265,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a
-        const FINAL_FIVE_MAX_NNZ: usize = 80_000;
+        const FINAL_FIVE_MAX_N: usize = 6_500;
+        const FINAL_FIVE_MAX_NNZ: usize = 100_000;
         // iter180a: wide five on tip+176a
         const FINAL_FIVE_OPS: i64 = 128_000_000;
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
@@ -4496,8 +4496,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
+            }
+        }
+    }
+    // 0154c: terminal conditioned re-transplant (darthweenies shape). Fire only when
+    // post-transplant stages strictly improved the incumbent; same ledger/gates.
+    if best_flops < transplant_entry_flops {
+        let donors = runner_up.borrow();
+        if let Some(cand) = transplant_probe::refine_with_donors(
+            &scoring_pat, &best_perm, &donors, amd_flops,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
             }
         }
     }
@@ -5274,6 +5292,10 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
     // Hard work budget: caps total per-subset scanning at O(n), so no adversarial
     // (e.g. highly disconnected) input can drive quadratic blow-up.
     let mut budget: i64 = 64 * n as i64 + 4096;
+    // BEND refinement state: per-CALL pair-exam counter (1M cap, independent
+    // of `budget`) + side flags (1=left,2=sep,3=right; 0=outside subset).
+    let mut refine_exams: usize = 0;
+    let mut side: Vec<u8> = vec![0u8; n];
 
     // Fill each subset with induced-subgraph AMD, falling back to degree order.
     // Reuse the local-index map across calls; touched entries are reset before
@@ -5441,6 +5463,132 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
                 sep.push(u);
             } else {
                 right.push(u);
+            }
+        }
+
+        // BEND-style sep-shrink refinement: gain moves over boundary vertices
+        // (sep members with outside-sep neighbors; non-sep members adjacent
+        // to sep), at most 3 sweeps. Ascending `nodes` scan → deterministic;
+        // per-vertex L/R gain tie → left (mirrors the (gain,-index)
+        // precedent). Strictly-improving moves only; strict-accept keeps the
+        // refined split only if |sep| strictly shrinks. Gated to large
+        // splits; per-CALL 1M pair-exam cap (gain scans only; commit scans
+        // reuse the just-examined adjacency; on break keep current state).
+        if sz > 400 && sep.len() > 16 && !left.is_empty() && !right.is_empty() {
+            // NOTE: both-sides-nonempty gate preserves the documented
+            // termination invariant (every pushed task strictly smaller):
+            // S->L/R moves fire only with zero opposite-side neighbors, so
+            // left/right only grow and a one-sided split could otherwise
+            // drain sep to empty and re-push the full subset.
+            for &u in &left {
+                side[u] = 1;
+            }
+            for &u in &sep {
+                side[u] = 2;
+            }
+            for &u in &right {
+                side[u] = 3;
+            }
+            let orig_left = left.clone();
+            let orig_sep = sep.clone();
+            let orig_right = right.clone();
+            let mut over = false;
+            for _ in 0..3 {
+                let mut moved = false;
+                for &v in &nodes {
+                    if over {
+                        break;
+                    }
+                    let s = side[v];
+                    if s == 2 {
+                        let mut cnt_l = 0usize;
+                        let mut cnt_r = 0usize;
+                        for &w in &adj[v] {
+                            refine_exams += 1;
+                            if refine_exams > 1_000_000 {
+                                over = true;
+                                break;
+                            }
+                            if side[w] == 1 {
+                                cnt_l += 1;
+                            } else if side[w] == 3 {
+                                cnt_r += 1;
+                            }
+                        }
+                        if over {
+                            break;
+                        }
+                        let gain_l = 1i64 - cnt_r as i64;
+                        let gain_r = 1i64 - cnt_l as i64;
+                        if gain_l > 0 && gain_l >= gain_r {
+                            side[v] = 1;
+                            for &w in &adj[v] {
+                                if side[w] == 3 {
+                                    side[w] = 2;
+                                }
+                            }
+                            moved = true;
+                        } else if gain_r > 0 && gain_r > gain_l {
+                            side[v] = 3;
+                            for &w in &adj[v] {
+                                if side[w] == 1 {
+                                    side[w] = 2;
+                                }
+                            }
+                            moved = true;
+                        }
+                    } else if s == 1 || s == 3 {
+                        let mut same = 0usize;
+                        let mut adj_sep = false;
+                        for &w in &adj[v] {
+                            refine_exams += 1;
+                            if refine_exams > 1_000_000 {
+                                over = true;
+                                break;
+                            }
+                            if side[w] == 2 {
+                                adj_sep = true;
+                            } else if side[w] == s {
+                                same += 1;
+                            }
+                        }
+                        if over {
+                            break;
+                        }
+                        if !adj_sep {
+                            continue;
+                        }
+                        // Cross-move gain is `-same` (pulls same-side nbrs
+                        // into sep): never strictly improving, so computed
+                        // for completeness but never applied.
+                        let _gain: i64 = -(same as i64);
+                    }
+                }
+                if !moved || over {
+                    break;
+                }
+            }
+            // Rebuild the three lists by ascending `nodes` scan: disjoint
+            // cover by construction. Strict-accept on |sep|.
+            left.clear();
+            sep.clear();
+            right.clear();
+            for &u in &nodes {
+                if side[u] == 1 {
+                    left.push(u);
+                } else if side[u] == 2 {
+                    sep.push(u);
+                } else {
+                    right.push(u);
+                }
+            }
+            if sep.len() >= orig_sep.len() {
+                left = orig_left;
+                sep = orig_sep;
+                right = orig_right;
+            }
+            for &u in &nodes {
+                side[u] = 0;
             }
         }
 

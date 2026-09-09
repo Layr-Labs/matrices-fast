@@ -2465,7 +2465,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
                 let gasprod_band = n >= 20_000;
-                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter331a: mid-xset 40% hold ONLY — NO x-gate (313a had both; failed)
+                let mid_xset_hold = (10_000..12_000).contains(&n) && nnz <= 80_000;
+                let (imm_num, imm_den) = if mid_xset_hold {
+                    (3u64, 5u64)
+                } else {
+                    (INDEP_IMMEDIATE_MARGIN.0, INDEP_IMMEDIATE_MARGIN.1)
+                };
+                if digabel_band || hydro_band || gasprod_band
+                    || f.saturating_mul(imm_den) <= best_flops.saturating_mul(imm_num)
+                {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -2491,9 +2500,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
     const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
 
+    // iter333a: also widen pair-descent EXT nnz (stack with midhold40)
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 30_000
+        && nnz <= 80_000
         && max_deg * 50 <= n;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0

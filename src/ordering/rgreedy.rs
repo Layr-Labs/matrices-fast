@@ -1537,6 +1537,598 @@ pub(crate) fn adjacent_pair_descent(
     changed_any.then_some(cur)
 }
 
+/// Ruin-and-reconstruct local search with COST-BOUNDED min-fill repair.
+///
+/// Ruin-recreate generator: deterministic strided ruin (k = 16/32/64/128
+/// by attempt mod 4) + greedy min-fill rebuild, lowest-index ties, five
+/// sequential windows per attempt (tunneling through unfiltered
+/// intermediates). One shared TripleWork budget; every repair evaluation
+/// charged (dense rows abort via None). Deterministic, no RNG; returns
+/// Some iff the rebuild differs (caller exact-scores and admits).
+pub(crate) fn ruin_window_reconstruct(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    attempt: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    let k = match attempt % 4 {
+        0 => 16,
+        1 => 32,
+        2 => 64,
+        _ => 128,
+    };
+    if n <= 32 || k >= n || seed.len() != n || col_ptr.len() != n + 1 || budget <= 0 {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    // Five sequential windows per attempt (tunneling through worse
+    // states); locations stride deterministically (no RNG).
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    let mut work = TripleWork { remaining: budget };
+    // VOL-RR7: single window (windows 5→1 — isolate window count from
+    // seat; the 5-window mid form degrades, test the single form here).
+    let mut cur = seed.to_vec();
+    for j in 0..1 {
+        let start = attempt
+            .wrapping_mul(9973)
+            .wrapping_add(12345)
+            .wrapping_add((j as usize).wrapping_mul(104729))
+            % (n - k);
+        let mut game = Game::new(n, &adj0)?;
+        // new() leaves the live-list empty; reset() populates it.
+        game.reset();
+        // Eliminate the shared prefix to position the game at the window.
+        for &v in &cur[..start] {
+            if !work.eliminate(&mut game, v) {
+                return None;
+            }
+        }
+        // Greedy min-fill reconstruction, every evaluation charged: a dense
+        // row exhausts the budget and aborts instead of running uncharged.
+        let w = game.w;
+        let mut remaining: Vec<usize> = cur[start..start + k].to_vec();
+        let mut order: Vec<usize> = Vec::with_capacity(k);
+        while !remaining.is_empty() {
+            let mut best_i = 0;
+            let mut best_c = {
+                let dv = game.deg[remaining[0]] as usize;
+                if !work.charge((dv + 1) * (3 * w + 6) + 24) {
+                    return None;
+                }
+                game.deficiency(remaining[0])
+            };
+            for i in 1..remaining.len() {
+                let dv = game.deg[remaining[i]] as usize;
+                if !work.charge((dv + 1) * (3 * w + 6) + 24) {
+                    return None;
+                }
+                let c = game.deficiency(remaining[i]);
+                if c < best_c || (c == best_c && remaining[i] < remaining[best_i]) {
+                    best_i = i;
+                    best_c = c;
+                }
+            }
+            let v = remaining.swap_remove(best_i);
+            order.push(v);
+            if !work.eliminate(&mut game, v) {
+                return None;
+            }
+        }
+        let mut next = Vec::with_capacity(n);
+        next.extend_from_slice(&cur[..start]);
+        next.extend_from_slice(&order);
+        next.extend_from_slice(&cur[start + k..]);
+        cur = next;
+    }
+    if cur == seed {
+        None
+    } else {
+        Some(cur)
+    }
+}
+
+/// Relatedness-ball ruin with greedy min-fill repair (VOL-RB).
+///
+/// NEW mechanism off the RR line: identical repair (charged min-fill),
+/// fence (density gate at call site), budget, seat, and k-schedule — the
+/// ONLY variable is ruin geometry. Strided windows cut structurally
+/// arbitrary slices; this ruins BFS balls in the pattern graph (Shaw-style
+/// relatedness ruin for LNS: a ball is a coherent subproblem, and on a
+/// good incumbent its vertices sit nearly contiguous, so the position span
+/// stays tight exactly where repair is cheapest). Span cap 256 (skip
+/// otherwise); gap outsiders inside the span are rebuilt too. Deterministic
+/// (stored adjacency order, index discipline, no RNG).
+pub(crate) fn ball_window_reconstruct(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    attempt: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    const MAX_SPAN: usize = 256;
+    const MIN_SET: usize = 8;
+    let k = match attempt % 4 {
+        0 => 16,
+        1 => 32,
+        2 => 64,
+        _ => 128,
+    };
+    if n <= 32 || seed.len() != n || col_ptr.len() != n + 1 || budget <= 0 {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    // BFS ball of ~k vertices from a strided seed vertex (pattern graph,
+    // stored order — fixed input, deterministic output).
+    let v0 = attempt
+        .wrapping_mul(9973)
+        .wrapping_add(12345)
+        % n;
+    let mut in_ball = vec![false; n];
+    let mut queue: Vec<usize> = Vec::with_capacity(k);
+    queue.push(v0);
+    in_ball[v0] = true;
+    let mut ball: Vec<usize> = Vec::with_capacity(k);
+    let mut head = 0usize;
+    while head < queue.len() && ball.len() < k {
+        let u = queue[head];
+        head += 1;
+        ball.push(u);
+        if ball.len() >= k {
+            break;
+        }
+        let (s, e) = (col_ptr[u], col_ptr[u + 1].min(row_idx.len()));
+        if s > e || col_ptr[u] > row_idx.len() {
+            return None;
+        }
+        for &w in &row_idx[s..e] {
+            if w < n && !in_ball[w] {
+                in_ball[w] = true;
+                queue.push(w);
+            }
+        }
+    }
+    if ball.len() < MIN_SET {
+        return None;
+    }
+    // Position span of the ball in the current perm.
+    let mut pos_of = vec![0usize; n];
+    for (idx, &v) in seed.iter().enumerate() {
+        pos_of[v] = idx;
+    }
+    let (mut lo, mut hi) = (n, 0usize);
+    for &v in &ball {
+        let p = pos_of[v];
+        if p < lo {
+            lo = p;
+        }
+        if p > hi {
+            hi = p;
+        }
+    }
+    if hi < lo || hi - lo + 1 > MAX_SPAN || hi - lo + 1 < MIN_SET {
+        return None;
+    }
+    let (start, end) = (lo, hi + 1);
+    // Identical repair machinery to ruin_window_reconstruct: positioned
+    // game, greedy min-fill, every evaluation charged, shared budget.
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    let mut game = Game::new(n, &adj0)?;
+    game.reset();
+    let mut work = TripleWork { remaining: budget };
+    for &v in &seed[..start] {
+        if !work.eliminate(&mut game, v) {
+            return None;
+        }
+    }
+    let w = game.w;
+    let mut remaining: Vec<usize> = seed[start..end].to_vec();
+    let mut order: Vec<usize> = Vec::with_capacity(remaining.len());
+    while !remaining.is_empty() {
+        let mut best_i = 0;
+        let mut best_c = {
+            let dv = game.deg[remaining[0]] as usize;
+            if !work.charge((dv + 1) * (3 * w + 6) + 24) {
+                return None;
+            }
+            game.deficiency(remaining[0])
+        };
+        for i in 1..remaining.len() {
+            let dv = game.deg[remaining[i]] as usize;
+            if !work.charge((dv + 1) * (3 * w + 6) + 24) {
+                return None;
+            }
+            let c = game.deficiency(remaining[i]);
+            if c < best_c || (c == best_c && remaining[i] < remaining[best_i]) {
+                best_i = i;
+                best_c = c;
+            }
+        }
+        let v = remaining.swap_remove(best_i);
+        order.push(v);
+        if !work.eliminate(&mut game, v) {
+            return None;
+        }
+    }
+    let mut candidate = Vec::with_capacity(n);
+    candidate.extend_from_slice(&seed[..start]);
+    candidate.extend_from_slice(&order);
+    candidate.extend_from_slice(&seed[end..]);
+    if candidate == seed {
+        None
+    } else {
+        Some(candidate)
+    }
+}
+
+/// Exact Σc² score of a permutation (shared by the metaheuristic tickets
+/// that track best-seen: SA, tabu-aspiration). Mirrors the harness scorer.
+fn exact_flops(sp: &feral::sparse::csc::CscPattern, perm: &[usize]) -> u64 {
+    let p = feral::ordering::amd::permute_pattern(sp, perm);
+    let e = feral::ordering::elimination_tree::EliminationTree::from_pattern(&p);
+    feral::symbolic::column_counts_gnp(&p, &e)
+        .iter()
+        .map(|&c| (c as u64) * (c as u64))
+        .sum()
+}
+
+/// Tabu pair descent: pair-descent sweeps with positional memory.
+///
+/// NEW generator (VOL-TABU): identical sweep mechanics to
+/// `adjacent_pair_descent` (same adjacency + degree rule, same exact game,
+/// same op budget), plus tenure: positions involved in a swap freeze for
+/// `tenure` sweeps, forcing the walk through negative territory greedy
+/// descents refuse. v2 adds aspiration: a frozen rule-hit is assembled
+/// whole, exact-scored (charged), and allowed iff it beats best-seen;
+/// best-of-sweep tracking likewise. Deterministic (no RNG).
+pub(crate) fn tabu_pair_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    sweeps: usize,
+    tenure: usize,
+    budget: i64,
+    aspiration: bool,
+) -> Option<Vec<usize>> {
+    if n < 2
+        || seed.len() != n
+        || col_ptr.len() != n + 1
+        || sweeps == 0
+        || budget <= 0
+    {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    let mut game = Game::new(n, &adj0)?;
+    let mut cur = seed.to_vec();
+    let mut next = Vec::with_capacity(n);
+    // Frozen-until sweep index per position (0 = free at sweep 0).
+    let mut tabu = vec![0usize; n];
+    let mut changed_any = false;
+    // Aspiration state (v2): exact-scored best-seen over sweeps + hits.
+    let scoring_pat = feral::sparse::csc::CscPattern {
+        n,
+        col_ptr: col_ptr.to_vec(),
+        row_idx: row_idx.to_vec(),
+    };
+    let score_charge = 8usize.saturating_mul(n.saturating_add(col_ptr[n])).max(1);
+    let mut work = TripleWork { remaining: budget };
+    let base = exact_flops(&scoring_pat, seed);
+    let mut best = seed.to_vec();
+    let mut best_f = base;
+
+    for sweep in 0..sweeps {
+        game.reset();
+        if game.ops > budget {
+            return None;
+        }
+        next.clear();
+
+        let mut k = 0usize;
+        if sweep & 1 == 1 {
+            let v = cur[0];
+            next.push(v);
+            game.eliminate(v);
+            if game.ops > budget {
+                return None;
+            }
+            k = 1;
+        }
+
+        let mut changed = false;
+        while k + 1 < n {
+            let a = cur[k];
+            let b = cur[k + 1];
+            let adjacent = game.adj[a * game.w + (b >> 6)] & (1u64 << (b & 63)) != 0;
+            let rule = adjacent && game.deg[b] < game.deg[a];
+            let frozen = tabu[k] > sweep || tabu[k + 1] > sweep;
+            let mut swap = rule && !frozen;
+            // Aspiration (v2): assemble the frozen hit whole, score it
+            // charged, allow iff it beats best-seen.
+            if aspiration && rule && frozen {
+                let mut cand = next.clone();
+                cand.push(b);
+                cand.push(a);
+                cand.extend_from_slice(&cur[k + 2..]);
+                if work.charge(score_charge + n) {
+                    let f = exact_flops(&scoring_pat, &cand);
+                    if f < best_f {
+                        best_f = f;
+                        best = cand;
+                        swap = true;
+                    }
+                }
+            }
+            let (first, second) = if swap { (b, a) } else { (a, b) };
+            if swap {
+                changed = true;
+                changed_any = true;
+                tabu[k] = sweep + tenure;
+                tabu[k + 1] = sweep + tenure;
+            }
+            next.push(first);
+            next.push(second);
+            game.eliminate(first);
+            if game.ops > budget {
+                return None;
+            }
+            game.eliminate(second);
+            if game.ops > budget {
+                return None;
+            }
+            k += 2;
+        }
+        if k < n {
+            let v = cur[k];
+            next.push(v);
+            game.eliminate(v);
+            if game.ops > budget {
+                return None;
+            }
+        }
+
+        std::mem::swap(&mut cur, &mut next);
+        // Best-of-sweep tracking (v2, charged; only when something moved).
+        if aspiration && changed && work.charge(score_charge) {
+            let f = exact_flops(&scoring_pat, &cur);
+            if f < best_f {
+                best_f = f;
+                best = cur.clone();
+            }
+        }
+    }
+
+    if aspiration {
+        (best_f < base).then_some(best)
+    } else {
+        changed_any.then_some(cur)
+    }
+}
+
+/// Simulated-annealing adjacent-swap search (fixed schedule, exact scores).
+///
+/// NEW generator (VOL-SA): the one unbuilt classical metaheuristic —
+/// greedy descents (pair/triple/five), chained LK, ruin-recreate, tabu and
+/// all lotteries stall on converged basins; SA accepts worse states with
+/// probability exp(−Δ/T) on a geometric cool, escaping where memoryless
+/// greed cannot. Proposals are uniform adjacent swaps from a fixed-seed
+/// xorshift64 (deterministic); every proposal is EXACT-scored and charged
+/// (~8·(n+nnz) units — call-site band keeps this honest); best-seen
+/// tracked and returned iff strictly better than seed (caller
+/// strict-admits). No RNG outside the fixed seed; no wall-clock.
+pub(crate) fn sa_swap_anneal(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    budget: i64,
+) -> Option<Vec<usize>> {
+    const ITERS: usize = 150;
+    const COOL_END_RATIO: f64 = 1e-4;
+    if n < 2 || seed.len() != n || col_ptr.len() != n + 1 || budget <= 0 {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    let nnz = col_ptr[n];
+    let scoring_pat = feral::sparse::csc::CscPattern {
+        n,
+        col_ptr: col_ptr.to_vec(),
+        row_idx: row_idx.to_vec(),
+    };
+    let exact = |perm: &[usize]| -> u64 {
+        let p = feral::ordering::amd::permute_pattern(&scoring_pat, perm);
+        let e = feral::ordering::elimination_tree::EliminationTree::from_pattern(&p);
+        feral::symbolic::column_counts_gnp(&p, &e)
+            .iter()
+            .map(|&c| (c as u64) * (c as u64))
+            .sum()
+    };
+    let mut work = TripleWork { remaining: budget };
+    let base = exact(seed);
+    if base == 0 {
+        return None;
+    }
+    let mut cur = seed.to_vec();
+    let mut cur_f = base;
+    let mut best = seed.to_vec();
+    let mut best_f = base;
+    let cool = COOL_END_RATIO.powf(1.0 / ITERS as f64);
+    let mut rng: u64 = 0x9E3779B97F4A7C15;
+    let score_charge = 8usize.saturating_mul(n.saturating_add(nnz)).max(1);
+    // VOL-SA-BLK: proposal mix (one variable) — half adjacent swaps,
+    // half single 3-rotations. NOTE on the standing "no 3-cycles" rule:
+    // that bars rc's killer shape (enumerative 3-cycle SmallScore WALKS on
+    // dense rows); this is one O(1) rotation per proposal, exact-scored
+    // once, charged, best-tracked — a different cost class entirely.
+    for _cycle in 0..3 {
+        let mut t = 0.01 * base as f64;
+        for _ in 0..ITERS {
+            t *= cool;
+            if t <= 0.0 {
+                break;
+            }
+            let mut trial = cur.clone();
+            if xs64(&mut rng) % 2 == 0 {
+                let p = (xs64(&mut rng) % (n - 1) as u64) as usize;
+                trial.swap(p, p + 1);
+            } else {
+                let p = (xs64(&mut rng) % (n - 2) as u64) as usize;
+                let a = trial[p];
+                trial[p] = trial[p + 1];
+                trial[p + 1] = trial[p + 2];
+                trial[p + 2] = a;
+            }
+            if !work.charge(score_charge) {
+                break;
+            }
+            let f = exact(&trial);
+            let delta = (f as i64).saturating_sub(cur_f as i64);
+            let accept = delta <= 0
+                || ((xs64(&mut rng) % 1_000_000) as f64) < 1e6 * (-(delta as f64) / t).exp();
+            if accept {
+                cur = trial;
+                cur_f = f;
+                if f < best_f {
+                    best_f = f;
+                    best = cur.clone();
+                }
+            }
+        }
+    }
+    if best_f < base {
+        Some(best)
+    } else {
+        None
+    }
+}
+
+/// Path relinking between incumbent and donor orderings (greedy placement).
+///
+/// NEW generator (VOL-PR): transplant assembles donor SEGMENTS and OX
+/// splices donor BLOCKS; this walks the full interpolation PATH instead —
+/// repeatedly place the first mismatched position from the donor and
+/// exact-score every step, keeping the best. Distinct basin access from
+/// both. Donors are the pipeline's own displaced orderings (same pool as
+/// transplant, but small-band terminal seat + charged exact scores give it
+/// the RR safety profile, not transplant's). First-two-donors cap,
+/// per-score charging with abort, best-tracked strict return.
+/// Deterministic (first-mismatch rule, index order, fixed budgets).
+pub(crate) fn path_relink(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    incumbent: &[usize],
+    donors: &[(u64, Vec<usize>)],
+    budget: i64,
+) -> Option<Vec<usize>> {
+    if n < 2
+        || incumbent.len() != n
+        || col_ptr.len() != n + 1
+        || donors.is_empty()
+        || budget <= 0
+    {
+        return None;
+    }
+    // Validate the incumbent (donor entries are guarded inline below).
+    {
+        let mut seen = vec![false; n];
+        for &v in incumbent {
+            if v >= n || seen[v] {
+                return None;
+            }
+            seen[v] = true;
+        }
+    }
+    let scoring_pat = feral::sparse::csc::CscPattern {
+        n,
+        col_ptr: col_ptr.to_vec(),
+        row_idx: row_idx.to_vec(),
+    };
+    let score_charge = 8usize.saturating_mul(n.saturating_add(col_ptr[n])).max(1);
+    let mut work = TripleWork { remaining: budget };
+    let base = exact_flops(&scoring_pat, incumbent);
+    let mut best = incumbent.to_vec();
+    let mut best_f = base;
+    // Pool order is pipeline-deterministic; take the first two donors.
+    for (_, donor) in donors.iter().take(2) {
+        if donor.len() != n {
+            continue;
+        }
+        let mut cur = incumbent.to_vec();
+        // Value -> current position map (rebuilt per donor).
+        let mut pos_of = vec![0usize; n];
+        for (idx, &v) in cur.iter().enumerate() {
+            if v < n {
+                pos_of[v] = idx;
+            }
+        }
+        loop {
+            // First mismatched position (index order, deterministic).
+            let mut i = 0;
+            while i < n && cur[i] == donor[i] {
+                i += 1;
+            }
+            if i >= n {
+                break;
+            }
+            let want = donor[i];
+            if want >= n {
+                break;
+            }
+            let j = pos_of[want];
+            if j >= n || cur[j] != want {
+                break;
+            }
+            cur.swap(i, j);
+            pos_of[cur[j]] = j;
+            pos_of[want] = i;
+            if !work.charge(score_charge) {
+                break;
+            }
+            let f = exact_flops(&scoring_pat, &cur);
+            if f < best_f {
+                best_f = f;
+                best = cur.clone();
+            }
+        }
+    }
+    // Swaps preserve bijectivity structurally; strict improvement only.
+    if best_f < base {
+        Some(best)
+    } else {
+        None
+    }
+}
+
 const TRIPLE_ORDERS: [[usize; 3]; 6] = [
     [0, 1, 2],
     [0, 2, 1],

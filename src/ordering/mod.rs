@@ -4260,6 +4260,40 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // VOL-RR-MID: ruin-recreate at the mid-pipeline seat (on the pre-five
+    // incumbent, before the five/LT1K/completion/subset-window stages).
+    // Biggest local form (−0.58): weaker recipient than terminal, so bigger
+    // wins — at the price of perturbing conditional downstream gates
+    // (stg5 +33 cascade regression, characterized, disclosed). Same fence
+    // (nnz<=5000, charged repair, k-mix 16/32/64/128). 16 attempts,
+    // best-of exact, strict admit.
+    if n > 32 && n <= 1_000 && nnz > 0 && nnz <= 5_000 {
+        let mut best_rr = best_perm.clone();
+        let mut best_rr_f = best_flops;
+        for attempt in 0..16 {
+            if let Some(cand) = rgreedy::ruin_window_reconstruct(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_rr,
+                attempt,
+                4_000_000,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_rr_f {
+                        best_rr_f = f;
+                        best_rr = cand;
+                    }
+                }
+            }
+        }
+        if best_rr_f < best_flops {
+            best_flops = best_rr_f;
+            best_perm = best_rr;
+        }
+    }
+
     // Terminal five-descent on the *shipped* incumbent (crown, n<=4000), then
     // n<=1000-only leftover four/triple/pair and a second five. The full 5/4/3
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the

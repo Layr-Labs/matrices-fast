@@ -233,9 +233,9 @@ const REDUCE_ALPHAS: [f64; 4] = [0.5, 2.5, 5.0, 10.0];
 /// is an exact improvement of the full objective at a fraction of the cost.
 /// Gated on the full-graph nnz below the documented slow tier, and on a margin
 /// window against the finished incumbent. Structural only - never on identity.
-const REDUCE_RECURSE_MAX_NNZ: usize = 150_000;
+const REDUCE_RECURSE_MAX_NNZ: usize = 250_000; // iter487a
 const REDUCE_RECURSE_MARGIN: (u64, u64) = (11, 10);
-const REDUCE_RECURSE_DEEP_MAX_CORE_N: usize = 80_000;
+const REDUCE_RECURSE_DEEP_MAX_CORE_N: usize = 120_000; // iter487a
 const REDUCE_RECURSE_DEEP_MAX_CORE_NNZ: usize = 250_000;
 /// EXTRA DEPTHS (matrices_mage 0064), bounded and SEQUENTIAL so the cost is identical on a
 /// 2-vCPU grader and a 16-core bench: after the shipped K=3 pass, depths are attempted in order
@@ -1696,6 +1696,20 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // dense tiny like qap) while nnz stays tight. `seed = 1` (default) deterministic.
     if n < KAHIP_MAX_N && nnz < KAHIP_MAX_NNZ {
         consider!(move || feral_kahip::kahip_order(&core));
+        // iter602a NEW BASE: always-on Eco+seed2 on chimera-narrow band only.
+        // Not a pe2 rewrite; not `if !part_extra2` ungate — extends existing always-on KaHIP block.
+        if n >= 1_500 && n <= 2_500 && nnz >= 8_000 && nnz < 15_000 {
+            let kahip_seed2 = feral_kahip::KahipOptions {
+                seed: 2,
+                ..Default::default()
+            };
+            consider!(move || feral_kahip::kahip_order_full(&core, &kahip_seed2).map(|(p, _, _)| p));
+            let kahip_eco = feral_kahip::KahipOptions {
+                mode: feral_kahip::KahipMode::Eco,
+                ..Default::default()
+            };
+            consider!(move || feral_kahip::kahip_order_full(&core, &kahip_eco).map(|(p, _, _)| p));
+        }
     }
     flush!();
     let part_extra2 = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
@@ -2466,7 +2480,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let hydro_band = (1800..=2500).contains(&n);
                 let gasprod_band = n >= 20_000;
                 // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
-                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
+                let mid_force = (7_000..22_000).contains(&n) && nnz >= 48_000; // iter488a
                 if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
@@ -2491,7 +2505,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     const PAIR_DESCENT_SWEEPS: usize = 4;
     const PAIR_DESCENT_OPS_BUDGET: i64 = 128_000_000;
     const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
-    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
+    const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 96_000_000; // iter487a
 
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
@@ -4265,10 +4279,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a
-        const FINAL_FIVE_MAX_NNZ: usize = 80_000;
+        const FINAL_FIVE_MAX_N: usize = 14_000; // iter487a
+        const FINAL_FIVE_MAX_NNZ: usize = 100_000; // iter487a
         // iter180a: wide five on tip+176a
-        const FINAL_FIVE_OPS: i64 = 128_000_000;
+        const FINAL_FIVE_OPS: i64 = 192_000_000; // iter487a
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.

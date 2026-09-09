@@ -2491,9 +2491,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     const PAIR_DESCENT_EXT_MAX_N: usize = 12_000;
     const PAIR_DESCENT_EXT_OPS_BUDGET: i64 = 48_000_000;
 
+    // iter330a: widen EXT nnz 30k→80k so lee4_06/mpbp get pair-descent polish
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 30_000
+        && nnz <= 80_000
         && max_deg * 50 <= n;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0

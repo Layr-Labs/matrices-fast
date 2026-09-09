@@ -528,8 +528,8 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
     if n < 64 {
         cfg.min_s = 8;
         cfg.max_s = 32;
-        cfg.max_blocks = 8;
-        cfg.budget = 1_000_000; if n >= 1_000 { cfg.budget /= 2; }
+        cfg.max_blocks = 4;
+        cfg.budget = 2_000_000; if n >= 1_000 { cfg.budget /= 2; }
     } else if n <= 1_000 {
         cfg.min_s = 8;
         cfg.max_s = 256;
@@ -807,11 +807,11 @@ fn perturb(base: &[usize], swaps: usize, seed: u64) -> Vec<usize> {
 #[inline]
 fn relabel_budget_and_cap(n: usize) -> (usize, usize) {
     if n >= 10_000 {
-        (500_000, 36)
+        (600_000, 40)
     } else if n >= 1_000 {
         (400_000, 30)
     } else {
-        (300_000, 24)
+        (200_000, 16)
     }
 }
 
@@ -1066,7 +1066,7 @@ const HEAVY_METRIC_MAX_VARIANTS: usize = 4;
 /// `extra_deg_div_nv_wf2`'s own ceiling: its cost does not track the others
 /// (≈3.6e-7 s/nnz, a wide-dynamic-range bucket-crowding shape) and its only
 /// measured win is faclay35 (nnz=132k).
-const HEAVY_METRIC_WF2_MAX_NNZ: usize = 150_000;
+const HEAVY_METRIC_WF2_MAX_NNZ: usize = 200_000;
 /// Above this nnz the block queues exactly ONE variant (giant-tier trim).
 const HEAVY_METRIC_GIANT_MIN_NNZ: usize = 700_000;
 /// Dead window: between 200k and 500k nnz every dev row was pure cost (zero
@@ -3380,9 +3380,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Accepted only on a strict decrease of the EXACT core objective, so
             // it can never lower the portfolio's own pick.
             let mut minfill_pick: Option<Vec<usize>> = None;
+            // Skip the minimum-fill spend when the degree-family passes agree:
+            // spread over the already-ranked exact flops is < 1%.
+            let mut agree_lo = u64::MAX;
+            let mut agree_hi = 0u64;
+            for r in results.iter().flatten() {
+                agree_lo = agree_lo.min(r.0);
+                agree_hi = agree_hi.max(r.0);
+            }
+            let passes_agree = agree_lo != u64::MAX
+                && agree_lo != 0
+                && agree_hi != u64::MAX
+                && (agree_hi as u128) * 100 < (agree_lo as u128) * 101;
             if (8..=CORE_MINFILL_MAX_CN).contains(&cn)
                 && cl.core_nnz() <= CORE_MINFILL_MAX_CORE_NNZ
                 && core_minfill_ledger.get() > 0
+                && !passes_agree
             {
                 let budget_before = core_minfill_ledger.get();
                 let (p, charged) = minfill_core_order(
@@ -5262,7 +5275,7 @@ fn nd_order(pattern: &Pattern) -> Vec<i32> {
     }
     let degree: Vec<usize> = adj.iter().map(|a| a.len()).collect();
 
-    const ND_LEAF: usize = 200;
+    const ND_LEAF: usize = 100;
 
     let mut order: Vec<usize> = vec![0usize; n];
     let mut mark: Vec<bool> = vec![false; n]; // membership in the current subset

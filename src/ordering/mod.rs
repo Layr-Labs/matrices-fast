@@ -168,6 +168,7 @@ mod chordal_certificate;
 /// Independent-set-first (normal-equations) lift: eliminate one KKT side first.
 mod indep_first;
 mod bit_kernels;
+mod leaf_core;
 
 use candidate_cache::Family as CandidateFamily;
 use prefix_score::PrefixScore as SmallScore;
@@ -4469,6 +4470,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
             if score(&candidate) < best_flops {
+                best_perm = candidate;
+            }
+        }
+    }
+    if leaf_core::enabled() && n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
+        if let Some((candidate, predicted)) = leaf_core::refine(pattern, &best_perm) {
+            let incumbent_flops = score(&best_perm);
+            if predicted < incumbent_flops && score(&candidate) < incumbent_flops {
                 best_perm = candidate;
             }
         }

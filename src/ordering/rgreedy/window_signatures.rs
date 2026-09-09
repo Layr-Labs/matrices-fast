@@ -9,6 +9,13 @@
 
 use super::{Game, TripleWork};
 use std::collections::HashMap;
+#[cfg(test)]
+use std::collections::HashSet;
+
+#[cfg(test)]
+use super::signature_canonical;
+#[cfg(test)]
+use signature_canonical::CanonicalKey;
 
 /// Same width ceiling as `window_dp`. Do not raise without the audit noted above.
 const MAX_WIDTH: usize = 14;
@@ -113,6 +120,8 @@ pub(crate) struct SignatureEngine {
     // ── within-invocation memo (no static/persistent state) ──────────────────
     memo: HashMap<SigKey, MemoEntry>,
     memo_bytes: usize,
+    #[cfg(test)]
+    canonical_seen: HashSet<CanonicalKey>,
     verify_on_hit: bool,
     charge_model: ChargeModel,
     stats: MemoStats,
@@ -139,6 +148,8 @@ impl SignatureEngine {
             path: Vec::new(),
             memo: HashMap::new(),
             memo_bytes: 0,
+            #[cfg(test)]
+            canonical_seen: HashSet::new(),
             // Verify every hit by exact recompute in debug builds; production
             // wiring can flip this on to sample the certificate.
             verify_on_hit: cfg!(debug_assertions),
@@ -157,6 +168,8 @@ impl SignatureEngine {
     pub(crate) fn reset_memo(&mut self) {
         self.memo.clear();
         self.memo_bytes = 0;
+        #[cfg(test)]
+        self.canonical_seen.clear();
         self.stats = MemoStats::default();
     }
 
@@ -320,6 +333,16 @@ impl SignatureEngine {
             }
             let order = map_order(vertices, &entry.order_local);
             return Some((order, entry.best, entry.incumbent));
+        }
+
+        #[cfg(test)]
+        if signature_canonical::probe_enabled_for_test() {
+            signature_canonical::observe_raw_miss_for_test(
+                &mut self.canonical_seen,
+                k,
+                &inside,
+                &key.hist,
+            );
         }
 
         let full = (states - 1) as u16;
@@ -1030,5 +1053,120 @@ mod tests {
         assert_eq!(third, (expected_order, expected_best, expected_incumbent));
         assert_eq!(engine.stats.hits, 1);
         assert_eq!(engine.stats.inserted, 2);
+    }
+
+    #[test]
+    fn canonical_probe_counts_relabelled_raw_misses_only() {
+        struct Guard;
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                signature_canonical::set_probe_enabled_for_test(false);
+                signature_canonical::reset_probe_stats_for_test();
+            }
+        }
+
+        signature_canonical::set_probe_enabled_for_test(true);
+        signature_canonical::reset_probe_stats_for_test();
+        let _guard = Guard;
+
+        let edges = [
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (4, 0),
+            (4, 1),
+            (5, 2),
+            (6, 0),
+            (6, 3),
+        ];
+        let p = crate::Pattern::from_edges(7, &edges);
+        let adj = Game::build_adj(p.n, &p.col_ptr, &p.row_idx).unwrap();
+        let mut game = build_game(&p, &adj);
+        game.reset();
+
+        let mut engine = SignatureEngine::new(p.n);
+        engine.set_verify_on_hit(true);
+        let mut work = TripleWork {
+            remaining: i64::MAX,
+        };
+
+        let first = engine
+            .solve_component(&game, &[0, 1, 2, 3], &mut work)
+            .unwrap();
+        assert_eq!(
+            engine
+                .solve_component(&game, &[0, 1, 2, 3], &mut work)
+                .unwrap(),
+            first
+        );
+        let _ = engine
+            .solve_component(&game, &[2, 0, 3, 1], &mut work)
+            .unwrap();
+
+        let raw = engine.stats();
+        assert_eq!(raw.hits, 1, "second call is the only raw hit");
+        assert_eq!(raw.inserted, 2, "relabelled local ids remain a raw miss");
+
+        let canonical = signature_canonical::take_probe_stats_for_test();
+        assert_eq!(canonical.calls, 2, "raw hit must not invoke the probe");
+        assert_eq!(canonical.canonicalized, 2);
+        assert_eq!(canonical.canonical_hits, 1);
+        assert_eq!(canonical.skipped_width, 0);
+        assert_eq!(canonical.skipped_hist, 0);
+        assert_eq!(canonical.skipped_candidates, 0);
+        assert!(canonical.cost > 0);
+    }
+
+    #[test]
+    #[ignore]
+    fn probe_signature_canonical_missed_hits() {
+        struct Guard;
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                signature_canonical::set_probe_enabled_for_test(false);
+            }
+        }
+
+        signature_canonical::set_probe_enabled_for_test(true);
+        let _guard = Guard;
+        let mut total = signature_canonical::CanonicalProbeStats::default();
+        for (name, pattern) in crate::corpus::corpus() {
+            signature_canonical::reset_probe_stats_for_test();
+            let _ = crate::ordering::order(&pattern);
+            let stats = signature_canonical::take_probe_stats_for_test();
+            total.calls += stats.calls;
+            total.canonicalized += stats.canonicalized;
+            total.canonical_hits += stats.canonical_hits;
+            total.skipped_width += stats.skipped_width;
+            total.skipped_hist += stats.skipped_hist;
+            total.skipped_candidates += stats.skipped_candidates;
+            total.skipped_work += stats.skipped_work;
+            total.candidates += stats.candidates;
+            total.cost = total.cost.saturating_add(stats.cost);
+            println!(
+                "SIGNATURE_CANONICAL\t{name}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                stats.calls,
+                stats.canonicalized,
+                stats.canonical_hits,
+                stats.skipped_width,
+                stats.skipped_hist,
+                stats.skipped_candidates,
+                stats.candidates,
+                stats.cost,
+                stats.skipped_work,
+            );
+        }
+        println!(
+            "SIGNATURE_CANONICAL_TOTAL\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            total.calls,
+            total.canonicalized,
+            total.canonical_hits,
+            total.skipped_width,
+            total.skipped_hist,
+            total.skipped_candidates,
+            total.candidates,
+            total.cost,
+            total.skipped_work,
+        );
     }
 }

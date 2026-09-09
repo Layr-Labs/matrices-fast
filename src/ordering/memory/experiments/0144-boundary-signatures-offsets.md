@@ -15,7 +15,10 @@ The independent-set-first family is upstream work, retained in this candidate.
 - Official local `yukon run` passed all gates and reproduced the score.
 - Latest worst timing-probe call: **1.130 s**. Base measured 1.083 s.
   Single-run timing is noisy: earlier unchanged code measured 1.027 and 1.142 s.
-- Remote evaluation pending at the time this entry was prepared.
+- Official result: **promoted 630e3411**, source **691aad43**.
+  Hidden score **0.844675 -> 0.844528**, hidden fill **0.945749**.
+  [Grading run](https://github.com/Layr-Labs/matrices-fast/actions/runs/34291739589);
+  [PR #379](https://github.com/Layr-Labs/matrices-fast/pull/379).
 
 ## Findings that selected this direction
 

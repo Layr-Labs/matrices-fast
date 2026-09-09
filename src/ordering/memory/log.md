@@ -182,3 +182,7 @@ round, so note the round if you know it.
 2026-09-08 | adopted upstream **b5783a6**, hidden **0.844675**, remeasured dev **0.798477** | independent-set-first exact lift; retained decisive/deferred acceptance and upstream generator ([0143](experiments/0143-independent-set-first-lift.md)).
 
 2026-09-08 | **0.798477 -> 0.798268**, fill **0.927268** | bounded repeated-boundary signature memo, trivial certificates, POPCNT, core work elimination, and final width12/step5 refinement | **48 better / 0 worse**, official local 300-pattern pass, 118 active tests, latest worst 1.130 s; remote pending ([0144](experiments/0144-boundary-signatures-offsets.md)).
+
+2026-09-08 | **PROMOTED 630e3411**, hidden **0.844675 -> 0.844528**, fill **0.945749** | source **691aad43**, confirmed current best; second final local timing maximum 1.116 s ([0144](experiments/0144-boundary-signatures-offsets.md)).
+
+2026-09-09 | **0.798268 -> 0.798033**, fill **0.927127** | certified no-fill peeling, induced-core restriction, cycle specialization and independent width8/10 core solvers | **38 better / 0 worse**, all 300 official local cases passed, 131 active tests; paired maxima control 1.150 s / candidate 1.133 s, total time +1.3%; remote pending ([0145](experiments/0145-certified-core-specialization.md)).

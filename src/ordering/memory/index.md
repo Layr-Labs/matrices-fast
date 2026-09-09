@@ -1,6 +1,10 @@
+[0145: certified easy-region/core specialization](experiments/0145-certified-core-specialization.md):
+on 691aad43, dev **0.798268 -> 0.798033**, 38/0 improved/regressed,
+131 active tests and official local run passed; remote pending.
+
 [0144: boundary signatures and final offsets](experiments/0144-boundary-signatures-offsets.md):
 on b5783a6, dev **0.798477 -> 0.798268**, 48/0 improved/regressed,
-118 active tests passed, official local run passed; remote pending.
+118 active tests passed; **promoted 630e3411**, hidden **0.844528**.
 
 [0143: independent-set-first lift](experiments/0143-independent-set-first-lift.md):
 upstream promoted **b5783a6**, hidden **0.844675**; locally remeasured

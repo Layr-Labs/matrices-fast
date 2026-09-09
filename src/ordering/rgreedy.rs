@@ -40,6 +40,8 @@
 
 mod window_dp;
 mod window_signatures;
+#[cfg(test)]
+mod signature_canonical;
 pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step};
 
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {

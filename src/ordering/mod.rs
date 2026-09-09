@@ -3380,9 +3380,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Accepted only on a strict decrease of the EXACT core objective, so
             // it can never lower the portfolio's own pick.
             let mut minfill_pick: Option<Vec<usize>> = None;
+            // Skip the minimum-fill spend when the degree-family passes agree:
+            // spread over the already-ranked exact flops is < 1%.
+            let mut agree_lo = u64::MAX;
+            let mut agree_hi = 0u64;
+            for r in results.iter().flatten() {
+                agree_lo = agree_lo.min(r.0);
+                agree_hi = agree_hi.max(r.0);
+            }
+            let passes_agree = agree_lo != u64::MAX
+                && agree_lo != 0
+                && agree_hi != u64::MAX
+                && (agree_hi as u128) * 100 < (agree_lo as u128) * 101;
             if (8..=CORE_MINFILL_MAX_CN).contains(&cn)
                 && cl.core_nnz() <= CORE_MINFILL_MAX_CORE_NNZ
                 && core_minfill_ledger.get() > 0
+                && !passes_agree
             {
                 let budget_before = core_minfill_ledger.get();
                 let (p, charged) = minfill_core_order(

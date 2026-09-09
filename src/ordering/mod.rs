@@ -3850,6 +3850,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
 
+    // Snapshot for the terminal re-transplant below: the donor pool is frozen
+    // from here on (flush_batch is the only writer) while replacing stages
+    // run after, so a changed incumbent is a new recipient. (Fired 7/0 thin
+    // on fbef927 and −0.09 on fb851f6; untested on this tree.)
+    let flops_at_transplant = best_flops;
+
     // ── TERMINAL COMPLETION-LATTICE DESCENT (MINL, see `minl.rs`) ──────────
     // Moves downward from the FINISHED incumbent's completion by exact local
     // fill-edge deletion, realizes the minimal completion by MCS-PEO and by
@@ -4231,10 +4237,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 6_500;
-        const FINAL_FIVE_MAX_NNZ: usize = 100_000;
-        // iter180a: wide five on tip+176a
-        const FINAL_FIVE_OPS: i64 = 128_000_000;
+        const FINAL_FIVE_MAX_N: usize = 4_000;
+        const FINAL_FIVE_MAX_NNZ: usize = 60_000;
+        const FINAL_FIVE_OPS: i64 = 32_000_000;
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and
         // four/triple at n<=4000 (69e3932) failed hidden. n<=1000 cannot see
         // lee1_07 / lee4_09. First five on n<=4000 is the promoted crown pass.
@@ -4263,7 +4268,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if best_flops < before_five && n <= 3_000 { // iter180a
+            if best_flops < before_five && n <= LT1K {
                 if let Some(cand) = rgreedy::adjacent_five_descent(
                     n,
                     &pattern.col_ptr,
@@ -4471,6 +4476,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         ) {
             if score(&candidate) < best_flops {
                 best_perm = candidate;
+            }
+        }
+    }
+
+    // Terminal re-transplant on the *finished* incumbent. Donor pool frozen
+    // since phase 14; conditioned on terminal strict gain (fires only where
+    // earned); same pool (no composition change); inherited below-AMD gate
+    // + ledger + strict admit.
+    if best_flops < flops_at_transplant {
+        let donors = runner_up.borrow();
+        if let Some(cand) = transplant_probe::refine_with_donors(
+            &scoring_pat, &best_perm, &donors, amd_flops,
+        ) {
+            let f = score(&cand);
+            if f < best_flops {
+                best_flops = f;
+                best_perm = cand;
             }
         }
     }

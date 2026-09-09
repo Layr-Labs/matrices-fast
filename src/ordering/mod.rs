@@ -2464,7 +2464,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // iter265a RC: 235a + second-colour/metric expand (0145 family)
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
-                let gasprod_band = n >= 20_000;
+                let gasprod_band = n >= 15_000; // iter365a: earlier indep immediate
                 if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;

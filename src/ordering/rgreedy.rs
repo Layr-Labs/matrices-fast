@@ -1537,6 +1537,103 @@ pub(crate) fn adjacent_pair_descent(
     changed_any.then_some(cur)
 }
 
+/// Ruin-and-reconstruct local search with COST-BOUNDED min-fill repair.
+///
+/// NEW generator (VOL-RR series): deterministic strided ruin (k =
+/// 16/32/64/128 by attempt mod 4) + greedy min-fill rebuild, lowest-index
+/// ties. VOL-RR6: FIVE sequential windows per attempt (deeper tunneling).
+/// One shared TripleWork budget across windows (aborts protect); game
+/// rebuilt per window. Deterministic (no RNG); returns Some iff differs.
+/// Deterministic (no RNG); every repair evaluation charged (dense rows
+/// abort via None); returns Some iff the rebuild differs.
+pub(crate) fn ruin_window_reconstruct(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    attempt: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    let k = match attempt % 4 {
+        0 => 16,
+        1 => 32,
+        2 => 64,
+        _ => 128,
+    };
+    if n <= 32 || k >= n || seed.len() != n || col_ptr.len() != n + 1 || budget <= 0 {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    // Three sequential windows per attempt (tunneling through worse
+    // states); locations stride deterministically (no RNG).
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    let mut work = TripleWork { remaining: budget };
+    let mut cur = seed.to_vec();
+    for j in 0..5 {
+        let start = attempt
+            .wrapping_mul(9973)
+            .wrapping_add(12345)
+            .wrapping_add((j as usize).wrapping_mul(104729))
+            % (n - k);
+        let mut game = Game::new(n, &adj0)?;
+        // new() leaves the live-list empty; reset() populates it.
+        game.reset();
+        // Eliminate the shared prefix to position the game at the window.
+        for &v in &cur[..start] {
+            if !work.eliminate(&mut game, v) {
+                return None;
+            }
+        }
+        // Greedy min-fill reconstruction, every evaluation charged: a dense
+        // row exhausts the budget and aborts instead of running uncharged.
+        let w = game.w;
+        let mut remaining: Vec<usize> = cur[start..start + k].to_vec();
+        let mut order: Vec<usize> = Vec::with_capacity(k);
+        while !remaining.is_empty() {
+            let mut best_i = 0;
+            let mut best_c = {
+                let dv = game.deg[remaining[0]] as usize;
+                if !work.charge((dv + 1) * (3 * w + 6) + 24) {
+                    return None;
+                }
+                game.deficiency(remaining[0])
+            };
+            for i in 1..remaining.len() {
+                let dv = game.deg[remaining[i]] as usize;
+                if !work.charge((dv + 1) * (3 * w + 6) + 24) {
+                    return None;
+                }
+                let c = game.deficiency(remaining[i]);
+                if c < best_c || (c == best_c && remaining[i] < remaining[best_i]) {
+                    best_i = i;
+                    best_c = c;
+                }
+            }
+            let v = remaining.swap_remove(best_i);
+            order.push(v);
+            if !work.eliminate(&mut game, v) {
+                return None;
+            }
+        }
+        let mut next = Vec::with_capacity(n);
+        next.extend_from_slice(&cur[..start]);
+        next.extend_from_slice(&order);
+        next.extend_from_slice(&cur[start + k..]);
+        cur = next;
+    }
+    if cur == seed {
+        None
+    } else {
+        Some(cur)
+    }
+}
+
 const TRIPLE_ORDERS: [[usize; 3]; 6] = [
     [0, 1, 2],
     [0, 2, 1],

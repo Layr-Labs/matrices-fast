@@ -186,3 +186,11 @@ round, so note the round if you know it.
 2026-09-08 | **0.798268 -> 0.795608** (−26.6 bip), gt_10k 0.7144 -> 0.6935 | independent-set-first lift v5: second-colour-class sets (x-inf, x9), DegDivNvSqrtWf/DegPlusDegme/DegSqrt metric passes on ≤16k-node cores, METIS on the two lowest-AMD cores, flat deterministic task pool; acceptance moved to after the subtree stage (strict), immediate only at ≥ 40 % lead | **7 better / 3 worse** (methanol400 +0.8 %, gasprod +0.7 %, graphpart +0.1 %), worst 1.055-1.095 s on this box (tip 1.040) ([0145](experiments/0145-second-colour-class-metric-cores.md)).
 
 2026-09-09 | fe871f1 **FAILED hidden Benchmark** (actions 34297482026, ~5 min, step 11). Local worst 1.055–1.126 s sat in the same band as 176a/173a timing deaths. v11 on 4d6d3d0: x-sets n≤12k, drop DegSqrt, METIS/metrics top-1 except nnz≥300k, extra 180a caps off giant-dense | probe **0.795871**, worst **1.026 s** (under tip 1.040); lee4_06 0.504 kept; pooling 0.282 restored; gams05 0.530, gabriel09 0.913 ([0145](experiments/0145-second-colour-class-metric-cores.md)).
+
+2026-09-09 | 273a local 0.794136 → v21 **0.794085** (−0.51 bip), WORST 1.081 s | mid-xset 40 % 1b hold so lee4_06 takes 4b (0.5074→0.5044); x-caps 15/5 only n<=10k; no skip-METIS; no AmindNorm (302a failed hidden) | official yukon run **0.794085**; submitted `d4a7cbfe` ([0146](experiments/0146-lee4-06-4b-hold.md)).
+
+2026-09-09 | 273a 0.794121 → **0.794061** (−0.60 bip), WORST **1.078 s** | f3 on n≥20k nnz≤80k (gasprod 0.9135→0.9112), g4 on n≥20k nnz≤150k (popdyn 0.9532→0.9518), 4b-lift subtree for n in 4k..15k nnz≤130k (methanol200 0.7246→0.7204); no hold / no AmindNorm / no skip-METIS | [0147](experiments/0147-273a-f3-g4-4b-subtree.md)
+
+2026-09-09 | 273a 0.794121 → **0.793999** (−1.22 bip), WORST **1.095 s** (lee4_09) | 0147 leftovers + gated second MINL n≤8k nnz≤40k. **ABORTED before submit:** 290a `1ab6be1` (MINL2 n≤5k) FAILED hidden, so lee4_06-out is not enough | [0148](experiments/0148-273a-f3-g4-4b-subtree-minl2.md)
+
+2026-09-09 | 273a 0.794121 → **0.794048** (−0.73 bip), WORST **1.085 s** | v23f leftovers + pairdesc EXT nnz 30k→80k (330a rejected thin 0.843545 alone; no MINL2 after 290a fail; no hold) | [0149](experiments/0149-273a-leftovers-pairdesc-ext.md)

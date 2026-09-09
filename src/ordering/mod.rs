@@ -551,6 +551,120 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
     cfg
 }
 
+/// One subtree-refine pass on an already-built permutation. Used as a
+/// last-chance polish on a deferred independent-set lift that lost to the
+/// incumbent's stage-4 subtree: compare polished-lift vs polished-incumbent
+/// instead of raw-lift vs polished-incumbent. Early-accept bands change the
+/// incumbent *before* stage 4 and re-roll the basin; this does not.
+fn one_subtree_polish(
+    pattern: &Pattern,
+    scoring_pat: &ScoringPattern,
+    perm: &[usize],
+    n: usize,
+    nnz: usize,
+) -> Option<Vec<usize>> {
+    let permuted = permute_pattern(scoring_pat, perm);
+    let etree = EliminationTree::from_pattern(&permuted);
+    let post = etree.postorder();
+    let mut candidate: Vec<usize> = post.iter().map(|&j| perm[j]).collect();
+    let post_pattern = permute_pattern(scoring_pat, &candidate);
+    let post_etree = EliminationTree::from_pattern(&post_pattern);
+    let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+        .into_iter()
+        .map(|c| c as u32)
+        .collect();
+    let parent: Vec<i32> = post_etree
+        .parent
+        .iter()
+        .map(|p| p.map_or(-1, |j| j as i32))
+        .collect();
+    let improved = rgreedy::subtree_refine(
+        n,
+        &pattern.col_ptr,
+        &pattern.row_idx,
+        &mut candidate,
+        &counts,
+        &parent,
+        subtree_cfg_for(n, nnz),
+    );
+    if improved > 0 && is_bijection(&candidate, n) {
+        Some(candidate)
+    } else {
+        None
+    }
+}
+
+/// One completion-lattice descent from `best_perm`, plus a bounded subtree
+/// round when the descent finishes a *minimal* completion that strictly
+/// improved. Mutates `best_perm`; returns the post-descent flop count.
+fn apply_minl_descent(
+    pattern: &Pattern,
+    scoring_pat: &ScoringPattern,
+    n: usize,
+    nnz: usize,
+    best_perm: &mut Vec<usize>,
+    score: impl Fn(&[usize]) -> u64,
+) -> u64 {
+    let mut cur_flops = score(best_perm);
+    let entry_flops = cur_flops;
+    let mut descent_completed = false;
+    if let Some((cands, completed)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        minl::minl_candidates(scoring_pat, best_perm)
+    }))
+    .ok()
+    .flatten()
+    {
+        descent_completed = completed;
+        for cand in cands {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < cur_flops {
+                    cur_flops = f;
+                    *best_perm = cand;
+                }
+            }
+        }
+    }
+    if descent_completed && cur_flops < entry_flops && n <= SUBTREE_CHAIN_MAX_N {
+        let permuted_m = permute_pattern(scoring_pat, best_perm);
+        let etree_m = EliminationTree::from_pattern(&permuted_m);
+        let post_m = etree_m.postorder();
+        let mut candidate_m: Vec<usize> = post_m.iter().map(|&j| best_perm[j]).collect();
+        let post_pattern_m = permute_pattern(scoring_pat, &candidate_m);
+        let post_etree_m = EliminationTree::from_pattern(&post_pattern_m);
+        let counts_m: Vec<u32> = column_counts_gnp(&post_pattern_m, &post_etree_m)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent_m: Vec<i32> = post_etree_m
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        let mut cfg_m = subtree_cfg_for(n, nnz);
+        cfg_m.round = 5;
+        cfg_m.max_blocks = 32;
+        cfg_m.budget = MINL_SUBTREE_BUDGET;
+        let improved_m = rgreedy::subtree_refine(
+            n,
+            &pattern.col_ptr,
+            &pattern.row_idx,
+            &mut candidate_m,
+            &counts_m,
+            &parent_m,
+            cfg_m,
+        );
+        if improved_m > 0 && is_bijection(&candidate_m, n) {
+            let f = score(&candidate_m);
+            if f < cur_flops {
+                cur_flops = f;
+                *best_perm = candidate_m;
+            }
+        }
+    }
+    cur_flops
+}
+
 fn terminal_deep_subtree_cfg(n: usize, nnz: usize, best_flops: u64, amd_flops: u64) -> rgreedy::SubCfg {
     let mut cfg = SUBTREE_CFG;
     cfg.min_s = 16;
@@ -2493,7 +2607,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 30_000
+        && nnz <= 80_000
         && max_deg * 50 <= n;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0
@@ -2993,6 +3107,20 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if f < best_flops {
             best_flops = f;
             best_perm = cand;
+            // 0145 leftover: a 4b-accepted lift missed the subtree stage.
+            // Re-run one subtree pass on the lift. Later stages are monotone
+            // so this cannot recreate the 1b/mpbp_35 basin re-roll. n<15k
+            // keeps lee4_09/10 (1.07 s) off the extra pass; nnz<=130k takes
+            // pooling_sppa9pq (n=5030) and skips giant KKTs.
+            if (4_000..15_000).contains(&n) && nnz <= 130_000 {
+                if let Some(polished) = one_subtree_polish(pattern, &scoring_pat, &best_perm, n, nnz) {
+                    let pf = score(&polished);
+                    if pf < best_flops {
+                        best_flops = pf;
+                        best_perm = polished;
+                    }
+                }
+            }
         }
     }
     #[cfg(test)]
@@ -3891,68 +4019,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // A replacement: when a residual-core path already improved the incumbent,
     // core minfill/refine paid the late lattice budget — skip full-graph MINL.
     if nnz > 0 && nnz < minl::MINL_MAX_NNZ && n >= 16 && !core_path_improved {
-        let mut cur_flops = score(&best_perm);
-        let entry_flops = cur_flops;
-        let mut descent_completed = false;
-        if let Some((cands, completed)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            minl::minl_candidates(&scoring_pat, &best_perm)
-        }))
-        .ok()
-        .flatten()
-        {
-            descent_completed = completed;
-            for cand in cands {
-                if is_bijection(&cand, n) {
-                    let f = score(&cand);
-                    if f < cur_flops {
-                        cur_flops = f;
-                        best_perm = cand;
-                    }
-                }
-            }
-        }
-        // A strict MINL win is a NEW completion the subtree chain has never
-        // refined: one bounded refinement round on it, paid only on the rows
-        // where the descent fired AND ran to a minimal completion (a
-        // budget-cut descent sits on the big-fill rows, where the round is
-        // the most expensive and the completion is not minimal anyway).
-        if descent_completed && cur_flops < entry_flops && n <= SUBTREE_CHAIN_MAX_N {
-            let permuted_m = permute_pattern(&scoring_pat, &best_perm);
-            let etree_m = EliminationTree::from_pattern(&permuted_m);
-            let post_m = etree_m.postorder();
-            let mut candidate_m: Vec<usize> = post_m.iter().map(|&j| best_perm[j]).collect();
-            let post_pattern_m = permute_pattern(&scoring_pat, &candidate_m);
-            let post_etree_m = EliminationTree::from_pattern(&post_pattern_m);
-            let counts_m: Vec<u32> = column_counts_gnp(&post_pattern_m, &post_etree_m)
-                .into_iter()
-                .map(|c| c as u32)
-                .collect();
-            let parent_m: Vec<i32> = post_etree_m
-                .parent
-                .iter()
-                .map(|p| p.map_or(-1, |j| j as i32))
-                .collect();
-            let mut cfg_m = subtree_cfg_for(n, nnz);
-            cfg_m.round = 5;
-            cfg_m.max_blocks = 32;
-            cfg_m.budget = MINL_SUBTREE_BUDGET;
-            let improved_m = rgreedy::subtree_refine(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                &mut candidate_m,
-                &counts_m,
-                &parent_m,
-                cfg_m,
-            );
-            if improved_m > 0 && is_bijection(&candidate_m, n) {
-                let f = score(&candidate_m);
-                if f < cur_flops {
-                    cur_flops = f;
-                    best_perm = candidate_m;
-                }
-            }
-        }
+        let cur_flops = apply_minl_descent(
+            pattern,
+            &scoring_pat,
+            n,
+            nnz,
+            &mut best_perm,
+            &score,
+        );
         best_flops = best_flops.min(cur_flops);
     }
     #[cfg(test)]

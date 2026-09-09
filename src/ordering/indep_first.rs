@@ -98,19 +98,12 @@ pub(crate) fn bipartite_sides(sp: &ScoringPattern) -> Option<Vec<u8>> {
     Some(colour)
 }
 
-/// Greedy maximal independent set by ascending `(degree, index)`, restricted
-/// to vertices of degree ≤ `max_deg`.
-pub(crate) fn greedy_independent_set(sp: &ScoringPattern, max_deg: usize) -> Vec<bool> {
+/// Greedy take-if-unblocked walk over a caller-sorted vertex list.
+fn greedy_from_order(sp: &ScoringPattern, order: impl IntoIterator<Item = usize>) -> Vec<bool> {
     let n = sp.n;
-    let mut order: Vec<usize> = (0..n).collect();
-    order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
     let mut in_x = vec![false; n];
     let mut blocked = vec![false; n];
     for v in order {
-        let d = sp.col_ptr[v + 1] - sp.col_ptr[v];
-        if d > max_deg {
-            break;
-        }
         if blocked[v] {
             continue;
         }
@@ -122,13 +115,65 @@ pub(crate) fn greedy_independent_set(sp: &ScoringPattern, max_deg: usize) -> Vec
     in_x
 }
 
+/// Greedy maximal independent set by ascending `(degree, index)`, restricted
+/// to vertices of degree ≤ `max_deg`.
+pub(crate) fn greedy_independent_set(sp: &ScoringPattern, max_deg: usize) -> Vec<bool> {
+    let n = sp.n;
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
+    order.retain(|&v| sp.col_ptr[v + 1] - sp.col_ptr[v] <= max_deg);
+    greedy_from_order(sp, order)
+}
+
+/// Greedy maximal independent set by *descending* degree, then ascending
+/// index. Distinct from the second colour class and from a BFS colour class.
+#[allow(dead_code)]
+pub(crate) fn greedy_independent_set_desc(sp: &ScoringPattern) -> Vec<bool> {
+    let n = sp.n;
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by_key(|&v| (std::cmp::Reverse(sp.col_ptr[v + 1] - sp.col_ptr[v]), v));
+    greedy_from_order(sp, order)
+}
+
+/// Independent set taken from one side of a BFS 2-colouring that *tolerates*
+/// odd cycles. On the crudeoil KKTs `bipartite_sides` returns None; this
+/// still produces a set different from degree-greedy and second-colour.
+#[allow(dead_code)]
+pub(crate) fn bfs_colour_independent_set(sp: &ScoringPattern, take_colour: u8) -> Vec<bool> {
+    let n = sp.n;
+    let mut colour = vec![u8::MAX; n];
+    let mut queue: Vec<usize> = Vec::new();
+    for s in 0..n {
+        if colour[s] != u8::MAX {
+            continue;
+        }
+        colour[s] = 0;
+        queue.clear();
+        queue.push(s);
+        let mut head = 0;
+        while head < queue.len() {
+            let v = queue[head];
+            head += 1;
+            let cv = colour[v];
+            for &w in &sp.row_idx[sp.col_ptr[v]..sp.col_ptr[v + 1]] {
+                if colour[w] == u8::MAX {
+                    colour[w] = 1 - cv;
+                    queue.push(w);
+                }
+            }
+        }
+    }
+    let mut order: Vec<usize> = (0..n).filter(|&v| colour[v] == take_colour).collect();
+    order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
+    greedy_from_order(sp, order)
+}
+
 /// Greedy maximal independent set by ascending predicted NEW FILL — the
 /// number of non-adjacent pairs in `N(v)` (exact for degree ≤ `exact_deg`,
 /// the all-pairs bound above it) — then `(degree, index)`. Eliminating a
 /// vertex whose neighbours are already mutually adjacent adds no edge to the
 /// Schur complement, so this prefers members that leave the core sparse
 /// rather than members that are merely cheap to eliminate.
-#[allow(dead_code)]
 pub(crate) fn fill_greedy_independent_set(sp: &ScoringPattern, max_deg: usize, exact_deg: usize) -> Vec<bool> {
     let n = sp.n;
     if n > u32::MAX as usize {
@@ -331,6 +376,7 @@ const METRIC_TOP_CORES: usize = 3; // iter265a RC
 enum Pass {
     Amd,
     Amf,
+    Amf5,
     Metis,
     Metric(super::custom_metrics::ScoreVariant),
 }
@@ -340,6 +386,10 @@ fn run_pass(ccore: &feral_ordering_core::CscPattern<'_>, pass: Pass) -> Option<V
         Pass::Amd => feral_amd::amd_order(ccore).ok(),
         Pass::Amf => {
             let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
+            feral_amf::amf_order_opts(ccore, &o).ok().map(|(p, ..)| p)
+        }
+        Pass::Amf5 => {
+            let o = feral_amf::AmfOptions { dense_alpha: 5.0, ..Default::default() };
             feral_amf::amf_order_opts(ccore, &o).ok().map(|(p, ..)| p)
         }
         Pass::Metis => feral_metis::metis_order_full(ccore, &feral_metis::MetisOptions::default()).ok().map(|(p, ..)| p),
@@ -466,6 +516,17 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 5, &g_inf));
     }
+    // Fill-greedy cap-3 + degree-greedy cap-4 on the n>=20k 1b band.
+    // Census: gasprod f3/amd 0.9372 vs g3 0.9442; popdyn g4/ddnsw 0.9562 vs
+    // g3 0.9694. nnz<=150k keeps pooling_sppc3pq / kissing2 out. n>=20k
+    // keeps pinene200 (n=19995) off g4 — v22's n>=19k gate 4b-accepted g4
+    // there and finished worse.
+    if n >= 20_000 && nnz <= 150_000 {
+        candidates.push(greedy_independent_set(sp, 4));
+        if nnz <= 80_000 {
+            candidates.push(fill_greedy_independent_set(sp, 3, 64));
+        }
+    }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
     for mut in_x in candidates {
@@ -550,6 +611,11 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
                 tasks.push((i, Pass::Metric(v)));
             }
+        }
+        // f96c520 leftover: AMF α5 on small cores of the pooling_dt3 /
+        // gasprod band. Never in the lee4_09/10 band (12k<=n<20k).
+        if n >= 20_000 && n < 40_000 && nnz <= 200_000 && cn <= 8_000 && cnnz <= 80_000 && !dense {
+            tasks.push((i, Pass::Amf5));
         }
     }
     let phase2 = par_map(tasks.len(), |t| -> Option<(usize, u64, Vec<usize>)> {

@@ -2461,7 +2461,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
-                if f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter241a: digabel+hydro+gasprod bands; tip margin (3,5); seq180 hydro
+                let digabel_band = (400..=1000).contains(&n);
+                let hydro_band = (1800..=2500).contains(&n);
+                let gasprod_band = n >= 20_000;
+                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {

@@ -3880,6 +3880,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // 0210: conditioned terminal re-transplant isolate — snapshot post-phase-14
+    // flops + donor pool; re-call only if later stages strictly improve.
+    let transplant_entry_flops = best_flops;
+    let donor_perms: Vec<(u64, Vec<usize>)> = {
+        let donors = runner_up.borrow();
+        if donors.is_empty() {
+            Vec::new()
+        } else {
+            donors.clone()
+        }
+    };
 
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
@@ -4496,8 +4507,31 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
+            }
+        }
+    }
+    // 0210b: terminal conditioned re-transplant + skip second refine on large
+    // rows (0210 hidden n/a timing). Fire only when post-transplant stages
+    // strictly improved AND donors non-empty AND n<30k AND nnz<200k.
+    // Ledger/widths/AMD-tie/FF128M unchanged; no matrix-ID gates.
+    if best_flops < transplant_entry_flops
+        && !donor_perms.is_empty()
+        && n < 30_000
+        && nnz < 200_000
+    {
+        if let Some(cand) = transplant_probe::refine_with_donors(
+            &scoring_pat, &best_perm, &donor_perms, amd_flops,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
             }
         }
     }

@@ -1,3 +1,12 @@
+- [0210b](experiments/0210b-conditioned-retransplant-large-skip.md) — 0210 re-transplant + skip second refine n≥30k/nnz≥200k. **KEEP/SUBMIT** SCORE 0.791911 (−0.000389; 22/0; WORST 1.485≤tip 1.560).
+- [0211](experiments/0211-residual-core-late-polish-bestof.md) — Residual-core late polish + best-of floor on 0210 KEEP. **MISS/REVERTED** (SCORE 0.791859 −0.000049 vs 0210; 5/1 chimera_lga-01; WORST 1.469; 0210 KEEP restored; no submit).
+- [0210](experiments/0210-conditioned-terminal-retransplant.md) — Conditioned terminal re-transplant isolate on 647a tip `62654a5` (Scoreboard LOCKED; snapshot+donor clone after phase-14; re-call before return iff best_flops < entry AND donors non-empty). **SUBMITTED** `9b18a070` (SCORE 0.791908 −0.000392; 17/0; WORST 1.518≤tip 1.560).
+- [0209](experiments/0209-cascading-width-transplant.md) — Cascading width-ladder transplant (rebuild etree after width commit; ledger stays 1M) on 647a tip `62654a5`. **MISS/REVERTED** (SCORE 0.792271 −0.000029; 13/6; WORST 1.494s>tip 1.483; cascade restored). Stop — next MINL upper-n/LNNZ (parent).
+- [0208](experiments/0208-completion-ngate-late-2500.md) — Late post-five completion n-gate n≤1000/nnz≤20k → n≤2500/nnz≤40k on 647a tip `62654a5`. **MISS/REVERTED** (SCORE=tip 0.792300; 0/0; WORST 1.472s>1.14; gate restored). Null late n-gate.
+- [0207](experiments/0207-indep-work-ledger-12m.md) — INDEP_WORK_LEDGER 8M→12M on 647a tip `62654a5`. **MISS/REVERTED** (SCORE 0.792360 worse; WORST 1.564s>1.14; ledger restored 8M). Abandon INDEP_WORK deepen → completion n-gate / MINL (0208).
+- [0206](experiments/0206-conditioned-core-minfill-half-gate.md) — Conditioned CORE_MINFILL fire gate 4k/30k→2k/15k on 647a tip `62654a5` (ledger 16M). **MISS/REVERTED** (SCORE 0.793107 worse; WORST 1.476s>1.14; gate restored). Abandon minfill deepen → 0207 INDEP_WORK.
+- [0205](experiments/0205-core-minfill-ledger-32m.md) — CORE_MINFILL_LEDGER 16M→32M on 647a tip `62654a5`. **MISS/REVERTED** (SCORE=tip 0.792300; WORST 1.454s>1.14; ledger restored 16M).
+[0204: 488a PAIR48M peel + SUBTREE150k](experiments/0204-488a-pair48m-peel.md): 0.793834→**0.793789**; **MISS/NO SUBMIT** 14/0; board moved; rebased 62654a5.
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so

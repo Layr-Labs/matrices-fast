@@ -312,7 +312,11 @@ fn subset_window_descent_config(
             }
         }
         let mut start = offset;
+        let advance = (width / 2).max(1);
         while start + 1 < n {
+            // The live graph has eliminated exactly current[..start]. Each
+            // strict window gain preserves its suffix graph, so completed
+            // gains remain safe even if a later work charge refuses to run.
             let end = (start + width).min(n);
             match refine_window(
                 &game,
@@ -324,14 +328,20 @@ fn subset_window_descent_config(
                 Some(improved) => changed |= improved,
                 None => return changed.then_some(current),
             }
-            if end < n {
-                for &v in &current[start..end] {
-                    if !work.eliminate(&mut game, v) {
-                        return changed.then_some(current);
-                    }
+            if end == n {
+                // No next window needs this residual; do not replay the tail.
+                break;
+            }
+            let next_start = start + advance.min(n - start);
+            // Commit only the leading half, retaining the optimized tail in
+            // the next window. Charge each actual elimination before doing it;
+            // on refusal, return without using the partially advanced graph.
+            for &v in &current[start..next_start] {
+                if !work.eliminate(&mut game, v) {
+                    return changed.then_some(current);
                 }
             }
-            start = end;
+            start = next_start;
         }
     }
     #[cfg(test)]

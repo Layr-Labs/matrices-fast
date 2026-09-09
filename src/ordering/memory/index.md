@@ -1,7 +1,7 @@
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
-v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
-v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so
-lee4_06 0.660→0.504 is kept and lee4_09/10 stay on the tip path.
+v11 PROMOTED 62d660a hidden **0.844081**, local 0.795871 / 1.026 s.
+v12b probe **0.795065** / 1.020 s: skip METIS on the lee4_09/10 band, metrics
+on four cheapest AMD cores; lee4_09 0.681→0.645, lee4_10 0.676→0.639.
 
 [0144: boundary signatures and final offsets](experiments/0144-boundary-signatures-offsets.md):
 on b5783a6, dev **0.798477 -> 0.798268**, 48/0 improved/regressed,

@@ -77,7 +77,8 @@ only. METIS shapes on cores (imb 0.02/0.05/0.10, seed 21, niparts 16, sw 50/800)
 | v7 accept after subtree, METIS top-2 | 0.795682 | 0.6935 | 1.126 s | mpbp_35 back; pooling_sppc3pq 0.88 → 1.03 s |
 | v8 + immediate tier ≥ 40 %, metrics top-3 | 0.795666 | 0.6935 | 1.095 s | lee4_06 **0.5044**, lee4_09 0.6473, lee4_10 0.6374, lee2_06 **0.7677**, mpbp_34 0.3031; methanol400 +0.8 %, gasprod_sarawak81 +0.7 % (their 1b lifts were < 2 % ahead once the incumbent had been subtree-polished) |
 | v9 strict 4b (fe871f1, **hidden Benchmark FAIL**) | 0.795608 | 0.6935 | 1.055–1.126 s | extra: glider400 0.886 → 0.879, torsion50 −0.2 %; graphpart +0.08 %. Hidden timeout on the lee4_09/10 band. |
-| **v11 on 4d6d3d0 (180a tip)** | **0.795871** | **0.6940** | **1.026 s** | x-sets n≤12k (lee4_06 0.504 kept; lee4_09/10 left on tip); extra 180a caps off giant-dense; METIS top-2 only nnz≥300k (pooling 0.282 restored); gams05 0.562→0.530, gabriel09 0.936→0.913 |
+| **v11 on 4d6d3d0 (180a tip), PROMOTED 62d660a hidden 0.844081** | **0.795871** | **0.6940** | **1.026 s** | x-sets n≤12k (lee4_06 0.504 kept; lee4_09/10 left on tip); extra 180a caps off giant-dense; METIS top-2 only nnz≥300k (pooling 0.282 restored); gams05 0.562→0.530, gabriel09 0.936→0.913 |
+| **v12b** | **0.795065** | **0.6920** | **1.020 s** | skip METIS on 12k≤n<20k nnz≤150k, metrics on 4 cheapest AMD cores (lee4_09 g3/ddnsw was 3rd); x-sets n≤15k; AMF α5 cn≤4k. lee4_09 0.681→0.645, lee4_10 0.676→0.639, dt3 0.737→0.722. 0 worse vs v11. |
 
 Stage cost (1b, v11): lee4_09 0.071 s (tip 0.077), lee4_10 0.087 s (tip 0.094),
 lee4_06 0.062 s, pooling_sppc3pq 0.238 s / final 0.2822. Worst 1.026 s is *under*

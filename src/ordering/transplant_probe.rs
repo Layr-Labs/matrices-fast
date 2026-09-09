@@ -20,9 +20,9 @@ pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
 /// Production terminal cross-candidate subtree transplant with verification
 /// reservation (0090 screen). Strict-accept only; ledger-bounded; structural
 /// gates only. Donors are displaced portfolio orderings already retained.
-// iter647a NEW BASE: larger ledger + finer widths; open sparse-large AMD-ties
+// iter713a NEW BASE: 647a transplant-ties widths + LEDGER 1.5M (CI-safe vs 651a 2M)
 // (facility/transswitch class at ratio≈1) that tip's below-anchor gate skips.
-const TRANSPLANT_LEDGER: u64 = 1_000_000;
+const TRANSPLANT_LEDGER: u64 = 1_500_000; // iter713a: 1.5M between tip 1M and failed-CI 2M
 
 pub(super) fn refine_with_donors(
     sp: &ScoringPattern,

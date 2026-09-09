@@ -3124,3 +3124,76 @@ fn probe_indep_timing() {
         }
     }
 }
+/// Offline nested-dissection pricing on qapw (Option B follow-up, 2026-09-09).
+/// MinFill already lost 2.2x here (26.8M vs AMD 12.2M at maxcol 415 vs 225);
+/// this prices the evident next instrument — hand-rolled ND (`nd_order` /
+/// `ndfm_order`) plus library METIS / Scotch ND — against AMD on the qapw
+/// pattern (n=705, nnz≈88k). Offline only, never ships, zero cap risk.
+#[test]
+#[ignore]
+fn probe_nd_qapw() {
+    let corpus = crate::corpus::corpus();
+    let (_, pat) = corpus
+        .iter()
+        .find(|(name, _)| name == "qapw")
+        .expect("qapw in dev corpus");
+    let n = pat.n;
+    let sp = scoring_pattern(pat);
+    let (cp, ri) = core_of(pat);
+    let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+
+    // AMD baseline: the number every instrument must beat.
+    let t = Instant::now();
+    let amd: Vec<usize> = feral_amd::amd_order(&core)
+        .unwrap()
+        .into_iter()
+        .map(|x| x as usize)
+        .collect();
+    let amd_s = t.elapsed().as_secs_f64();
+    assert!(is_bijection(&amd, n));
+    let amd_f = flops_of(&sp, &amd);
+    let amd_p = permute_pattern(&sp, &amd);
+    let amd_e = EliminationTree::from_pattern(&amd_p);
+    let amd_c = column_counts_gnp(&amd_p, &amd_e);
+    println!(
+        "BASE\tqapw\tn={n}\tnnz={}\tAMD flops={amd_f} maxcol={} ({amd_s:.3} s)",
+        pat.nnz(),
+        amd_c.iter().max().unwrap()
+    );
+
+    // Shipped order() reference: what the crown scores on this row.
+    let t = Instant::now();
+    let ship = order(pat);
+    let ship_s = t.elapsed().as_secs_f64();
+    let ship_f = flops_of(&sp, &ship);
+    println!(
+        "REF\tqapw\tshipped order() flops={ship_f} ratio={:.4} ({ship_s:.3} s)",
+        ship_f as f64 / amd_f as f64
+    );
+
+    let mut price = |tag: &str, mk: &dyn Fn() -> Vec<i32>| {
+        let t = Instant::now();
+        let perm: Vec<usize> = mk().into_iter().map(|x| x as usize).collect();
+        let ord_s = t.elapsed().as_secs_f64();
+        let bij = is_bijection(&perm, n);
+        let t = Instant::now();
+        let f = flops_of(&sp, &perm);
+        let pp = permute_pattern(&sp, &perm);
+        let e = EliminationTree::from_pattern(&pp);
+        let c = column_counts_gnp(&pp, &e);
+        let sc_s = t.elapsed().as_secs_f64();
+        println!(
+            "ND\tqapw\t{tag}\tbij={bij}\tflops={f}\tratio={:.4}\tmaxcol={}\tord={ord_s:.3}s\tscore={sc_s:.3}s",
+            f as f64 / amd_f as f64,
+            c.iter().max().unwrap()
+        );
+    };
+    price("nd", &|| nd_order(pat));
+    price("ndfm", &|| ndfm_order(pat));
+    price("metis", &|| {
+        feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
+            .map(|(p, ..)| p)
+            .unwrap()
+    });
+    price("scotch", &|| feral_scotch::scotch_order(&core).unwrap());
+}

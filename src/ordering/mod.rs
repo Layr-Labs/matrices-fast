@@ -3880,6 +3880,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // RE-TX (re-price on 74b6ccd): snapshot for the terminal re-transplant.
+    let transplant_entry_flops = best_flops;
 
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
@@ -4498,6 +4500,24 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         ) {
             if score(&candidate) < best_flops {
                 best_perm = candidate;
+            }
+        }
+    }
+    // RE-TX (re-price on 74b6ccd): TERMINAL RE-TRANSPLANT. Donor pool frozen
+    // since phase 14 while replacing stages run after; re-run the same
+    // ledger-bounded refine on the finished incumbent, only on terminal
+    // strict gain. Strict admit.
+    if best_flops < transplant_entry_flops {
+        let donors = runner_up.borrow();
+        if let Some(cand) = transplant_probe::refine_with_donors(
+            &scoring_pat, &best_perm, &donors, amd_flops,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
             }
         }
     }

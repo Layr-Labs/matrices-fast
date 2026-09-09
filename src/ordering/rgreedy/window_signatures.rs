@@ -84,8 +84,8 @@ struct SigKey {
 struct MemoEntry {
     best: u64,
     incumbent: u64,
-    /// The chosen local order (permutation of `0..k`); already reflects the
-    /// `best < incumbent` decision (identity when no strict gain).
+    /// The chosen local-index order, including the owning engine's
+    /// immutable tie policy.
     order_local: Vec<u8>,
 }
 
@@ -114,6 +114,8 @@ pub(crate) struct SignatureEngine {
     memo: HashMap<SigKey, MemoEntry>,
     memo_bytes: usize,
     verify_on_hit: bool,
+    // Fixed at construction: strict and neutral entries never share a memo.
+    neutral_largest: bool,
     charge_model: ChargeModel,
     stats: MemoStats,
 }
@@ -142,11 +144,20 @@ impl SignatureEngine {
             // Verify every hit by exact recompute in debug builds; production
             // wiring can flip this on to sample the certificate.
             verify_on_hit: cfg!(debug_assertions),
+            neutral_largest: false,
             // Default to production-identical budget gating; opt in to the honest
             // envelope explicitly once the parent wants to extend exploration.
             charge_model: ChargeModel::UnionParity,
             stats: MemoStats::default(),
         }
+    }
+
+    /// A separate engine and memo for largest local-index optimal orders.
+    /// The tie policy has no setter and remains fixed across memo resets.
+    pub(crate) fn new_neutral_largest(n: usize) -> Self {
+        let mut engine = Self::new(n);
+        engine.neutral_largest = true;
+        engine
     }
 
     pub(crate) fn stats(&self) -> MemoStats {
@@ -328,7 +339,12 @@ impl SignatureEngine {
         let (best, incumbent, order_local) = if complete {
             self.stats.trivial += 1;
             let cost = (1..=k).map(|i| (total as u64 + i as u64).pow(2)).sum();
-            (cost, cost, (0..k as u8).collect())
+            let order = if self.neutral_largest {
+                (0..k as u8).rev().collect()
+            } else {
+                (0..k as u8).collect()
+            };
+            (cost, cost, order)
         } else {
             if self.charge_model == ChargeModel::SignatureTrue && !work.charge(solve_cost) {
                 return None;
@@ -358,6 +374,20 @@ impl SignatureEngine {
     /// Consumes the pre-zeta `self.hist`, fills `widths`/`components`/`nbr_union`,
     /// runs the identical pivot DP, and returns `(best, incumbent, order_local)`.
     fn run_dp(
+        &mut self,
+        k: usize,
+        states: usize,
+        inside: &[u16; MAX_WIDTH],
+        total: u32,
+    ) -> (u64, u64, Vec<u8>) {
+        if self.neutral_largest {
+            self.run_dp_policy::<true>(k, states, inside, total)
+        } else {
+            self.run_dp_policy::<false>(k, states, inside, total)
+        }
+    }
+
+    fn run_dp_policy<const NEUTRAL: bool>(
         &mut self,
         k: usize,
         states: usize,
@@ -427,9 +457,12 @@ impl SignatureEngine {
         self.path[0] = 0;
         for m in 1..states {
             self.best[m] = u64::MAX;
-            self.path[m] = u64::MAX;
+            self.path[m] = if NEUTRAL { 0 } else { u64::MAX };
         }
         for mask in 0..states - 1 {
+            if NEUTRAL && self.best[mask] == u64::MAX {
+                continue;
+            }
             for pivot in 0..k {
                 let bit = 1usize << pivot;
                 if mask & bit != 0 {
@@ -439,7 +472,12 @@ impl SignatureEngine {
                 let width = self.widths[self.components[next * k + pivot] as usize];
                 let cost = self.best[mask] + width * width;
                 let code = (self.path[mask] << 4) | pivot as u64;
-                if cost < self.best[next] || (cost == self.best[next] && code < self.path[next]) {
+                let preferred_tie = if NEUTRAL {
+                    code > self.path[next]
+                } else {
+                    code < self.path[next]
+                };
+                if cost < self.best[next] || (cost == self.best[next] && preferred_tie) {
                     self.best[next] = cost;
                     self.path[next] = code;
                 }
@@ -455,7 +493,7 @@ impl SignatureEngine {
             .sum();
 
         let best = self.best[states - 1];
-        let order_local: Vec<u8> = if best < incumbent {
+        let order_local: Vec<u8> = if best < incumbent || (NEUTRAL && best == incumbent) {
             (0..k)
                 .map(|i| ((self.path[states - 1] >> (4 * (k - i - 1))) & 15) as u8)
                 .collect()

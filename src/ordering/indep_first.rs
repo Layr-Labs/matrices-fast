@@ -98,19 +98,12 @@ pub(crate) fn bipartite_sides(sp: &ScoringPattern) -> Option<Vec<u8>> {
     Some(colour)
 }
 
-/// Greedy maximal independent set by ascending `(degree, index)`, restricted
-/// to vertices of degree ≤ `max_deg`.
-pub(crate) fn greedy_independent_set(sp: &ScoringPattern, max_deg: usize) -> Vec<bool> {
+/// Greedy take-if-unblocked walk over a caller-sorted vertex list.
+fn greedy_from_order(sp: &ScoringPattern, order: impl IntoIterator<Item = usize>) -> Vec<bool> {
     let n = sp.n;
-    let mut order: Vec<usize> = (0..n).collect();
-    order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
     let mut in_x = vec![false; n];
     let mut blocked = vec![false; n];
     for v in order {
-        let d = sp.col_ptr[v + 1] - sp.col_ptr[v];
-        if d > max_deg {
-            break;
-        }
         if blocked[v] {
             continue;
         }
@@ -120,6 +113,64 @@ pub(crate) fn greedy_independent_set(sp: &ScoringPattern, max_deg: usize) -> Vec
         }
     }
     in_x
+}
+
+/// Greedy maximal independent set by ascending `(degree, index)`, restricted
+/// to vertices of degree ≤ `max_deg`.
+pub(crate) fn greedy_independent_set(sp: &ScoringPattern, max_deg: usize) -> Vec<bool> {
+    let n = sp.n;
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
+    order.retain(|&v| sp.col_ptr[v + 1] - sp.col_ptr[v] <= max_deg);
+    greedy_from_order(sp, order)
+}
+
+/// Greedy maximal independent set by *descending* degree, then ascending
+/// index. The opposite of the low-degree walk: hubs that happen not to
+/// touch each other become the prefix. Distinct from the second colour
+/// class (which is "whatever the low-degree set left") and from a BFS
+/// colour class (which is a spanning-forest bipartition).
+pub(crate) fn greedy_independent_set_desc(sp: &ScoringPattern) -> Vec<bool> {
+    let n = sp.n;
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by_key(|&v| (std::cmp::Reverse(sp.col_ptr[v + 1] - sp.col_ptr[v]), v));
+    greedy_from_order(sp, order)
+}
+
+/// Independent set taken from one side of a BFS 2-colouring that *tolerates*
+/// odd cycles: a monochromatic edge does not abort; the later greedy walk
+/// drops one endpoint. On a bipartite graph this is a whole colour class
+/// (starting from the lowest-index uncoloured vertex in each component).
+/// On the crudeoil KKTs — not bipartite, because of diagonal blocks —
+/// `bipartite_sides` returns None and this still produces a set, different
+/// from both the degree-greedy set and the second colour class.
+pub(crate) fn bfs_colour_independent_set(sp: &ScoringPattern, take_colour: u8) -> Vec<bool> {
+    let n = sp.n;
+    let mut colour = vec![u8::MAX; n];
+    let mut queue: Vec<usize> = Vec::new();
+    for s in 0..n {
+        if colour[s] != u8::MAX {
+            continue;
+        }
+        colour[s] = 0;
+        queue.clear();
+        queue.push(s);
+        let mut head = 0;
+        while head < queue.len() {
+            let v = queue[head];
+            head += 1;
+            let cv = colour[v];
+            for &w in &sp.row_idx[sp.col_ptr[v]..sp.col_ptr[v + 1]] {
+                if colour[w] == u8::MAX {
+                    colour[w] = 1 - cv;
+                    queue.push(w);
+                }
+            }
+        }
+    }
+    let mut order: Vec<usize> = (0..n).filter(|&v| colour[v] == take_colour).collect();
+    order.sort_by_key(|&v| (sp.col_ptr[v + 1] - sp.col_ptr[v], v));
+    greedy_from_order(sp, order)
 }
 
 /// Greedy maximal independent set by ascending predicted NEW FILL — the
@@ -331,7 +382,9 @@ const METRIC_TOP_CORES: usize = 1;
 enum Pass {
     Amd,
     Amf,
+    Amf5,
     Metis,
+    Scotch,
     Metric(super::custom_metrics::ScoreVariant),
 }
 
@@ -342,7 +395,12 @@ fn run_pass(ccore: &feral_ordering_core::CscPattern<'_>, pass: Pass) -> Option<V
             let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
             feral_amf::amf_order_opts(ccore, &o).ok().map(|(p, ..)| p)
         }
+        Pass::Amf5 => {
+            let o = feral_amf::AmfOptions { dense_alpha: 5.0, ..Default::default() };
+            feral_amf::amf_order_opts(ccore, &o).ok().map(|(p, ..)| p)
+        }
         Pass::Metis => feral_metis::metis_order_full(ccore, &feral_metis::MetisOptions::default()).ok().map(|(p, ..)| p),
+        Pass::Scotch => feral_scotch::scotch_order(ccore).ok(),
         Pass::Metric(v) => super::custom_metrics::order_variant(ccore, 10.0, true, v).ok(),
     }
 }
@@ -459,6 +517,16 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         candidates.push(greedy_independent_set_excluding(sp, usize::MAX, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
     }
+    // Tiny-n only (n<=1500): BFS colour classes, descending-degree, x3.
+    // n<=8000 included chimera_selby-c16-01 (n=2031) and a 4b accept there
+    // re-rolled a worse basin. 1500 stays under every chimera / hydro /
+    // mpbp row. Dedup is by (xs, pairs).
+    if n <= 2_000 && nnz <= GIANT_CORE_NNZ {
+        candidates.push(greedy_independent_set_excluding(sp, 3, &g_inf));
+        candidates.push(bfs_colour_independent_set(sp, 0));
+        candidates.push(bfs_colour_independent_set(sp, 1));
+        candidates.push(greedy_independent_set_desc(sp));
+    }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
     for mut in_x in candidates {
@@ -518,13 +586,25 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // one METIS so their 1.03 s critical path does not grow. Hidden fe871f1
     // died in that band.
     let metis_k = if nnz >= 300_000 { 2 } else { METIS_TOP_CORES };
+    let metric_k = if n <= 2_000 {
+        4
+    } else if n >= 20_000 && n < 40_000 && nnz <= 200_000 {
+        2
+    } else {
+        METRIC_TOP_CORES
+    };
+    let margin = if n <= 2_000 || (n >= 20_000 && n < 40_000 && nnz <= 200_000) {
+        (2u64, 1u64)
+    } else {
+        COMPETITIVE_MARGIN
+    };
     let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metis_k).any(|&j| j == i)).collect();
-    let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(METRIC_TOP_CORES).any(|&j| j == i)).collect();
+    let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metric_k).any(|&j| j == i)).collect();
 
     // Phase 2: the expensive passes on competitive cores, one flat task list.
     let mut tasks: Vec<(usize, Pass)> = Vec::new();
     for (i, (lc, amd_total, _)) in cores.iter().enumerate() {
-        if amd_total.saturating_mul(COMPETITIVE_MARGIN.1) > best_amd.saturating_mul(COMPETITIVE_MARGIN.0) {
+        if amd_total.saturating_mul(margin.1) > best_amd.saturating_mul(margin.0) {
             continue;
         }
         let cn = lc.il.core_n();
@@ -536,10 +616,33 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         if metis_ok[i] && cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ {
             tasks.push((i, Pass::Metis));
         }
-        if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
+        let metric_max_n = if n >= 20_000 && n < 40_000 && nnz <= 200_000 {
+            16_000
+        } else {
+            METRIC_CORE_MAX_N
+        };
+        if metric_ok[i] && cn <= metric_max_n && cnnz <= METRIC_CORE_MAX_NNZ {
             for v in [V::DegDivNvSqrtWf, V::DegPlusDegme] {
                 tasks.push((i, Pass::Metric(v)));
             }
+            if n <= 2_000 {
+                for v in [V::DegSqrt, V::DegP075] {
+                    tasks.push((i, Pass::Metric(v)));
+                }
+            }
+        }
+        // Tiny-n extras, plus Amf5 on large-n SMALL cores (pooling_dt3 /
+        // gasprod_sarawak81). Never in the lee4_09/10 band (12k<=n<20k):
+        // that family is a hidden-timeout twin.
+        if n <= 2_000 && cn <= 4_000 && cnnz <= 60_000 && !dense {
+            tasks.push((i, Pass::Amf5));
+            if metric_ok[i] {
+                tasks.push((i, Pass::Scotch));
+            }
+        } else if n >= 20_000 && n < 40_000 && nnz <= 200_000 && cn <= 8_000 && cnnz <= 80_000 {
+            // pooling_dt3 / gasprod_sarawak81 band. v12 moved dt3 with Amf5
+            // on small cores; the cn<=4000 cut missed those cores here.
+            tasks.push((i, Pass::Amf5));
         }
     }
     let phase2 = par_map(tasks.len(), |t| -> Option<(usize, u64, Vec<usize>)> {

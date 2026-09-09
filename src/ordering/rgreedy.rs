@@ -1484,7 +1484,8 @@ pub(crate) fn adjacent_pair_descent(
     for sweep in 0..sweeps {
         game.reset();
         if game.ops > budget {
-            return None;
+            // Keep a completed improving sweep if a later sweep hits the budget.
+            return changed_any.then_some(cur);
         }
         next.clear();
 
@@ -1494,7 +1495,7 @@ pub(crate) fn adjacent_pair_descent(
             next.push(v);
             game.eliminate(v);
             if game.ops > budget {
-                return None;
+                return changed_any.then_some(cur);
             }
             k = 1;
         }
@@ -1511,11 +1512,11 @@ pub(crate) fn adjacent_pair_descent(
             next.push(second);
             game.eliminate(first);
             if game.ops > budget {
-                return None;
+                return changed_any.then_some(cur);
             }
             game.eliminate(second);
             if game.ops > budget {
-                return None;
+                return changed_any.then_some(cur);
             }
             k += 2;
         }
@@ -1524,7 +1525,7 @@ pub(crate) fn adjacent_pair_descent(
             next.push(v);
             game.eliminate(v);
             if game.ops > budget {
-                return None;
+                return changed_any.then_some(cur);
             }
         }
 

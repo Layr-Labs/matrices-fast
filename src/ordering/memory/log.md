@@ -186,3 +186,18 @@ round, so note the round if you know it.
 2026-09-08 | **0.798268 -> 0.795608** (−26.6 bip), gt_10k 0.7144 -> 0.6935 | independent-set-first lift v5: second-colour-class sets (x-inf, x9), DegDivNvSqrtWf/DegPlusDegme/DegSqrt metric passes on ≤16k-node cores, METIS on the two lowest-AMD cores, flat deterministic task pool; acceptance moved to after the subtree stage (strict), immediate only at ≥ 40 % lead | **7 better / 3 worse** (methanol400 +0.8 %, gasprod +0.7 %, graphpart +0.1 %), worst 1.055-1.095 s on this box (tip 1.040) ([0145](experiments/0145-second-colour-class-metric-cores.md)).
 
 2026-09-09 | fe871f1 **FAILED hidden Benchmark** (actions 34297482026, ~5 min, step 11). Local worst 1.055–1.126 s sat in the same band as 176a/173a timing deaths. v11 on 4d6d3d0: x-sets n≤12k, drop DegSqrt, METIS/metrics top-1 except nnz≥300k, extra 180a caps off giant-dense | probe **0.795871**, worst **1.026 s** (under tip 1.040); lee4_06 0.504 kept; pooling 0.282 restored; gams05 0.530, gabriel09 0.913 ([0145](experiments/0145-second-colour-class-metric-cores.md)).
+
+2026-09-09 | unchanged 74b6ccd | two full Yukon runs FAIL at nuclear104 / gabriel10; diagnostic suffix FAIL; original caps and sandbox retained | machine contention observed.
+2026-09-09 | unchanged diagnostic score 0.793834099689795 | all 300 public patterns; 225 better / 75 equal / 0 worse vs AMD; worst 2.1427s | baseline understanding recorded before algorithm edits.
+2026-09-09 | score-consistency negative control FAIL as expected | mpbp_34 stored 913886 vs actual 908206 | source fix and exact-equivalent independent-set reuse under evaluation.
+
+- 2026-09-09: Score synchronization plus independent-set traversal reuse: 121 active tests pass; all 300 dev exact counts unchanged, aggregate 0.793834099689795, diagnostic worst 2.0793s. Correctness/runtime work alone has no measured quality gain.
+
+- 2026-09-09 | 0.793834099689795 -> same | Exact independent-set membership deduplication | Synthetic differing-Schur test passed; all 300 public counts unchanged; diagnostic worst 1.7297s.
+- 2026-09-09 | pending | Bounded final neutral-window DP, width8/3 sweeps/offset3/2M work; saved-score reuse | Four new tests and two existing neutral tests pass; official capped run in progress.
+- 2026-09-09 | 0.793834099689795 -> 0.793832 | Final disjoint neutral windows plus exact dedup/score fixes | Official yukon run passed 300/300 and determinism; 2 wins, 0 losses.
+- 2026-09-09 | pending | Rolling neutral overlap with unchanged2M work plus component-wise portfolio donor collection | 133 active tests pass; official capped run in progress.
+- 2026-09-09 | 0.793834099689795 -> 0.7938262724282135 | Rolling neutral overlap plus component donor collection | Official 300/300 and deterministic replay pass; 3 wins, 0 losses vs original, 297 unchanged.
+- 2026-09-09 | pending | Additive final score-neutral etree postorder + rolling width8/advance3/3 sweeps/8M | Preserve earlier2M and component gains; official capped run in progress.
+- 2026-09-09 | FAIL | Postordered8M official attempt | chp_partload hit2s; focused3-repeat diagnostic minimum0.7057s, addedpoststage0.0022s. Production unchanged for officialretry; cap preserved.
+- 2026-09-09 | 0.793834099689795 -> 0.7937615870146049 | Additive postordered8M rolling | Official retry passed300/300 and determinism; 20wins/0losses, public relative gain0.913449bips.

@@ -308,6 +308,7 @@ mod tests {
             &expected_donors,
             &mut expected_flops,
             &mut expected_perm,
+            None,
         );
         super::super::flush_batch(
             &mut cached,
@@ -317,6 +318,7 @@ mod tests {
             &actual_donors,
             &mut actual_flops,
             &mut actual_perm,
+            None,
         );
         assert_eq!(actual_perm, expected_perm);
         assert_eq!(actual_flops, expected_flops);

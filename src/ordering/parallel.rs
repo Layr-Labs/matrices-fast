@@ -156,6 +156,16 @@ pub(crate) fn run_candidates(
     incumbent: u64,
     keep_all: bool,
 ) -> Vec<CandOut> {
+    run_candidates_mixed(tasks, sp, n, nnz, incumbent, keep_all, None)
+}
+
+/// Same portfolio evaluation, optionally retaining independent component minima
+/// from the exact column counts that each unique score already computes.
+pub(crate) fn run_candidates_mixed(
+    tasks: &[CandFn<'_>], sp: &ScoringPattern, n: usize, nnz: usize,
+    incumbent: u64, keep_all: bool,
+    components: Option<&super::component_mix::ComponentMix>,
+) -> Vec<CandOut> {
     run_generic(
         tasks.len(),
         sp,
@@ -163,6 +173,7 @@ pub(crate) fn run_candidates(
         nnz,
         incumbent,
         keep_all,
+        components,
         &|i: usize| match std::panic::catch_unwind(AssertUnwindSafe(|| (tasks[i])())) {
             Ok(Ok(perm_i32)) => Some(perm_i32.into_iter().map(|x| x as usize).collect()),
             _ => None,
@@ -186,6 +197,7 @@ pub(crate) fn run_perms(
         nnz,
         incumbent,
         false,
+        None,
         &|i: usize| match std::panic::catch_unwind(AssertUnwindSafe(|| (tasks[i])())) {
             Ok(v) => v,
             Err(_) => None,
@@ -203,6 +215,7 @@ fn run_generic(
     nnz: usize,
     incumbent: u64,
     keep_all: bool,
+    components: Option<&super::component_mix::ComponentMix>,
     produce: &(dyn Fn(usize) -> Option<Vec<usize>> + Sync),
 ) -> Vec<CandOut> {
     let mut results: Vec<CandOut> = Vec::with_capacity(len);
@@ -230,7 +243,11 @@ fn run_generic(
         }
         let f = dedup.flops(&perm, || {
             let w = ws.get_or_insert_with(|| ScoreWorkspace::new(n, nnz));
-            w.flops(sp, &perm)
+            let flops = w.flops(sp, &perm);
+            if let Some(mix) = components {
+                mix.record(&perm, w.probe_counts());
+            }
+            flops
         });
         let prev = gmin.fetch_min(f, AtomicOrdering::Relaxed);
         CandOut {

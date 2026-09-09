@@ -473,8 +473,8 @@ const RELABEL_AMF_MAX_NNZ: usize = 200_000;
 /// Structural window for the 0061 extra well-below relabel tickets (matrices_mage r6):
 /// on both corpora every conversion sat at n <= 5315 / nnz <= 42228 and none at n >= 6000
 /// or nnz > 50000, where the tickets cost 0.04-0.33 s per row for a bit-identical result.
-const EXTRA_RELABEL_MAX_N: usize = 6_000;
-const EXTRA_RELABEL_MAX_NNZ: usize = 50_000;
+const EXTRA_RELABEL_MAX_N: usize = 10_000; // iter470a timing
+const EXTRA_RELABEL_MAX_NNZ: usize = 100_000; // iter470a
 
 #[cfg(test)]
 const SUBTREE_SEARCH_WORK_LIMIT: i64 = 32_000_000;
@@ -2465,7 +2465,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
                 let gasprod_band = n >= 20_000;
-                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
+                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
+                if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -4263,8 +4265,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 6_500;
-        const FINAL_FIVE_MAX_NNZ: usize = 100_000;
+        const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a
+        const FINAL_FIVE_MAX_NNZ: usize = 80_000;
         // iter180a: wide five on tip+176a
         const FINAL_FIVE_OPS: i64 = 128_000_000;
         // Extra pivot work only on n<=1000. five2 at n<=3000 (c7c1a8a) and

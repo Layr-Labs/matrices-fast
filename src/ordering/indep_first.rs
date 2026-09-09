@@ -514,17 +514,34 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // pooling cap-inf / cap-9 pair); the third-best core never won.
     let mut by_amd: Vec<usize> = (0..cores.len()).collect();
     by_amd.sort_by_key(|&i| (cores[i].1, i));
-    // Second METIS only on nnz-heavy patterns (pooling): lee4_09/10 stay at
-    // one METIS so their 1.03 s critical path does not grow. Hidden fe871f1
-    // died in that band.
-    let metis_k = if nnz >= 300_000 { 2 } else { METIS_TOP_CORES };
+    // Second METIS only on nnz-heavy patterns (pooling). On the lee4_09/10
+    // band METIS never wins (~0.99-4.8x AMD) and the 50 ms it costs is what
+    // blocked walking g3: extra 180a mid-caps outrank cap-3 on AMD, so
+    // METRIC_TOP=1 never sees the core that DegDivNvSqrtWf actually wins
+    // (v5 probe: g3 / ddnsw 0.665 vs pipeline 0.681). Skip METIS there and
+    // walk the four cheapest AMD cores instead. x-sets stay at n<=12k —
+    // raising them to 15k (v12b) plus global metric_k=2 / Amf5 failed
+    // hidden. Gate is pattern-only (n, nnz).
+    let skip_metis = n >= 12_000 && n < 20_000 && nnz <= 150_000;
+    let metis_k = if skip_metis {
+        0
+    } else if nnz >= 300_000 {
+        2
+    } else {
+        METIS_TOP_CORES
+    };
+    let metric_k = if skip_metis { 4 } else { METRIC_TOP_CORES };
     let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metis_k).any(|&j| j == i)).collect();
-    let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(METRIC_TOP_CORES).any(|&j| j == i)).collect();
+    let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metric_k).any(|&j| j == i)).collect();
+    let margin = if skip_metis { (2u64, 1u64) } else { COMPETITIVE_MARGIN };
+    // g3 cores on lee4_09 can sit just over 12k nodes; raise the metric
+    // envelope only in the skip band so other rows keep the 12k cut.
+    let metric_max_n = if skip_metis { 16_000 } else { METRIC_CORE_MAX_N };
 
     // Phase 2: the expensive passes on competitive cores, one flat task list.
     let mut tasks: Vec<(usize, Pass)> = Vec::new();
     for (i, (lc, amd_total, _)) in cores.iter().enumerate() {
-        if amd_total.saturating_mul(COMPETITIVE_MARGIN.1) > best_amd.saturating_mul(COMPETITIVE_MARGIN.0) {
+        if amd_total.saturating_mul(margin.1) > best_amd.saturating_mul(margin.0) {
             continue;
         }
         let cn = lc.il.core_n();
@@ -536,7 +553,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         if metis_ok[i] && cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ {
             tasks.push((i, Pass::Metis));
         }
-        if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
+        if metric_ok[i] && cn <= metric_max_n && cnnz <= METRIC_CORE_MAX_NNZ {
             for v in [V::DegDivNvSqrtWf, V::DegPlusDegme] {
                 tasks.push((i, Pass::Metric(v)));
             }

@@ -526,7 +526,9 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // died in that band.
     let metis_k = if nnz >= 300_000 { 2 } else { METIS_TOP_CORES };
     let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metis_k).any(|&j| j == i)).collect();
-    let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(METRIC_TOP_CORES).any(|&j| j == i)).collect();
+    // iter273a: METRIC top-4 only on n<=16k (lee4_09 class); else top-3 — protect lee4_10 timing
+    let metric_k = if n <= 16_000 { 4 } else { METRIC_TOP_CORES };
+    let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metric_k).any(|&j| j == i)).collect();
 
     // Phase 2: the expensive passes on competitive cores, one flat task list.
     let mut tasks: Vec<(usize, Pass)> = Vec::new();
@@ -545,7 +547,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         }
         if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
             // iter265a RC: broader quotient-metric family (0145 census winners)
-            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme] {
+            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
                 tasks.push((i, Pass::Metric(v)));
             }
         }

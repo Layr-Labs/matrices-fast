@@ -2465,7 +2465,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
                 let gasprod_band = n >= 20_000;
-                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
+                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
+                if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {

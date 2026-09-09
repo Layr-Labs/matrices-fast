@@ -260,12 +260,12 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
-    // iter161a: base caps + 20/7 only on dense full patterns (no Scotch)
+    // iter192a: ALWAYS 20/7 + denser 25/11 on 191a
     let dense_input = nnz >= 12 * n;
     let caps: &[usize] = if dense_input {
-        &[usize::MAX, 20, 15, 9, 7, 5, 3]
+        &[usize::MAX, 25, 20, 15, 11, 9, 7, 5, 3]
     } else {
-        &[usize::MAX, 15, 9, 5, 3]
+        &[usize::MAX, 20, 15, 9, 7, 5, 3]
     };
     for &cap in caps {
         let mut in_x = greedy_independent_set(sp, cap);
@@ -309,7 +309,6 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
                 }
                 2 => feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok()?.0,
                 _ => {
-                    // iter159a: AMF α5 mid-core pass
                     let o = feral_amf::AmfOptions { dense_alpha: 5.0, ..Default::default() };
                     feral_amf::amf_order_opts(&ccore, &o).ok()?.0
                 }
@@ -341,8 +340,8 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         let mut pass_ids: Vec<usize> = vec![0];
         if use_amf {
             pass_ids.push(1);
-            if cn <= 4_000 && cnnz <= 60_000 {
-                pass_ids.push(3); // AMF α5 tight iter176a
+            if cn <= 2_000 && cnnz <= 40_000 {
+                pass_ids.push(3); // AMF α5 ultra iter191a
             }
         }
         if use_metis {
@@ -357,7 +356,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
                 }
             }
         }
-        // iter158a: (no Scotch — 156g/157a Scotch family failed hidden) 2-seed relabelled AMF on small sparse Schur cores (0143 untested follow-up)
+        // iter187a: AMF 2-seed relabel (173a style) before METIS relabel
         if use_amf && cn <= 3_000 && cnnz <= 30_000 {
             let mut inv = vec![0usize; cn];
             let mix = |mut x: u64| -> u64 {
@@ -374,15 +373,13 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
                     let j = (s as usize) % (i + 1);
                     q.swap(i, j);
                 }
-                for (ni, &ov) in q.iter().enumerate() {
-                    inv[ov] = ni;
-                }
+                for (ni, &ov) in q.iter().enumerate() { inv[ov] = ni; }
                 let mut b_ptr: Vec<usize> = Vec::with_capacity(cn + 1);
                 let mut b_idx: Vec<usize> = Vec::with_capacity(cnnz);
                 b_ptr.push(0);
-                for &old in &q {
-                    let s0 = il.core_col_ptr[old];
-                    let s1 = il.core_col_ptr[old + 1];
+                for &oldv in &q {
+                    let s0 = il.core_col_ptr[oldv];
+                    let s1 = il.core_col_ptr[oldv + 1];
                     let mut col: Vec<usize> = il.core_row_idx[s0..s1].iter().map(|&w| inv[w]).collect();
                     col.sort_unstable();
                     b_idx.extend(col);
@@ -393,6 +390,48 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
                 let Some(bcore) = feral_ordering_core::CscPattern::new(cn, &bcp, &bri) else { continue; };
                 let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
                 let Ok((pb, ..)) = feral_amf::amf_order_opts(&bcore, &o) else { continue; };
+                let cp: Vec<usize> = pb.into_iter().map(|x| q[x as usize]).collect();
+                if !super::is_bijection(&cp, cn) { continue; }
+                let f = super::flops_of(&core_pat, &cp);
+                let total = il.prefix_flops.saturating_add(f);
+                if best_here.as_ref().map_or(true, |(bf, _)| total < *bf) {
+                    best_here = Some((total, splice(&il, &cp)));
+                }
+            }
+        }
+        // iter181a: 2-seed relabel + METIS on tiny sparse cores (not AMF)
+        if use_metis && cn <= 1_500 && cnnz <= 15_000 /*189a*/ {
+            let mut inv = vec![0usize; cn];
+            let mix = |mut x: u64| -> u64 {
+                x = x.wrapping_add(0x9E3779B97F4A7C15);
+                x = (x ^ (x >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+                x = (x ^ (x >> 27)).wrapping_mul(0x94D049BB133111EB);
+                x ^ (x >> 31)
+            };
+            for seed in 1u64..=2 {
+                let mut q: Vec<usize> = (0..cn).collect();
+                let mut s = seed;
+                for i in (1..cn).rev() {
+                    s = mix(s);
+                    let j = (s as usize) % (i + 1);
+                    q.swap(i, j);
+                }
+                for (ni, &ov) in q.iter().enumerate() { inv[ov] = ni; }
+                let mut b_ptr: Vec<usize> = Vec::with_capacity(cn + 1);
+                let mut b_idx: Vec<usize> = Vec::with_capacity(cnnz);
+                b_ptr.push(0);
+                for &oldv in &q {
+                    let s0 = il.core_col_ptr[oldv];
+                    let s1 = il.core_col_ptr[oldv + 1];
+                    let mut col: Vec<usize> = il.core_row_idx[s0..s1].iter().map(|&w| inv[w]).collect();
+                    col.sort_unstable();
+                    b_idx.extend(col);
+                    b_ptr.push(b_idx.len());
+                }
+                let bcp: Vec<i32> = match b_ptr.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>() { Some(v) => v, None => continue };
+                let bri: Vec<i32> = match b_idx.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>() { Some(v) => v, None => continue };
+                let Some(bcore) = feral_ordering_core::CscPattern::new(cn, &bcp, &bri) else { continue; };
+                let Ok((pb, ..)) = feral_metis::metis_order_full(&bcore, &feral_metis::MetisOptions::default()) else { continue; };
                 let cp: Vec<usize> = pb.into_iter().map(|x| q[x as usize]).collect();
                 if !super::is_bijection(&cp, cn) { continue; }
                 let f = super::flops_of(&core_pat, &cp);

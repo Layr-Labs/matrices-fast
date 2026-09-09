@@ -269,7 +269,7 @@ const INDEP_MIN_N: usize = 32;
 const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
 /// Immediate-acceptance margin at stage 1b as `(num, den)`: `f * den <= incumbent * num`.
-const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (3, 5);
+const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10); // iter230a: 10% early on tip
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
 /// nnz cap for the THREE extra sweep-found AMF variants (α1/α16/α-1). The sweep
@@ -2461,7 +2461,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
-                if f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter235a: digabel + hydro + gasprod any-accept (seq180 finds hydro indep)
+                let digabel_band = (400..=1000).contains(&n);
+                let hydro_band = (1800..=2500).contains(&n);
+                let gasprod_band = n >= 20_000;
+                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {

@@ -269,7 +269,7 @@ const INDEP_MIN_N: usize = 32;
 const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
 /// Immediate-acceptance margin at stage 1b as `(num, den)`: `f * den <= incumbent * num`.
-const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (3, 5);
+const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10); // iter230a: 10% early on tip
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
 /// nnz cap for the THREE extra sweep-found AMF variants (α1/α16/α-1). The sweep
@@ -549,50 +549,6 @@ fn subtree_cfg_for(n: usize, nnz: usize) -> rgreedy::SubCfg {
         cfg.budget = MID_BUDGET;
     }
     cfg
-}
-
-/// One subtree-refine pass on an already-built permutation. Used as a
-/// last-chance polish on a deferred independent-set lift that lost to the
-/// incumbent's stage-4 subtree: compare polished-lift vs polished-incumbent
-/// instead of raw-lift vs polished-incumbent. Early-accept (jonathan's
-/// band / 10% family) changes the incumbent *before* stage 4 and re-rolls
-/// the basin; this does not.
-fn one_subtree_polish(
-    pattern: &Pattern,
-    scoring_pat: &ScoringPattern,
-    perm: &[usize],
-    n: usize,
-    nnz: usize,
-) -> Option<Vec<usize>> {
-    let permuted = permute_pattern(scoring_pat, perm);
-    let etree = EliminationTree::from_pattern(&permuted);
-    let post = etree.postorder();
-    let mut candidate: Vec<usize> = post.iter().map(|&j| perm[j]).collect();
-    let post_pattern = permute_pattern(scoring_pat, &candidate);
-    let post_etree = EliminationTree::from_pattern(&post_pattern);
-    let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
-        .into_iter()
-        .map(|c| c as u32)
-        .collect();
-    let parent: Vec<i32> = post_etree
-        .parent
-        .iter()
-        .map(|p| p.map_or(-1, |j| j as i32))
-        .collect();
-    let improved = rgreedy::subtree_refine(
-        n,
-        &pattern.col_ptr,
-        &pattern.row_idx,
-        &mut candidate,
-        &counts,
-        &parent,
-        subtree_cfg_for(n, nnz),
-    );
-    if improved > 0 && is_bijection(&candidate, n) {
-        Some(candidate)
-    } else {
-        None
-    }
 }
 
 fn terminal_deep_subtree_cfg(n: usize, nnz: usize, best_flops: u64, amd_flops: u64) -> rgreedy::SubCfg {
@@ -2505,7 +2461,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
-                if f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter265a RC: 235a + second-colour/metric expand (0145 family)
+                let digabel_band = (400..=1000).contains(&n);
+                let hydro_band = (1800..=2500).contains(&n);
+                let gasprod_band = n >= 20_000;
+                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -3033,18 +2993,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if f < best_flops {
             best_flops = f;
             best_perm = cand;
-        } else if n <= 2_000 && nnz <= 20_000 {
-            // Last-chance, tiny-n only. n<=8000 accepted chimera_selby-c16-01
-            // (n=2031) at 4b (0.701 vs 0.714) and the later stages finished
-            // worse (0.6754 vs 0.6744) — the mpbp_35 pathology at small
-            // scale. n<=2000 keeps that row out and keeps digabel (n=514).
-            if let Some(polished) = one_subtree_polish(pattern, &scoring_pat, &cand, n, nnz) {
-                let pf = score(&polished);
-                if pf < best_flops {
-                    best_flops = pf;
-                    best_perm = polished;
-                }
-            }
         }
     }
     #[cfg(test)]

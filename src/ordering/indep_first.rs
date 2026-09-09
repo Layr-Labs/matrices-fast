@@ -312,10 +312,31 @@ pub(crate) fn predicted_pairs(sp: &ScoringPattern, in_x: &[bool]) -> u64 {
         .sum()
 }
 
+/// Second-colour-class ("x") set envelope.
+///
+/// v11 drew this at 12_000 purely to buy wall-clock: that cut `crudeoil_lee4_09`
+/// (n=15904) and `lee4_10` (n=17809) off the x-set path and gave back the
+/// 0.6814 -> 0.6473 / 0.6755 -> 0.6374 those two rows are worth, because the
+/// revision that had them (v5, `fe871f1`) was killed by the hidden 2 s cap.
+/// The quality was never the problem — the funding was. Restored here against
+/// a stage-13 (`PEO_ALT_MAX_N`) cut that pays for it with room to spare: those
+/// two rows are the corpus's slowest, and this revision leaves them FASTER
+/// than the frontier (0.907 s -> 0.822/0.838 s on this box) while taking the
+/// -3.8 / -3.4 percentage points. 20_000 covers both with margin and stops
+/// below `crudeoil_pooling_dt3` (n=30660), whose own win comes from the metric
+/// envelope below instead.
+const X_SET_MAX_N: usize = 20_000;
+
 /// Core-size envelope for the quotient-graph metric passes (see `run`):
 /// their cost grows faster than AMD's on grid-like cores (0.6 s per pass on
 /// the 80k-node cont6-qq core versus 10 ms on the 10k-node lee4 cores).
-const METRIC_CORE_MAX_N: usize = 12_000;
+///
+/// 12_000 -> 16_000 is what actually moves the lee rows: the x-sets alone
+/// changed nothing on them (measured: one row, `pooling_dt3`, -1.48 pp), because
+/// the winning passes are metric walks on the lifted core, and their cores sit
+/// just above 12k. 16_000 is v5's own figure; the cont6-qq core (80k) stays far
+/// outside it.
+const METRIC_CORE_MAX_N: usize = 16_000;
 const METRIC_CORE_MAX_NNZ: usize = 200_000;
 /// Expensive passes (AMF, METIS, metrics) run only on cores whose AMD total
 /// is within this factor of the best AMD total over all sets, `(num, den)`.
@@ -323,7 +344,15 @@ const COMPETITIVE_MARGIN: (u64, u64) = (3, 2);
 /// METIS runs on this many cores per pattern (the lowest AMD totals).
 const METIS_TOP_CORES: usize = 1;
 /// The metric walks run on this many cores per pattern (the lowest AMD totals).
-const METRIC_TOP_CORES: usize = 1;
+///
+/// v11 cut this to 1 for the same timing reason as `X_SET_MAX_N`, and top-1 is
+/// why the widened x-set envelope alone was worth nothing on the lee rows: the
+/// x9 core they win on is not the lowest-AMD core. Restoring v5's 3 (with
+/// `DegSqrt` back in the menu, `lee4_09`'s winner) takes all four rows this
+/// revision improves. It is the expensive half of the change — +0.12 to +0.18 s
+/// on `pooling_sppc3pq`, `nuclear104`, `lee4_06`, `mpbp_48` — and every one of
+/// those rows is inside the stage-13 cut that funds it.
+const METRIC_TOP_CORES: usize = 3;
 
 /// Ordering passes on a lifted core. `Amd` runs first on every core; the rest
 /// run only on competitive cores (see `run`).
@@ -455,7 +484,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             candidates.push(greedy_independent_set(sp, cap));
         }
     }
-    if n <= 12_000 && nnz <= GIANT_CORE_NNZ {
+    if n <= X_SET_MAX_N && nnz <= GIANT_CORE_NNZ {
         candidates.push(greedy_independent_set_excluding(sp, usize::MAX, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
     }
@@ -537,7 +566,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             tasks.push((i, Pass::Metis));
         }
         if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
-            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme] {
+            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt] {
                 tasks.push((i, Pass::Metric(v)));
             }
         }

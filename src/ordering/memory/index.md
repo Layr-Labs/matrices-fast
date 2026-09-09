@@ -1,3 +1,10 @@
+[0146: stage 13 funds the lee rows' metric cores](experiments/0146-stage13-funds-lee-metric-cores.md):
+on `ea7618f` official local **0.795871 -> 0.794956** (−9.15 bip), 4 better / 0
+worse, worst `order()` **0.907 -> 0.838 s** — better AND faster than the
+frontier. Alternate-seed PEO priced at 0.19 bip total; its time buys back v11's
+x-set / metric-core cut (lee4_09 0.6473, lee4_10 0.6374). Phase marks report
+stale `best_flops` after stage 11: price late stages by final-ratio A/B only.
+
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so

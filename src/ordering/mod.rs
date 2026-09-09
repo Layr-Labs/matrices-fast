@@ -194,7 +194,7 @@ const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
 const PEO_ALT_LEDGER: u64 = 4_000_000;
 const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
 const PEO_ALT_SEEDS: usize = 8;
-const PEO_ALT_MAX_N: usize = 50_000;
+const PEO_ALT_MAX_N: usize = 10_000;
 /// Ranked-subtree chain (first round and its conditional follow-ups) ceiling.
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
@@ -3817,6 +3817,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // 0.21 s) the chains ran to their ledger and changed nothing, while all of
     // their measured wins sit at n < 50k (mpbp_34 -0.19, mpbp_35 -0.08,
     // arki0013 -0.05, gabriel09 -0.03).
+    //
+    // 50_000 -> 10_000. MEASURED by disabling this whole stage on the dev
+    // corpus: it is worth **0.19 bips of score in total** — it changes 4 of 300
+    // rows (mpbp_15 -0.45 pp, maxcsp-ehi-85-297-71 -0.13, syn40hfsg -0.08,
+    // kall_circlesrectangles_c6r39 -0.03) — and costs 0.13-0.19 s on a dozen
+    // rows, 0.10 s of it on the corpus's two slowest (crudeoil_lee4_09/10).
+    // That is the worst score-per-millisecond in the pipeline, and wall-clock is
+    // this problem's binding constraint, not fill: the mpbp_34/35, arki0013 and
+    // gabriel09 wins recorded above NO LONGER REPRODUCE on this tip (those rows
+    // are bit-identical with the stage off), so its whole present value is four
+    // small rows, every one of them at n < 10_000. The gate keeps all four and
+    // takes the time back everywhere else, which is what funds `X_SET_MAX_N` and
+    // `METRIC_TOP_CORES` in `indep_first`. Do not widen it again without
+    // re-measuring: the cost scales with (n + nnz + lnnz) per round per seed,
+    // the wins do not.
     // iter75: narrow PEO_ALT skip to lee1_07 band only (3k≤n<8k nnz≥9k).
     // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
     // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.

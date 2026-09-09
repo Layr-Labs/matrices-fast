@@ -7,6 +7,18 @@ it, rather than deleting it — a resolved question is a useful signpost.
 
 ## Active
 
+- [ ] **Price the rest of the pipeline by score-per-millisecond.**
+      [0146](experiments/0146-stage13-funds-lee-metric-cores.md) did this for
+      stage 13 (alternate-seed PEO) and found 0.19 bips of score defended by
+      0.10 s on the corpus's slowest rows — the time was worth ~9 bips spent
+      elsewhere. No other stage has ever been priced this way. `9.reduce`
+      (13.24 s corpus-wide) and `1.portfolio` (30.36 s) are the obvious next
+      candidates. Two rules from 0146: `phase_mark` reports `best_flops`, which
+      stages after 11 leave stale, so a stage's apparent flatness proves
+      nothing — A/B the FINAL per-row ratio; and re-price periodically, because
+      stage 13's recorded wins (mpbp_34/35, arki0013, gabriel09) had silently
+      stopped reproducing as later stages grew to reach the same completions.
+
 - [ ] **Work the residual core, not the full matrix (0062 substrate).** [0075](experiments/0075-residual-core-minfill.md) tested four-seed residual-core AMF/AMD relabels (no movers) and exact MinFill for `cn <= 1,000` (7 movers, now shipped). Still untested: multi-depth prefixes K in {2,4,5} (distinct cores only), and late phases run on the core under a per-call WORK budget as a REPLACEMENT of a late phase (never additive on rows >= 0.8 s). See [0062](experiments/0062-reduce-then-amf-terminal.md).
 - [ ] **Relabel the OTHER numbering-sensitive routines (top lead).**
       [0005](experiments/0005-relabelled-amf-multistart.md) established the general

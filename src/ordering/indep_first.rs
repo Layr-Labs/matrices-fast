@@ -459,12 +459,14 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             candidates.push(greedy_independent_set(sp, cap));
         }
     }
-    // iter265a RC: widen second-colour (was n<=12k). nnz<=80k excludes lee4_09/10.
+    // iter265a RC x-sets; iter313a: x-15/x-5 only n<=10k (avoid re-roll lee4_06 4b)
     if n <= 18_000 && nnz <= 80_000 {
         candidates.push(greedy_independent_set_excluding(sp, usize::MAX, &g_inf));
-        candidates.push(greedy_independent_set_excluding(sp, 15, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
-        candidates.push(greedy_independent_set_excluding(sp, 5, &g_inf));
+        if n <= 10_000 {
+            candidates.push(greedy_independent_set_excluding(sp, 15, &g_inf));
+            candidates.push(greedy_independent_set_excluding(sp, 5, &g_inf));
+        }
     }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();

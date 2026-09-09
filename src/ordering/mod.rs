@@ -2465,7 +2465,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
                 let gasprod_band = n >= 20_000;
-                if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter313a: lee4_06 mid-xset 4b hold — 40% floor so 21% lead defers to 4b
+                let mid_xset_hold = (10_000..12_000).contains(&n) && nnz <= 80_000;
+                let (imm_num, imm_den) = if mid_xset_hold {
+                    (3u64, 5u64)
+                } else {
+                    (INDEP_IMMEDIATE_MARGIN.0, INDEP_IMMEDIATE_MARGIN.1)
+                };
+                if digabel_band || hydro_band || gasprod_band
+                    || f.saturating_mul(imm_den) <= best_flops.saturating_mul(imm_num)
+                {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {

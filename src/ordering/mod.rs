@@ -199,7 +199,7 @@ const PEO_ALT_MAX_N: usize = 50_000;
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
 const MINL_SUBTREE_BUDGET: i64 = 8_000_000;
-const SUBTREE_CHAIN_MAX_N: usize = 45_000; // iter463a
+const SUBTREE_CHAIN_MAX_N: usize = 35_000;
 const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
 const PEO_LARGE_LEDGER: u64 = 2_500_000;
 
@@ -2464,8 +2464,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // iter265a RC: 235a + second-colour/metric expand (0145 family)
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
-                let gasprod_band = n >= 20_000;
-                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
+                let gasprod_band = n >= 16_000; // 0154b: lee4_10 (17809) immediate; lee4_09 (15904) stays deferred
+                // iter444a (jonathan308 8e1962c): mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
                 let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
                 if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
@@ -2495,7 +2495,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 60_000 // iter475a
+        && nnz <= 50_000 // 0154b tighten: 80k too slow (worst 1.389); KEEP max_deg*50<=n
         && max_deg * 50 <= n;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0
@@ -3880,6 +3880,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // 0154c: snapshot post-transplant flops; re-call only if later stages improve
+    let transplant_entry_flops = best_flops;
 
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
@@ -4265,7 +4267,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
     // cap rows. Strict exact admit → 0 worse.
     {
-        const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a
+        const FINAL_FIVE_MAX_N: usize = 12_000; // iter445a on 444a (jonathan308 8e1962c)
         const FINAL_FIVE_MAX_NNZ: usize = 80_000;
         // iter180a: wide five on tip+176a
         const FINAL_FIVE_OPS: i64 = 128_000_000;
@@ -4496,8 +4498,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
+            }
+        }
+    }
+    // 0154c: terminal conditioned re-transplant (darthweenies shape). Fire only when
+    // post-transplant stages strictly improved the incumbent; same ledger/gates.
+    if best_flops < transplant_entry_flops {
+        let donors = runner_up.borrow();
+        if let Some(cand) = transplant_probe::refine_with_donors(
+            &scoring_pat, &best_perm, &donors, amd_flops,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
             }
         }
     }

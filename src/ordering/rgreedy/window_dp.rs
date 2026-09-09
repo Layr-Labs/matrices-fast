@@ -221,6 +221,7 @@ pub(crate) fn subset_window_descent(
         (width / 2).max(1),
         budget,
         ChargeModel::UnionParity,
+        false,
     )
 }
 
@@ -244,7 +245,53 @@ pub(crate) fn subset_window_descent_step(
         offset_step,
         budget,
         ChargeModel::SignatureTrue,
+        false,
     )
+}
+
+/// Spread exact search across the remaining suffix by shortening costly
+/// windows. Only the allocation of the deterministic work budget changes.
+pub(crate) fn adaptive_window_descent(
+    n: usize, col_ptr: &[usize], row_idx: &[usize], seed: &[usize], budget: i64,
+) -> Option<Vec<usize>> {
+    subset_window_descent_config(
+        n, col_ptr, row_idx, seed, 14, 4, 5, budget,
+        ChargeModel::SignatureTrue, true,
+    )
+}
+
+fn window_price(game: &Game<'_>, vertices: &[usize]) -> usize {
+    let k = vertices.len();
+    let mut unseen = (1u16 << k) - 1;
+    let mut cost = 8 * k * k + 8 * k;
+    while unseen != 0 {
+        let mut component = 1u16 << unseen.trailing_zeros();
+        let mut frontier = component;
+        while frontier != 0 {
+            let i = frontier.trailing_zeros() as usize;
+            frontier &= frontier - 1;
+            let v = vertices[i];
+            for (j, &u) in vertices.iter().enumerate() {
+                let bit = 1u16 << j;
+                if unseen & bit != 0 && component & bit == 0
+                    && game.adj[v * game.w + u / 64] & (1u64 << (u % 64)) != 0
+                {
+                    component |= bit;
+                    frontier |= bit;
+                }
+            }
+        }
+        unseen &= !component;
+        let size = component.count_ones() as usize;
+        if size >= 2 {
+            let incident = vertices.iter().enumerate()
+                .filter(|(i, _)| component & (1 << i) != 0)
+                .map(|(_, &v)| game.deg[v] as usize).sum();
+            let (union, signature) = SignatureEngine::charge_costs(size, game.w, incident);
+            cost = cost.saturating_add(if size >= 5 { union.min(signature) } else { union });
+        }
+    }
+    cost
 }
 
 fn subset_window_descent_config(
@@ -257,6 +304,7 @@ fn subset_window_descent_config(
     offset_step: usize,
     budget: i64,
     charge_model: ChargeModel,
+    adaptive: bool,
 ) -> Option<Vec<usize>> {
     if n < 2
         || n > MAX_DIMENSION
@@ -313,7 +361,21 @@ fn subset_window_descent_config(
         }
         let mut start = offset;
         while start + 1 < n {
-            let end = (start + width).min(n);
+            let mut end = (start + width).min(n);
+            if adaptive {
+                // Reserve work for later windows instead of spending everything
+                // on the first large connected block. Estimation is charged too.
+                let windows = (n - start).div_ceil(width).max(1);
+                let allowance = (work.remaining.max(0) as usize / windows).saturating_mul(4);
+                while end > start + 2 {
+                    let k = end - start;
+                    if !work.charge(8 * k * k + 8 * k) {
+                        return changed.then_some(current);
+                    }
+                    if window_price(&game, &current[start..end]) <= allowance { break; }
+                    end -= 1;
+                }
+            }
             match refine_window(
                 &game,
                 &mut current[start..end],
@@ -452,6 +514,51 @@ mod tests {
                     pattern.n, pattern.nnz(),
                 );
             }
+        }
+    }
+
+    #[test]
+    fn adaptive_windows_preserve_permutations_and_exact_cost_under_budget_exhaustion() {
+        for n in [0, 1, 6, 17, 65, 129] {
+            for sample in 0..4 {
+                let edges: Vec<_> = (0..n).flat_map(|v| {
+                    (v + 1..n).filter(move |&u| {
+                        (v * 19 + u * 7 + sample * 11) % 23 < 2 + sample
+                    }).map(move |u| (v, u))
+                }).collect();
+                let p = Pattern::from_edges(n, &edges);
+                let seed: Vec<_> = (0..n).rev().collect();
+                let before = ssi_scoring::score(&p, &seed).flops;
+                for budget in [1, 1_000, 20_000, 200_000, 2_000_000] {
+                    let candidate = adaptive_window_descent(n, &p.col_ptr, &p.row_idx, &seed, budget);
+                    assert_eq!(candidate, adaptive_window_descent(n, &p.col_ptr, &p.row_idx, &seed, budget));
+                    if let Some(candidate) = candidate {
+                        let mut sorted = candidate.clone();
+                        sorted.sort_unstable();
+                        assert_eq!(sorted, (0..n).collect::<Vec<_>>());
+                        assert!(ssi_scoring::score(&p, &candidate).flops <= before);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn probe_adaptive_windows() {
+        for (name, p) in crate::corpus::corpus() {
+            let started = std::time::Instant::now();
+            let base = crate::ordering::order(&p);
+            let base_seconds = started.elapsed().as_secs_f64();
+            let before = ssi_scoring::score(&p, &base).flops;
+            let started = std::time::Instant::now();
+            let candidate = if p.n >= 6 && p.n <= MAX_DIMENSION && p.nnz() <= 200_000 {
+                adaptive_window_descent(p.n, &p.col_ptr, &p.row_idx, &base, 48_000_000)
+            } else { None };
+            let extra_seconds = started.elapsed().as_secs_f64();
+            let after = candidate.as_ref().map_or(before, |v| ssi_scoring::score(&p, v).flops);
+            assert!(after <= before, "{name}");
+            println!("ADAPTIVE\t{name}\t{}\t{}\t{before}\t{after}\t{base_seconds:.6}\t{extra_seconds:.6}", p.n, p.nnz());
         }
     }
 

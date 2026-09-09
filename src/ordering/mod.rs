@@ -4501,6 +4501,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // Spend a bounded terminal search allowance across the suffix. Shrink
+    // expensive windows instead of letting one large component consume the
+    // remaining search. Rank against the actual final incumbent: the preceding
+    // pass can replace best_perm without updating best_flops.
+    if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
+        if let Some(candidate) = rgreedy::adaptive_window_descent(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 48_000_000,
+        ) {
+            if is_bijection(&candidate, n) && score(&candidate) < score(&best_perm) {
+                best_perm = candidate;
+            }
+        }
+    }
     best_perm
 }
 

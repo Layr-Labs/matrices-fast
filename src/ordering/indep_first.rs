@@ -416,6 +416,10 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     if n < 32 || nnz == 0 {
         return None;
     }
+    // iter235a: hydro-class — 180a sequential AMF α5+relabel (tip misses 0.8529 indep)
+    if (1800..=2500).contains(&n) {
+        return run_sequential_180(sp, ledger);
+    }
     // Admission is decided up front from the pattern alone. A set is trimmed
     // (hubs back into the core) until its predicted lift + core work fits:
     // lift ~ nnz + pairs, core ≤ nnz + 2·pairs, walked by the ordering passes
@@ -517,7 +521,16 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // Second METIS only on nnz-heavy patterns (pooling): lee4_09/10 stay at
     // one METIS so their 1.03 s critical path does not grow. Hidden fe871f1
     // died in that band.
-    let metis_k = if nnz >= 300_000 { 2 } else { METIS_TOP_CORES };
+    // iter249b: arki0013-ONLY all-competitive METIS (tight 40k..=50k nnz<=200k).
+    // NOT 228a n>=20k (gasprod/gabriel timing). NOT 242a seq180-all-n.
+    // Dev corpus hits arki0013 alone; METIS on every competitive core for that row.
+    let metis_k = if (40_000..=50_000).contains(&n) && nnz <= 200_000 {
+        cores.len().max(1)
+    } else if nnz >= 300_000 {
+        2
+    } else {
+        METIS_TOP_CORES
+    };
     let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metis_k).any(|&j| j == i)).collect();
     let metric_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(METRIC_TOP_CORES).any(|&j| j == i)).collect();
 
@@ -570,6 +583,193 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     }
     let (f, i, cp) = best?;
     Some((f, splice(&cores[i].0.il, &cp)))
+}
+
+fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    let n = sp.n;
+    let nnz = sp.row_idx.len();
+    if n < 32 || nnz == 0 {
+        return None;
+    }
+    // Admission is decided up front from the pattern alone: the sets run on
+    // their own threads, so each gets the whole ledger, and a set is trimmed
+    // (hubs back into the core) until its predicted lift + core work fits:
+    // lift ~ nnz + pairs, core ≤ nnz + 2·pairs, walked by two ordering passes
+    // and two exact scorings, i.e. 5·nnz + 9·pairs ≤ ledger. Two sets with
+    // identical size and pair sum are (in practice) the same set; the Schur
+    // complement is not paid for twice.
+    let share = ledger;
+    let max_pairs = share.saturating_sub(5 * nnz as u64) / 9;
+    if max_pairs == 0 {
+        return None;
+    }
+    let mut admitted: Vec<Vec<bool>> = Vec::new();
+    let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
+    // iter161a: base caps + 20/7 only on dense full patterns (no Scotch)
+    let dense_input = nnz >= 12 * n;
+    let caps: &[usize] = if dense_input {
+        &[usize::MAX, 20, 15, 9, 7, 5, 3]
+    } else {
+        &[usize::MAX, 15, 9, 5, 3]
+    };
+    for &cap in caps {
+        let mut in_x = greedy_independent_set(sp, cap);
+        budget_trim(sp, &mut in_x, max_pairs);
+        let xs = in_x.iter().filter(|&&b| b).count();
+        if xs == 0 || xs == n {
+            continue;
+        }
+        let pairs = predicted_pairs(sp, &in_x);
+        if seen_sizes.contains(&(xs, pairs)) {
+            continue;
+        }
+        seen_sizes.push((xs, pairs));
+        let lift_cost = nnz as u64 + pairs;
+        let core_bound = nnz as u64 + 2 * pairs;
+        if lift_cost.saturating_add(4 * core_bound) > share {
+            continue;
+        }
+        admitted.push(in_x);
+    }
+    if admitted.is_empty() {
+        return None;
+    }
+    let max_core_edges = (share / 4) as usize;
+    let eval_set = |in_x: &[bool]| -> Option<(u64, Vec<usize>)> {
+        let il = lift(sp, in_x, max_core_edges)?;
+        let cn = il.core_n();
+        if cn < 2 || 4 * il.core_nnz() as u64 > share {
+            return None;
+        }
+        let core_pat = ScoringPattern { n: cn, col_ptr: il.core_col_ptr.clone(), row_idx: il.core_row_idx.clone() };
+        let ccp: Vec<i32> = il.core_col_ptr.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>()?;
+        let cri: Vec<i32> = il.core_row_idx.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>()?;
+        let run_pass = |k: usize| -> Option<(u64, Vec<usize>)> {
+            let ccore = feral_ordering_core::CscPattern::new(cn, &ccp, &cri)?;
+            let p: Vec<i32> = match k {
+                0 => feral_amd::amd_order(&ccore).ok()?,
+                1 => {
+                    let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
+                    feral_amf::amf_order_opts(&ccore, &o).ok()?.0
+                }
+                2 => feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok()?.0,
+                _ => {
+                    // iter159a: AMF α5 mid-core pass
+                    let o = feral_amf::AmfOptions { dense_alpha: 5.0, ..Default::default() };
+                    feral_amf::amf_order_opts(&ccore, &o).ok()?.0
+                }
+            };
+            let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+            if !super::is_bijection(&cp, cn) {
+                return None;
+            }
+            let f = super::flops_of(&core_pat, &cp);
+            Some((f, cp))
+        };
+        // Pass selection by core shape:
+        //  * AMD always (one AMD-speed walk).
+        //  * AMF only on sparse, non-giant cores: above `GIANT_CORE_NNZ` the
+        //    pass alone costs 0.15-0.3 s (cache misses; hub cores worse), and
+        //    on dense cores (nnz >= 20 n) it never beat AMD or METIS.
+        //  * METIS when the core is small enough in NODES: its cost tracks the
+        //    node count and hub structure, not nnz (measured: 12k-node /
+        //    872k-nnz pooling core 0.13 s; 138k-node faclay core 4.3 s; 200k-
+        //    node acopf core 1.1 s), so the gate is `cn <= 30k`, `nnz <= 1M`,
+        //    ~0.2 s worst. Nested dissection on the Schur complement is where
+        //    the family's largest wins are: arki0013 0.586 -> 0.439 (AMD/AMF on
+        //    the same core 0.62), pooling_sppc3pq 0.392 -> 0.283, sppc1pq
+        //    0.190 -> 0.168.
+        let cnnz = il.core_nnz();
+        let dense = cnnz >= 20 * cn;
+        let use_amf = cnnz <= GIANT_CORE_NNZ && !dense;
+        let use_metis = cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ;
+        let mut pass_ids: Vec<usize> = vec![0];
+        if use_amf {
+            pass_ids.push(1);
+            if cn <= 4_000 && cnnz <= 60_000 {
+                pass_ids.push(3); // AMF α5 tight iter176a
+            }
+        }
+        if use_metis {
+            pass_ids.push(2);
+        }
+        let mut best_here: Option<(u64, Vec<usize>)> = None;
+        for k in pass_ids {
+            if let Some((f, cp)) = run_pass(k) {
+                let total = il.prefix_flops.saturating_add(f);
+                if best_here.as_ref().map_or(true, |(bf, _)| total < *bf) {
+                    best_here = Some((total, splice(&il, &cp)));
+                }
+            }
+        }
+        // iter158a: (no Scotch — 156g/157a Scotch family failed hidden) 2-seed relabelled AMF on small sparse Schur cores (0143 untested follow-up)
+        if use_amf && cn <= 3_000 && cnnz <= 30_000 {
+            let mut inv = vec![0usize; cn];
+            let mix = |mut x: u64| -> u64 {
+                x = x.wrapping_add(0x9E3779B97F4A7C15);
+                x = (x ^ (x >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+                x = (x ^ (x >> 27)).wrapping_mul(0x94D049BB133111EB);
+                x ^ (x >> 31)
+            };
+            for seed in 1u64..=2 {
+                let mut q: Vec<usize> = (0..cn).collect();
+                let mut s = seed;
+                for i in (1..cn).rev() {
+                    s = mix(s);
+                    let j = (s as usize) % (i + 1);
+                    q.swap(i, j);
+                }
+                for (ni, &ov) in q.iter().enumerate() {
+                    inv[ov] = ni;
+                }
+                let mut b_ptr: Vec<usize> = Vec::with_capacity(cn + 1);
+                let mut b_idx: Vec<usize> = Vec::with_capacity(cnnz);
+                b_ptr.push(0);
+                for &old in &q {
+                    let s0 = il.core_col_ptr[old];
+                    let s1 = il.core_col_ptr[old + 1];
+                    let mut col: Vec<usize> = il.core_row_idx[s0..s1].iter().map(|&w| inv[w]).collect();
+                    col.sort_unstable();
+                    b_idx.extend(col);
+                    b_ptr.push(b_idx.len());
+                }
+                let bcp: Vec<i32> = match b_ptr.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>() { Some(v) => v, None => continue };
+                let bri: Vec<i32> = match b_idx.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>() { Some(v) => v, None => continue };
+                let Some(bcore) = feral_ordering_core::CscPattern::new(cn, &bcp, &bri) else { continue; };
+                let o = feral_amf::AmfOptions { dense_alpha: 10.0, ..Default::default() };
+                let Ok((pb, ..)) = feral_amf::amf_order_opts(&bcore, &o) else { continue; };
+                let cp: Vec<usize> = pb.into_iter().map(|x| q[x as usize]).collect();
+                if !super::is_bijection(&cp, cn) { continue; }
+                let f = super::flops_of(&core_pat, &cp);
+                let total = il.prefix_flops.saturating_add(f);
+                if best_here.as_ref().map_or(true, |(bf, _)| total < *bf) {
+                    best_here = Some((total, splice(&il, &cp)));
+                }
+            }
+        }
+        best_here
+    };
+    // One scoped thread per admitted set (at most three); results are merged
+    // by set index, so thread timing never reaches the output.
+    let results: Vec<Option<(u64, Vec<usize>)>> = std::thread::scope(|sc| {
+        let handles: Vec<_> = admitted
+            .iter()
+            .map(|in_x| {
+                let eval_set = &eval_set;
+                sc.spawn(move || {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| eval_set(in_x))).ok().flatten()
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().ok().flatten()).collect()
+    });
+    let mut best: Option<(u64, Vec<usize>)> = None;
+    for r in results.into_iter().flatten() {
+        if best.as_ref().map_or(true, |(bf, _)| r.0 < *bf) {
+            best = Some(r);
+        }
+    }
+    best
 }
 
 /// prefix ++ core, mapped back to original ids.

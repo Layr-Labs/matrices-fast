@@ -2464,7 +2464,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // iter265a RC: 235a + second-colour/metric expand (0145 family)
                 let digabel_band = (400..=1000).contains(&n);
                 let hydro_band = (1800..=2500).contains(&n);
-                let gasprod_band = n >= 20_000;
+                let gasprod_band = n >= 16_000; // 0154b: lee4_10 (17809) immediate; lee4_09 (15904) stays deferred
                 if digabel_band || hydro_band || gasprod_band || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
@@ -2493,7 +2493,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     let pair_descent_ext = n > PAIR_DESCENT_MAX_N
         && n <= PAIR_DESCENT_EXT_MAX_N
-        && nnz <= 30_000
+        && nnz <= 50_000 // 0154b tighten: 80k too slow (worst 1.389); KEEP max_deg*50<=n
         && max_deg * 50 <= n;
     let pair_descent_gate = n >= PAIR_DESCENT_MIN_N
         && nnz > 0
@@ -3878,6 +3878,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // 0154c: snapshot post-transplant flops; re-call only if later stages improve
+    let transplant_entry_flops = best_flops;
 
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
@@ -4494,8 +4496,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
+            }
+        }
+    }
+    // 0154c: terminal conditioned re-transplant (darthweenies shape). Fire only when
+    // post-transplant stages strictly improved the incumbent; same ledger/gates.
+    if best_flops < transplant_entry_flops {
+        let donors = runner_up.borrow();
+        if let Some(cand) = transplant_probe::refine_with_donors(
+            &scoring_pat, &best_perm, &donors, amd_flops,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
             }
         }
     }

@@ -1,3 +1,27 @@
+[0154: gasband 16k + pair-EXT 50k + conditioned re-transplant](experiments/0154-gasband16k-pairext50k-conditioned-retransplant.md):
+official local **0.794121 → 0.794020** (−1.01 bip), fill 0.926119, **12 better / 0 worse**; worst probe 1.392 s vs tip 1.509 s same box. Submitted.
+
+[0155: x9 only on n>18k && nnz<=80k, paid by SqDiv+DegDivNvDegme](experiments/0155-x9-on-n18k-nnz80k.md):
+official local **0.794121** exact tie / 0 class movers. Reverted. Not submitted. Tip-clean.
+
+[0153: x3/x16 second-colour on the safe nnz gate](experiments/0153-x3-x16-second-colour-safe-gate.md):
+official local **0.794121** exact tie / 0 movers. Reverted. Not submitted. Tip-clean.
+
+[0152: g2/DegSqrt on the pinene200 band, paid by SqDiv](experiments/0152-g2-degsqrt-pinene-band.md):
+official local **0.794121** exact tie / 0 movers. pinene200 flat 0.836. Reverted. Not submitted.
+
+[0151: DegSqrt on the 5th AMD core, paid by SqDiv](experiments/0151-degsqrt-on-fifth-amd-core.md):
+official local **0.794155** (+0.000034). lee4_09 0.645 and lee4_10 0.639 unchanged. ndcc13 0.618→0.630. Reverted. Not submitted.
+
+[0149: x9 set on the lee4_10 band](experiments/0149-x9-set-on-lee4-band.md):
+official local **0.794104** (−0.000017). lee4_10 0.639→0.637 only. Reverted. Not submitted.
+
+[0148: n>16k DegP125 for SqDiv](experiments/0148-n16k-degp125-for-sqdiv.md):
+official local **0.794121** exact tie. Swap reverted. Not submitted.
+
+[0147: tight 4th metric core on n>16k](experiments/0147-n16k-fourth-metric-core.md):
+unmeasured. Shipped binary scored 0.794121. Reverted before a dedicated run; 0148 is the measured follow-up.
+
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so

@@ -186,3 +186,18 @@ round, so note the round if you know it.
 2026-09-08 | **0.798268 -> 0.795608** (−26.6 bip), gt_10k 0.7144 -> 0.6935 | independent-set-first lift v5: second-colour-class sets (x-inf, x9), DegDivNvSqrtWf/DegPlusDegme/DegSqrt metric passes on ≤16k-node cores, METIS on the two lowest-AMD cores, flat deterministic task pool; acceptance moved to after the subtree stage (strict), immediate only at ≥ 40 % lead | **7 better / 3 worse** (methanol400 +0.8 %, gasprod +0.7 %, graphpart +0.1 %), worst 1.055-1.095 s on this box (tip 1.040) ([0145](experiments/0145-second-colour-class-metric-cores.md)).
 
 2026-09-09 | fe871f1 **FAILED hidden Benchmark** (actions 34297482026, ~5 min, step 11). Local worst 1.055–1.126 s sat in the same band as 176a/173a timing deaths. v11 on 4d6d3d0: x-sets n≤12k, drop DegSqrt, METIS/metrics top-1 except nnz≥300k, extra 180a caps off giant-dense | probe **0.795871**, worst **1.026 s** (under tip 1.040); lee4_06 0.504 kept; pooling 0.282 restored; gams05 0.530, gabriel09 0.913 ([0145](experiments/0145-second-colour-class-metric-cores.md)).
+2026-09-09 | be9bae1 local claim 0.794121 / worst 1.105s → pending | n>16k: 4th metric core only if AMD total ≤ 5/4 of best, census trio on that core, SqDiv dropped on the other metric cores (same task count) | official local **0.794121** exact tie with tip; null, not submitted ([0147](experiments/0147-n16k-fourth-metric-core.md)).
+
+2026-09-09 | 0.794121 → **0.794121** (exact tie, fill 0.926127) | n>16k metric list: SqDiv replaced by DegP125 (same task count, top-3) | **null, swap reverted, not submitted** ([0148](experiments/0148-n16k-degp125-for-sqdiv.md)).
+
+2026-09-09 | 0.794121 → **0.794104** (−0.000017) | lee4_10 0.639→0.637; x9 DegDivNvSqrtWf paid by caps 15/5 + SqDiv | **below 0.0001 bar, reverted, not submitted** ([0149](experiments/0149-x9-set-on-lee4-band.md)).
+
+2026-09-09 | 0.794121 → **0.794155** (+0.000034, fill 0.926131) | n<=16k: drop SqDiv, DegSqrt only on 5th AMD core inside 5/4 | lee4_09 0.645 and lee4_10 0.639 unchanged; ndcc13 0.618→0.630 | **worse, reverted, not submitted** ([0151](experiments/0151-degsqrt-on-fifth-amd-core.md)).
+
+2026-09-09 | 0.794121 → **0.794121** (exact tie, fill 0.926126, 0 movers) | pinene200 band only: one g2 set, AMD+DegSqrt inside metric envelope, SqDiv dropped on existing n>18k metric cores in-gate | **null, reverted, not submitted** ([0152](experiments/0152-g2-degsqrt-pinene-band.md)).
+
+2026-09-09 | 0.794121 → **0.794121** (exact tie, fill 0.926126, 0 movers) | second-colour safe gate: add x3 + x16 excluding sets; n<=18k && nnz<=80k unchanged | **null, reverted, not submitted; tip-clean** ([0153](experiments/0153-x3-x16-second-colour-safe-gate.md)).
+
+2026-09-09 | 0.794121 → **0.794121** (exact tie, fill 0.9261, 0 movers) | n>18k && nnz<=80k: admit x9 only, census trio on those cores if inside metric envelope and not hub/0.7s band; drop SqDiv+DegDivNvDegme on n>16k metric cores | **null, reverted, not submitted** ([0155](experiments/0155-x9-on-n18k-nnz80k.md)).
+
+2026-09-09 | 0.794121 → **0.794020** (−1.01 bip), fill 0.926126 → **0.926119** | gasprod_band 16k + pair-EXT nnz 50k (keep max_deg*50<=n; 4/48M) + conditioned terminal re-transplant | **12 better / 0 worse**, worst probe 1.392 s vs tip 1.509 s same box; 0154a DegP125 ADD exact-tie reverted before stack | submitted ([0154](experiments/0154-gasband16k-pairext50k-conditioned-retransplant.md)).

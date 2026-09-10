@@ -90,7 +90,20 @@ fn transplant_pass(
     let mut best_f = inc_f;
     let mut best_perm = incumbent.to_vec();
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
+    // iter881a: n-adaptive fraction widths for n<8k (tip set otherwise) — NOT denser-n12k list
+    let width_list: Vec<usize> = if n < 8_000 || (n < 12_000 && sp.row_idx.len() <= 8 * n) { // iter899a
+        let mut w = vec![4096usize, 512, 128, 32, 8];
+        for &f in &[3usize, 5, 7, 9, 11] {
+            let x = (n / f).max(8);
+            if x < n { w.push(x); }
+        }
+        w.sort_unstable_by(|a,b| b.cmp(a));
+        w.dedup();
+        w
+    } else {
+        vec![4096, 512, 128, 32, 8]
+    };
+    'widths: for &width in &width_list {
         let blks = blocks(&parent, 4, width.min(n));
         if blks.len() < 2 {
             continue;
@@ -202,7 +215,19 @@ fn terminal_pass(
     let mut scored_donors = 0usize;
     let mut stopped_partial = false;
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
+    let width_list: Vec<usize> = if n < 8_000 || (n < 12_000 && sp.row_idx.len() <= 8 * n) { // iter899a
+        let mut w = vec![4096usize, 512, 128, 32, 8];
+        for &f in &[3usize, 5, 7, 9, 11] {
+            let x = (n / f).max(8);
+            if x < n { w.push(x); }
+        }
+        w.sort_unstable_by(|a,b| b.cmp(a));
+        w.dedup();
+        w
+    } else {
+        vec![4096, 512, 128, 32, 8]
+    }; // iter881a-loop2
+    'widths: for &width in &width_list {
         let blocks = blocks(&parent, 4, width.min(n));
         if blocks.len() < 2 { continue; }
         let contribution: Vec<u64> = blocks.iter().map(|&(a, b)|

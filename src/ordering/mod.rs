@@ -3868,15 +3868,36 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Terminal cross-candidate subtree transplant (0090 reservation policy).
     // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
     // are the displaced portfolio orderings already retained for PEO_ALT.
+    let transplant_entry_flops = best_flops;
     {
         let donors = runner_up.borrow();
         if let Some(cand) = transplant_probe::refine_with_donors(
-            &scoring_pat, &best_perm, &donors, amd_flops,
+            &scoring_pat, &best_perm, &donors, amd_flops, false,
         ) {
             let f = score(&cand);
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
+            }
+        }
+    }
+    // VOL-TX2R: chained second pass with REVERSED (fine-first) width order,
+    // conditioned on a strict phase-14 win this row. Same ledger, same
+    // gates, same donors — width order is the ONLY variable vs filing
+    // 87e7f7bc. Fine-first spends the ledger on small segments first:
+    // identical where the ledger never binds, different winners exactly
+    // where it binds (big rows). Strict admit + bijection check.
+    if best_flops < transplant_entry_flops {
+        let donors = runner_up.borrow();
+        if let Some(cand2) = transplant_probe::refine_with_donors(
+            &scoring_pat, &best_perm, &donors, amd_flops, true,
+        ) {
+            if is_bijection(&cand2, n) {
+                let f2 = score(&cand2);
+                if f2 < best_flops {
+                    best_flops = f2;
+                    best_perm = cand2;
+                }
             }
         }
     }

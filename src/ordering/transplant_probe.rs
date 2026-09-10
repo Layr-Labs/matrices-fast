@@ -29,6 +29,7 @@ pub(super) fn refine_with_donors(
     incumbent: &[usize],
     donors: &[(u64, Vec<usize>)],
     amd_flops: u64,
+    reverse_widths: bool,
 ) -> Option<Vec<usize>> {
     let n = sp.n;
     let nnz = sp.row_idx.len();
@@ -50,7 +51,7 @@ pub(super) fn refine_with_donors(
     }
     let donor_perms: Vec<&[usize]> = donors.iter().map(|(_, p)| p.as_slice()).collect();
     let (best_f, assembled) =
-        transplant_pass(&mut ws, sp, incumbent, &donor_perms, inc_f, TRANSPLANT_LEDGER);
+        transplant_pass(&mut ws, sp, incumbent, &donor_perms, inc_f, TRANSPLANT_LEDGER, reverse_widths);
     if best_f < inc_f && is_bijection(&assembled, n) {
         Some(assembled)
     } else {
@@ -65,6 +66,7 @@ fn transplant_pass(
     donors: &[&[usize]],
     inc_f: u64,
     cap: u64,
+    reverse_widths: bool,
 ) -> (u64, Vec<usize>) {
     let n = sp.n;
     let unit = n as u64 + sp.row_idx.len() as u64;
@@ -90,7 +92,16 @@ fn transplant_pass(
     let mut best_f = inc_f;
     let mut best_perm = incumbent.to_vec();
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
+    // VOL-TX2R: width order selectable. Coarse-first spends the ledger on
+    // big segments; fine-first spends it on small ones first — different
+    // winners exactly where the ledger binds (big rows). Default order
+    // preserved (iter647a schedule).
+    let widths: [usize; 5] = if reverse_widths {
+        [8, 32, 128, 512, 4096]
+    } else {
+        [4096, 512, 128, 32, 8]
+    };
+    'widths: for width in widths {
         let blks = blocks(&parent, 4, width.min(n));
         if blks.len() < 2 {
             continue;

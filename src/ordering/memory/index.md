@@ -1,3 +1,12 @@
+[0146: stale-incumbent invariant, stage-13 retirement, identity windows](experiments/0146-stale-incumbent-and-stage13-retirement.md):
+on frontier 62654a5, dev **0.792300 -> 0.792452** (deliberate +1.9 bip), worst
+**1.479 -> 1.303 s**, official run OK, not submitted. Repairs a real
+correctness defect (`best_flops` drifting above the incumbent, letting stage 14
+admit a worse donor) — **so every inherited late-stage attribution should be
+re-derived**. Retires `13.alt` (176 fired / **3** gained / 8.38 s). Closes the
+one-round 4b lift polish (**-21 bip**), the INDEP ledger deepening, and the
+"idle budget at small n" premise (174/300 rows already cost >= 0.4 s).
+
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so

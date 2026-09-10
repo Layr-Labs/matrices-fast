@@ -149,6 +149,17 @@ use crate::Pattern;
 /// what-if scoring). Not compiled into the shipped binary.
 #[cfg(test)]
 mod probe;
+
+/// TEST-ONLY event counters (0148). Never compiled into the shipped binary.
+#[cfg(test)]
+pub(super) mod probe_counters {
+    use std::sync::atomic::AtomicUsize;
+    /// Deferred independent-set lift that beat the subtree-polished incumbent
+    /// at stage 4b — the case that never receives a stage-4 chain pass.
+    pub(in crate::ordering) static INDEP_4B_WINS: AtomicUsize = AtomicUsize::new(0);
+    /// Deferred lift that lost at 4b.
+    pub(in crate::ordering) static INDEP_4B_LOSSES: AtomicUsize = AtomicUsize::new(0);
+}
 mod transplant_probe;
 
 pub mod rgreedy;
@@ -2983,6 +2994,71 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // ── SCALED RANKED CHAIN, above SUBTREE_CHAIN_MAX_N (0150) ───────────────
+    // The chain above is capped at 45k because iter463a measured it moving the
+    // ratio by < 0.01 there for 0.26-0.48 s. That measured its GEOMETRY, not
+    // its worth: ranked blocks of max_s <= 384 cover a vanishing fraction of a
+    // six-figure elimination tree, which is exactly what the cap comment says.
+    // Blocks scaled to the graph (max_s = n/64, min_s 64, 16 ranked blocks, a
+    // 32M budget) do move these rows: unitcommit_200_100_1_mod_8 -0.96 %,
+    // transswitch2736spr -0.58 %, transswitch2383wpr -0.18 %, over 4-6 rounds
+    // that each re-postorder the improved tree.
+    //
+    // The gate is drawn around where it PAYS, not around where it fits. The
+    // three giants (acopf_case9241pegase_qcqp n=313k, faclay75 n=273k,
+    // gabriel10 n=244k) and cont6-qq (nnz=558k) gained exactly zero across the
+    // full geometry sweep while costing 0.17-0.67 s, so n and nnz both stop
+    // short of them. In-gate worst measured cost is 0.52 s on top of a 0.74 s
+    // order(), against a 1.4 s corpus worst on this box.
+    const HUGE_CHAIN_MAX_N: usize = 150_000;
+    const HUGE_CHAIN_MAX_NNZ: usize = 500_000;
+    const HUGE_CHAIN_ROUNDS: usize = 6;
+    if n > SUBTREE_CHAIN_MAX_N && n <= HUGE_CHAIN_MAX_N && nnz <= HUGE_CHAIN_MAX_NNZ {
+        for round in 0..HUGE_CHAIN_ROUNDS {
+            let permuted_h = permute_pattern(&scoring_pat, &best_perm);
+            let etree_h = EliminationTree::from_pattern(&permuted_h);
+            let post_h = etree_h.postorder();
+            let mut cand_h: Vec<usize> = post_h.iter().map(|&j| best_perm[j]).collect();
+            let pp_h = permute_pattern(&scoring_pat, &cand_h);
+            let pe_h = EliminationTree::from_pattern(&pp_h);
+            let counts_h: Vec<u32> = column_counts_gnp(&pp_h, &pe_h)
+                .into_iter()
+                .map(|c| c as u32)
+                .collect();
+            let parent_h: Vec<i32> = pe_h
+                .parent
+                .iter()
+                .map(|p| p.map_or(-1, |j| j as i32))
+                .collect();
+            let cfg_h = rgreedy::SubCfg {
+                min_s: 64,
+                max_s: (n / 64).max(1_024),
+                max_sub: 1_600,
+                max_blocks: 16,
+                budget: 32_000_000,
+                streams: 1,
+                rank_blocks: true,
+                round,
+            };
+            let imp_h = rgreedy::subtree_refine(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &mut cand_h,
+                &counts_h,
+                &parent_h,
+                cfg_h,
+            );
+            if imp_h == 0 || !is_bijection(&cand_h, n) {
+                continue;
+            }
+            let f_h = score(&cand_h);
+            if f_h < best_flops {
+                best_flops = f_h;
+                best_perm = cand_h;
+            }
+        }
+    }
     #[cfg(test)]
     parallel::phase_mark("4.subtree", _tph, best_flops);
     #[cfg(test)]
@@ -2993,8 +3069,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // win later; nothing is held back past this point.
     if let Some((f, cand)) = indep_deferred {
         if f < best_flops {
+            #[cfg(test)]
+            probe_counters::INDEP_4B_WINS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             best_flops = f;
             best_perm = cand;
+        } else {
+            #[cfg(test)]
+            probe_counters::INDEP_4B_LOSSES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
     #[cfg(test)]

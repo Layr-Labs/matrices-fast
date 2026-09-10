@@ -45,7 +45,16 @@ pub(super) fn refine_with_donors(
         && nnz <= 6 * n
         && amd_flops > 0
         && inc_f.saturating_mul(100) <= amd_flops.saturating_mul(101);
-    if !below && !sparse_large_tie {
+    // Small/mid near-AMD ties (the 54 lt_1k + 17 1k_10k ties at ratio 1.000):
+    // same 1% tie test, smaller box, density-guarded. Unit-gated above so cost
+    // is ms here and far below the slow tier. Generalizes the sparse-large tie
+    // gate to the ties it excludes; best-of floor keeps it zero-downside.
+    let small_tie = (64..15_000).contains(&n)
+        && (2_000..40_000).contains(&nnz)
+        && nnz <= 8 * n
+        && amd_flops > 0
+        && inc_f.saturating_mul(100) <= amd_flops.saturating_mul(101);
+    if !below && !sparse_large_tie && !small_tie {
         return None;
     }
     let donor_perms: Vec<&[usize]> = donors.iter().map(|(_, p)| p.as_slice()).collect();

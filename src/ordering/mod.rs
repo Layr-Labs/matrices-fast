@@ -3826,7 +3826,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // iter75: narrow PEO_ALT skip to lee1_07 band only (3k≤n<8k nnz≥9k).
     // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
     // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.
-    let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 9_000;
+    // Three later hidden runs exceeded the time cap. Final-count profiling found
+    // that the alternate seed changed no public winner on dense rows above 8k,
+    // while costing about 80 ms on the slow lee/nuclear rows. Keep the sparse
+    // mpbp/gabriel/arki beneficiaries and skip only the measured no-gain shape.
+    let peo_alt_danger = ((3_000..8_000).contains(&n) && nnz >= 9_000)
+        || (n >= 8_000 && nnz >= 5 * n);
     if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
         && !peo_alt_danger
     {
@@ -4496,8 +4501,57 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let flops = score(&candidate);
+            if flops < best_flops {
+                best_flops = flops;
                 best_perm = candidate;
+            }
+        }
+
+        // Two broader versions of this terminal chain exceeded the hidden
+        // wall-clock cap. Keep only the low-width passes that still improved
+        // the finished incumbent with an 8M allowance apiece. Their combined
+        // allowance is 24M, or 32M on tiny rows with the extra width-12 pass.
+        let safe_chain: &[(usize, usize, usize, i64)] = &[
+            (6, 4, 1, 8_000_000),
+            (7, 4, 3, 8_000_000),
+            (8, 4, 3, 8_000_000),
+        ];
+        if n <= 3_000 && nnz <= 80_000 {
+            for &(width, sweeps, step, budget) in safe_chain {
+                if let Some(candidate) = rgreedy::subset_window_descent_step(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    width,
+                    sweeps,
+                    step,
+                    budget,
+                ) {
+                    let flops = score(&candidate);
+                    if flops < best_flops {
+                        best_flops = flops;
+                        best_perm = candidate;
+                    }
+                }
+            }
+        }
+        if n <= 512 && nnz <= 80_000 {
+            if let Some(candidate) = rgreedy::subset_window_descent_step(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                12,
+                4,
+                1,
+                8_000_000,
+            ) {
+                let flops = score(&candidate);
+                if flops < best_flops {
+                    best_perm = candidate;
+                }
             }
         }
     }

@@ -3827,7 +3827,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
     // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.
     let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 9_000;
-    if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
+    if n >= 16 && n < 15_000 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER // iter827a
         && !peo_alt_danger
     {
         let seeds = runner_up.borrow().clone();

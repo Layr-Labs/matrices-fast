@@ -3124,3 +3124,1030 @@ fn probe_indep_timing() {
         }
     }
 }
+
+/// MinFill already lost 2.2x here (26.8M vs AMD 12.2M at maxcol 415 vs 225);
+/// this prices the evident next instrument — hand-rolled ND (`nd_order` /
+/// `ndfm_order`) plus library METIS / Scotch ND — against AMD on the qapw
+/// pattern (n=705, nnz≈88k). Offline only, never ships, zero cap risk.
+#[test]
+#[ignore]
+fn probe_nd_qapw() {
+    let corpus = crate::corpus::corpus();
+    let (_, pat) = corpus
+        .iter()
+        .find(|(name, _)| name == "qapw")
+        .expect("qapw in dev corpus");
+    let n = pat.n;
+    let sp = scoring_pattern(pat);
+    let (cp, ri) = core_of(pat);
+    let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+
+    // AMD baseline: the number every instrument must beat.
+    let t = Instant::now();
+    let amd: Vec<usize> = feral_amd::amd_order(&core)
+        .unwrap()
+        .into_iter()
+        .map(|x| x as usize)
+        .collect();
+    let amd_s = t.elapsed().as_secs_f64();
+    assert!(is_bijection(&amd, n));
+    let amd_f = flops_of(&sp, &amd);
+    let amd_p = permute_pattern(&sp, &amd);
+    let amd_e = EliminationTree::from_pattern(&amd_p);
+    let amd_c = column_counts_gnp(&amd_p, &amd_e);
+    println!(
+        "BASE\tqapw\tn={n}\tnnz={}\tAMD flops={amd_f} maxcol={} ({amd_s:.3} s)",
+        pat.nnz(),
+        amd_c.iter().max().unwrap()
+    );
+
+    // Shipped order() reference: what the crown scores on this row.
+    let t = Instant::now();
+    let ship = order(pat);
+    let ship_s = t.elapsed().as_secs_f64();
+    let ship_f = flops_of(&sp, &ship);
+    println!(
+        "REF\tqapw\tshipped order() flops={ship_f} ratio={:.4} ({ship_s:.3} s)",
+        ship_f as f64 / amd_f as f64
+    );
+
+    let mut price = |tag: &str, mk: &dyn Fn() -> Vec<i32>| {
+        let t = Instant::now();
+        let perm: Vec<usize> = mk().into_iter().map(|x| x as usize).collect();
+        let ord_s = t.elapsed().as_secs_f64();
+        let bij = is_bijection(&perm, n);
+        let t = Instant::now();
+        let f = flops_of(&sp, &perm);
+        let pp = permute_pattern(&sp, &perm);
+        let e = EliminationTree::from_pattern(&pp);
+        let c = column_counts_gnp(&pp, &e);
+        let sc_s = t.elapsed().as_secs_f64();
+        println!(
+            "ND\tqapw\t{tag}\tbij={bij}\tflops={f}\tratio={:.4}\tmaxcol={}\tord={ord_s:.3}s\tscore={sc_s:.3}s",
+            f as f64 / amd_f as f64,
+            c.iter().max().unwrap()
+        );
+    };
+    price("nd", &|| nd_order(pat));
+    price("ndfm", &|| ndfm_order(pat));
+    price("metis", &|| {
+        feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
+            .map(|(p, ..)| p)
+            .unwrap()
+    });
+    price("scotch", &|| feral_scotch::scotch_order(&core).unwrap());
+}
+
+/// Offline instrument pricing on pooling_foulds5pq (last bound-backed
+/// runner-up: n=1218, gap-40 maxcol bound, weak δ≤3 bounds — inconclusive,
+/// not actionable — now measured). MinFill + hand ND + METIS vs AMD.
+/// Offline only, never ships, zero cap risk.
+#[test]
+#[ignore]
+fn probe_pooling() {
+    let corpus = crate::corpus::corpus();
+    let (_, pat) = corpus
+        .iter()
+        .find(|(name, _)| name == "pooling_foulds5pq")
+        .expect("pooling_foulds5pq in dev corpus");
+    let n = pat.n;
+    let sp = scoring_pattern(pat);
+    let (cp, ri) = core_of(pat);
+    let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+
+    let t = Instant::now();
+    let amd: Vec<usize> = feral_amd::amd_order(&core)
+        .unwrap()
+        .into_iter()
+        .map(|x| x as usize)
+        .collect();
+    let amd_s = t.elapsed().as_secs_f64();
+    assert!(is_bijection(&amd, n));
+    let amd_f = flops_of(&sp, &amd);
+    let amd_p = permute_pattern(&sp, &amd);
+    let amd_e = EliminationTree::from_pattern(&amd_p);
+    let amd_c = column_counts_gnp(&amd_p, &amd_e);
+    println!(
+        "BASE\tpooling_foulds5pq\tn={n}\tnnz={}\tAMD flops={amd_f} maxcol={} ({amd_s:.3} s)",
+        pat.nnz(),
+        amd_c.iter().max().unwrap()
+    );
+
+    let t = Instant::now();
+    let ship = order(pat);
+    let ship_s = t.elapsed().as_secs_f64();
+    let ship_f = flops_of(&sp, &ship);
+    println!(
+        "REF\tpooling_foulds5pq\tshipped order() flops={ship_f} ratio={:.4} ({ship_s:.3} s)",
+        ship_f as f64 / amd_f as f64
+    );
+
+    let mut price = |tag: &str, mk: &dyn Fn() -> Vec<i32>| {
+        let t = Instant::now();
+        let perm: Vec<usize> = mk().into_iter().map(|x| x as usize).collect();
+        let ord_s = t.elapsed().as_secs_f64();
+        let bij = is_bijection(&perm, n);
+        let f = flops_of(&sp, &perm);
+        let pp = permute_pattern(&sp, &perm);
+        let e = EliminationTree::from_pattern(&pp);
+        let c = column_counts_gnp(&pp, &e);
+        println!(
+            "POOL\tpooling_foulds5pq\t{tag}\tbij={bij}\tflops={f}\tratio={:.4}\tmaxcol={}\tord={ord_s:.3}s",
+            f as f64 / amd_f as f64,
+            c.iter().max().unwrap()
+        );
+    };
+    price("minfill", &|| minfill_order(pat));
+    price("nd", &|| nd_order(pat));
+    price("ndfm", &|| ndfm_order(pat));
+    price("metis", &|| {
+        feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
+            .map(|(p, ..)| p)
+            .unwrap()
+    });
+}
+
+/// Offline weighted-etree-postorder pricing (new-linearization hunt).
+/// Shipped code postorders elimination trees with index-ordered children
+/// (vendor `postorder()`); reverse-children/preorder/level-order all nulled
+/// as FINISHED-incumbent linearizations — but cost-weighted child orders
+/// were never tried. For each row: finished incumbent -> etree -> subtree
+/// flop weights -> ascending- and descending-weight postorders (same
+/// base_cand construction as FINAL_REFINE) -> exact score vs incumbent.
+/// Offline only, never ships, zero cap risk.
+#[test]
+#[ignore]
+fn probe_wpost() {
+    let corpus = crate::corpus::corpus();
+    let mut better = 0usize;
+    let mut worse = 0usize;
+    let mut same = 0usize;
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let _ = parallel::phase_take();
+        let incumb = order(pat);
+        let sp = scoring_pattern(pat);
+        let inc_f = flops_of(&sp, &incumb);
+        // Etree of the incumbent-permuted pattern + column counts.
+        let permuted = permute_pattern(&sp, &incumb);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let raw: Vec<u64> = column_counts_gnp(&permuted, &etree)
+            .into_iter()
+            .map(|c| (c as u64) * (c as u64))
+            .collect();
+        // Children lists + roots (index order, mirroring vendor).
+        let mut children: Vec<Vec<usize>> = vec![Vec::new(); n];
+        let mut roots: Vec<usize> = Vec::new();
+        for (j, p) in etree.parent.iter().enumerate() {
+            match p {
+                Some(par) => children[*par].push(j),
+                None => roots.push(j),
+            }
+        }
+        // Subtree flop weights via index-order postorder accumulation.
+        let mut wpost: Vec<usize> = Vec::with_capacity(n);
+        {
+            let mut next = vec![0usize; n];
+            let mut stack: Vec<usize> = Vec::new();
+            for &r in &roots {
+                stack.push(r);
+                while let Some(&node) = stack.last() {
+                    let k = next[node];
+                    if k < children[node].len() {
+                        next[node] = k + 1;
+                        stack.push(children[node][k]);
+                    } else {
+                        wpost.push(node);
+                        stack.pop();
+                    }
+                }
+            }
+        }
+        let mut weight = vec![0u64; n];
+        for &j in &wpost {
+            let mut wsum = raw[j];
+            for &c in &children[j] {
+                wsum = wsum.saturating_add(weight[c]);
+            }
+            weight[j] = wsum;
+        }
+        // Two weighted linearizations (children + roots by subtree weight).
+        for (tag, asc) in [("wasc", true), ("wdesc", false)] {
+            let mut ch2 = children.clone();
+            for list in ch2.iter_mut() {
+                list.sort_by(|&a, &b| {
+                    if asc {
+                        weight[a].cmp(&weight[b]).then_with(|| a.cmp(&b))
+                    } else {
+                        weight[b].cmp(&weight[a]).then_with(|| a.cmp(&b))
+                    }
+                });
+            }
+            let mut r2 = roots.clone();
+            r2.sort_by(|&a, &b| {
+                if asc {
+                    weight[a].cmp(&weight[b]).then_with(|| a.cmp(&b))
+                } else {
+                    weight[b].cmp(&weight[a]).then_with(|| a.cmp(&b))
+                }
+            });
+            let mut post: Vec<usize> = Vec::with_capacity(n);
+            {
+                let mut next = vec![0usize; n];
+                let mut stack: Vec<usize> = Vec::new();
+                for &r in &r2 {
+                    stack.push(r);
+                    while let Some(&node) = stack.last() {
+                        let k = next[node];
+                        if k < ch2[node].len() {
+                            next[node] = k + 1;
+                            stack.push(ch2[node][k]);
+                        } else {
+                            post.push(node);
+                            stack.pop();
+                        }
+                    }
+                }
+            }
+            if post.len() != n {
+                continue;
+            }
+            let cand: Vec<usize> = post.iter().map(|&j| incumb[j]).collect();
+            if !is_bijection(&cand, n) {
+                println!("WPOST\t{name}\t{tag}\tNON-BIJECTION");
+                continue;
+            }
+            let f = flops_of(&sp, &cand);
+            if f < inc_f {
+                better += 1;
+                println!(
+                    "WPOST\t{name}\tn={n}\t{tag}\t{inc_f}->{f} (-{:.1} row-bips)",
+                    (inc_f - f) as f64 * 10000.0 / inc_f as f64
+                );
+            } else if f > inc_f {
+                worse += 1;
+            } else {
+                same += 1;
+            }
+        }
+    }
+    println!("WPOST SUMMARY better={better} worse={worse} same={same}");
+}
+
+/// Offline degeneracy-ordering pricing (portfolio-candidate hunt).
+/// Smallest-last ordering (lazy heap, index tie-breaks, deterministic) has
+/// no portfolio seat anywhere: RCM/Sloan/ND/MinFill all shipped as cheap
+/// structural candidates, degeneracy never did. Score it vs AMD per row.
+/// Offline only, never ships, zero cap risk. A strict win anywhere =
+/// build it as a consider! candidate; all-null = close the family.
+#[test]
+#[ignore]
+fn probe_degen() {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    let corpus = crate::corpus::corpus();
+    let mut better = 0usize;
+    let mut worse = 0usize;
+    let mut same = 0usize;
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        // Symmetric deduped adjacency.
+        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+        for j in 0..n {
+            let (s, e) = (pat.col_ptr[j], pat.col_ptr[j + 1]);
+            for &i in &pat.row_idx[s..e] {
+                if i != j && i < n {
+                    adj[j].push(i);
+                }
+            }
+        }
+        for a in adj.iter_mut() {
+            a.sort_unstable();
+            a.dedup();
+        }
+        // Smallest-last elimination order, lazy heap, index ties.
+        let mut deg: Vec<usize> = adj.iter().map(|a| a.len()).collect();
+        let mut alive = vec![true; n];
+        let mut heap: BinaryHeap<(Reverse<usize>, usize)> = BinaryHeap::new();
+        for v in 0..n {
+            heap.push((Reverse(deg[v]), v));
+        }
+        let mut elim: Vec<usize> = Vec::with_capacity(n);
+        let mut alive_n = n;
+        while let Some((Reverse(d), v)) = heap.pop() {
+            if !alive[v] || d != deg[v] {
+                continue;
+            }
+            alive[v] = false;
+            alive_n -= 1;
+            elim.push(v);
+            for &u in &adj[v] {
+                if alive[u] && deg[u] > 0 {
+                    deg[u] -= 1;
+                    heap.push((Reverse(deg[u]), u));
+                }
+            }
+            if alive_n == 0 {
+                break;
+            }
+        }
+        if elim.len() != n {
+            println!("DEGEN\t{name}\tSHORT");
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = match feral_ordering_core::CscPattern::new(n, &cp, &ri) {
+            Some(c) => c,
+            None => continue,
+        };
+        let amd: Vec<usize> = match feral_amd::amd_order(&core) {
+            Ok(p) => p.into_iter().map(|x| x as usize).collect(),
+            Err(_) => continue,
+        };
+        let base = flops_of(&sp, &amd);
+        let mine = flops_of(&sp, &elim);
+        if mine < base {
+            better += 1;
+            println!(
+                "DEGEN\t{name}\tn={n}\tnnz={}\t{base}->{mine} (-{:.1} row-bips)",
+                pat.nnz(),
+                (base - mine) as f64 * 10000.0 / base as f64
+            );
+        } else if mine > base {
+            worse += 1;
+        } else {
+            same += 1;
+        }
+    }
+    println!("DEGEN SUMMARY better={better} worse={worse} same={same}");
+}
+
+
+/// Optimality-bound extension to rsyn/gasprod pockets (Option B cont.).
+/// Rebuilt bounds machinery (degeneracy via lazy heap + greedy max-clique,
+/// deterministic): per target row, bound maxcol ≥ max(δ+1, ω) vs AMD and
+/// crown maxcol/flops. qapw included as calibration (must reproduce
+/// bounds.log exactly: δ=170, ω=2, AMD maxcol 225, flops 12183146).
+/// Offline only, never ships, zero cap risk.
+#[test]
+#[ignore]
+fn probe_bounds2() {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    let targets = [
+        "qapw",
+        "gasprod_sarawak16",
+        "gasprod_sarawak81",
+        "rsyn0805m03m",
+        "rsyn0810m02hfsg",
+        "rsyn0810m04m",
+        "rsyn0815m",
+        "rsyn0815m02hfsg",
+        "rsyn0815m04m",
+        "rsyn0820m02m",
+        "rsyn0820m04m",
+        "rsyn0830hfsg",
+        "rsyn0830m04m",
+        "rsyn0840m",
+        "rsyn0840m02m",
+        "rsyn0840m04m",
+    ];
+    let corpus = crate::corpus::corpus();
+    for want in targets {
+        let (_, pat) = match corpus.iter().find(|(name, _)| name == want) {
+            Some(found) => found,
+            None => {
+                println!("BOUNDS2\t{want}\tMISSING");
+                continue;
+            }
+        };
+        let n = pat.n;
+        // Symmetric deduped adjacency.
+        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+        for j in 0..n {
+            let (s, e) = (pat.col_ptr[j], pat.col_ptr[j + 1].min(pat.row_idx.len()));
+            for &i in &pat.row_idx[s..e] {
+                if i != j && i < n {
+                    adj[j].push(i);
+                }
+            }
+        }
+        for a in adj.iter_mut() {
+            a.sort_unstable();
+            a.dedup();
+        }
+        // Degeneracy number via lazy min-heap (deterministic, index ties):
+        // max over removal steps of the min live degree.
+        let mut deg: Vec<usize> = adj.iter().map(|a| a.len()).collect();
+        let mut alive = vec![true; n];
+        let mut heap: BinaryHeap<(Reverse<usize>, usize)> = BinaryHeap::new();
+        for v in 0..n {
+            heap.push((Reverse(deg[v]), v));
+        }
+        let mut degen = 0usize;
+        let mut left = n;
+        while let Some((Reverse(d), v)) = heap.pop() {
+            if !alive[v] || d != deg[v] {
+                continue;
+            }
+            if d > degen {
+                degen = d;
+            }
+            alive[v] = false;
+            left -= 1;
+            if left == 0 {
+                break;
+            }
+            for &u in &adj[v] {
+                if alive[u] && deg[u] > 0 {
+                    deg[u] -= 1;
+                    heap.push((Reverse(deg[u]), u));
+                }
+            }
+        }
+        // Greedy max-clique lower bound: best maximal clique over all
+        // start vertices (index order; degree-desc candidate order).
+        // O(n) marks array for adjacency tests.
+        let mut mark = vec![0u32; n];
+        let mut tick: u32 = 1;
+        let mut omega = 0usize;
+        for &s in &(0..n).collect::<Vec<_>>() {
+            let mut clique: Vec<usize> = vec![s];
+            tick += 1;
+            for &u in &adj[s] {
+                mark[u] = tick;
+            }
+            // Candidates: neighbors of s by (degree desc, index asc).
+            let mut cands: Vec<usize> = adj[s].clone();
+            cands.sort_by(|&a, &b| adj[b].len().cmp(&adj[a].len()).then_with(|| a.cmp(&b)));
+            for &v in &cands {
+                if mark[v] != tick {
+                    continue;
+                }
+                // v must neighbor ALL of clique: check via fresh marks.
+                tick += 1;
+                if tick == u32::MAX {
+                    break;
+                }
+                for &u in &adj[v] {
+                    mark[u] = tick;
+                }
+                let mut ok = true;
+                for &c in &clique {
+                    if c != v && mark[c] != tick {
+                        ok = false;
+                        break;
+                    }
+                }
+                if ok {
+                    clique.push(v);
+                }
+            }
+            if clique.len() > omega {
+                omega = clique.len();
+            }
+        }
+        let bound = degen.saturating_add(1).max(omega);
+        // AMD + crown maxcol/flops.
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let amd_txt = match feral_ordering_core::CscPattern::new(n, &cp, &ri) {
+            Some(core) => match feral_amd::amd_order(&core) {
+                Ok(p) => {
+                    let perm: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                    let pp = permute_pattern(&sp, &perm);
+                    let e = EliminationTree::from_pattern(&pp);
+                    let c = column_counts_gnp(&pp, &e);
+                    format!(
+                        "{} {}",
+                        c.iter().max().unwrap(),
+                        c.iter().map(|&x| (x as u64) * (x as u64)).sum::<u64>()
+                    )
+                }
+                Err(_) => "AMD-ERR".to_string(),
+            },
+            None => "CORE-ERR".to_string(),
+        };
+        let _ = parallel::phase_take();
+        let incumb = order(pat);
+        let ip = permute_pattern(&sp, &incumb);
+        let ie = EliminationTree::from_pattern(&ip);
+        let ic = column_counts_gnp(&ip, &ie);
+        println!(
+            "BOUNDS2\t{want}\tn={n}\tnnz={}\tdegen={degen} omega={omega} bound={bound}\tAMD[{amd_txt}]\tcrown[maxcol={} flops={}]",
+            pat.nnz(),
+            ic.iter().max().unwrap(),
+            ic.iter().map(|&x| (x as u64) * (x as u64)).sum::<u64>()
+        );
+    }
+    println!("BOUNDS2 DONE");
+}
+
+/// MD-deficiency-tiebreak fire check: does md_deficiency_tiebreak ever
+/// differ from AMD (correctness of the null), and does it ever win?
+/// Offline only, never ships.
+#[test]
+#[ignore]
+fn probe_mddef_weak() {
+    let corpus = crate::corpus::corpus();
+    let mut diff = 0usize;
+    let mut won = 0usize;
+    let mut rows = 0usize;
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n < 2 || n > 2_000 || pat.nnz() > 200_000 {
+            continue;
+        }
+        rows += 1;
+        let (cp, ri) = core_of(pat);
+        let core = match feral_ordering_core::CscPattern::new(n, &cp, &ri) {
+            Some(c) => c,
+            None => continue,
+        };
+        let amd: Vec<usize> = match feral_amd::amd_order(&core) {
+            Ok(p) => p.into_iter().map(|x| x as usize).collect(),
+            Err(_) => continue,
+        };
+        let sp = scoring_pattern(pat);
+        let base = flops_of(&sp, &amd);
+        match rgreedy::md_deficiency_tiebreak(n, &pat.col_ptr, &pat.row_idx, None, 32_000_000) {
+            Some(mine) => {
+                if mine != amd {
+                    diff += 1;
+                }
+                let f = flops_of(&sp, &mine);
+                if f < base {
+                    won += 1;
+                    println!(
+                        "MDDEF\t{name}\tn={n}\t{base}->{f} (-{:.1} row-bips)",
+                        (base - f) as f64 * 10000.0 / base as f64
+                    );
+                }
+            }
+            None => {}
+        }
+    }
+    println!("MDDEF SUMMARY rows={rows} differ={diff} won={won}");
+}
+
+/// Supply-chain/emfl/squfl big-tie probe (family attribution follow-up).
+/// Big (n≥10k) EXACT ties the bound/instrument program never touched:
+/// supplychainr1_053050 (gap-100 bound, zero trials), squfl030-150 +
+/// emfl050_5_5 (weak bounds, inconclusive). Sparse network rows (avg deg
+/// 4–7) — NOT dense KKTs, so the faclay/gabriel/qapw/knp deaths may not
+/// apply. MinFill + hand ND + METIS + Scotch vs AMD, offline.
+/// Offline only, never ships, zero cap risk.
+#[test]
+#[ignore]
+fn probe_supply() {
+    let targets = [
+        "supplychainr1_053050",
+        "squfl030-150",
+        "emfl050_5_5",
+    ];
+    let corpus = crate::corpus::corpus();
+    for want in targets {
+        let (_, pat) = match corpus.iter().find(|(name, _)| name == want) {
+            Some(found) => found,
+            None => {
+                println!("SUPPLY\t{want}\tMISSING");
+                continue;
+            }
+        };
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = match feral_ordering_core::CscPattern::new(n, &cp, &ri) {
+            Some(c) => c,
+            None => {
+                println!("SUPPLY\t{want}\tCORE-ERR");
+                continue;
+            }
+        };
+        let amd: Vec<usize> = match feral_amd::amd_order(&core) {
+            Ok(p) => p.into_iter().map(|x| x as usize).collect(),
+            Err(_) => {
+                println!("SUPPLY\t{want}\tAMD-ERR");
+                continue;
+            }
+        };
+        let base = flops_of(&sp, &amd);
+        let app = permute_pattern(&sp, &amd);
+        let ae = EliminationTree::from_pattern(&app);
+        let ac = column_counts_gnp(&app, &ae);
+        println!(
+            "SUPPLY\t{want}\tn={n}\tnnz={}\tAMD flops={base} maxcol={}",
+            pat.nnz(),
+            ac.iter().max().unwrap()
+        );
+        let t = Instant::now();
+        let ship = order(pat);
+        let ship_s = t.elapsed().as_secs_f64();
+        let ship_f = flops_of(&sp, &ship);
+        println!(
+            "SUPPLY\t{want}\tshipped flops={ship_f} ratio={:.4} ({ship_s:.3} s)",
+            ship_f as f64 / base as f64
+        );
+        let mut price = |tag: &str, mk: &dyn Fn() -> Vec<i32>| {
+            let t = Instant::now();
+            let perm: Vec<usize> = mk().into_iter().map(|x| x as usize).collect();
+            let ord_s = t.elapsed().as_secs_f64();
+            let bij = is_bijection(&perm, n);
+            let f = flops_of(&sp, &perm);
+            let pp = permute_pattern(&sp, &perm);
+            let e = EliminationTree::from_pattern(&pp);
+            let c = column_counts_gnp(&pp, &e);
+            println!(
+                "SUPPLY\t{want}\t{tag}\tbij={bij}\tflops={f}\tratio={:.4}\tmaxcol={}\tord={ord_s:.3}s",
+                f as f64 / base as f64,
+                c.iter().max().unwrap()
+            );
+        };
+        price("minfill", &|| minfill_order(pat));
+        price("nd", &|| nd_order(pat));
+        price("ndfm", &|| ndfm_order(pat));
+        price("metis", &|| {
+            feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
+                .map(|(p, ..)| p)
+                .unwrap()
+        });
+        price("scotch", &|| feral_scotch::scotch_order(&core).unwrap());
+    }
+    println!("SUPPLY DONE");
+}
+
+/// Dedicated partitioner/MinFill measurement on rsyn/gasprod pockets.
+/// Library partitioners run in-portfolio on most of these rows (so this
+/// is NOT virgin territory for them), but best-of discards losses
+/// silently — no head-to-head record exists for ANY instrument here, and
+/// hand-ND (n<1k gate) + MinFill (nnz<12k gate) are excluded outright.
+/// MinFill + nd + ndfm + METIS + Scotch vs AMD + crown per row.
+/// Offline only, never ships, zero cap risk.
+#[test]
+#[ignore]
+fn probe_pockets() {
+    let targets = [
+        "gasprod_sarawak16",
+        "gasprod_sarawak81",
+        "rsyn0805m03m",
+        "rsyn0810m02hfsg",
+        "rsyn0810m04m",
+        "rsyn0815m",
+        "rsyn0815m02hfsg",
+        "rsyn0815m04m",
+        "rsyn0820m02m",
+        "rsyn0820m04m",
+        "rsyn0830hfsg",
+        "rsyn0830m04m",
+        "rsyn0840m",
+        "rsyn0840m02m",
+        "rsyn0840m04m",
+    ];
+    let corpus = crate::corpus::corpus();
+    for want in targets {
+        let (_, pat) = match corpus.iter().find(|(name, _)| name == want) {
+            Some(found) => found,
+            None => {
+                println!("POCKET\t{want}\tMISSING");
+                continue;
+            }
+        };
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = match feral_ordering_core::CscPattern::new(n, &cp, &ri) {
+            Some(c) => c,
+            None => {
+                println!("POCKET\t{want}\tCORE-ERR");
+                continue;
+            }
+        };
+        let amd: Vec<usize> = match feral_amd::amd_order(&core) {
+            Ok(p) => p.into_iter().map(|x| x as usize).collect(),
+            Err(_) => {
+                println!("POCKET\t{want}\tAMD-ERR");
+                continue;
+            }
+        };
+        let base = flops_of(&sp, &amd);
+        let app = permute_pattern(&sp, &amd);
+        let ae = EliminationTree::from_pattern(&app);
+        let ac = column_counts_gnp(&app, &ae);
+        println!(
+            "POCKET\t{want}\tn={n}\tnnz={}\tAMD flops={base} maxcol={}",
+            pat.nnz(),
+            ac.iter().max().unwrap()
+        );
+        let t = Instant::now();
+        let ship = order(pat);
+        let ship_s = t.elapsed().as_secs_f64();
+        let ship_f = flops_of(&sp, &ship);
+        println!(
+            "POCKET\t{want}\tshipped flops={ship_f} ratio={:.4} ({ship_s:.3} s)",
+            ship_f as f64 / base as f64
+        );
+        let mut price = |tag: &str, mk: &dyn Fn() -> Vec<i32>| {
+            let t = Instant::now();
+            let perm: Vec<usize> = mk().into_iter().map(|x| x as usize).collect();
+            let ord_s = t.elapsed().as_secs_f64();
+            let bij = is_bijection(&perm, n);
+            let f = flops_of(&sp, &perm);
+            let pp = permute_pattern(&sp, &perm);
+            let e = EliminationTree::from_pattern(&pp);
+            let c = column_counts_gnp(&pp, &e);
+            println!(
+                "POCKET\t{want}\t{tag}\tbij={bij}\tflops={f}\tratio={:.4}\tmaxcol={}\tord={ord_s:.3}s",
+                f as f64 / base as f64,
+                c.iter().max().unwrap()
+            );
+        };
+        price("minfill", &|| minfill_order(pat));
+        price("nd", &|| nd_order(pat));
+        price("ndfm", &|| ndfm_order(pat));
+        price("metis", &|| {
+            feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
+                .map(|(p, ..)| p)
+                .unwrap()
+        });
+        price("scotch", &|| feral_scotch::scotch_order(&core).unwrap());
+    }
+    println!("POCKET DONE");
+}
+
+/// Arm A — MinFill (+relabels, the 0010 form) on the pocket band.
+/// Pockets (gasprod x2, rsyn x13 — MinFill-gated or relabel-starved)
+/// PLUS generically every dev row with n>=3000, nnz in 12k..250k, sparse
+/// (nnz<8n): structural band gate, never family-named. Per row:
+/// deterministic MinFill + relabelled seeds on the shipped budget scaling
+/// (MINFILL_RELABEL_BUDGET/nnz clamped 2..8), best-of vs AMD; per-pass
+/// wall time recorded for substitutive pricing. Crown comparison done by
+/// offline join (ratios already measured) — no order() rerun needed.
+/// Offline only, never ships, zero cap risk.
+#[test]
+#[ignore]
+fn probe_minfill_band() {
+    let pockets = [
+        "pooling_foulds5pq",
+        "pooling_foulds4pq",
+        "pooling_rt2tp",
+        "gasprod_sarawak16",
+        "gasprod_sarawak81",
+        "rsyn0805m03m",
+        "rsyn0810m02hfsg",
+        "rsyn0810m04m",
+        "rsyn0815m",
+        "rsyn0815m02hfsg",
+        "rsyn0815m04m",
+        "rsyn0820m02m",
+        "rsyn0820m04m",
+        "rsyn0830hfsg",
+        "rsyn0830m04m",
+        "rsyn0840m",
+        "rsyn0840m02m",
+        "rsyn0840m04m",
+    ];
+    let corpus = crate::corpus::corpus();
+    // Generic band selection (structural only).
+    let mut names: Vec<String> = pockets.iter().map(|s| s.to_string()).collect();
+    for (name, pat) in &corpus {
+        let (n, nnz) = (pat.n, pat.nnz());
+        if n >= 3_000 && (12_000..250_000).contains(&nnz) && nnz < 8 * n {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+    }
+    names.sort();
+    println!("MINFILLBAND rows={}", names.len());
+    for want in &names {
+        let (_, pat) = match corpus.iter().find(|(name, _)| name == want) {
+            Some(found) => found,
+            None => {
+                println!("MINFILLBAND\t{want}\tMISSING");
+                continue;
+            }
+        };
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = match feral_ordering_core::CscPattern::new(n, &cp, &ri) {
+            Some(c) => c,
+            None => {
+                println!("MINFILLBAND\t{want}\tCORE-ERR");
+                continue;
+            }
+        };
+        let amd: Vec<usize> = match feral_amd::amd_order(&core) {
+            Ok(p) => p.into_iter().map(|x| x as usize).collect(),
+            Err(_) => {
+                println!("MINFILLBAND\t{want}\tAMD-ERR");
+                continue;
+            }
+        };
+        let base = flops_of(&sp, &amd);
+        // Deterministic + relabelled seeds on shipped budget scaling.
+        let restarts: u64 = if n <= 1_000 && nnz <= 5_000 {
+            24
+        } else if n < 2_000 && nnz < 10_000 {
+            6
+        } else {
+            (MINFILL_RELABEL_BUDGET / nnz.max(1)).clamp(2, 8) as u64
+        };
+        let mut best_f = flops_of(&sp, &minfill_order(pat).into_iter().map(|x| x as usize).collect::<Vec<_>>());
+        let mut best_src = "det".to_string();
+        let mut worst_s = 0.0f64;
+        for seed in 1..=restarts {
+            let q = relabel(n, seed);
+            let b = permute_pattern(&sp, &q);
+            let b_pat = Pattern {
+                n,
+                col_ptr: b.col_ptr,
+                row_idx: b.row_idx,
+            };
+            let t = Instant::now();
+            let pb: Vec<usize> = minfill_order(&b_pat)
+                .into_iter()
+                .map(|x| q[x as usize])
+                .collect();
+            let s = t.elapsed().as_secs_f64();
+            if s > worst_s {
+                worst_s = s;
+            }
+            let f = flops_of(&sp, &pb);
+            if f < best_f {
+                best_f = f;
+                best_src = format!("seed{seed}");
+            }
+        }
+        println!(
+            "MINFILLBAND\t{want}\tn={n}\tnnz={nnz}\trestarts={restarts}\tAMD={base}\tbest={best_f}({best_src}) ratio={:.4} worstpass={worst_s:.3}s",
+            best_f as f64 / base as f64
+        );
+    }
+    println!("MINFILLBAND DONE");
+}
+
+/// Stage-aware border-last probe (staircase hunt, phase 1).
+/// Thesis: on rows with linking/border structure (pooling foulds ties,
+/// gasprod, rsyn band), eliminating the highest-degree border vertices
+/// LAST (Schur-complement order) beats AMD where generic methods stall.
+/// Variants: border = top-k degree vertices at fractions {0.5%,1%,2%,5%},
+/// AMD on the induced remainder, border appended (index order); plus a
+/// border-FIRST sign check. Vs AMD baseline + crown reference.
+/// Offline only, never ships, zero cap risk.
+#[test]
+#[ignore]
+fn probe_stage() {
+    let targets = [
+        "pooling_foulds5pq",
+        "pooling_foulds4pq",
+        "pooling_rt2tp",
+        "gasprod_sarawak16",
+        "gasprod_sarawak81",
+        "rsyn0815m",
+        "rsyn0830m04m",
+        "rsyn0840m04m",
+        "multiplants_stg1c",
+    ];
+    let corpus = crate::corpus::corpus();
+    for want in targets {
+        let (_, pat) = match corpus.iter().find(|(name, _)| name == want) {
+            Some(found) => found,
+            None => {
+                println!("STAGE\t{want}\tMISSING");
+                continue;
+            }
+        };
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        // Static degrees (symmetric pattern).
+        let mut deg = vec![0usize; n];
+        for j in 0..n {
+            let (s, e) = (pat.col_ptr[j], pat.col_ptr[j + 1].min(pat.row_idx.len()));
+            for &i in &pat.row_idx[s..e] {
+                if i != j && i < n {
+                    deg[j] += 1;
+                }
+            }
+        }
+        // AMD baseline.
+        let (cp, ri) = core_of(pat);
+        let base = match feral_ordering_core::CscPattern::new(n, &cp, &ri) {
+            Some(core) => match feral_amd::amd_order(&core) {
+                Ok(p) => {
+                    let perm: Vec<usize> =
+                        p.into_iter().map(|x| x as usize).collect();
+                    flops_of(&sp, &perm)
+                }
+                Err(_) => {
+                    println!("STAGE\t{want}\tAMD-ERR");
+                    continue;
+                }
+            },
+            None => {
+                println!("STAGE\t{want}\tCORE-ERR");
+                continue;
+            }
+        };
+        // Crown reference.
+        let _ = parallel::phase_take();
+        let incumb = order(pat);
+        let crown_f = flops_of(&sp, &incumb);
+        println!(
+            "STAGE\t{want}\tn={n}\tnnz={}\tAMD={base}\tcrown={crown_f} (ratio={:.4})",
+            pat.nnz(),
+            crown_f as f64 / base as f64
+        );
+        // Vertices by (degree desc, index asc); border = top-k.
+        let mut by_deg: Vec<usize> = (0..n).collect();
+        by_deg.sort_by(|&a, &b| deg[b].cmp(&deg[a]).then_with(|| a.cmp(&b)));
+        for frac in [0.005f64, 0.01, 0.02, 0.05] {
+            let k = ((n as f64 * frac) as usize).clamp(1, n.saturating_sub(1));
+            let mut is_border = vec![false; n];
+            for &v in by_deg.iter().take(k) {
+                is_border[v] = true;
+            }
+            // Induced remainder: local index map + CSC.
+            let mut local = vec![usize::MAX; n];
+            let mut rem: Vec<usize> = Vec::new();
+            for v in 0..n {
+                if !is_border[v] {
+                    local[v] = rem.len();
+                    rem.push(v);
+                }
+            }
+            let mut rcp: Vec<i32> = Vec::with_capacity(rem.len() + 1);
+            let mut rri: Vec<i32> = Vec::new();
+            rcp.push(0);
+            for &u in &rem {
+                let (s, e) = (pat.col_ptr[u], pat.col_ptr[u + 1].min(pat.row_idx.len()));
+                for &w in &pat.row_idx[s..e] {
+                    if w < n && !is_border[w] && w != u {
+                        rri.push(local[w] as i32);
+                    }
+                }
+                rcp.push(rri.len() as i32);
+            }
+            // NOTE: unsorted row lists + possible dupes; amd_order validates.
+            let tag = format!("blast-{:.1}", frac * 100.0);
+            match feral_ordering_core::CscPattern::new(rem.len(), &rcp, &rri) {
+                Some(cc) => match feral_amd::amd_order(&cc) {
+                    Ok(p) => {
+                        let mut perm: Vec<usize> =
+                            p.into_iter().map(|x| rem[x as usize]).collect();
+                        for v in 0..n {
+                            if is_border[v] {
+                                perm.push(v);
+                            }
+                        }
+                        if perm.len() == n {
+                            let f = flops_of(&sp, &perm);
+                            println!(
+                                "STAGE\t{want}\t{tag}\tk={k}\tflops={f} ratio={:.4} {}",
+                                f as f64 / base as f64,
+                                if f < crown_f { "BEATS-CROWN" } else { "" }
+                            );
+                        }
+                    }
+                    Err(_) => println!("STAGE\t{want}\t{tag}\tAMD-ERR"),
+                },
+                None => println!("STAGE\t{want}\t{tag}\tCORE-ERR"),
+            }
+            // Border-FIRST sign check (same machinery, border prepended).
+            let tagf = format!("bfirst-{:.1}", frac * 100.0);
+            match feral_ordering_core::CscPattern::new(rem.len(), &rcp, &rri) {
+                Some(cc) => match feral_amd::amd_order(&cc) {
+                    Ok(p) => {
+                        let mut perm: Vec<usize> = Vec::with_capacity(n);
+                        for v in 0..n {
+                            if is_border[v] {
+                                perm.push(v);
+                            }
+                        }
+                        for x in p {
+                            perm.push(rem[x as usize]);
+                        }
+                        if perm.len() == n {
+                            let f = flops_of(&sp, &perm);
+                            println!(
+                                "STAGE\t{want}\t{tagf}\tk={k}\tflops={f} ratio={:.4}",
+                                f as f64 / base as f64
+                            );
+                        }
+                    }
+                    Err(_) => {}
+                },
+                None => {}
+            }
+        }
+    }
+    println!("STAGE DONE");
+}

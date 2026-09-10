@@ -1,3 +1,7 @@
+[0146: adaptive terminal windows](experiments/0146-adaptive-terminal-windows.md):
+untouched dev baseline **0.793834**; diagnostic **0.793730689**, 38 wins / 0 losses,
+119 active tests pass; official full-corpus Yukon score **0.793731**, all gates pass.
+
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so

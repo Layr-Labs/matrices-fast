@@ -113,6 +113,57 @@ fn reconstruct(
 }
 
 fn mcs_peo(adj: &[Vec<u32>], incumbent: &[usize], reverse_adj: bool) -> Vec<usize> {
+    // Keep only the live entry for each vertex. Removing obsolete entries
+    // eagerly preserves the old lazy stack's LIFO order among valid entries,
+    // but bounds queue storage by n rather than the completion's edge count.
+    let n = adj.len();
+    const NONE: usize = usize::MAX;
+    let mut head = vec![NONE; n + 1];
+    let mut next = vec![NONE; n];
+    let mut previous = vec![NONE; n];
+    let mut weight = vec![0usize; n];
+    for (i, &v) in incumbent.iter().enumerate() {
+        if i == 0 { head[0] = v; }
+        if i > 0 { previous[v] = incumbent[i - 1]; }
+        if i + 1 < n { next[v] = incumbent[i + 1]; }
+    }
+    let mut maximum = 0;
+    let mut visit = Vec::with_capacity(n);
+    while visit.len() < n {
+        while head[maximum] == NONE {
+            if maximum == 0 { visit.reverse(); return visit; }
+            maximum -= 1;
+        }
+        let v = head[maximum];
+        head[maximum] = next[v];
+        if next[v] != NONE { previous[next[v]] = NONE; }
+        weight[v] = NONE;
+        visit.push(v);
+        for offset in 0..adj[v].len() {
+            let index = if reverse_adj { adj[v].len() - 1 - offset } else { offset };
+            let u = adj[v][index] as usize;
+            let old = weight[u];
+            if old == NONE { continue; }
+            let before = previous[u];
+            let after = next[u];
+            if before == NONE { head[old] = after; } else { next[before] = after; }
+            if after != NONE { previous[after] = before; }
+            let new = old + 1;
+            let first = head[new];
+            previous[u] = NONE;
+            next[u] = first;
+            if first != NONE { previous[first] = u; }
+            head[new] = u;
+            weight[u] = new;
+            maximum = maximum.max(new);
+        }
+    }
+    visit.reverse();
+    visit
+}
+
+#[cfg(test)]
+fn mcs_peo_reference(adj: &[Vec<u32>], incumbent: &[usize], reverse_adj: bool) -> Vec<usize> {
     let n = adj.len();
     let mut weight = vec![0usize; n];
     let mut visited = vec![false; n];
@@ -156,6 +207,30 @@ mod tests {
     use super::*;
     use super::super::{column_counts_gnp, flops_of, is_bijection,
         permute_pattern, EliminationTree, ScoringPattern};
+
+    #[test]
+    fn intrusive_mcs_matches_lazy_stack_with_both_tie_orders() {
+        for n in [0, 1, 6, 17, 65, 257] {
+            for sample in 0..12 {
+                let mut adj = vec![Vec::new(); n];
+                for v in 0..n {
+                    for u in v + 1..n {
+                        if (v * 31 + u * 17 + sample * 13) % 19 <= sample {
+                            adj[v].push(u as u32);
+                            adj[u].push(v as u32);
+                        }
+                    }
+                }
+                for row in &mut adj { if sample % 2 == 0 { row.reverse(); } }
+                let mut seed: Vec<_> = (0..n).collect();
+                if n > 0 { seed.rotate_left(sample % n); }
+                if sample % 3 == 0 { seed.reverse(); }
+                for reverse in [false, true] {
+                    assert_eq!(mcs_peo(&adj, &seed, reverse), mcs_peo_reference(&adj, &seed, reverse));
+                }
+            }
+        }
+    }
 
     fn pattern(adj: &[Vec<bool>]) -> ScoringPattern {
         let mut cp = vec![0];

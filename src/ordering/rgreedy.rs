@@ -40,7 +40,7 @@
 
 mod window_dp;
 mod window_signatures;
-pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step};
+pub(crate) use window_dp::{adaptive_window_descent, subset_window_descent, subset_window_descent_step};
 
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
     fn mul(words: &mut [u64; 6], factor: u64) {

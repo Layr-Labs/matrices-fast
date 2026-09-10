@@ -191,10 +191,10 @@ const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
 /// (n + nnz) against 0.039 us per Lnnz, i.e. the two terms cost the same per unit -
 /// not the 5:1 the above-gate ledger assumes - so this law charges them equally and
 /// the allowance is set in measured time: 4M units is about 140 ms on the dev host.
-const PEO_ALT_LEDGER: u64 = 4_000_000;
-const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
+/// Depth of the retained runner-up ordering ledger. The alternate-seed chain
+/// that once consumed it is retired (see "STAGE 13 RETIRED"), but the terminal
+/// transplant still draws its donors from this pool, so the depth stays.
 const PEO_ALT_SEEDS: usize = 8;
-const PEO_ALT_MAX_N: usize = 50_000;
 /// Ranked-subtree chain (first round and its conditional follow-ups) ceiling.
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
@@ -1171,10 +1171,6 @@ fn flush_batch<'a>(
         let (Some(f), Some(perm)) = (r.flops, r.perm) else {
             continue;
         };
-        #[cfg(test)]
-        probe::alt_lineage::note_scored(f, &perm);
-        #[cfg(test)]
-        probe::alt_lineage::note_consider(f, &perm, *best_flops, &best_perm[..]);
         {
             // Retain the best few displaced orderings. A chain started from a
             // different ordering converges to a different minimal triangulation,
@@ -1224,8 +1220,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     let score_workspace = std::cell::RefCell::new(scoring_ws::ScoreWorkspace::new(n, pattern.nnz()));
     let score = |p: &[usize]| {
         let f = score_workspace.borrow_mut().flops(&scoring_pat, p);
-        #[cfg(test)]
-        probe::alt_lineage::note_scored(f, p);
         f
     };
 
@@ -3826,55 +3820,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     parallel::phase_mark("12.peo", _tph, best_flops);
     #[cfg(test)]
     let _tph = std::time::Instant::now();
-    // A stalled chain has reached a minimal triangulation, so more cleanup cannot help;
-    // a different starting ordering can, because it converges somewhere else. The seeds
-    // are orderings the portfolio already built and discarded, so only the rounds cost
-    // anything, and they are charged against one shared allowance under the measured law.
-    #[cfg(test)]
-    probe::alt_lineage::capture_entry(n, nnz, &best_perm, &runner_up.borrow());
-    // Alternate-seed chains are gated to n <= PEO_ALT_MAX_N as well: on every
-    // dev row above it (acopf 0.39 s, transswitch 0.21-0.24 s, unitcommit
-    // 0.21 s) the chains ran to their ledger and changed nothing, while all of
-    // their measured wins sit at n < 50k (mpbp_34 -0.19, mpbp_35 -0.08,
-    // arki0013 -0.05, gabriel09 -0.03).
-    // iter75: narrow PEO_ALT skip to lee1_07 band only (3k≤n<8k nnz≥9k).
-    // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
-    // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.
-    let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 9_000;
-    if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
-        && !peo_alt_danger
-    {
-        let seeds = runner_up.borrow().clone();
-        if !seeds.is_empty() {
-            let mut ledger: u64 = 0;
-            let mut leader_flops = score(&best_perm);
-            for (_, seed) in seeds {
-                let mut cur = seed;
-                let mut cur_flops = u64::MAX;
-                for _ in 0..8 {
-                    let pp = permute_pattern(&scoring_pat, &cur);
-                    let et = EliminationTree::from_pattern(&pp);
-                    let counts = column_counts_gnp(&pp, &et);
-                    let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
-                    let cost = n as u64 + nnz as u64 + lnnz;
-                    if ledger + cost > PEO_ALT_LEDGER { break; }
-                    ledger += cost;
-                    let Some(cands) = peo_extract::candidates_bounded(
-                        n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &cur,
-                        usize::MAX, usize::MAX, PEO_ALT_MAX_LNNZ,
-                    ) else { break; };
-                    let inc: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
-                    let mut fin = inc;
-                    for c in cands { let f = score(&c); if f < fin { fin = f; cur = c; } }
-                    cur_flops = fin;
-                    if fin == inc { break; }
-                }
-                if cur_flops < leader_flops { leader_flops = cur_flops; best_perm = cur; }
-                if ledger >= PEO_ALT_LEDGER { break; }
-            }
-        }
-    }
-
+    // ── STAGE 13 RETIRED: alternate-seed PEO chains ────────────────────────
+    // Retiring the stage also deletes the last identity-keyed predicate on
+    // this path: the `peo_alt_danger` skip window `(3_000..8_000) && nnz >=
+    // 9_000`, whose own comment named the dev families it was drawn around.
     #[cfg(test)]
     parallel::phase_mark("13.alt", _tph, best_flops);
     #[cfg(test)]

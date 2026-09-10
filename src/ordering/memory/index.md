@@ -1,3 +1,8 @@
+[0152: retire stage 13, the alternate-seed PEO chains](experiments/0152-stage13-retirement-isolated.md):
+dev **0.792439 -> 0.792452** (-0.164 rel bip, 4 rows worse), corpus time
+145.95 -> 138.46 s, worst row 1.315 -> 1.161 s, rows over 1.0 s 14 -> 10. Also
+deletes the `peo_alt_danger` identity window.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

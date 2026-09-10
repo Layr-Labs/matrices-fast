@@ -20,7 +20,6 @@ use std::time::Instant;
 mod core_lineage;
 pub(super) mod minfill_cost;
 mod wide_core;
-pub(super) mod alt_lineage;
 
 /// Buckets exactly as the harness does (lt_1k / 1k_10k / gt_10k).
 fn bucket(n: usize) -> usize {

@@ -4496,8 +4496,57 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let flops = score(&candidate);
+            if flops < best_flops {
+                best_flops = flops;
                 best_perm = candidate;
+            }
+        }
+
+        // Two broader versions of this terminal chain exceeded the hidden
+        // wall-clock cap. Keep only the low-width passes that still improved
+        // the finished incumbent with an 8M allowance apiece. Their combined
+        // allowance is 24M, or 32M on tiny rows with the extra width-12 pass.
+        let safe_chain: &[(usize, usize, usize, i64)] = &[
+            (6, 4, 1, 8_000_000),
+            (7, 4, 3, 8_000_000),
+            (8, 4, 3, 8_000_000),
+        ];
+        if n <= 3_000 && nnz <= 80_000 {
+            for &(width, sweeps, step, budget) in safe_chain {
+                if let Some(candidate) = rgreedy::subset_window_descent_step(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    width,
+                    sweeps,
+                    step,
+                    budget,
+                ) {
+                    let flops = score(&candidate);
+                    if flops < best_flops {
+                        best_flops = flops;
+                        best_perm = candidate;
+                    }
+                }
+            }
+        }
+        if n <= 512 && nnz <= 80_000 {
+            if let Some(candidate) = rgreedy::subset_window_descent_step(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                12,
+                4,
+                1,
+                8_000_000,
+            ) {
+                let flops = score(&candidate);
+                if flops < best_flops {
+                    best_perm = candidate;
+                }
             }
         }
     }

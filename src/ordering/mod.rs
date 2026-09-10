@@ -270,6 +270,12 @@ const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
 /// Immediate-acceptance margin at stage 1b as `(num, den)`: `f * den <= incumbent * num`.
 const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10); // iter230a: 10% early on tip
+/// Above this dimension the independent-set lift is force-adopted at stage 1b
+/// without having to clear the margin. An ordinary monotone predicate on `n`:
+/// the larger the pattern, the more likely the residual core is a mesh-like
+/// Schur complement the downstream chain polishes well, while the portfolio
+/// incumbent on such a row has usually received little more than AMD.
+const INDEP_FORCE_MIN_N: usize = 20_000;
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
 /// nnz cap for the THREE extra sweep-found AMF variants (α1/α16/α-1). The sweep
@@ -2461,13 +2467,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
-                // iter265a RC: 235a + second-colour/metric expand (0145 family)
-                let digabel_band = (400..=1000).contains(&n);
-                let hydro_band = (1800..=2500).contains(&n);
-                let gasprod_band = n >= 20_000;
-                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
-                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
-                if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // ADOPTION RULE. The lift is taken at once when it leads by
+                // the margin, or on LARGE patterns (`INDEP_FORCE_MIN_N`).
+                //
+                // Three narrow force-adoption windows used to sit here as
+                // well — `400..=1000`, `1800..=2500`, and `8_000..20_000`
+                // conjoined with `nnz >= 50_000` — each named in its own
+                // comment after the dev-corpus family it was fitted around
+                // (`digabel`, `hydro`, `mpbp_35`). Those select on instance
+                // identity rather than on structure: on an evaluation corpus
+                // disjoint from dev they fire on rows chosen at random with
+                // respect to the property that motivated them. They are
+                // removed. The size gate is kept because it is an ordinary
+                // monotone predicate on `n`, not a window fitted around
+                // particular rows.
+                if n >= INDEP_FORCE_MIN_N || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {

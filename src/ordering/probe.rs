@@ -3124,3 +3124,645 @@ fn probe_indep_timing() {
         }
     }
 }
+
+
+/// 0147: where is the remaining slack in `lt_1k` (0.887390, the weakest bucket)?
+/// Lists every row whose shipped ordering only ties raw AMD, with its size and
+/// its `order()` wall time, so the tie set can be split into "provably optimal"
+/// (n <= 20, settled by exact DP) and "unexplored".
+#[test]
+#[ignore]
+fn probe_lt1k_tie_census() {
+    let corpus = crate::corpus::corpus();
+    let mut ties: Vec<(String, usize, usize, f64, f64)> = Vec::new();
+    let mut rows = 0usize;
+    let mut log_sum = 0.0f64;
+    let mut near: Vec<(String, usize, usize, f64, f64)> = Vec::new();
+    let mut slowest = 0.0f64;
+    let mut slowest_row = String::new();
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n >= 1_000 {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let t0 = Instant::now();
+        let perm = order(pat);
+        let secs = t0.elapsed().as_secs_f64();
+        let ship = flops_of(&sp, &perm) as f64;
+        let ratio = ship / amd;
+        rows += 1;
+        log_sum += ratio.ln();
+        if secs > slowest {
+            slowest = secs;
+            slowest_row = name.clone();
+        }
+        if ratio >= 0.99999 {
+            ties.push((name.clone(), n, pat.nnz(), ratio, secs));
+        } else if ratio >= 0.98 {
+            near.push((name.clone(), n, pat.nnz(), ratio, secs));
+        }
+    }
+
+    ties.sort_by_key(|t| t.1);
+    println!("--- exact ties with raw AMD ---");
+    let mut small = 0usize;
+    let mut tie_time = 0.0f64;
+    for (name, n, nnz, r, s) in &ties {
+        if *n <= 20 {
+            small += 1;
+        }
+        tie_time += s;
+        println!("TIE\t{name}\tn={n}\tnnz={nnz}\tratio={r:.6}\torder={s:.3}s");
+    }
+    println!("\n--- within 2% of AMD (not tied) ---");
+    for (name, n, nnz, r, s) in &near {
+        println!("NEAR\t{name}\tn={n}\tnnz={nnz}\tratio={r:.6}\torder={s:.3}s");
+    }
+    println!("\nLT1K_ROWS = {rows}");
+    println!("LT1K_GEOMEAN = {:.6}", (log_sum / rows as f64).exp());
+    println!("LT1K_TIES = {}", ties.len());
+    println!("LT1K_TIES_N_LE_20_PROVABLY_OPTIMAL = {small}");
+    println!("LT1K_TIES_UNEXPLORED = {}", ties.len() - small);
+    println!("LT1K_TIE_ORDER_TIME = {tie_time:.2} s");
+    println!("LT1K_NEAR_TIES = {}", near.len());
+    println!("LT1K_SLOWEST = {slowest_row} at {slowest:.3} s");
+}
+
+
+/// 0147b: oracle search on the `lt_1k` rows that only tie raw AMD. Spends
+/// seconds per row — far beyond any shippable budget — on perturb + plateau +
+/// paired-swap local search from the shipped ordering. If a budget 10x the cap
+/// cannot beat AMD on these rows, the tie set is locked and the bucket is done.
+#[test]
+#[ignore]
+fn probe_lt1k_tie_oracle() {
+    let budget = std::time::Duration::from_secs_f64(6.0);
+    let targets = [
+        "clay0203m", "slay04m", "sssd15-04", "hybriddynamic_fixed", "maxmin",
+        "wastepaper6", "clay0204m", "slay05m", "clay0304m", "sssd18-08persp",
+        "slay06m", "sssd25-08", "slay07m", "chain200", "slay08m",
+    ];
+    let corpus = crate::corpus::corpus();
+    let mut moved = 0usize;
+    let mut tried = 0usize;
+
+    for (name, pat) in &corpus {
+        if !targets.contains(&name.as_str()) {
+            continue;
+        }
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let ship = order(pat);
+        let mut best = flops_of(&sp, &ship) as f64;
+        let start_best = best;
+        let mut best_perm = ship;
+        let mut iters = 0u64;
+        let mut accepted = 0u64;
+        let t0 = Instant::now();
+        let mut seed = 0x5eed_1234u64;
+        while t0.elapsed() < budget {
+            iters += 1;
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let swaps = 2 + (seed >> 59) as usize * 2;
+            let p = perturb(&best_perm, swaps.max(2), seed);
+            let p = plateau_refine(pat, p, true);
+            let p = paired_swap_refine(pat, p);
+            if !is_bijection(&p, n) {
+                continue;
+            }
+            let f = flops_of(&sp, &p) as f64;
+            if f < best - 1e-9 {
+                best = f;
+                best_perm = p;
+                accepted += 1;
+            }
+        }
+        tried += 1;
+        let gain = (start_best - best) / start_best * 100.0;
+        if best < start_best - 1e-9 {
+            moved += 1;
+        }
+        println!(
+            "ORACLE\t{name}\tn={n}\tship_ratio={:.6}\toracle_ratio={:.6}\tgain={gain:.2}%\titers={iters}\taccepted={accepted}",
+            start_best / amd,
+            best / amd
+        );
+    }
+    println!("\nORACLE_ROWS = {tried}");
+    println!("ORACLE_ROWS_MOVED = {moved}");
+    println!("ORACLE_BUDGET_PER_ROW = 6.0 s (cap is 2.0 s for the whole order())");
+}
+
+
+/// 0148 step 1: which rows reach stage 4b with a winning deferred lift, and
+/// what does `order()` actually cost on THIS box? The frontier's "gate it to
+/// rows under ~0.6 s" is written in its author's seconds; this measures ours.
+#[test]
+#[ignore]
+fn probe_indep_4b_census() {
+    use std::sync::atomic::Ordering as AtOrd;
+    let corpus = crate::corpus::corpus();
+    let mut wins: Vec<(String, usize, usize, f64)> = Vec::new();
+    let mut worst = 0.0f64;
+    let mut worst_row = String::new();
+
+    for (name, pat) in &corpus {
+        if pat.n < 1_000 {
+            continue;
+        }
+        super::probe_counters::INDEP_4B_WINS.store(0, AtOrd::Relaxed);
+        super::probe_counters::INDEP_4B_LOSSES.store(0, AtOrd::Relaxed);
+        let t0 = Instant::now();
+        let _perm = order(pat);
+        let secs = t0.elapsed().as_secs_f64();
+        let w = super::probe_counters::INDEP_4B_WINS.load(AtOrd::Relaxed);
+        let l = super::probe_counters::INDEP_4B_LOSSES.load(AtOrd::Relaxed);
+        if secs > worst {
+            worst = secs;
+            worst_row = name.clone();
+        }
+        if w > 0 {
+            wins.push((name.clone(), pat.n, pat.nnz(), secs));
+            println!("4B_WIN\t{name}\tn={}\tnnz={}\torder={secs:.3}s", pat.n, pat.nnz());
+        } else if l > 0 {
+            println!("4b_loss\t{name}\tn={}\tnnz={}\torder={secs:.3}s", pat.n, pat.nnz());
+        }
+    }
+
+    wins.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+    println!("\n--- rows that would newly pay a subtree pass, cheapest first ---");
+    for (name, n, nnz, s) in &wins {
+        let headroom = 2.0 - s;
+        println!("PAY\t{name}\tn={n}\tnnz={nnz}\torder={s:.3}s\theadroom={headroom:.3}s");
+    }
+    println!("\nFOURB_WIN_ROWS = {}", wins.len());
+    println!("FOURB_WIN_UNDER_0_6S = {}", wins.iter().filter(|w| w.3 < 0.6).count());
+    println!("FOURB_WIN_UNDER_1_0S = {}", wins.iter().filter(|w| w.3 < 1.0).count());
+    println!("CORPUS_WORST = {worst_row} at {worst:.3} s");
+}
+
+
+
+
+/// 0149: the same census as 0147, run where the weight is. `1k_10k` (0.30) and
+/// `gt_10k` (0.40) together carry 70% of the board, so a row moved here is
+/// worth basis points that `lt_1k` cannot pay.
+#[test]
+#[ignore]
+fn probe_mid_high_tie_census() {
+    let corpus = crate::corpus::corpus();
+    let mut rows: Vec<(String, usize, usize, f64, f64, usize)> = Vec::new();
+    let mut log_sum = [0.0f64; 3];
+    let mut counts = [0usize; 3];
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n < 1_000 {
+            continue;
+        }
+        let b = bucket(n);
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect::<Vec<_>>(),
+        ) as f64;
+        let t0 = Instant::now();
+        let perm = order(pat);
+        let secs = t0.elapsed().as_secs_f64();
+        let ratio = flops_of(&sp, &perm) as f64 / amd;
+        log_sum[b] += ratio.ln();
+        counts[b] += 1;
+        rows.push((name.clone(), n, pat.nnz(), ratio, secs, b));
+    }
+
+    for b in 1..3 {
+        let geo = (log_sum[b] / counts[b] as f64).exp();
+        let mut bucket_rows: Vec<_> = rows.iter().filter(|r| r.5 == b).collect();
+        bucket_rows.sort_by(|a, c| c.3.partial_cmp(&a.3).unwrap());
+        let ties = bucket_rows.iter().filter(|r| r.3 >= 0.99999).count();
+        let near = bucket_rows.iter().filter(|r| r.3 >= 0.98 && r.3 < 0.99999).count();
+        let above = bucket_rows.iter().filter(|r| r.3 > geo).count();
+        println!("\n===== {} : geomean {:.6}, {} rows =====", BUCKET_NAMES[b], geo, counts[b]);
+        println!("TIES = {ties}   NEAR_TIES = {near}   ABOVE_GEOMEAN = {above}");
+        println!("--- worst 20 by ratio ---");
+        for (name, n, nnz, r, s, _) in bucket_rows.iter().take(20) {
+            println!("W\t{}\t{name}\tn={n}\tnnz={nnz}\tratio={r:.6}\torder={s:.3}s", BUCKET_NAMES[b]);
+        }
+    }
+
+    // Family view: rows sharing a prefix before the first digit run.
+    let mut fam: std::collections::BTreeMap<String, (usize, f64, f64, f64)> = Default::default();
+    for (name, _n, _nnz, r, s, b) in rows.iter() {
+        let key: String = name.chars().take_while(|c| !c.is_ascii_digit()).collect();
+        let e = fam.entry(format!("{}[{}]", key, BUCKET_NAMES[*b])).or_insert((0, 0.0, 0.0, 0.0));
+        e.0 += 1;
+        e.1 += r.ln();
+        e.2 += s;
+        e.3 = e.3.max(*r);
+    }
+    println!("\n--- families of 2+ rows, worst mean ratio first ---");
+    let mut fams: Vec<_> = fam.into_iter().filter(|(_, v)| v.0 >= 2).collect();
+    fams.sort_by(|a, b| (b.1.1 / b.1.0 as f64).partial_cmp(&(a.1.1 / a.1.0 as f64)).unwrap());
+    for (k, (c, ls, ts, worst)) in fams.iter().take(18) {
+        println!("FAM\t{k}\trows={c}\tmean_ratio={:.6}\tworst={worst:.6}\ttime={ts:.2}s", (ls / *c as f64).exp());
+    }
+}
+
+
+/// 0149b: portfolio oracle on the tie mass in the weighted buckets. 0147 showed
+/// swap-neighbourhood search is useless on ties, so this arm is structural
+/// instead: every metric variant at several dense_alphas, min-fill, and a deep
+/// subtree chain on the best of them, all far past any shippable budget.
+#[test]
+#[ignore]
+fn probe_weighted_tie_oracle() {
+    use custom_metrics::ScoreVariant::*;
+    let targets = [
+        "squfl015-080persp", "squfl025-030", "squfl015-060", "squfl020-150",
+        "squfl010-080", "squfl010-040persp", "squfl025-025persp", "squfl030-150",
+        "emfl100_3_3", "emfl100_5_5", "emfl050_5_5", "knp5-44", "knp5-43",
+        "chain400", "hydroenergy1", "pooling_foulds5pq", "supplychainr1_053050",
+        "kissing2", "watercontamination0303r", "camshape400", "polygon75",
+    ];
+    let variants = [SqDiv, SqPure, Ammf, AmindNorm, DegSqrt, DegP075, DegP125,
+        DegDivNvSqrtWf, DegDivNvWfP15, DegPlusDegme, DegDivNvDegme];
+    let alphas = [-1.0f64, 5.0, 10.0, 20.0, 40.0];
+    let corpus = crate::corpus::corpus();
+    let mut moved = 0usize;
+    let mut tried = 0usize;
+
+    for (name, pat) in &corpus {
+        if !targets.contains(&name.as_str()) {
+            continue;
+        }
+        let n = pat.n;
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect::<Vec<_>>(),
+        ) as f64;
+        let ship = flops_of(&sp, &order(pat)) as f64;
+
+        let t0 = Instant::now();
+        let mut best = ship;
+        let mut best_arm = "ship".to_string();
+        let mut best_perm: Vec<usize> = order(pat);
+
+        for &aggressive in &[true, false] {
+            for &alpha in &alphas {
+                for &v in &variants {
+                    if let Ok(p) = custom_metrics::order_variant(&core, alpha, aggressive, v) {
+                        let perm: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                        if !is_bijection(&perm, n) { continue; }
+                        let f = flops_of(&sp, &perm) as f64;
+                        if f < best {
+                            best = f;
+                            best_arm = format!("{v:?}/a{alpha}/agg{aggressive}");
+                            best_perm = perm;
+                        }
+                    }
+                }
+            }
+        }
+        let mf: Vec<usize> = minfill_order(pat).into_iter().map(|x| x as usize).collect();
+        if is_bijection(&mf, n) {
+            let f = flops_of(&sp, &mf) as f64;
+            if f < best { best = f; best_arm = "minfill".into(); best_perm = mf; }
+        }
+
+        // Deep subtree chain on the best structural candidate, way over budget.
+        let permuted = permute_pattern(&sp, &best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut cand: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+        let pp = permute_pattern(&sp, &cand);
+        let pe = EliminationTree::from_pattern(&pp);
+        let counts: Vec<u32> = column_counts_gnp(&pp, &pe).into_iter().map(|c| c as u32).collect();
+        let parent: Vec<i32> = pe.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+        let mut cfg = subtree_cfg_for(n, pat.nnz());
+        cfg.max_blocks = 64;
+        cfg.budget = 16_000_000;
+        cfg.max_s = 1_200;
+        cfg.streams = 4;
+        for round in 0..4usize {
+            cfg.round = round;
+            let imp = rgreedy::subtree_refine(n, &pat.col_ptr, &pat.row_idx, &mut cand, &counts, &parent, cfg);
+            if imp > 0 && is_bijection(&cand, n) {
+                let f = flops_of(&sp, &cand) as f64;
+                if f < best { best = f; best_arm = format!("{best_arm}+subtree(r{round})"); }
+            }
+        }
+
+        tried += 1;
+        if best < ship - 1e-9 { moved += 1; }
+        println!(
+            "ORACLE2\t{name}\tn={n}\tship={:.6}\toracle={:.6}\tgain={:.3}%\tarm={best_arm}\tspent={:.2}s",
+            ship / amd, best / amd, (ship - best) / ship * 100.0, t0.elapsed().as_secs_f64()
+        );
+    }
+    println!("\nORACLE2_ROWS = {tried}");
+    println!("ORACLE2_ROWS_MOVED = {moved}");
+}
+
+
+/// 0150: does ANY ranked-block geometry move the six largest gt_10k graphs?
+/// The chain is off above SUBTREE_CHAIN_MAX_N because blocks capped at
+/// max_s 1200 do nothing there. This sweeps blocks scaled to the graph.
+#[test]
+#[ignore]
+fn probe_huge_row_geometry() {
+    let targets = [
+        "acopf_case9241pegase_qcqp", "unitcommit_200_100_1_mod_8",
+        "transswitch2383wpr", "faclay75", "gabriel10", "transswitch2736spr",
+    ];
+    let corpus = crate::corpus::corpus();
+    let mut moved = 0usize;
+    let mut tried = 0usize;
+
+    for (name, pat) in &corpus {
+        if !targets.contains(&name.as_str()) {
+            continue;
+        }
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect::<Vec<_>>(),
+        ) as f64;
+        let ship = order(pat);
+        let ship_f = flops_of(&sp, &ship) as f64;
+
+        // Chain preamble, exactly as production builds it.
+        let permuted = permute_pattern(&sp, &ship);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let base_cand: Vec<usize> = post.iter().map(|&j| ship[j]).collect();
+        let pp = permute_pattern(&sp, &base_cand);
+        let pe = EliminationTree::from_pattern(&pp);
+        let counts: Vec<u32> = column_counts_gnp(&pp, &pe).into_iter().map(|c| c as u32).collect();
+        let parent: Vec<i32> = pe.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+        let post_f = flops_of(&sp, &base_cand) as f64;
+
+        let mut best = ship_f.min(post_f);
+        let mut best_cfg = String::from("none");
+        let mut best_secs = 0.0f64;
+
+        let max_s_list = [2_000usize, 8_000, 32_000, (n / 64).max(1_024)];
+        for &max_s in &max_s_list {
+            for &min_s in &[64usize, 512] {
+                for &max_blocks in &[4usize, 16] {
+                    for &budget in &[4_000_000i64, 32_000_000] {
+                        let mut cfg = rgreedy::SubCfg {
+                            min_s,
+                            max_s,
+                            max_sub: 1_600,
+                            max_blocks,
+                            budget,
+                            streams: 1,
+                            rank_blocks: true,
+                            round: 0,
+                        };
+                        let mut cand = base_cand.clone();
+                        let t0 = Instant::now();
+                        let mut imp = rgreedy::subtree_refine(
+                            n, &pat.col_ptr, &pat.row_idx, &mut cand, &counts, &parent, cfg,
+                        );
+                        if imp == 0 {
+                            cfg.round = 2;
+                            imp = rgreedy::subtree_refine(
+                                n, &pat.col_ptr, &pat.row_idx, &mut cand, &counts, &parent, cfg,
+                            );
+                        }
+                        let secs = t0.elapsed().as_secs_f64();
+                        if imp > 0 && is_bijection(&cand, n) {
+                            let f = flops_of(&sp, &cand) as f64;
+                            if f < best {
+                                best = f;
+                                best_cfg = format!("max_s={max_s},min_s={min_s},blocks={max_blocks},budget={budget}");
+                                best_secs = secs;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        tried += 1;
+        if best < ship_f - 1e-9 { moved += 1; }
+        println!(
+            "GEO\t{name}\tn={n}\tnnz={nnz}\tship={:.6}\tbest={:.6}\tgain={:.3}%\tcfg={best_cfg}\tcost={best_secs:.2}s",
+            ship_f / amd, best / amd, (ship_f - best) / ship_f * 100.0
+        );
+    }
+    println!("\nGEO_ROWS = {tried}");
+    println!("GEO_ROWS_MOVED = {moved}");
+}
+
+
+/// 0150b: cascade the winning geometry (min_s 64, 16 ranked blocks, 32M budget,
+/// max_s ~ n/64 floored at 1024) on EVERY row the chain currently refuses,
+/// repeating until it stops paying. Reports total gain and total added seconds.
+#[test]
+#[ignore]
+fn probe_huge_row_cascade() {
+    let corpus = crate::corpus::corpus();
+    let mut log_gain = 0.0f64;
+    let mut moved = 0usize;
+    let mut rows = 0usize;
+    let mut worst_cost = 0.0f64;
+    let mut worst_row = String::new();
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n <= SUBTREE_CHAIN_MAX_N {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core).unwrap().into_iter().map(|x| x as usize).collect::<Vec<_>>(),
+        ) as f64;
+        let t_ship = Instant::now();
+        let ship = order(pat);
+        let ship_secs = t_ship.elapsed().as_secs_f64();
+        let ship_f = flops_of(&sp, &ship) as f64;
+
+        let t0 = Instant::now();
+        let mut cur = ship.clone();
+        let mut cur_f = ship_f;
+        let mut passes = 0usize;
+        for round in 0..6usize {
+            let permuted = permute_pattern(&sp, &cur);
+            let etree = EliminationTree::from_pattern(&permuted);
+            let post = etree.postorder();
+            let mut cand: Vec<usize> = post.iter().map(|&j| cur[j]).collect();
+            let pp = permute_pattern(&sp, &cand);
+            let pe = EliminationTree::from_pattern(&pp);
+            let counts: Vec<u32> = column_counts_gnp(&pp, &pe).into_iter().map(|c| c as u32).collect();
+            let parent: Vec<i32> = pe.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+            let cfg = rgreedy::SubCfg {
+                min_s: 64,
+                max_s: (n / 64).max(1_024),
+                max_sub: 1_600,
+                max_blocks: 16,
+                budget: 32_000_000,
+                streams: 1,
+                rank_blocks: true,
+                round,
+            };
+            let imp = rgreedy::subtree_refine(n, &pat.col_ptr, &pat.row_idx, &mut cand, &counts, &parent, cfg);
+            if imp == 0 || !is_bijection(&cand, n) {
+                continue;
+            }
+            let f = flops_of(&sp, &cand) as f64;
+            if f < cur_f {
+                cur_f = f;
+                cur = cand;
+                passes += 1;
+            }
+        }
+        let cost = t0.elapsed().as_secs_f64();
+        rows += 1;
+        if cur_f < ship_f - 1e-9 {
+            moved += 1;
+            log_gain += (cur_f / ship_f).ln();
+        }
+        if cost > worst_cost {
+            worst_cost = cost;
+            worst_row = name.clone();
+        }
+        println!(
+            "CASC\t{name}\tn={n}\tnnz={nnz}\tship={:.6}\tafter={:.6}\tgain={:.3}%\tpasses={passes}\tcost={cost:.2}s\torder={ship_secs:.2}s\ttotal={:.2}s",
+            ship_f / amd, cur_f / amd, (ship_f - cur_f) / ship_f * 100.0, ship_secs + cost
+        );
+    }
+    println!("\nCASC_ROWS = {rows}");
+    println!("CASC_ROWS_MOVED = {moved}");
+    println!("CASC_GT10K_GEOMEAN_FACTOR = {:.6}  (over 45 gt_10k rows)", (log_gain / 45.0).exp());
+    println!("CASC_BOARD_BIP = {:.2}", -0.40 * 0.685397 * (log_gain / 45.0) * 10_000.0);
+    println!("CASC_WORST_COST = {worst_row} at {worst_cost:.2}s");
+}
+
+
+/// 0151: bounded variants of the 0150 cascade. Submission a5e3fd90 FAILED
+/// hidden validation with no score, and the suspect is unbounded work on a row
+/// that never improves (32M budget x 16 blocks x 6 rounds, all paid). Each
+/// variant here breaks on the first non-improving round, so a non-responding
+/// row pays one round, not six.
+#[test]
+#[ignore]
+fn probe_huge_row_bounded() {
+    // (label, rounds, budget, max_blocks)
+    let configs: [(&str, usize, i64, usize); 5] = [
+        ("A r3/8M/b8", 3, 8_000_000, 8),
+        ("B r3/32M/b16", 3, 32_000_000, 16),
+        ("C r6/8M/b8", 6, 8_000_000, 8),
+        ("D r4/16M/b16", 4, 16_000_000, 16),
+        ("E r6/32M/b16-break", 6, 32_000_000, 16),
+    ];
+    let corpus = crate::corpus::corpus();
+    let mut totals: Vec<(String, f64, f64, f64)> = configs
+        .iter()
+        .map(|c| (c.0.to_string(), 0.0, 0.0, 0.0))
+        .collect();
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n <= SUBTREE_CHAIN_MAX_N {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let in_gate = n <= 150_000 && nnz <= 500_000;
+        let sp = scoring_pattern(pat);
+        let ship = order(pat);
+        let ship_f = flops_of(&sp, &ship) as f64;
+
+        for (ci, (label, rounds, budget, blocks)) in configs.iter().enumerate() {
+            let t0 = Instant::now();
+            let mut cur = ship.clone();
+            let mut cur_f = ship_f;
+            for round in 0..*rounds {
+                let permuted = permute_pattern(&sp, &cur);
+                let etree = EliminationTree::from_pattern(&permuted);
+                let post = etree.postorder();
+                let mut cand: Vec<usize> = post.iter().map(|&j| cur[j]).collect();
+                let pp = permute_pattern(&sp, &cand);
+                let pe = EliminationTree::from_pattern(&pp);
+                let counts: Vec<u32> = column_counts_gnp(&pp, &pe).into_iter().map(|c| c as u32).collect();
+                let parent: Vec<i32> = pe.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
+                let cfg = rgreedy::SubCfg {
+                    min_s: 64,
+                    max_s: (n / 64).max(1_024),
+                    max_sub: 1_600,
+                    max_blocks: *blocks,
+                    budget: *budget,
+                    streams: 1,
+                    rank_blocks: true,
+                    round,
+                };
+                let imp = rgreedy::subtree_refine(n, &pat.col_ptr, &pat.row_idx, &mut cand, &counts, &parent, cfg);
+                if imp == 0 || !is_bijection(&cand, n) {
+                    break; // the hardening: a non-responding row pays one round
+                }
+                let f = flops_of(&sp, &cand) as f64;
+                if f >= cur_f {
+                    break;
+                }
+                cur_f = f;
+                cur = cand;
+            }
+            let cost = t0.elapsed().as_secs_f64();
+            let gain_ln = (cur_f / ship_f).ln();
+            if in_gate {
+                totals[ci].1 += gain_ln;
+                totals[ci].2 += cost;
+                if cost > totals[ci].3 {
+                    totals[ci].3 = cost;
+                }
+            }
+            println!(
+                "BND\t{label}\t{name}\tn={n}\tin_gate={in_gate}\tgain={:.3}%\tcost={cost:.2}s",
+                -gain_ln * 100.0
+            );
+        }
+    }
+
+    println!("\n--- in-gate totals (gt_10k has 45 rows; board weight 0.40) ---");
+    for (label, gain_ln, cost, worst) in &totals {
+        println!(
+            "TOTAL\t{label}\tboard_bip={:.2}\tadded_time={cost:.2}s\tworst_row_cost={worst:.2}s",
+            -0.40 * 0.685397 * (gain_ln / 45.0) * 10_000.0
+        );
+    }
+}

@@ -3868,8 +3868,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Terminal cross-candidate subtree transplant (0090 reservation policy).
     // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
     // are the displaced portfolio orderings already retained for PEO_ALT.
+    // One chained round (87e7f7b shape; donor substrate credit dukemawex,
+    // chaining shape credit darthweenies, see memory/0147): a strict win
+    // reshapes the incumbent into fresh donor-assembly territory, so the
+    // identical pass re-runs once on the new incumbent — but ONLY when the
+    // shipped pass strictly improved this row. Longer chains and deeper
+    // chained ledgers were tried and rejected by measurement (0147/0148).
     {
         let donors = runner_up.borrow();
+        let entry_flops = best_flops;
         if let Some(cand) = transplant_probe::refine_with_donors(
             &scoring_pat, &best_perm, &donors, amd_flops,
         ) {
@@ -3877,6 +3884,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if f < best_flops {
                 best_flops = f;
                 best_perm = cand;
+            }
+        }
+        if best_flops < entry_flops {
+            if let Some(cand) = transplant_probe::refine_with_donors(
+                &scoring_pat, &best_perm, &donors, amd_flops,
+            ) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
             }
         }
     }

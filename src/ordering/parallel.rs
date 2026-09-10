@@ -352,6 +352,38 @@ fn in_worker() -> bool {
     IN_WORKER.with(|c| c.get())
 }
 
+/// TEST-ONLY record of what stage 1b decided on the current row, so a probe can
+/// size the deferred-lift population (the cost driver of running the polish
+/// chain on both candidates) rather than infer it from rows whose final
+/// permutation happened to change. Fields: `(kind, lift_flops, incumbent_flops,
+/// accepted_at_4b)` with `kind` 0 = no lift produced / not better, 1 = adopted
+/// at 1b by the size gate, 2 = adopted at 1b by the margin, 3 = deferred.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static INDEP_TRACE: std::cell::Cell<(u8, u64, u64, bool)> =
+        const { std::cell::Cell::new((0, 0, 0, false)) };
+}
+
+#[cfg(test)]
+#[inline]
+pub(crate) fn indep_trace_set(kind: u8, lift: u64, incumbent: u64) {
+    INDEP_TRACE.with(|c| c.set((kind, lift, incumbent, false)));
+}
+
+#[cfg(test)]
+#[inline]
+pub(crate) fn indep_trace_accept() {
+    INDEP_TRACE.with(|c| {
+        let (k, l, i, _) = c.get();
+        c.set((k, l, i, true));
+    });
+}
+
+#[cfg(test)]
+pub(crate) fn indep_trace_take() -> (u8, u64, u64, bool) {
+    INDEP_TRACE.with(|c| c.replace((0, 0, 0, false)))
+}
+
 /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
 /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
 /// stage of `order()` sets a row's critical path. Never compiled into the

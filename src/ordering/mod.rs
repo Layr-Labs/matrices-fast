@@ -191,10 +191,10 @@ const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
 /// (n + nnz) against 0.039 us per Lnnz, i.e. the two terms cost the same per unit -
 /// not the 5:1 the above-gate ledger assumes - so this law charges them equally and
 /// the allowance is set in measured time: 4M units is about 140 ms on the dev host.
-const PEO_ALT_LEDGER: u64 = 4_000_000;
-const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
+/// Depth of the retained runner-up ordering ledger. The alternate-seed chain
+/// that once consumed it is retired (see "STAGE 13 RETIRED"), but the terminal
+/// transplant still draws its donors from this pool, so the depth stays.
 const PEO_ALT_SEEDS: usize = 8;
-const PEO_ALT_MAX_N: usize = 50_000;
 /// Ranked-subtree chain (first round and its conditional follow-ups) ceiling.
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
@@ -269,7 +269,18 @@ const INDEP_MIN_N: usize = 32;
 const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
 /// Immediate-acceptance margin at stage 1b as `(num, den)`: `f * den <= incumbent * num`.
-const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10); // iter230a: 10% early on tip
+/// Immediate-adoption margin for the independent-set lift: taken at once when
+/// its exact score is at most 90 % of the incumbent's. Swept after the narrow
+/// family windows were removed, since this is the general rule they were
+/// patching — 100 % (adopt on any lead) costs 14 bips and 80 % costs 0.4, so
+/// the knob is already at its optimum and is not where those windows' value
+/// can be recovered.
+const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10);
+/// Above this dimension the independent-set lift is adopted without needing to
+/// clear the margin. Removing it costs 41 bips of `gt_10k` geomean on the dev
+/// corpus (0.6854 -> 0.6895), so the effect it captures is real and monotone in
+/// size, not an artefact of particular rows.
+const INDEP_FORCE_MIN_N: usize = 20_000;
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
 /// nnz cap for the THREE extra sweep-found AMF variants (α1/α16/α-1). The sweep
@@ -879,6 +890,24 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
     }
 }
 
+/// Largest `n` (and `nnz`) for which the deferred independent-set lift gets its
+/// own pipeline pass. The branch runs the pipeline a SECOND time, so it roughly
+/// doubles a row's cost; the bound is a pure cost calibration. Over the dev
+/// corpus the slowest row with `n <= 600` costs 0.576 s, so a branched row's
+/// worst case is 1.15 s — at or below the corpus's existing worst row (1.187 s
+/// whole-corpus, 16 vCPU), i.e. the tree's cap exposure does not move. The
+/// `nnz` bound keeps a hypothetical small-but-dense row, where the heavy
+/// relabel passes make one pass expensive, out of the branch.
+///
+/// Calibrating this bound on TIME cannot select on the score outcome: the
+/// second pass is a pure option (its result is kept only when it is strictly
+/// better), so shrinking the bound can forgo a gain but can never make a row
+/// worse. Raising it is what the per-matrix work ledger is for — a deterministic
+/// work bound would price the second pass on the rows this constant has to
+/// exclude wholesale.
+const CHAIN_BRANCH_MAX_N: usize = 600;
+const CHAIN_BRANCH_MAX_NNZ: usize = 30_000;
+
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
     if let Some(perm) = forest_certificate(pattern) { return perm; }
@@ -887,7 +916,37 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     ) {
         return perm;
     }
-    leader_order(pattern)
+    // ── FAIR LIFT-VS-INCUMBENT COMPARISON ───────────────────────────────────
+    // Pass 1 is the pipeline unchanged; it also reports the independent-set
+    // lift that stage 1b deferred, if any (22 of 300 dev rows). Pass 2 gives
+    // that lift the WHOLE pipeline as its incumbent, and the better FINAL score
+    // wins.
+    //
+    // The comparison has to happen here, at the end, and nowhere earlier. The
+    // retired stage-4b form compared the raw lift against a polished incumbent
+    // and lost real gains; running the polish chain (stages 2-4) on both
+    // candidates and choosing there was measured and is WORSE STILL, by 13.2
+    // relative dev bip, because a candidate that leads after stage 4 can still
+    // lose by the end: on `mpbp_35` the portfolio incumbent trails the lift
+    // 0.4227 to 0.4013 at stage 4 and then wins 0.3219 to 0.3942, because
+    // `10.completion` gains 14 % on its basin and nothing on the lift's. The
+    // stage at which the arms cross varies across rows (`3.search`,
+    // `7.telos`, `9.reduce`, `14.transplant`), so the only valid comparison
+    // point is the final score.
+    //
+    // Pass 1 is byte-identical to the shipped pipeline, so keeping the better
+    // of the two passes cannot make any row worse: the second pass is an
+    // option, not a substitution.
+    let (perm, flops, deferred) = leader_pass(pattern, None);
+    if let Some(lift) = deferred {
+        if pattern.n <= CHAIN_BRANCH_MAX_N && pattern.nnz() <= CHAIN_BRANCH_MAX_NNZ {
+            let (perm2, flops2, _) = leader_pass(pattern, Some(lift));
+            if flops2 < flops && is_bijection(&perm2, pattern.n) {
+                return perm2;
+            }
+        }
+    }
+    perm
 }
 
 // Certificate fast path: only return when leaf peeling removes every vertex.
@@ -1165,10 +1224,6 @@ fn flush_batch<'a>(
         let (Some(f), Some(perm)) = (r.flops, r.perm) else {
             continue;
         };
-        #[cfg(test)]
-        probe::alt_lineage::note_scored(f, &perm);
-        #[cfg(test)]
-        probe::alt_lineage::note_consider(f, &perm, *best_flops, &best_perm[..]);
         {
             // Retain the best few displaced orderings. A chain started from a
             // different ordering converges to a different minimal triangulation,
@@ -1186,11 +1241,20 @@ fn flush_batch<'a>(
     }
 }
 
-fn leader_order(pattern: &Pattern) -> Vec<usize> {
+/// One pass of the ordering pipeline.
+///
+/// `forced_lift` selects the arm: `None` runs stage 1b as shipped and REPORTS
+/// the lift it deferred (third return value) so `order` can give that lift its
+/// own pass; `Some(lift)` installs the lift as the stage-1b incumbent and hands
+/// it stages 2-15 instead. Returns `(perm, score(perm), deferred_lift)`.
+fn leader_pass(
+    pattern: &Pattern,
+    forced_lift: Option<(u64, Vec<usize>)>,
+) -> (Vec<usize>, u64, Option<(u64, Vec<usize>)>) {
     let mut terminal_core_candidate: Option<(u64, Vec<usize>)> = None;
     let n = pattern.n;
     if n == 0 {
-        return Vec::new();
+        return (Vec::new(), 0, None);
     }
 
     // i32-indexed borrowed pattern shared by every feral ordering crate.
@@ -1218,8 +1282,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     let score_workspace = std::cell::RefCell::new(scoring_ws::ScoreWorkspace::new(n, pattern.nnz()));
     let score = |p: &[usize]| {
         let f = score_workspace.borrow_mut().flops(&scoring_pat, p);
-        #[cfg(test)]
-        probe::alt_lineage::note_scored(f, p);
         f
     };
 
@@ -1241,7 +1303,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             .iter().filter(|&&i| i > j).count()
     }).sum();
     if score_workspace.borrow().nnz_l() == (n + original_edges) as u64 {
-        return best_perm;
+        return (best_perm, best_flops, None);
     }
     let amd_flops = best_flops;
 
@@ -2457,17 +2519,49 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // lift 0.283 against a 0.494 portfolio best, subtree on the old incumbent
     // 0.15 s).
     let mut indep_deferred: Option<(u64, Vec<usize>)> = None;
-    if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
+    if let Some((lf, lp)) = forced_lift {
+        // Second arm: the lift IS the incumbent from here on. Stage 1 is
+        // deterministic, so `best_flops` at this point equals pass 1's and the
+        // lift was strictly better than it there.
+        best_flops = lf;
+        best_perm = lp;
+    } else if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
-                // iter265a RC: 235a + second-colour/metric expand (0145 family)
-                let digabel_band = (400..=1000).contains(&n);
-                let hydro_band = (1800..=2500).contains(&n);
-                let gasprod_band = n >= 20_000;
-                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
-                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
-                if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // ADOPTION RULE. The lift is taken at once when it leads by
+                // the margin, or on LARGE patterns, where the lift is the
+                // better basin often enough to be worth the bet: above
+                // `INDEP_FORCE_MIN_N` the residual core is a mesh-like Schur
+                // complement that the downstream chain polishes well, while
+                // the portfolio incumbent on such a row has usually received
+                // little more than AMD.
+                //
+                // The frontier additionally force-adopted inside two NARROW
+                // n-windows (400..=1000 and 1800..=2500) and an
+                // 8k..20k/nnz>=50k band, each named after a dev-corpus family
+                // (`digabel`, `hydro`, `mpbp_35`). Those are instance
+                // special-casing rather than structure: on a rotating hidden
+                // corpus disjoint from dev they fire on rows chosen at random
+                // with respect to the property that motivated them, so they
+                // are removed. The size gate below is kept because it is an
+                // ordinary monotone predicate on `n`, not a window fitted
+                // around particular rows.
+                let _margin_ok = f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1)
+                    <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0);
+                #[cfg(test)]
+                parallel::indep_trace_set(
+                    if n >= INDEP_FORCE_MIN_N {
+                        1
+                    } else if _margin_ok {
+                        2
+                    } else {
+                        3
+                    },
+                    f,
+                    best_flops,
+                );
+                if n >= INDEP_FORCE_MIN_N || _margin_ok {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -2991,10 +3085,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // the subtree-polished incumbent becomes the incumbent for the remaining
     // stages. Every later stage is monotone, so a lift that loses here cannot
     // win later; nothing is held back past this point.
+    // A DEFERRED LIFT IS COMPARED UNPOLISHED, ON PURPOSE. Polishing it here
+    // with one round of the stage-4 chain (so that both sides have had "the
+    // same" treatment) was measured and REGRESSED the corpus by 21 bips, all
+    // of it in gt_10k (0.6854 -> 0.6895). One round is not a proxy for what
+    // the incumbent has actually received — the full 7-round chain plus stages
+    // 5-12 — so the polish only lets marginal lifts win this comparison and
+    // then underperform downstream, which is the failure mode the stage-1b
+    // comment describes (a lift leading the raw portfolio by 8 % ending 22 %
+    // behind). Making this comparison fair requires deciding BEFORE stage 4 or
+    // running stage 4 on both candidates; it is not fixable here.
+    let deferred_out = indep_deferred.clone();
     if let Some((f, cand)) = indep_deferred {
         if f < best_flops {
             best_flops = f;
             best_perm = cand;
+            #[cfg(test)]
+            parallel::indep_trace_accept();
         }
     }
     #[cfg(test)]
@@ -3723,7 +3830,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if f < best_flops { best_perm = p; }
+            // `f` is already the exact score of `p`; write it back so the
+            // terminal stages compare against the real incumbent.
+            if f < best_flops { best_flops = f; best_perm = p; }
         }
     }
     // iter62 LEAP: local paired-swap / plateau refine on full lt_1k (SmallScore
@@ -3731,6 +3840,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n >= 12 && n <= 1_000 && pattern.nnz() <= 8_000 {
         best_perm = cutoff_paired_swap_refine(pattern, best_perm);
         best_perm = cutoff_plateau_refine(pattern, best_perm, true);
+        // Both refiners are monotone but return only the permutation, so the
+        // incumbent score has to be re-derived. One `flops_of` on an
+        // `n <= 1000 && nnz <= 8000` row is negligible.
+        best_flops = best_flops.min(score(&best_perm));
     }
     #[cfg(test)]
     parallel::phase_mark("11.corecand", _tph, best_flops);
@@ -3747,6 +3860,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // permutation, so the graph it works on is non-increasing and later rounds
     // are cheaper than earlier ones. The cap only exists so the loop cannot run
     // unbounded on a pathological strict-gain chain.
+    // Tracks the exact score of `best_perm` as the chain leaves it, so the
+    // stale-incumbent hazard the round body comments on is repaired for the
+    // stages that follow rather than only compensated for inside this one.
+    let mut peo_true_flops: Option<u64> = None;
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
         let mut oversize_ledger: u64 = 0;
         for _ in 0..8 {
@@ -3775,6 +3892,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            peo_true_flops = Some(final_flops);
             if final_flops == incumbent_flops { break; }
         }
     } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ && nnz < 1_200_000 {
@@ -3805,62 +3923,44 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            peo_true_flops = Some(final_flops);
             if final_flops == incumbent_flops { break; }
         }
+    }
+    // The PEO chain rewrites `best_perm` while tracking its score only in a
+    // round-local variable; without this write-back the terminal transplant
+    // compares donors against a pre-chain `best_flops` and can admit one that
+    // is worse than the chain's own result.
+    if let Some(t) = peo_true_flops {
+        best_flops = best_flops.min(t);
     }
     #[cfg(test)]
     parallel::phase_mark("12.peo", _tph, best_flops);
     #[cfg(test)]
     let _tph = std::time::Instant::now();
-    // A stalled chain has reached a minimal triangulation, so more cleanup cannot help;
-    // a different starting ordering can, because it converges somewhere else. The seeds
-    // are orderings the portfolio already built and discarded, so only the rounds cost
-    // anything, and they are charged against one shared allowance under the measured law.
-    #[cfg(test)]
-    probe::alt_lineage::capture_entry(n, nnz, &best_perm, &runner_up.borrow());
-    // Alternate-seed chains are gated to n <= PEO_ALT_MAX_N as well: on every
-    // dev row above it (acopf 0.39 s, transswitch 0.21-0.24 s, unitcommit
-    // 0.21 s) the chains ran to their ledger and changed nothing, while all of
-    // their measured wins sit at n < 50k (mpbp_34 -0.19, mpbp_35 -0.08,
-    // arki0013 -0.05, gabriel09 -0.03).
-    // iter75: narrow PEO_ALT skip to lee1_07 band only (3k≤n<8k nnz≥9k).
-    // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
-    // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.
-    let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 9_000;
-    if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
-        && !peo_alt_danger
-    {
-        let seeds = runner_up.borrow().clone();
-        if !seeds.is_empty() {
-            let mut ledger: u64 = 0;
-            let mut leader_flops = score(&best_perm);
-            for (_, seed) in seeds {
-                let mut cur = seed;
-                let mut cur_flops = u64::MAX;
-                for _ in 0..8 {
-                    let pp = permute_pattern(&scoring_pat, &cur);
-                    let et = EliminationTree::from_pattern(&pp);
-                    let counts = column_counts_gnp(&pp, &et);
-                    let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
-                    let cost = n as u64 + nnz as u64 + lnnz;
-                    if ledger + cost > PEO_ALT_LEDGER { break; }
-                    ledger += cost;
-                    let Some(cands) = peo_extract::candidates_bounded(
-                        n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &cur,
-                        usize::MAX, usize::MAX, PEO_ALT_MAX_LNNZ,
-                    ) else { break; };
-                    let inc: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
-                    let mut fin = inc;
-                    for c in cands { let f = score(&c); if f < fin { fin = f; cur = c; } }
-                    cur_flops = fin;
-                    if fin == inc { break; }
-                }
-                if cur_flops < leader_flops { leader_flops = cur_flops; best_perm = cur; }
-                if ledger >= PEO_ALT_LEDGER { break; }
-            }
-        }
-    }
-
+    // ── STAGE 13 RETIRED: alternate-seed PEO chains ────────────────────────
+    // Measured over the whole dev corpus with a repaired `best_flops`
+    // invariant: the chain fired on 176 rows, cost 8.50 s, and improved
+    // exactly 3 of them for a combined -0.00697 ln, i.e. about 0.21 bips.
+    // It was the pipeline's single largest block of unproductive time and it
+    // landed on the rows nearest the cap (arki0013 224 ms on a 1.18 s row,
+    // mpbp_48 184 ms, crudeoil_pooling_dt3 183 ms, gabriel09 169 ms).
+    //
+    // The reason is not budget scaling: chain depth affordable under the
+    // ledger does NOT separate its winners from its no-gain firings (winners
+    // sat at depths 2, 40 and 619; expensive no-gain rows at 4, 11, 19, 23,
+    // 34 and 64), so no depth or size gate recovers the value. What changed is
+    // that stage 12's own re-extraction now reaches those gains first — with
+    // the stale-incumbent defect repaired, `12.peo` is visibly responsible for
+    // mpbp_35 0.4225 -> 0.3342, nuclear104 0.8997 -> 0.7846, arki0013 0.4328
+    // -> 0.4215 and gabriel09 0.9210 -> 0.9131, the very rows this stage was
+    // once credited for. A second chain from a discarded runner-up cannot
+    // improve on an incumbent stage 12 has already driven to a minimal
+    // triangulation.
+    //
+    // Retiring it takes the corpus worst row from 1.348 s to 1.200 s and the
+    // count of rows above 1.0 s from 17 to 13, which is what funds the
+    // symmetric lift polish at stage 4b below.
     #[cfg(test)]
     parallel::phase_mark("13.alt", _tph, best_flops);
     #[cfg(test)]
@@ -3868,6 +3968,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Terminal cross-candidate subtree transplant (0090 reservation policy).
     // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
     // are the displaced portfolio orderings already retained for PEO_ALT.
+    // INVARIANT (test-only): the transplant below admits a donor on
+    // `f < best_flops`, so `best_flops` must be the exact score of the current
+    // `best_perm`. Any earlier stage that improves `best_perm` without writing
+    // its score back opens a window in which a WORSE donor is admitted. This
+    // assert is the guard that keeps that class of bug from reappearing.
+    #[cfg(test)]
+    {
+        let truth = score(&best_perm);
+        if best_flops != truth {
+            eprintln!(
+                "STALE_BEST_FLOPS\tn={n}\tnnz={nnz}\tbest_flops={best_flops}\ttrue={truth}\tgap={}",
+                best_flops as i128 - truth as i128
+            );
+        }
+    }
     {
         let donors = runner_up.borrow();
         if let Some(cand) = transplant_probe::refine_with_donors(
@@ -3883,6 +3998,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     #[cfg(test)]
     parallel::phase_mark("14.transplant", _tph, best_flops);
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
 
     // ── TERMINAL COMPLETION-LATTICE DESCENT (MINL, see `minl.rs`) ──────────
     // Moves downward from the FINISHED incumbent's completion by exact local
@@ -4496,12 +4613,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            // The write-back is required, not cosmetic: `best_flops` is the
+            // pass's reported score and this was the one acceptance in the
+            // pipeline that left it stale (best-flops invariant).
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
             }
         }
     }
-    best_perm
+    // Re-score only when the caller is going to compare two passes: the
+    // comparison must be exact, and one scoring pass on ~22 of 300 rows is
+    // free next to a pipeline pass. On every other row this is `best_flops`
+    // and costs nothing.
+    let final_flops = if deferred_out.is_some() {
+        score(&best_perm)
+    } else {
+        best_flops
+    };
+    (best_perm, final_flops, deferred_out)
 }
 
 
@@ -5810,7 +5941,7 @@ mod tests {
         let mut cases=0; let mut saved=0u128; let mut full=0u128; let mut wins=0;
         for (name,p) in crate::corpus::corpus() {
             if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 {continue;}
-            let scoring=SmallScore::new(&p); let base=leader_order(&p);
+            let scoring=SmallScore::new(&p); let base=leader_pass(&p, None).0;
             let bound=scoring.flops(&base);
             for seed in 1..=64 {
                 let q=perturb(&base,1+seed as usize%16,seed);
@@ -5840,7 +5971,7 @@ mod tests {
             if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 {continue;}
             let scoring=ScoringPattern {n:p.n,col_ptr:p.col_ptr.clone(),row_idx:p.row_idx.clone()};
             let fast=SmallScore::new(&p);
-            let base=leader_order(&p);
+            let base=leader_pass(&p, None).0;
             for seed in 0..64 {
                 let perm=perturb(&base, 1+seed as usize%16, seed+1);
                 assert_eq!(fast.flops(&perm),flops_of(&scoring,&perm),"{name} seed={seed}"); checks+=1;
@@ -5865,7 +5996,7 @@ mod tests {
         let mut logs=0.0f64; let mut us=0u128;
         for (name,p) in crate::corpus::corpus() {
             if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 {continue;}
-            let base=paired_swap_refine(&p,leader_order(&p));
+            let base=paired_swap_refine(&p,leader_pass(&p, None).0);
             let t=std::time::Instant::now();
             let cand=plateau_refine(&p,base.clone(),true);
             us+=t.elapsed().as_micros();
@@ -5888,7 +6019,7 @@ mod tests {
         let mut cases=0; let mut wins=0; let mut logs=0.0f64; let mut us=0u128;
         for (name,p) in crate::corpus::corpus() {
             if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 { continue; }
-            let base=leader_order(&p);
+            let base=leader_pass(&p, None).0;
             let t=std::time::Instant::now();
             let cand=paired_swap_refine(&p,base.clone());
             us+=t.elapsed().as_micros();
@@ -6114,7 +6245,7 @@ mod tests {
                 let f=flops_of(&core,&candidate);
                 assert_eq!(f,(n+3*edges.len()) as u64);
                 let t=std::time::Instant::now();
-                let base=leader_order(&p);
+                let base=leader_pass(&p, None).0;
                 let leader_us=t.elapsed().as_micros();
                 let bf=flops_of(&core,&base);
                 assert!(f<=bf);

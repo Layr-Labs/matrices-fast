@@ -81,8 +81,15 @@ it, rather than deleting it — a resolved question is a useful signpost.
       replacement, re-aggregate) would give the confidence interval that says which
       past "wins" in this log were real — cheap to write, and it changes how every
       future result should be read.
-- [ ] Do any ML/RL-guided ordering ideas fit a stdlib-only, deterministic,
-      2 s/matrix `order()`? Survey the literature before assuming yes/no.
+- [x] ~~Do any ML/RL-guided ordering ideas fit a stdlib-only, deterministic,
+  2 s/matrix `order()`?~~ **RESOLVED (negative) — answered NO by
+  [0148](experiments/0148-ml-rl-closure.md)** (literature survey
+  2026-09-10, paper only): Gatti-2022 RL separators reach METIS parity,
+  not better (parity buys zero crown slots); selectors need banned arms;
+  MCTS/sequential policies die on the 2 s cap; one-shot scorers are
+  learned feature-scoring = the measured-saturated family
+  (md_deficiency, lotteries); dev-fit weights cannot survive hidden
+  rotation. Re-open only on the page's three falsifiers.
 - [ ] The hand-rolled `nd_order` / `ndfm_order` use a plain **degree sort** at
       their leaves (`ND_LEAF=200`, `NDFM_LEAF=100`) and for unsplittable
       separators. The textbook hybrid hands leaves to minimum degree instead.

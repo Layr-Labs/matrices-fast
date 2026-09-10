@@ -1537,6 +1537,185 @@ pub(crate) fn adjacent_pair_descent(
     changed_any.then_some(cur)
 }
 
+/// Ruin-and-reconstruct local search with COST-BOUNDED min-fill repair.
+///
+/// Ruin-recreate generator: deterministic strided ruin (k = 16/32/64/128
+/// by attempt mod 4) + greedy min-fill rebuild, lowest-index ties, five
+/// sequential windows per attempt (tunneling through unfiltered
+/// intermediates). One shared TripleWork budget; every repair evaluation
+/// charged (dense rows abort via None). Deterministic, no RNG; returns
+/// Some iff the rebuild differs (caller exact-scores and admits).
+/// (Rebuilt on 62654a5 for the re-price; prior form verified compiling +
+/// priced across 74b6ccd.)
+pub(crate) fn ruin_window_reconstruct(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    attempt: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    let k = match attempt % 4 {
+        0 => 16,
+        1 => 32,
+        2 => 64,
+        _ => 128,
+    };
+    if n <= 32 || k >= n || seed.len() != n || col_ptr.len() != n + 1 || budget <= 0 {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    // DRAW-2 RR7: single window (revert to the -0.72 verified form).
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    let mut work = TripleWork { remaining: budget };
+    let mut cur = seed.to_vec();
+    for j in 0..1 {
+        let start = attempt
+            .wrapping_mul(9973)
+            .wrapping_add(12345)
+            .wrapping_add((j as usize).wrapping_mul(104729))
+            % (n - k);
+        let mut game = Game::new(n, &adj0)?;
+        // new() leaves the live-list empty; reset() populates it.
+        game.reset();
+        // Eliminate the shared prefix to position the game at the window.
+        for &v in &cur[..start] {
+            if !work.eliminate(&mut game, v) {
+                return None;
+            }
+        }
+        // Greedy min-fill reconstruction, every evaluation charged: a dense
+        // row exhausts the budget and aborts instead of running uncharged.
+        let w = game.w;
+        let mut remaining: Vec<usize> = cur[start..start + k].to_vec();
+        let mut order: Vec<usize> = Vec::with_capacity(k);
+        while !remaining.is_empty() {
+            let mut best_i = 0;
+            let mut best_c = {
+                let dv = game.deg[remaining[0]] as usize;
+                if !work.charge((dv + 1) * (3 * w + 6) + 24) {
+                    return None;
+                }
+                game.deficiency(remaining[0])
+            };
+            for i in 1..remaining.len() {
+                let dv = game.deg[remaining[i]] as usize;
+                if !work.charge((dv + 1) * (3 * w + 6) + 24) {
+                    return None;
+                }
+                let c = game.deficiency(remaining[i]);
+                if c < best_c || (c == best_c && remaining[i] < remaining[best_i]) {
+                    best_i = i;
+                    best_c = c;
+                }
+            }
+            let v = remaining.swap_remove(best_i);
+            order.push(v);
+            if !work.eliminate(&mut game, v) {
+                return None;
+            }
+        }
+        let mut next = Vec::with_capacity(n);
+        next.extend_from_slice(&cur[..start]);
+        next.extend_from_slice(&order);
+        next.extend_from_slice(&cur[start + k..]);
+        cur = next;
+    }
+    if cur == seed {
+        None
+    } else {
+        Some(cur)
+    }
+}
+
+/// Greedy exact minimum-degree with minimum-deficiency tie-breaks.
+///
+/// NEW generator (VOL-MDDEF): AMD breaks degree ties arbitrarily (the
+/// relabel lotteries prove ties matter, then randomize them). This breaks
+/// ties by live deficiency — the fill-aware choice — on the EXACT fill
+/// graph (no supervariables/approximations). `tie_seed`: None = lowest
+/// index final tie-break (deterministic); Some(s) = reservoir-sampled tie
+/// draws from a fixed xorshift64 stream (deterministic lottery over
+/// exact-MD basins — a new lottery family; all prior lotteries ran on
+/// library AMD/AMF). Budget-capped (eliminations + deficiency evals +
+/// scans all charged); None on breach.
+pub(crate) fn md_deficiency_tiebreak(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    tie_seed: Option<u64>,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    if n < 2 || col_ptr.len() != n + 1 || budget <= 0 {
+        return None;
+    }
+    let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+    let mut game = Game::new(n, &adj0)?;
+    game.reset();
+    let mut work = TripleWork { remaining: budget };
+    if !work.charge(n) {
+        return None;
+    }
+    let mut alive = vec![true; n];
+    let mut order: Vec<usize> = Vec::with_capacity(n);
+    let mut rng = tie_seed.unwrap_or(0);
+    for _ in 0..n {
+        // Minimum live degree (index order → deterministic pre-filter).
+        let mut min_d = usize::MAX;
+        for v in 0..n {
+            if alive[v] && (game.deg[v] as usize) < min_d {
+                min_d = game.deg[v] as usize;
+            }
+        }
+        if min_d == usize::MAX {
+            return None;
+        }
+        // Among min-degree vertices, minimum live deficiency; ties by
+        // index (None) or reservoir-sampled draw (Some).
+        let mut best_v = n;
+        let mut best_c = u32::MAX;
+        let mut eq_count = 0u32;
+        for v in 0..n {
+            if !alive[v] || game.deg[v] as usize != min_d {
+                continue;
+            }
+            let dv = game.deg[v] as usize;
+            if !work.charge((dv + 1) * (3 * game.w + 6) + 24) {
+                return None;
+            }
+            let c = game.deficiency(v);
+            if c < best_c {
+                best_c = c;
+                best_v = v;
+                eq_count = 1;
+            } else if tie_seed.is_some() && c == best_c {
+                eq_count += 1;
+                if xs64(&mut rng) % eq_count as u64 == 0 {
+                    best_v = v;
+                }
+            }
+        }
+        if best_v >= n {
+            return None;
+        }
+        alive[best_v] = false;
+        order.push(best_v);
+        if !work.eliminate(&mut game, best_v) {
+            return None;
+        }
+        if !work.charge(n) {
+            return None;
+        }
+    }
+    Some(order)
+}
+
 const TRIPLE_ORDERS: [[usize; 3]; 6] = [
     [0, 1, 2],
     [0, 2, 1],

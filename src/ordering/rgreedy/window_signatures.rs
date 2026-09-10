@@ -205,10 +205,16 @@ impl SignatureEngine {
     /// original-order cost `incumbent`. `None` iff the input is malformed or the
     /// (union-identical) budget cannot fund the component.
     pub(crate) fn solve_component(
-        &mut self,
-        game: &Game<'_>,
-        vertices: &[usize],
-        work: &mut TripleWork,
+        &mut self, game: &Game<'_>, vertices: &[usize], work: &mut TripleWork,
+    ) -> Option<(Vec<usize>, u64, u64)> {
+        self.solve_component_inplace(game, vertices, work, &mut 0, &mut false)
+    }
+
+    /// Continue the same paid preparation at the DP refusal, never replay it.
+    /// Caller ends the terminal descent immediately when `attempted` becomes true.
+    pub(crate) fn solve_component_inplace(
+        &mut self, game: &Game<'_>, vertices: &[usize], work: &mut TripleWork,
+        reserve: &mut i64, attempted: &mut bool,
     ) -> Option<(Vec<usize>, u64, u64)> {
         let k = vertices.len();
         if k == 0 || k > MAX_WIDTH || game.n > self.n {
@@ -331,7 +337,15 @@ impl SignatureEngine {
             (cost, cost, (0..k as u8).collect())
         } else {
             if self.charge_model == ChargeModel::SignatureTrue && !work.charge(solve_cost) {
-                return None;
+                if *reserve <= 0 || *attempted { return None; }
+                *attempted = true;
+                // Atomic refusal: no debit, mutation of the prepared histogram,
+                // or reserve release unless the entire pending DP fits.
+                let available = work.remaining.checked_add(*reserve)?;
+                let cost = i64::try_from(solve_cost).ok()?;
+                if available < cost { return None; }
+                work.remaining = available - cost;
+                *reserve = 0;
             }
             self.run_dp(k, states, &inside, total)
         };
@@ -1030,5 +1044,59 @@ mod tests {
         assert_eq!(third, (expected_order, expected_best, expected_incumbent));
         assert_eq!(engine.stats.hits, 1);
         assert_eq!(engine.stats.inserted, 2);
+    }
+}
+
+#[cfg(test)]
+mod inplace_tests {
+    use super::*;
+    #[test]
+    fn exact_inplace_boundaries() {
+        let n=128;
+        let edges: Vec<_>=(0..n-1).map(|v|(v,v+1)).collect();
+        let p=crate::Pattern::from_edges(n,&edges);
+        let adj=Game::build_adj(n,&p.col_ptr,&p.row_idx).unwrap();
+        let mut game=Game::new(n,&adj).unwrap(); game.reset();
+        let vertices: Vec<_>=(10..16).collect();
+        let k=vertices.len();let states=1usize<<k;
+        let (_,total)=SignatureEngine::charge_costs(k,game.w,vertices.iter().map(|&v|game.deg[v] as usize).sum());
+        let dp=states*(32*k+56);let prep=total-dp;
+        let mut plain=SignatureEngine::new(n);plain.set_charge_model(ChargeModel::SignatureTrue);
+        let mut all=TripleWork{remaining:total as i64};
+        let expected=plain.solve_component(&game,&vertices,&mut all).unwrap();assert_eq!(all.remaining,0);
+        // Positive physically avoided reserve, not tiny-n saturating fixture.
+        let reserve=n*n.div_ceil(64)-64;assert!(reserve>0 && reserve<dp);
+        for delta in [-1i64,0,1] {
+            let mut eng=SignatureEngine::new(n);eng.set_charge_model(ChargeModel::SignatureTrue);
+            let mut work=TripleWork{remaining:(total-reserve) as i64+delta};
+            let before=work.remaining;
+            let mut saved=reserve as i64;let mut attempted=false;
+            let result=eng.solve_component_inplace(&game,&vertices,&mut work,&mut saved,&mut attempted);
+            assert!(attempted);
+            assert_eq!(eng.stats.probes,1,"no repeated signatures");
+            if delta<0 {
+                assert!(result.is_none());assert_eq!(work.remaining,before-prep as i64);assert_eq!(saved,reserve as i64);
+            } else {
+                assert_eq!(result,Some(expected.clone()));assert_eq!(saved,0);assert_eq!(work.remaining,delta);
+                assert_eq!(eng.stats.inserted,1);
+            }
+        }
+        // Preparation refusal must not open reserve or mutate state.
+        let mut eng=SignatureEngine::new(n);eng.set_charge_model(ChargeModel::SignatureTrue);
+        let mut w=TripleWork{remaining:prep as i64-1};let mut r=reserve as i64;let mut a=false;
+        assert!(eng.solve_component_inplace(&game,&vertices,&mut w,&mut r,&mut a).is_none());
+        assert!(!a);assert_eq!(w.remaining,prep as i64-1);assert_eq!(r,reserve as i64);assert_eq!(eng.stats.probes,0);
+        // No-hit/zero reserve and full original budget preserve original cutoff.
+        let mut w=TripleWork{remaining:total as i64-1};let mut r=0;let mut a=false;
+        assert!(eng.solve_component_inplace(&game,&vertices,&mut w,&mut r,&mut a).is_none());assert!(!a);
+        let mut w=TripleWork{remaining:total as i64};
+        assert_eq!(eng.solve_component_inplace(&game,&vertices,&mut w,&mut r,&mut a),Some(expected));assert!(!a);assert_eq!(w.remaining,0);
+        // Atomic rejected charge and conversion boundary.
+        let mut w=TripleWork{remaining:17};assert!(!w.charge(18));assert_eq!(w.remaining,17);assert!(!w.charge(usize::MAX));assert_eq!(w.remaining,17);assert!(w.charge(17));assert_eq!(w.remaining,0);
+        // Fresh live residual state despite retained engine: compare fresh oracle.
+        game.eliminate(10);let vertices:Vec<_>=(11..17).collect();
+        let mut fresh=SignatureEngine::new(n);fresh.set_charge_model(ChargeModel::SignatureTrue);
+        let mut wa=TripleWork{remaining:1_000_000};let mut wb=TripleWork{remaining:1_000_000};
+        assert_eq!(eng.solve_component(&game,&vertices,&mut wa),fresh.solve_component(&game,&vertices,&mut wb));
     }
 }

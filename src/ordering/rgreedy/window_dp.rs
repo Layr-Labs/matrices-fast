@@ -140,12 +140,18 @@ fn solve_component(
     Some((order, best[states - 1], incumbent))
 }
 
-fn refine_window(
+fn refine_window(game: &Game<'_>, window: &mut [usize], work: &mut TripleWork,
+    engine: &mut Option<SignatureEngine>, charge_model: ChargeModel) -> Option<bool> {
+    refine_window_inplace(game, window, work, engine, charge_model, &mut 0, &mut false)
+}
+
+fn refine_window_inplace(
     game: &Game<'_>,
     window: &mut [usize],
     work: &mut TripleWork,
     engine: &mut Option<SignatureEngine>,
     charge_model: ChargeModel,
+    reserve: &mut i64, attempted: &mut bool,
 ) -> Option<bool> {
     let k = window.len();
     if !work.charge(8 * k * k + 8 * k) {
@@ -183,7 +189,7 @@ fn refine_window(
         let solution = if vertices.len() >= 5 && signature_cost < union_cost {
             let engine = engine.get_or_insert_with(|| SignatureEngine::new(game.n));
             engine.set_charge_model(charge_model);
-            engine.solve_component(game, &vertices, work)
+            engine.solve_component_inplace(game, &vertices, work, reserve, attempted)
         } else {
             solve_component(game, &vertices, work)
         };
@@ -196,6 +202,7 @@ fn refine_window(
             }
             changed = true;
         }
+        if *attempted { return Some(changed); }
     }
     Some(changed)
 }
@@ -247,6 +254,36 @@ pub(crate) fn subset_window_descent_step(
     )
 }
 
+/// Owns only the immutable input graph, never a working Game or signature memo.
+/// Binding the input borrows here prevents reuse for a different graph.
+pub(crate) struct TerminalAdjacency<'a> {
+    n: usize,
+    col_ptr: &'a [usize],
+    row_idx: &'a [usize],
+    pristine: Option<Vec<u64>>,
+}
+
+impl<'a> TerminalAdjacency<'a> {
+    pub(crate) fn new(n: usize, col_ptr: &'a [usize], row_idx: &'a [usize]) -> Self {
+        Self { n, col_ptr, row_idx, pristine: None }
+    }
+
+    pub(crate) fn parity(&mut self, seed: &[usize], width: usize, sweeps: usize,
+                         budget: i64) -> Option<Vec<usize>> {
+        subset_window_descent_owned(self.n, self.col_ptr, self.row_idx, seed,
+            width, sweeps, (width / 2).max(1), budget, ChargeModel::UnionParity,
+            &mut self.pristine, false)
+    }
+
+    // Consuming the owner makes the reserved call terminal in its chain.
+    pub(crate) fn finish(mut self, seed: &[usize], width: usize, sweeps: usize,
+                         offset_step: usize, budget: i64) -> Option<Vec<usize>> {
+        subset_window_descent_owned(self.n, self.col_ptr, self.row_idx, seed,
+            width, sweeps, offset_step, budget, ChargeModel::SignatureTrue,
+            &mut self.pristine, true)
+    }
+}
+
 fn subset_window_descent_config(
     n: usize,
     col_ptr: &[usize],
@@ -257,6 +294,23 @@ fn subset_window_descent_config(
     offset_step: usize,
     budget: i64,
     charge_model: ChargeModel,
+) -> Option<Vec<usize>> {
+    subset_window_descent_owned(n, col_ptr, row_idx, seed, width, sweeps,
+        offset_step, budget, charge_model, &mut None, false)
+}
+
+fn subset_window_descent_owned(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    offset_step: usize,
+    budget: i64,
+    charge_model: ChargeModel,
+    owner: &mut Option<Vec<u64>>,
+    terminal_reserve: bool,
 ) -> Option<Vec<usize>> {
     if n < 2
         || n > MAX_DIMENSION
@@ -295,8 +349,14 @@ fn subset_window_descent_config(
     if !work.charge(setup) {
         return None;
     }
-    let pristine = Game::build_adj(n, col_ptr, row_idx)?;
-    let mut game = Game::new(n, &pristine)?;
+    // Original setup remains debited; only the actual cache hit's avoided
+    // immutable zero stores, less bookkeeping, can fund one in-flight DP.
+    let mut reserve = if terminal_reserve && owner.is_some() {
+        n.checked_mul(words)?.saturating_sub(64) as i64
+    } else { 0 };
+    if owner.is_none() { *owner = Some(Game::build_adj(n, col_ptr, row_idx)?); }
+    let mut game = Game::new(n, owner.as_deref()?)?;
+    let mut attempted = false;
     let mut engine = None;
     let mut current = seed.to_vec();
     let mut changed = false;
@@ -314,16 +374,18 @@ fn subset_window_descent_config(
         let mut start = offset;
         while start + 1 < n {
             let end = (start + width).min(n);
-            match refine_window(
+            match refine_window_inplace(
                 &game,
                 &mut current[start..end],
                 &mut work,
                 &mut engine,
                 charge_model,
+                &mut reserve, &mut attempted,
             ) {
                 Some(improved) => changed |= improved,
                 None => return changed.then_some(current),
             }
+            if attempted { return changed.then_some(current); }
             if end < n {
                 for &v in &current[start..end] {
                     if !work.eliminate(&mut game, v) {

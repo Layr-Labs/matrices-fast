@@ -1,3 +1,8 @@
+[0151: repair the stale `best_flops` invariant](experiments/0151-best-flops-writeback-isolated.md):
+write-backs at stage 11, the two `lt_1k` refiners and both PEO chains, plus a
+`cfg(test)` guard before the transplant. **Zero dev effect** (0 of 300 rows
+move). The guard still fires on 4 rows: the remaining leak is stage 13.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

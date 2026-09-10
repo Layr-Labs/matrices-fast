@@ -4496,8 +4496,73 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let flops = score(&candidate);
+            if flops < best_flops {
+                best_flops = flops;
                 best_perm = candidate;
+            }
+        }
+
+        // The existing terminal windows stop at one set of boundaries.  Sweep
+        // complementary offsets on the finished incumbent: a strict win from
+        // one sweep changes the next sweep's windows, so the sequence can cross
+        // boundaries that no individual pass can.  Every call has a fixed work
+        // allowance and every result is checked against the exact objective.
+        // The original ten-pass draft exceeded the hidden cap.  Keep the full
+        // chain on small, bounded-density rows; sparse medium rows get only the
+        // two highest-yield passes from the gate screen.
+        let full_chain: &[(usize, usize, usize, i64, bool)] = &[
+            (12, 4, 1, 64_000_000, true),
+            (12, 4, 6, 64_000_000, false),
+            (14, 4, 5, 96_000_000, true),
+            (14, 4, 7, 96_000_000, false),
+            (9, 4, 4, 48_000_000, true),
+            (11, 4, 5, 64_000_000, true),
+            (8, 4, 3, 32_000_000, true),
+            (10, 4, 3, 48_000_000, true),
+            (7, 4, 3, 32_000_000, true),
+            (6, 4, 1, 32_000_000, true),
+        ];
+        let sparse_chain: &[(usize, usize, usize, i64, bool)] = &[
+            (9, 4, 4, 48_000_000, true),
+            (11, 4, 5, 64_000_000, true),
+        ];
+        let chain = if n <= 3_000 && nnz <= 80_000 {
+            full_chain
+        } else if nnz <= 50_000 && nnz <= 5 * n {
+            sparse_chain
+        } else {
+            &[]
+        };
+        for &(width, sweeps, step, budget, signature_charge) in chain {
+            let candidate = if signature_charge {
+                rgreedy::subset_window_descent_step(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    width,
+                    sweeps,
+                    step,
+                    budget,
+                )
+            } else {
+                rgreedy::subset_window_descent(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    width,
+                    sweeps,
+                    budget,
+                )
+            };
+            if let Some(candidate) = candidate {
+                let flops = score(&candidate);
+                if flops < best_flops {
+                    best_flops = flops;
+                    best_perm = candidate;
+                }
             }
         }
     }

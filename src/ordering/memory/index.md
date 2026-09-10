@@ -1,3 +1,22 @@
+[0147: measure the cap at the grader's CORE COUNT; the indep_first window priced](experiments/0147-grader-core-count-and-indep-window.md):
+`7c12f0a` **FAILED hidden** at a 16-vCPU worst of 1.303 s while the frontier
+`62654a5` **passed** at 1.479 s — so **16-vCPU wall clock cannot rank the tail
+or support a safety claim**. `PAR_MAX_THREADS = 4` on a ~2-vCPU grader, so
+inflation is per-row (0.89x on the giants, **1.68x on `arki0016`**): pin the
+probe with `taskset -c 0,1`. The giants are the SAFEST grader rows; the mid-size
+parallel band is the real cap risk. Also prices the `indep_first`
+`n in 1800..=2500` window at **0.03 bip** — deleted with `run_sequential_180`,
+no replacement; dev **0.792455**, official run OK.
+
+[0146: stale-incumbent invariant, stage-13 retirement, identity windows](experiments/0146-stale-incumbent-and-stage13-retirement.md):
+on frontier 62654a5, dev **0.792300 -> 0.792452** (deliberate +1.9 bip), worst
+**1.479 -> 1.303 s**, official run OK, not submitted. Repairs a real
+correctness defect (`best_flops` drifting above the incumbent, letting stage 14
+admit a worse donor) — **so every inherited late-stage attribution should be
+re-derived**. Retires `13.alt` (176 fired / **3** gained / 8.38 s). Closes the
+one-round 4b lift polish (**-21 bip**), the INDEP ledger deepening, and the
+"idle budget at small n" premise (174/300 rows already cost >= 0.4 s).
+
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so
@@ -273,3 +292,17 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0090: transplant verification reservation](experiments/0090-transplant-verification-reservation-screen.md) — 100k reservation retains partial donor gains, 26 winners / 0.93139 dev bips; below screen.
 - [0091: residual-core exact minimum fill](experiments/0091-residual-core-exact-minimum-fill.md) — a second OBJECTIVE on the cores the reduction already builds, 18.28998 dev bips, 6 wins / 0 losses; and the call-site work counter that priced it after a 300-row A/B could not.
 - [0094: light-tier α grid {10,5,2.5,1}](experiments/0094-light-alpha-grid.md) — aa5b471 dev 0.812247 → **0.811892** (−3.55 bips, all 1k_10k); ports the e7988e5 pattern atop relabelled lotteries (disjoint mid-α draws); 71 tests, worst 0.484 s.
+
+- [0148: the deferred independent-set lift gets its own pipeline pass](experiments/0148-two-arm-stage1b-lift-pass.md) — dev 0.792455 -> 0.792370 (+1.072 rel bip, **0 of 300 rows worse**, by construction rather than by tuning); 22 of 300 rows defer a lift and the mechanism's ceiling is 2.796 rel bip. Carries three transferable results: an intermediate-stage flops comparison is not a proxy for the final score (choosing after stage 4 costs 13.2 rel bip), `1.portfolio`'s displaced candidates are load-bearing through `runner_up`, and isolated seconds do not reproduce across sessions to 1.2-1.4x.
+
+- [0149: declared cap probe — the AMD floor](experiments/0149-declared-cap-probe-amd-floor.md) — a
+  MEASUREMENT INSTRUMENT, not a score attempt: `order()` reduced to the two exact
+  certificates plus bare `feral_amd::amd_order`, dev **0.9967**, whole corpus in
+  13.9 s. Tests the premise under every work-reduction lead in the queue — that
+  reducing ordering work reaches the one hidden matrix the whole field dies on
+  (47 consecutive cap failures in a 20 s window at ~18 % of the traversal). A
+  pass also yields the harness's **fixed overhead**, the missing constant that
+  converts grader wall clock into ordering seconds. The dev tail is a *refuted*
+  cap instrument: `62654a5` passes at 1.479 s worst while `7c12f0a` (1.303 s)
+  and `1b1b7b6` (1.191 s) both failed. Restore the real tree with
+  `CAP_PROBE_FLOOR = false`.

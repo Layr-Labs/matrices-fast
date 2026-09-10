@@ -355,6 +355,163 @@ impl SignatureEngine {
         Some((order, best, incumbent))
     }
 
+    pub(crate) fn solve_component_inplace(
+        &mut self, game: &Game<'_>, vertices: &[usize], work: &mut TripleWork,
+        reserve: &mut i64, attempted: &mut bool,
+    ) -> Option<(Vec<usize>, u64, u64)> {
+        let k = vertices.len();
+        if k == 0 || k > MAX_WIDTH || game.n > self.n {
+            return None;
+        }
+        // The scratch (`comp_stamp`/`sig`/`sig_stamp`) is indexed by live vertex
+        // id, so it must span the whole graph or a real external neighbour would
+        // be silently dropped from the boundary histogram (undercounting width).
+        // Callers must build the engine with `n >= game.n` (typically `game.n`).
+        debug_assert!(
+            game.n <= self.n,
+            "SignatureEngine scratch n={} too small for graph n={}",
+            self.n,
+            game.n
+        );
+        for (i, &v) in vertices.iter().enumerate() {
+            if v >= self.n || v >= game.n || vertices[..i].contains(&v) {
+                return None;
+            }
+        }
+        let states = 1usize << k;
+
+        let incident = vertices.iter().map(|&v| game.deg[v] as usize).sum();
+        let (union_cost, signature_cost) = Self::charge_costs(k, game.w, incident);
+        let solve_cost = states * (32 * k + 56);
+        let cost = match self.charge_model {
+            ChargeModel::UnionParity => union_cost,
+            ChargeModel::SignatureTrue => signature_cost - solve_cost,
+        };
+        if !work.charge(cost) {
+            return None;
+        }
+
+        // ── internal (within-window) adjacency, k-bit masks ──────────────────
+        let mut inside = [0u16; MAX_WIDTH];
+        let w = game.w;
+        for (i, &v) in vertices.iter().enumerate() {
+            for (j, &u) in vertices.iter().enumerate() {
+                if i != j && game.adj[v * w + u / 64] & (1u64 << (u % 64)) != 0 {
+                    inside[i] |= 1u16 << j;
+                }
+            }
+        }
+
+        // ── boundary signature histogram (external incidence multiset) ───────
+        self.begin_epoch();
+        for &v in vertices {
+            self.comp_stamp[v] = self.epoch;
+        }
+        self.touched.clear();
+        for (i, &v) in vertices.iter().enumerate() {
+            let row = &game.adj[v * w..v * w + w];
+            for (word_idx, &word) in row.iter().enumerate() {
+                let mut bits = word;
+                while bits != 0 {
+                    let u = word_idx * 64 + bits.trailing_zeros() as usize;
+                    bits &= bits - 1;
+                    if self.comp_stamp[u] == self.epoch {
+                        continue;
+                    }
+                    if self.sig_stamp[u] != self.epoch {
+                        self.sig_stamp[u] = self.epoch;
+                        self.sig[u] = 0;
+                        self.touched.push(u);
+                    }
+                    self.sig[u] |= 1u16 << i;
+                }
+            }
+        }
+        let total = self.touched.len() as u32;
+
+        // pre-zeta histogram over the active region, plus the exact memo key.
+        self.hist.resize(states, 0);
+        self.hist.fill(0);
+        for idx in 0..self.touched.len() {
+            let u = self.touched[idx];
+            let s = self.sig[u] as usize;
+            self.hist[s] += 1;
+        }
+        let mut hist_pairs: Vec<(u16, u32)> = Vec::new();
+        for m in 1..states {
+            if self.hist[m] != 0 {
+                hist_pairs.push((m as u16, self.hist[m])); // ascending by signature
+            }
+        }
+        let key = SigKey {
+            k: k as u8,
+            inside,
+            hist: hist_pairs,
+        };
+
+        self.stats.probes += 1;
+        if let Some(entry) = self.memo.get(&key).cloned() {
+            self.stats.hits += 1;
+            if self.verify_on_hit {
+                // Exact recompute certificate: a hit must reproduce the stored
+                // solution bit-for-bit, or the key is unsound.
+                let (best, incumbent, order_local) = self.run_dp(k, states, &inside, total);
+                assert_eq!(best, entry.best, "memo certificate: best mismatch");
+                assert_eq!(
+                    incumbent, entry.incumbent,
+                    "memo certificate: incumbent mismatch"
+                );
+                assert_eq!(
+                    order_local, entry.order_local,
+                    "memo certificate: order mismatch"
+                );
+                self.stats.verified_hits += 1;
+            }
+            let order = map_order(vertices, &entry.order_local);
+            return Some((order, entry.best, entry.incumbent));
+        }
+
+        let full = (states - 1) as u16;
+        let complete = (0..k).all(|i| inside[i] == (full ^ (1 << i)))
+            && key.hist.iter().all(|&(signature, _)| signature == full);
+        let (best, incumbent, order_local) = if complete {
+            self.stats.trivial += 1;
+            let cost = (1..=k).map(|i| (total as u64 + i as u64).pow(2)).sum();
+            (cost, cost, (0..k as u8).collect())
+        } else {
+            if self.charge_model == ChargeModel::SignatureTrue && !work.charge(solve_cost) {
+                if *reserve <= 0 || *attempted { return None; }
+                *attempted = true;
+                // Atomic refusal: no debit, mutation of the prepared histogram,
+                // or reserve release unless the entire pending DP fits.
+                let available = work.remaining.checked_add(*reserve)?;
+                let cost = i64::try_from(solve_cost).ok()?;
+                if available < cost { return None; }
+                work.remaining = available - cost;
+                *reserve = 0;
+            }
+            self.run_dp(k, states, &inside, total)
+        };
+        let entry_bytes =
+            128 + key.hist.capacity() * std::mem::size_of::<(u16, u32)>() + order_local.len();
+        if self.memo.len() < MAX_MEMO_ENTRIES
+            && entry_bytes <= MAX_MEMO_BYTES.saturating_sub(self.memo_bytes)
+        {
+            self.memo.insert(
+                key,
+                MemoEntry {
+                    best,
+                    incumbent,
+                    order_local: order_local.clone(),
+                },
+            );
+            self.memo_bytes += entry_bytes;
+            self.stats.inserted += 1;
+        }
+        let order = map_order(vertices, &order_local);
+        Some((order, best, incumbent))
+    }
+
     /// Consumes the pre-zeta `self.hist`, fills `widths`/`components`/`nbr_union`,
     /// runs the identical pivot DP, and returns `(best, incumbent, order_local)`.
     fn run_dp(
@@ -1030,5 +1187,59 @@ mod tests {
         assert_eq!(third, (expected_order, expected_best, expected_incumbent));
         assert_eq!(engine.stats.hits, 1);
         assert_eq!(engine.stats.inserted, 2);
+    }
+}
+
+#[cfg(test)]
+mod inplace_tests {
+    use super::*;
+    #[test]
+    fn exact_inplace_boundaries() {
+        let n=128;
+        let edges: Vec<_>=(0..n-1).map(|v|(v,v+1)).collect();
+        let p=crate::Pattern::from_edges(n,&edges);
+        let adj=Game::build_adj(n,&p.col_ptr,&p.row_idx).unwrap();
+        let mut game=Game::new(n,&adj).unwrap(); game.reset();
+        let vertices: Vec<_>=(10..16).collect();
+        let k=vertices.len();let states=1usize<<k;
+        let (_,total)=SignatureEngine::charge_costs(k,game.w,vertices.iter().map(|&v|game.deg[v] as usize).sum());
+        let dp=states*(32*k+56);let prep=total-dp;
+        let mut plain=SignatureEngine::new(n);plain.set_charge_model(ChargeModel::SignatureTrue);
+        let mut all=TripleWork{remaining:total as i64};
+        let expected=plain.solve_component(&game,&vertices,&mut all).unwrap();assert_eq!(all.remaining,0);
+        // Positive physically avoided reserve, not tiny-n saturating fixture.
+        let reserve=n*n.div_ceil(64)-64;assert!(reserve>0 && reserve<dp);
+        for delta in [-1i64,0,1] {
+            let mut eng=SignatureEngine::new(n);eng.set_charge_model(ChargeModel::SignatureTrue);
+            let mut work=TripleWork{remaining:(total-reserve) as i64+delta};
+            let before=work.remaining;
+            let mut saved=reserve as i64;let mut attempted=false;
+            let result=eng.solve_component_inplace(&game,&vertices,&mut work,&mut saved,&mut attempted);
+            assert!(attempted);
+            assert_eq!(eng.stats.probes,1,"no repeated signatures");
+            if delta<0 {
+                assert!(result.is_none());assert_eq!(work.remaining,before-prep as i64);assert_eq!(saved,reserve as i64);
+            } else {
+                assert_eq!(result,Some(expected.clone()));assert_eq!(saved,0);assert_eq!(work.remaining,delta);
+                assert_eq!(eng.stats.inserted,1);
+            }
+        }
+        // Preparation refusal must not open reserve or mutate state.
+        let mut eng=SignatureEngine::new(n);eng.set_charge_model(ChargeModel::SignatureTrue);
+        let mut w=TripleWork{remaining:prep as i64-1};let mut r=reserve as i64;let mut a=false;
+        assert!(eng.solve_component_inplace(&game,&vertices,&mut w,&mut r,&mut a).is_none());
+        assert!(!a);assert_eq!(w.remaining,prep as i64-1);assert_eq!(r,reserve as i64);assert_eq!(eng.stats.probes,0);
+        // No-hit/zero reserve and full original budget preserve original cutoff.
+        let mut w=TripleWork{remaining:total as i64-1};let mut r=0;let mut a=false;
+        assert!(eng.solve_component_inplace(&game,&vertices,&mut w,&mut r,&mut a).is_none());assert!(!a);
+        let mut w=TripleWork{remaining:total as i64};
+        assert_eq!(eng.solve_component_inplace(&game,&vertices,&mut w,&mut r,&mut a),Some(expected));assert!(!a);assert_eq!(w.remaining,0);
+        // Atomic rejected charge and conversion boundary.
+        let mut w=TripleWork{remaining:17};assert!(!w.charge(18));assert_eq!(w.remaining,17);assert!(!w.charge(usize::MAX));assert_eq!(w.remaining,17);assert!(w.charge(17));assert_eq!(w.remaining,0);
+        // Fresh live residual state despite retained engine: compare fresh oracle.
+        game.eliminate(10);let vertices:Vec<_>=(11..17).collect();
+        let mut fresh=SignatureEngine::new(n);fresh.set_charge_model(ChargeModel::SignatureTrue);
+        let mut wa=TripleWork{remaining:1_000_000};let mut wb=TripleWork{remaining:1_000_000};
+        assert_eq!(eng.solve_component(&game,&vertices,&mut wa),fresh.solve_component(&game,&vertices,&mut wb));
     }
 }

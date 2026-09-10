@@ -685,3 +685,250 @@ mod tests {
         }
     }
 }
+
+/// Explicit inter-call immutable payload <=8 MiB and offdiagonal density cap.
+/// Resource exposure restriction, not a hidden-input runtime guarantee.
+pub(crate) fn sparse_terminal_scope(n: usize, nnz: usize) -> bool {
+    n >= 6 && n <= super::MAX_N && nnz <= 200_000 && n <= 8192 && nnz <= 4 * n
+}
+
+fn refine_window_inplace(
+    game: &Game<'_>,
+    window: &mut [usize],
+    work: &mut TripleWork,
+    engine: &mut Option<SignatureEngine>,
+    charge_model: ChargeModel,
+    reserve: &mut i64, attempted: &mut bool,
+) -> Option<bool> {
+    let k = window.len();
+    if !work.charge(8 * k * k + 8 * k) {
+        return None;
+    }
+    let mut unseen = (1u16 << k) - 1;
+    let mut changed = false;
+    while unseen != 0 {
+        let mut component = 1u16 << unseen.trailing_zeros();
+        let mut frontier = component;
+        while frontier != 0 {
+            let i = frontier.trailing_zeros() as usize;
+            frontier &= frontier - 1;
+            let v = window[i];
+            for (j, &u) in window.iter().enumerate() {
+                let bit = 1u16 << j;
+                if unseen & bit != 0
+                    && component & bit == 0
+                    && game.adj[v * game.w + u / 64] & (1u64 << (u % 64)) != 0
+                {
+                    component |= bit;
+                    frontier |= bit;
+                }
+            }
+        }
+        unseen &= !component;
+        if component.count_ones() < 2 {
+            continue;
+        }
+        let positions: Vec<usize> = (0..k).filter(|&i| component & (1 << i) != 0).collect();
+        let vertices: Vec<usize> = positions.iter().map(|&i| window[i]).collect();
+        let incident = vertices.iter().map(|&v| game.deg[v] as usize).sum();
+        let (union_cost, signature_cost) =
+            SignatureEngine::charge_costs(vertices.len(), game.w, incident);
+        let solution = if vertices.len() >= 5 && signature_cost < union_cost {
+            let engine = engine.get_or_insert_with(|| SignatureEngine::new(game.n));
+            engine.set_charge_model(charge_model);
+            engine.solve_component_inplace(game, &vertices, work, reserve, attempted)
+        } else {
+            solve_component(game, &vertices, work)
+        };
+        let Some((order, best, incumbent)) = solution else {
+            return if changed { Some(true) } else { None };
+        };
+        if best < incumbent {
+            for (&position, &v) in positions.iter().zip(&order) {
+                window[position] = v;
+            }
+            changed = true;
+        }
+        if *attempted { return Some(changed); }
+    }
+    Some(changed)
+}
+
+/// Owns only the immutable input graph, never a working Game or signature memo.
+/// Binding the input borrows here prevents reuse for a different graph.
+pub(crate) struct TerminalAdjacency<'a> {
+    n: usize,
+    col_ptr: &'a [usize],
+    row_idx: &'a [usize],
+    pristine: Option<Vec<u64>>,
+}
+
+impl<'a> TerminalAdjacency<'a> {
+    pub(crate) fn new(n: usize, col_ptr: &'a [usize], row_idx: &'a [usize]) -> Self {
+        Self { n, col_ptr, row_idx, pristine: None }
+    }
+
+    pub(crate) fn parity(&mut self, seed: &[usize], width: usize, sweeps: usize,
+                         budget: i64) -> Option<Vec<usize>> {
+        if !sparse_terminal_scope(self.n, self.row_idx.len()) {
+            return subset_window_descent(self.n, self.col_ptr, self.row_idx, seed, width, sweeps, budget);
+        }
+        subset_window_descent_owned(self.n, self.col_ptr, self.row_idx, seed,
+            width, sweeps, (width / 2).max(1), budget, ChargeModel::UnionParity,
+            &mut self.pristine, false)
+    }
+
+    // Consuming the owner makes the reserved call terminal in its chain.
+    pub(crate) fn finish(mut self, seed: &[usize], width: usize, sweeps: usize,
+                         offset_step: usize, budget: i64) -> Option<Vec<usize>> {
+        if !sparse_terminal_scope(self.n, self.row_idx.len()) || self.pristine.is_none() {
+            return subset_window_descent_step(self.n, self.col_ptr, self.row_idx, seed, width, sweeps, offset_step, budget);
+        }
+        subset_window_descent_owned(self.n, self.col_ptr, self.row_idx, seed,
+            width, sweeps, offset_step, budget, ChargeModel::SignatureTrue,
+            &mut self.pristine, true)
+    }
+}
+
+fn subset_window_descent_owned(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    offset_step: usize,
+    budget: i64,
+    charge_model: ChargeModel,
+    owner: &mut Option<Vec<u64>>,
+    terminal_reserve: bool,
+) -> Option<Vec<usize>> {
+    if n < 2
+        || n > MAX_DIMENSION
+        || !(2..=MAX_WIDTH).contains(&width)
+        || offset_step >= width
+        || sweeps == 0
+        || budget <= 0
+        || seed.len() != n
+        || col_ptr.len() != n + 1
+    {
+        return None;
+    }
+    #[cfg(test)]
+    let mut report = WorkReport {
+        width,
+        completed: false,
+    };
+    let mut work = TripleWork { remaining: budget };
+    if !work.charge(n + 1 + row_idx.len() + 2 * n)
+        || col_ptr.first().copied() != Some(0)
+        || col_ptr.last().copied() != Some(row_idx.len())
+        || col_ptr.windows(2).any(|p| p[0] > p[1])
+        || row_idx.iter().any(|&v| v >= n)
+    {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    let words = n.div_ceil(64);
+    let setup = 3 * n * words + 2 * row_idx.len() + 16 * n + words;
+    if !work.charge(setup) {
+        return None;
+    }
+    // Original setup remains debited; only the actual cache hit's avoided
+    // immutable zero stores, less bookkeeping, can fund one in-flight DP.
+    let mut reserve = if terminal_reserve && owner.is_some() {
+        n.checked_mul(words)?.saturating_sub(64) as i64
+    } else { 0 };
+    if owner.is_none() { *owner = Some(Game::build_adj(n, col_ptr, row_idx)?); }
+    let mut game = Game::new(n, owner.as_deref()?)?;
+    let mut attempted = false;
+    let mut engine = None;
+    let mut current = seed.to_vec();
+    let mut changed = false;
+    for sweep in 0..sweeps {
+        if !work.charge(2 * n * words + 8 * n) {
+            return changed.then_some(current);
+        }
+        game.reset();
+        let offset = (sweep * offset_step) % width;
+        for &v in current.iter().take(offset.min(n)) {
+            if !work.eliminate(&mut game, v) {
+                return changed.then_some(current);
+            }
+        }
+        let mut start = offset;
+        while start + 1 < n {
+            let end = (start + width).min(n);
+            match refine_window_inplace(
+                &game,
+                &mut current[start..end],
+                &mut work,
+                &mut engine,
+                charge_model,
+                &mut reserve, &mut attempted,
+            ) {
+                Some(improved) => changed |= improved,
+                None => return changed.then_some(current),
+            }
+            if attempted { return changed.then_some(current); }
+            if end < n {
+                for &v in &current[start..end] {
+                    if !work.eliminate(&mut game, v) {
+                        return changed.then_some(current);
+                    }
+                }
+            }
+            start = end;
+        }
+    }
+    #[cfg(test)]
+    {
+        report.completed = true;
+    }
+    changed.then_some(current)
+}
+
+#[cfg(test)]
+mod sparse_tests {
+    use super::*;
+    #[test]
+    fn exact_sparse_scope_hit_fallback() {
+        assert!(!sparse_terminal_scope(5,0));
+        assert!(sparse_terminal_scope(6,24));
+        assert!(!sparse_terminal_scope(6,25));
+        assert!(sparse_terminal_scope(8192,32768));
+        assert!(!sparse_terminal_scope(8192,32769));
+        assert!(!sparse_terminal_scope(8193,0));
+        assert!(!sparse_terminal_scope(usize::MAX,0));
+        for n in 6usize..=8192 {assert!(8*n*n.div_ceil(64)<=8*1024*1024);}
+        assert_eq!(8*8192usize*8192usize.div_ceil(64),8*1024*1024);
+        let n=128;let edges:Vec<_>=(0..n-1).map(|v|(v,v+1)).collect();
+        let p=crate::Pattern::from_edges(n,&edges);let seed:Vec<_>=(0..n).collect();
+        let mut owner=TerminalAdjacency::new(n,&p.col_ptr,&p.row_idx);
+        assert!(owner.pristine.is_none());
+        assert!(owner.parity(&seed,8,2,0).is_none());assert!(owner.pristine.is_none());
+        assert_eq!(owner.finish(&seed,12,4,5,64000000),subset_window_descent_step(n,&p.col_ptr,&p.row_idx,&seed,12,4,5,64000000));
+        let mut owner=TerminalAdjacency::new(n,&p.col_ptr,&p.row_idx);
+        assert_eq!(owner.parity(&seed,8,2,16000000),subset_window_descent(n,&p.col_ptr,&p.row_idx,&seed,8,2,16000000));
+        assert!(owner.pristine.is_some());
+        let ptr=owner.pristine.as_ref().unwrap().as_ptr();
+        let _=owner.parity(&seed,12,2,32000000);
+        assert_eq!(ptr,owner.pristine.as_ref().unwrap().as_ptr(),"actual retained cache reused, no rebuild");
+        assert_eq!(owner.pristine.as_ref().unwrap(),&Game::build_adj(n,&p.col_ptr,&p.row_idx).unwrap());
+        let _=owner.finish(&seed,12,4,5,64000000);
+        // Density-excluded graph: owner defensive fallback never populates cache.
+        let n=16;let edges:Vec<_>=(0..n).flat_map(|u|(u+1..n).map(move|v|(u,v))).collect();
+        let p=crate::Pattern::from_edges(n,&edges);let seed:Vec<_>=(0..n).rev().collect();
+        assert!(!sparse_terminal_scope(n,p.row_idx.len()));
+        let mut owner=TerminalAdjacency::new(n,&p.col_ptr,&p.row_idx);
+        assert_eq!(owner.parity(&seed,8,2,16000000),subset_window_descent(n,&p.col_ptr,&p.row_idx,&seed,8,2,16000000));
+        assert!(owner.pristine.is_none());
+        assert_eq!(owner.finish(&seed,12,4,5,64000000),subset_window_descent_step(n,&p.col_ptr,&p.row_idx,&seed,12,4,5,64000000));
+    }
+}

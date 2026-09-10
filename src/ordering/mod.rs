@@ -4479,6 +4479,31 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    if rgreedy::sparse_terminal_scope(n, nnz) {
+    let mut terminal_adjacency = rgreedy::TerminalAdjacency::new(n, &pattern.col_ptr, &pattern.row_idx);
+    if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
+        for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
+            if let Some(candidate) = terminal_adjacency.parity(
+                &best_perm, width, 2, budget,
+            ) {
+                let flops = score(&candidate);
+                if flops < best_flops {
+                    best_flops = flops;
+                    best_perm = candidate;
+                }
+            }
+        }
+    }
+    if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
+        if let Some(candidate) = terminal_adjacency.finish(
+            &best_perm, 12, 4, 5, 64_000_000,
+        ) {
+            if score(&candidate) < best_flops {
+                best_perm = candidate;
+            }
+        }
+    }
+    } else {
     if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
         for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
             if let Some(candidate) = rgreedy::subset_window_descent(
@@ -4500,6 +4525,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 best_perm = candidate;
             }
         }
+    }
     }
     best_perm
 }

@@ -3737,7 +3737,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if f < best_flops { best_perm = p; }
+            // `f` is already the exact score of `p`; write it back so the
+            // terminal stages compare against the real incumbent.
+            if f < best_flops { best_flops = f; best_perm = p; }
         }
     }
     // iter62 LEAP: local paired-swap / plateau refine on full lt_1k (SmallScore
@@ -3745,6 +3747,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n >= 12 && n <= 1_000 && pattern.nnz() <= 8_000 {
         best_perm = cutoff_paired_swap_refine(pattern, best_perm);
         best_perm = cutoff_plateau_refine(pattern, best_perm, true);
+        // Both refiners are monotone but return only the permutation, so the
+        // incumbent score has to be re-derived. One `flops_of` on an
+        // `n <= 1000 && nnz <= 8000` row is negligible.
+        best_flops = best_flops.min(score(&best_perm));
     }
     #[cfg(test)]
     parallel::phase_mark("11.corecand", _tph, best_flops);
@@ -3761,6 +3767,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // permutation, so the graph it works on is non-increasing and later rounds
     // are cheaper than earlier ones. The cap only exists so the loop cannot run
     // unbounded on a pathological strict-gain chain.
+    // Tracks the exact score of `best_perm` as the chain leaves it, so the
+    // stale-incumbent hazard the round body comments on is repaired for the
+    // stages that follow rather than only compensated for inside this one.
+    let mut peo_true_flops: Option<u64> = None;
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
         let mut oversize_ledger: u64 = 0;
         for _ in 0..8 {
@@ -3789,6 +3799,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            peo_true_flops = Some(final_flops);
             if final_flops == incumbent_flops { break; }
         }
     } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ && nnz < 1_200_000 {
@@ -3819,8 +3830,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            peo_true_flops = Some(final_flops);
             if final_flops == incumbent_flops { break; }
         }
+    }
+    // The PEO chain rewrites `best_perm` while tracking its score only in a
+    // round-local variable; without this write-back the terminal transplant
+    // compares donors against a pre-chain `best_flops` and can admit one that
+    // is worse than the chain's own result.
+    if let Some(t) = peo_true_flops {
+        best_flops = best_flops.min(t);
     }
     #[cfg(test)]
     parallel::phase_mark("12.peo", _tph, best_flops);
@@ -3882,6 +3901,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Terminal cross-candidate subtree transplant (0090 reservation policy).
     // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
     // are the displaced portfolio orderings already retained for PEO_ALT.
+    // INVARIANT (test-only): the transplant below admits a donor on
+    // `f < best_flops`, so `best_flops` must be the exact score of the current
+    // `best_perm`. Any earlier stage that improves `best_perm` without writing
+    // its score back opens a window in which a WORSE donor is admitted. This
+    // check is the guard that keeps that class of bug from reappearing.
+    #[cfg(test)]
+    {
+        let truth = score(&best_perm);
+        if best_flops != truth {
+            eprintln!(
+                "STALE_BEST_FLOPS\tn={n}\tnnz={nnz}\tbest_flops={best_flops}\ttrue={truth}\tgap={}",
+                best_flops as i128 - truth as i128
+            );
+        }
+    }
     {
         let donors = runner_up.borrow();
         if let Some(cand) = transplant_probe::refine_with_donors(

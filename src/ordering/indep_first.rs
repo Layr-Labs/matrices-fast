@@ -550,6 +550,17 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
                 tasks.push((i, Pass::Metric(v)));
             }
+            // 0151: AmindNorm on SMALL cores only. The census found it the
+            // sole mover on edgecross24-115's x9 core (cn 8.7k, cnnz 85k:
+            // 0.8173 -> 0.7960 at 15 ms), but on crudeoil_pooling_dt3's
+            // cores (cn 15-22k, cnnz 128-144k) the same walk costs 0.1-0.9 s
+            // and scores 141-261x AMD — the variant's cost does not track
+            // the other six, so it carries its own core-size ceiling below
+            // the measured blow-up band (same pattern as
+            // HEAVY_METRIC_WF2_MAX_NNZ).
+            if cn <= 12_000 && cnnz <= 100_000 {
+                tasks.push((i, Pass::Metric(V::AmindNorm)));
+            }
         }
     }
     let phase2 = par_map(tasks.len(), |t| -> Option<(usize, u64, Vec<usize>)> {

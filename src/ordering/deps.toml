@@ -1,14 +1,9 @@
-# Declare permissive, pure-Rust crates your ordering needs, one per line:
-#   [dependencies]
-#   rand = "0.8.5"
-# Only `name = "x.y.z"` is accepted. No git/path/features. Every crate and its
-# whole transitive tree must be permissively licensed and contain no C/FFI
-# (enforced by the grader).
+# Exact reviewed dependencies from RULES.md. No git/path/features overrides.
+# The trusted gate checks the allowlist, licenses and resolved dependency tree.
 [dependencies]
 feral-amd = "0.2.1"
 feral-amf = "0.2.1"
 feral-metis = "0.2.1"
-feral-scotch = "0.2.1"
 feral-kahip = "0.2.1"
 feral-ordering-core = "0.2.1"
 feral = "0.11.0"

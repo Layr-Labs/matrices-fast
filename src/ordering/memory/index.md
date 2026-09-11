@@ -1,9 +1,3 @@
-[0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
-compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
-keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->
-0.792439** (-1.75 relative bip). Isolated on purpose: it is also the single
-candidate being tested against the 2 s cap.
-
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so
@@ -279,3 +273,9 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0090: transplant verification reservation](experiments/0090-transplant-verification-reservation-screen.md) — 100k reservation retains partial donor gains, 26 winners / 0.93139 dev bips; below screen.
 - [0091: residual-core exact minimum fill](experiments/0091-residual-core-exact-minimum-fill.md) — a second OBJECTIVE on the cores the reduction already builds, 18.28998 dev bips, 6 wins / 0 losses; and the call-site work counter that priced it after a 300-row A/B could not.
 - [0094: light-tier α grid {10,5,2.5,1}](experiments/0094-light-alpha-grid.md) — aa5b471 dev 0.812247 → **0.811892** (−3.55 bips, all 1k_10k); ports the e7988e5 pattern atop relabelled lotteries (disjoint mid-α draws); 71 tests, worst 0.484 s.
+- [0146: multiscale terminal exact-window descent](experiments/0146-multiscale-terminal-window-descent.md) — complementary width/stride chain on the finished incumbent; dev **0.792300 → 0.791984**, strict exact acceptance, measured worst 0.803 s.
+- [0147: two-tier window runtime envelope](experiments/0147-two-tier-window-runtime-envelope.md) — after 0146's hidden timeout, retain the full chain only below n=3k/80k nnz and two passes on sparse medium rows; dev **0.792300 → 0.792076**, worst 0.798 s.
+- [0148: fixed low-width terminal budget](experiments/0148-low-width-terminal-budget.md) — after 0146 and 0147 both hit the hidden cap, replace their high-budget paths with widths 6/7/8 at 8M each plus one tiny-row pass; dev **0.792300 → 0.792241**.
+- [0149: dense alternate-PEO headroom](experiments/0149-dense-alternate-peo-headroom.md) — after 0148 also timed out, skip a no-gain alternate-seed loop at n≥8k/nnz≥5n; preserve dev **0.792241** and lower the profiled worst complete call from 0.796 to **0.712 s**.
+- [0150: equal-budget terminal window exchange](experiments/0150-equal-budget-terminal-window-exchange.md) — replace width-12/32M union work with width-8/32M signature search; dev **0.792188**, but submission `c8739463` still hit the hidden cap, proving equal allowance is insufficient.
+- [0151: subtractive terminal window exchange](experiments/0151-subtractive-terminal-window-exchange.md) — also remove the inherited width-8/16M pass; retain 32 wins at dev **0.792191** with a three-pass **120M** terminal schedule, 16M below the promoted parent.

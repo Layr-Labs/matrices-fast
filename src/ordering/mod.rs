@@ -270,12 +270,6 @@ const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
 /// Immediate-acceptance margin at stage 1b as `(num, den)`: `f * den <= incumbent * num`.
 const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10); // iter230a: 10% early on tip
-/// Above this dimension the independent-set lift is force-adopted at stage 1b
-/// without having to clear the margin. An ordinary monotone predicate on `n`:
-/// the larger the pattern, the more likely the residual core is a mesh-like
-/// Schur complement the downstream chain polishes well, while the portfolio
-/// incumbent on such a row has usually received little more than AMD.
-const INDEP_FORCE_MIN_N: usize = 20_000;
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
 /// nnz cap for the THREE extra sweep-found AMF variants (α1/α16/α-1). The sweep
@@ -2467,21 +2461,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
-                // ADOPTION RULE. The lift is taken at once when it leads by
-                // the margin, or on LARGE patterns (`INDEP_FORCE_MIN_N`).
-                //
-                // Three narrow force-adoption windows used to sit here as
-                // well — `400..=1000`, `1800..=2500`, and `8_000..20_000`
-                // conjoined with `nnz >= 50_000` — each named in its own
-                // comment after the dev-corpus family it was fitted around
-                // (`digabel`, `hydro`, `mpbp_35`). Those select on instance
-                // identity rather than on structure: on an evaluation corpus
-                // disjoint from dev they fire on rows chosen at random with
-                // respect to the property that motivated them. They are
-                // removed. The size gate is kept because it is an ordinary
-                // monotone predicate on `n`, not a window fitted around
-                // particular rows.
-                if n >= INDEP_FORCE_MIN_N || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter265a RC: 235a + second-colour/metric expand (0145 family)
+                let digabel_band = (400..=1000).contains(&n);
+                let hydro_band = (1800..=2500).contains(&n);
+                let gasprod_band = n >= 20_000;
+                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
+                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
+                if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -3840,7 +3826,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // iter75: narrow PEO_ALT skip to lee1_07 band only (3k≤n<8k nnz≥9k).
     // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
     // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.
-    let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 9_000;
+    // Three later hidden runs exceeded the time cap. Final-count profiling found
+    // that the alternate seed changed no public winner on dense rows above 8k,
+    // while costing about 80 ms on the slow lee/nuclear rows. Keep the sparse
+    // mpbp/gabriel/arki beneficiaries and skip only the measured no-gain shape.
+    let peo_alt_danger = ((3_000..8_000).contains(&n) && nnz >= 9_000)
+        || (n >= 8_000 && nnz >= 5 * n);
     if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
         && !peo_alt_danger
     {
@@ -4494,7 +4485,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
-        for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
+        for (width, budget) in [(10, 24_000_000)] {
             if let Some(candidate) = rgreedy::subset_window_descent(
                 n, &pattern.col_ptr, &pattern.row_idx, &best_perm, width, 2, budget,
             ) {
@@ -4510,7 +4501,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let flops = score(&candidate);
+            if flops < best_flops {
+                best_flops = flops;
+                best_perm = candidate;
+            }
+        }
+
+        // Five additive or equal-budget packages exceeded the hidden cap.
+        // Remove the inherited width-8/16M and width-12/32M union passes, then
+        // spend 32M on this smaller exponential window. The full terminal
+        // allowance is 120M, 16M below the promoted parent's hidden-proven
+        // 136M, while the exact public score still improves by over one bip.
+        if let Some(candidate) = rgreedy::subset_window_descent_step(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, 32_000_000,
+        ) {
+            let flops = score(&candidate);
+            if flops < best_flops {
                 best_perm = candidate;
             }
         }

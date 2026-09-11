@@ -1075,12 +1075,13 @@ const HEAVY_METRIC_MAX_VARIANTS: usize = 4;
 const HEAVY_METRIC_WF2_MAX_NNZ: usize = 150_000;
 /// Above this nnz the block queues exactly ONE variant (giant-tier trim).
 const HEAVY_METRIC_GIANT_MIN_NNZ: usize = 700_000;
-/// Dead window: between 200k and 500k nnz every dev row was pure cost (zero
-/// wins, 0.05-0.13 s each on the slowest mid class), so the block is skipped
-/// there entirely. Below 200k it runs on SPARSE rows only (nnz <= 6 n), the
-/// same density guard the no-dense AMD pass uses.
-const HEAVY_METRIC_DEAD_MIN_NNZ: usize = 200_000;
-const HEAVY_METRIC_DEAD_MAX_NNZ: usize = 500_000;
+/// The block runs on SPARSE patterns only (`nnz <= 6 n`), the same density
+/// guard the no-dense AMD pass uses, at every size. It used to run under a
+/// four-step ladder in `nnz` with a hole cut in it -- 2 variants below 200k
+/// (sparse only), 0 in 200k..=500k, 4 in 500k..700k, 1 above -- and both edges
+/// of the hole were read off one corpus. The rows the hole removed are dense:
+/// the density guard that the low band already applied covers them without a
+/// band, so the band is gone and the guard is applied everywhere.
 const HEAVY_SPARSE_MAX_AVG_DEG: usize = 6;
 /// Heavy-tier metric variants as `(spec, dense_alpha)` in descending measured
 /// marginal value; `HEAVY_METRIC_BUDGET / nnz` takes a prefix. `cm_*` names a
@@ -2078,20 +2079,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // giant tier gets exactly one variant. Deterministic (fixed spec list, count
     // a pure function of nnz) and bijection-checked, so best-of makes it
     // zero-downside.
-    let metric_dead_window = (nnz >= HEAVY_METRIC_DEAD_MIN_NNZ && nnz <= HEAVY_METRIC_DEAD_MAX_NNZ)
-        || (nnz < HEAVY_METRIC_DEAD_MIN_NNZ && nnz > HEAVY_SPARSE_MAX_AVG_DEG * n);
+    let metric_dead_window = nnz > HEAVY_SPARSE_MAX_AVG_DEG * n;
     if heavy_arm_enabled()
         && nnz >= HEAVY_METRIC_MIN_NNZ
         && nnz <= HEAVY_METRIC_MAX_NNZ
         && !metric_dead_window
     {
-        let band_cap = if nnz >= HEAVY_METRIC_GIANT_MIN_NNZ {
-            1
-        } else if nnz < HEAVY_METRIC_DEAD_MIN_NNZ {
-            2
-        } else {
-            HEAVY_METRIC_MAX_VARIANTS
-        };
+        // Monotone non-increasing in `nnz`, and pointwise <= the ladder it
+        // replaces everywhere the ladder ran at all.
+        let band_cap = if nnz >= HEAVY_METRIC_GIANT_MIN_NNZ { 1 } else { 2 };
         let k = (HEAVY_METRIC_BUDGET / nnz).clamp(1, HEAVY_METRIC_MAX_VARIANTS).min(band_cap);
         // In the giant sparse-hub class, replace the single generic metric with
         // the metric matched to its hub scale; dense giants and hub-free sparse

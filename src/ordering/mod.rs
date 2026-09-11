@@ -850,38 +850,57 @@ fn dense_deferred_count(n: usize, col_deg: &[usize], dense_alpha: f64) -> usize 
     col_deg.iter().filter(|&&d| d > dense).count()
 }
 
-/// Restart count for the budgeted relabelled multi-start:
-/// Incorporates the historical hub-gatewall discriminator (`max_deg * 50 <= n`)
-/// and low-nnz / mid-band floors to eliminate seed starvation on non-hub graphs
-/// while protecting extreme hub matrices like `ringpack_30_2` from timeout.
+/// A hub graph's relabelled AMD pass costs more than `nnz` predicts, because
+/// dense absorption lets the quotient degrees grow with the largest degree
+/// rather than with the average one. So a hub graph gets its own, smaller work
+/// budget: at most `RELABEL_HUB_WORK / nnz` restarts, and never fewer than
+/// `RELABEL_HUB_MIN` — a monotone non-increasing law in `nnz`, applied at every
+/// size, not a band.
+const RELABEL_HUB_WORK: usize = 400_000;
+const RELABEL_HUB_MIN: usize = 4;
+
+/// Largest `nnz` at which one relabelled pass is still affordable on a sparse,
+/// hub-free giant. A cost bound, not a population: above it the pass is a
+/// significant fraction of the per-matrix budget on its own.
+const RELABEL_GIANT_MAX_NNZ: usize = 1_500_000;
+
+/// Restart count for the budgeted relabelled multi-start.
+///
+/// Restarts come from a work budget (`budget / nnz`, capped), raised by two
+/// monotone floors that stop seed starvation where a pass is cheap — below
+/// `nnz <= 20_000`, and on hub-free graphs below `nnz <= 150_000` — and by a
+/// single-pass floor on sparse hub-free giants, which the budget alone starves
+/// to zero. The hub law above then caps the result on every hub graph.
+///
+/// Every branch is a half-space in `n`, `nnz` or `max_deg`: no restart count
+/// here depends on a two-sided window.
 fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_deg: usize) -> usize {
     if nnz == 0 {
         return 0;
     }
     let base_r = (budget / nnz).min(cap);
 
-    if max_deg * 50 > n && (100_000..=150_000).contains(&nnz) {
-        base_r.min(4) // Hub guard (e.g. ringpack_30_2)
-    } else if nnz <= 20_000 {
+    let restarts = if nnz <= 20_000 {
         (600_000 / nnz).min(48) // Low-nnz regime
     } else if nnz <= 150_000 && max_deg * 50 <= n {
         base_r.max(12) // Mid-band non-hub floor
     } else if nnz <= 350_000 && nnz <= 5 * n && max_deg * 50 <= n && n >= 10_000 {
-        if n >= 40_000 && nnz <= 200_000 {
-            base_r.max(4)
-        } else {
-            base_r.max(8) // Sparse gt_10k mesh/network floor (unstarving transswitch & powerflow)
-        }
-    } else if (500_000..=1_500_000).contains(&nnz) && nnz <= 8 * n && max_deg * 200 <= n {
+        base_r.max(4) // Sparse gt_10k mesh/network floor
+    } else if nnz <= RELABEL_GIANT_MAX_NNZ && nnz <= 8 * n && max_deg * 200 <= n {
         // Sparse hub-free giants: the budget gives them zero restarts, yet one
-        // relabelled pass is the best single generator on the acopf class
-        // (1.0000 -> 0.9737 for 0.13 s) and an AMD pass is cheap there. The
-        // 200x hub test (not the usual 50x) keeps the faclay class out: its
-        // 2777-degree hubs make the pass 0.13 s of pure cost on the corpus's
-        // cap-critical row, and no relabelled restart wins there.
+        // relabelled pass is the best single generator on mesh-like power-flow
+        // patterns (1.0000 -> 0.9737 for 0.13 s) and an AMD pass is cheap
+        // there. The 200x hub-free test (not the usual 50x) is what keeps the
+        // pass off patterns whose thousand-degree hubs make it pure cost.
         base_r.max(1)
     } else {
         base_r
+    };
+
+    if max_deg * 50 > n {
+        restarts.min(RELABEL_HUB_MIN.max(RELABEL_HUB_WORK / nnz))
+    } else {
+        restarts
     }
 }
 
@@ -3737,7 +3756,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if f < best_flops { best_perm = p; }
+            // `f` is already the exact score of `p`; write it back so the
+            // terminal stages compare against the real incumbent.
+            if f < best_flops { best_flops = f; best_perm = p; }
         }
     }
     // iter62 LEAP: local paired-swap / plateau refine on full lt_1k (SmallScore
@@ -3745,6 +3766,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n >= 12 && n <= 1_000 && pattern.nnz() <= 8_000 {
         best_perm = cutoff_paired_swap_refine(pattern, best_perm);
         best_perm = cutoff_plateau_refine(pattern, best_perm, true);
+        // Both refiners are monotone but return only the permutation, so the
+        // incumbent score has to be re-derived. One `flops_of` on an
+        // `n <= 1000 && nnz <= 8000` row is negligible.
+        best_flops = best_flops.min(score(&best_perm));
     }
     #[cfg(test)]
     parallel::phase_mark("11.corecand", _tph, best_flops);
@@ -3761,6 +3786,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // permutation, so the graph it works on is non-increasing and later rounds
     // are cheaper than earlier ones. The cap only exists so the loop cannot run
     // unbounded on a pathological strict-gain chain.
+    // Tracks the exact score of `best_perm` as the chain leaves it, so the
+    // stale-incumbent hazard the round body comments on is repaired for the
+    // stages that follow rather than only compensated for inside this one.
+    let mut peo_true_flops: Option<u64> = None;
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
         let mut oversize_ledger: u64 = 0;
         for _ in 0..8 {
@@ -3789,6 +3818,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            peo_true_flops = Some(final_flops);
             if final_flops == incumbent_flops { break; }
         }
     } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ && nnz < 1_200_000 {
@@ -3819,8 +3849,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            peo_true_flops = Some(final_flops);
             if final_flops == incumbent_flops { break; }
         }
+    }
+    // The PEO chain rewrites `best_perm` while tracking its score only in a
+    // round-local variable; without this write-back the terminal transplant
+    // compares donors against a pre-chain `best_flops` and can admit one that
+    // is worse than the chain's own result.
+    if let Some(t) = peo_true_flops {
+        best_flops = best_flops.min(t);
     }
     #[cfg(test)]
     parallel::phase_mark("12.peo", _tph, best_flops);
@@ -3872,6 +3910,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if cur_flops < leader_flops { leader_flops = cur_flops; best_perm = cur; }
                 if ledger >= PEO_ALT_LEDGER { break; }
             }
+            // INVARIANT (see the stage-14 guard below): a stage that improves
+            // `best_perm` must write its score back, because the transplant and
+            // every later terminal admits on `f < best_flops`. A stale, too-high
+            // `best_flops` admits a donor whose true score is WORSE than the
+            // incumbent's. `leader_flops` is the exact score of `best_perm`
+            // here: it starts as `score(&best_perm)` and each assignment above
+            // pairs it with the permutation it scores (`fin` is `Sigma c_j^2`
+            // of `cur`'s own permuted column counts). The write-back is a
+            // monotone `min`, so it can only tighten a later admission test,
+            // never loosen one, and it costs no additional work.
+            best_flops = best_flops.min(leader_flops);
         }
     }
 
@@ -3882,6 +3931,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Terminal cross-candidate subtree transplant (0090 reservation policy).
     // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
     // are the displaced portfolio orderings already retained for PEO_ALT.
+    // INVARIANT (test-only): the transplant below admits a donor on
+    // `f < best_flops`, so `best_flops` must be the exact score of the current
+    // `best_perm`. Any earlier stage that improves `best_perm` without writing
+    // its score back opens a window in which a WORSE donor is admitted. This
+    // check is the guard that keeps that class of bug from reappearing.
+    #[cfg(test)]
+    {
+        let truth = score(&best_perm);
+        if best_flops != truth {
+            eprintln!(
+                "STALE_BEST_FLOPS\tn={n}\tnnz={nnz}\tbest_flops={best_flops}\ttrue={truth}\tgap={}",
+                best_flops as i128 - truth as i128
+            );
+        }
+    }
     {
         let donors = runner_up.borrow();
         if let Some(cand) = transplant_probe::refine_with_donors(

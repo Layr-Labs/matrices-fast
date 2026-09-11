@@ -38,14 +38,14 @@ pub(super) fn refine_with_donors(
     }
     let mut ws = scoring_ws::ScoreWorkspace::new(n, nnz);
     let inc_f = ws.flops(sp, incumbent);
+    // Only below-AMD incumbents. A near-AMD tie band that additionally selected
+    // `n` in 15k..120k and `nnz` in 40k..500k used to be admitted here; both
+    // were two-sided windows over a dev population rather than bounds on the
+    // pass's cost, and the pass finds nothing on a tie: opened to every sparse
+    // (`nnz <= 6 n`) tie row it fires on 48 of the 300 dev patterns and improves
+    // none of them.
     let below = amd_flops > 0 && inc_f < amd_flops;
-    // Sparse-large near-AMD ties: tip skipped these (inc_f >= amd). Open them.
-    let sparse_large_tie = (15_000..120_000).contains(&n)
-        && (40_000..500_000).contains(&nnz)
-        && nnz <= 6 * n
-        && amd_flops > 0
-        && inc_f.saturating_mul(100) <= amd_flops.saturating_mul(101);
-    if !below && !sparse_large_tie {
+    if !below {
         return None;
     }
     let donor_perms: Vec<&[usize]> = donors.iter().map(|(_, p)| p.as_slice()).collect();

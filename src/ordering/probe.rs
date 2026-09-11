@@ -1272,6 +1272,182 @@ fn probe_multiseed() {
 /// Score the BUDGETED relabelled-AMD multi-start and measure its true combined
 /// cost.
 ///
+/// 0151b: metric variants on the REDUCE (degree<=3 peel) core — the one core
+/// substrate whose pass menu (AMF alpha grid + AMD + MinFill) never included
+/// the quotient-graph metrics that won on the independent-set cores (0145,
+/// 0151). For every corpus row whose K=3 reduce core builds inside the
+/// production envelope, run AMD/AMF (the production passes) plus the 11
+/// `custom_metrics` variants and METIS on the core, and report any
+/// `prefix + core` total that beats the SHIPPED pipeline final (fed via
+/// SSI_BASELINE_COUNTS). Costs per pass are recorded so a gate can be priced.
+#[test]
+#[ignore]
+fn probe_reduce_core_metrics() {
+    use super::custom_metrics::ScoreVariant as V;
+    eprintln!("RCM_TRACE test started, pid={}", std::process::id());
+    let corpus = crate::corpus::corpus();
+    let baseline: std::collections::HashMap<String, u64> = std::env::var("SSI_BASELINE_COUNTS")
+        .ok()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|s| {
+            s.lines()
+                .filter(|l| l.starts_with("COUNTS\t"))
+                .filter_map(|l| {
+                    let f: Vec<&str> = l.split('\t').collect();
+                    Some((f[1].to_string(), f[5].trim().parse::<u64>().ok()?))
+                })
+                .collect()
+        })
+        .expect("set SSI_BASELINE_COUNTS");
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|s| s.split(',').map(|x| x.trim().to_string()).collect());
+    let variants: [(V, &str); 11] = [
+        (V::SqDiv, "sqdiv"),
+        (V::SqPure, "sqpure"),
+        (V::Ammf, "ammf"),
+        (V::AmindNorm, "amind"),
+        (V::DegSqrt, "degsqrt"),
+        (V::DegP075, "degp075"),
+        (V::DegP125, "degp125"),
+        (V::DegDivNvSqrtWf, "ddnsw"),
+        (V::DegDivNvWfP15, "ddnw15"),
+        (V::DegPlusDegme, "dpd"),
+        (V::DegDivNvDegme, "ddnd"),
+    ];
+    let mut gains: std::collections::BTreeMap<&'static str, (usize, f64)> = Default::default();
+    let mut total_secs: std::collections::BTreeMap<&'static str, f64> = Default::default();
+    for (name, pat) in &corpus {
+        if let Some(o) = &only {
+            if !o.contains(name) {
+                if std::env::var("SSI_RCM_TRACE").is_ok() { eprintln!("RCM_SKIP only-filter {}", name); }
+                continue;
+            }
+        }
+        let n = pat.n;
+        if n < super::REDUCE_MIN_N {
+            if std::env::var("SSI_RCM_TRACE").is_ok() { eprintln!("RCM_SKIP n<50 {}", name); }
+            continue;
+        }
+        let nnz = pat.nnz();
+        if nnz == 0 || nnz > super::REDUCE_MAX_NNZ {
+            if std::env::var("SSI_RCM_TRACE").is_ok() { eprintln!("RCM_SKIP nnz {} nnz={}", name, nnz); }
+            continue;
+        }
+        let Some(pipeline) = baseline.get(name).copied() else {
+            if std::env::var("SSI_RCM_TRACE").is_ok() {
+                eprintln!("RCM_SKIP no-baseline {}", name);
+            }
+            continue;
+        };
+        let sp = scoring_pattern(pat);
+        let Some(cl) = super::core_lift::reduce(
+            &sp,
+            super::REDUCE_ROW_DEG,
+            super::REDUCE_MAX_CORE_N,
+            super::REDUCE_MAX_CORE_EDGES,
+        ) else {
+            if std::env::var("SSI_RCM_TRACE").is_ok() {
+                eprintln!("RCM_SKIP reduce-none {name} n={n} nnz={nnz}");
+            }
+            continue;
+        };
+        let cn = cl.core_n();
+        if cn < 8 || cl.core_nnz() > 350_000 {
+            if std::env::var("SSI_RCM_TRACE").is_ok() {
+                eprintln!("RCM_SKIP gate cn={} cnnz={} {}", cn, cl.core_nnz(), name);
+            }
+            continue;
+        }
+        let core_pat = ScoringPattern {
+            n: cn,
+            col_ptr: cl.core_col_ptr.clone(),
+            row_idx: cl.core_row_idx.clone(),
+        };
+        let ccp: Vec<i32> = cl.core_col_ptr.iter().map(|&x| x as i32).collect();
+        let cri: Vec<i32> = cl.core_row_idx.iter().map(|&x| x as i32).collect();
+        let Some(ccore) = feral_ordering_core::CscPattern::new(cn, &ccp, &cri) else { continue };
+        // (tag, prefix+core total, secs for the pass)
+        let mut results: Vec<(&'static str, u64, f64)> = Vec::new();
+        let mut run = |tag: &'static str,
+                       p: Option<Vec<i32>>,
+                       secs_acc: &mut std::collections::BTreeMap<&'static str, f64>|
+         -> Option<()> {
+            let t = std::time::Instant::now();
+            let p = p?;
+            let took = t.elapsed().as_secs_f64();
+            *secs_acc.entry(tag).or_insert(0.0) += took;
+            let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+            if !is_bijection(&cp, cn) {
+                return None;
+            }
+            let f = cl.prefix_flops.saturating_add(flops_of(&core_pat, &cp));
+            results.push((tag, f, took));
+            Some(())
+        };
+        run(
+            "amd",
+            feral_amd::amd_order(&ccore).ok(),
+            &mut total_secs,
+        );
+        for a in [0.5f64, 5.0] {
+            let o = feral_amf::AmfOptions { dense_alpha: a, ..Default::default() };
+            run(
+                "amf",
+                feral_amf::amf_order_opts(&ccore, &o).ok().map(|(p, ..)| p),
+                &mut total_secs,
+            );
+        }
+        for (v, tag) in variants {
+            run(
+                tag,
+                super::custom_metrics::order_variant(&ccore, 10.0, true, v).ok(),
+                &mut total_secs,
+            );
+        }
+        if cn <= 30_000 {
+            run(
+                "metis",
+                feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default())
+                    .ok()
+                    .map(|(p, ..)| p),
+                &mut total_secs,
+            );
+        }
+        if std::env::var("SSI_RCM_TRACE").is_ok() {
+            let tot: f64 = results.iter().map(|(_, _, s)| *s).sum();
+            eprintln!("RCM_DONE {} cn={} results={} pass_secs={:.3} best_vs_pipe={}", name, cn, results.len(), tot, results.iter().map(|(_, f, _)| *f as f64 / pipeline as f64).fold(f64::MAX, f64::min));
+        }
+        let mut wins: Vec<(&'static str, u64)> = results
+            .iter()
+            .filter(|(_, f, _)| *f < pipeline)
+            .map(|(t, f, _)| (*t, *f))
+            .collect();
+        wins.sort_by_key(|(_, f)| *f);
+        if !wins.is_empty() {
+            let mut line = format!(
+                "RCM\t{name}\tn={n}\tnnz={nnz}\tcn={cn}\tcnnz={}",
+                cl.core_nnz()
+            );
+            for (t, f) in &wins {
+                line.push_str(&format!("\t{t}={:.4}", *f as f64 / pipeline as f64));
+                let e = gains.entry(t).or_insert((0, 0.0));
+                e.0 += 1;
+                e.1 += (*f as f64 / pipeline as f64).ln();
+            }
+            println!("{line}");
+        }
+    }
+    println!("--- reduce-core wins vs pipeline final (count, Sum ln ratio) ---");
+    for (t, (c, s)) in &gains {
+        println!("{t:<8} {c:>4} {s:>9.4}");
+    }
+    println!("--- total seconds per pass ---");
+    for (t, s) in &total_secs {
+        println!("{t:<8} {s:>8.2}s");
+    }
+}
+
 /// [`probe_relabel_amd`] established the family works — 41 of 300 matrices
 /// improved, 0.883906 -> 0.874024 at a flat 24 restarts. But a flat count is
 /// unshippable: 24 restarts costs 1.444 s on `nuclear10a` and 0.658 s on
@@ -2893,6 +3069,8 @@ fn probe_indep_sets() {
     let ledger: u64 = 8_000_000;
     let mut gains: std::collections::BTreeMap<&'static str, (usize, f64)> = Default::default();
     let mut total_secs: std::collections::BTreeMap<&'static str, f64> = Default::default();
+    let alpha_hits: std::sync::Mutex<Vec<String>> = Default::default();
+    let label_cur: std::cell::RefCell<String> = Default::default();
     for (name, pat) in &corpus {
         if let Some(o) = &only {
             if !o.contains(name) { continue; }
@@ -2961,10 +3139,144 @@ fn probe_indep_sets() {
             if cn <= 30_000 && cnnz <= 1_000_000 {
                 note("metis", feral_metis::metis_order_full(&ccore, &feral_metis::MetisOptions::default()).ok().map(|(p, ..)| p));
             }
+            // 0153: AMF alpha grid on the lifted core (production core-AMF runs
+            // at a fixed alpha=10) and METIS shapes on the core (production
+            // runs default METIS on top-2 cores only, no shape variants).
+            if std::env::var("SSI_SETS_AMFND").is_ok() {
+                if cnnz <= 600_000 && !dense {
+                    for (a, asfx) in [(0.5f64, "amfa05"), (2.5f64, "amfa25"), (5.0f64, "amfa50"), (-1.0f64, "amfand")] {
+                        let o = feral_amf::AmfOptions { dense_alpha: a, ..Default::default() };
+                        if let Ok(p) = feral_amf::amf_order_opts(&ccore, &o) {
+                            let cp: Vec<usize> = p.0.into_iter().map(|x| x as usize).collect();
+                            if is_bijection(&cp, cn) {
+                                let f = il.prefix_flops.saturating_add(flops_of(&core_pat, &cp));
+                                if f < pipeline {
+                                    alpha_hits.lock().unwrap().push(format!(
+                                        "AMFND\t{}\t{}\t{}\t{:.4}\tcn={}\tcnnz={}",
+                                        name, label_cur.borrow(), asfx,
+                                        f as f64 / pipeline as f64, cn, cnnz
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                if cn <= 30_000 && cnnz <= 400_000 {
+                    let shapes: [(&'static str, feral_metis::MetisOptions); 4] = [
+                        ("metimb02", feral_metis::MetisOptions { max_imbalance: 0.02, ..Default::default() }),
+                        ("metimb10", feral_metis::MetisOptions { max_imbalance: 0.10, ..Default::default() }),
+                        ("metseed21", feral_metis::MetisOptions { seed: 21, ..Default::default() }),
+                        ("metnip16", feral_metis::MetisOptions { niparts: 16, ..Default::default() }),
+                    ];
+                    for (tag, o) in shapes {
+                        if let Ok((p, _, _)) = feral_metis::metis_order_full(&ccore, &o) {
+                            let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                            if is_bijection(&cp, cn) {
+                                let f = il.prefix_flops.saturating_add(flops_of(&core_pat, &cp));
+                                if f < pipeline {
+                                    alpha_hits.lock().unwrap().push(format!(
+                                        "AMFND\t{}\t{}\t{}\t{:.4}\tcn={}\tcnnz={}",
+                                        name, label_cur.borrow(), tag,
+                                        f as f64 / pipeline as f64, cn, cnnz
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if std::env::var("SSI_SETS_CM").is_ok() && cnnz <= 600_000 {
                 use custom_metrics::ScoreVariant as V;
                 for (v, tag) in [(V::SqDiv, "sqdiv"), (V::SqPure, "sqpure"), (V::Ammf, "ammf"), (V::AmindNorm, "amind"), (V::DegSqrt, "degsqrt"), (V::DegP075, "degp075"), (V::DegP125, "degp125"), (V::DegDivNvSqrtWf, "ddnsw"), (V::DegDivNvWfP15, "ddnw15"), (V::DegPlusDegme, "dpd"), (V::DegDivNvDegme, "ddnd")] {
                     note(tag, custom_metrics::order_variant(&ccore, 10.0, true, v).ok());
+                }
+                // 0151c: alpha sweep on the core metric passes (production runs
+                // every metric at a fixed dense_alpha = 10).
+                if std::env::var("SSI_SETS_ALPHA").is_ok() {
+                    for (a, asfx) in [(2.5f64, "25"), (5.0f64, "50")] {
+                        for (v, full) in [(V::DegDivNvSqrtWf, "ddnsw"), (V::DegPlusDegme, "dpd"), (V::AmindNorm, "amind"), (V::DegDivNvDegme, "ddnd"), (V::SqPure, "sqpure")] {
+                            if let Ok(p) = custom_metrics::order_variant(&ccore, a, true, v) {
+                                let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                                if is_bijection(&cp, cn) {
+                                    let f = il.prefix_flops.saturating_add(flops_of(&core_pat, &cp));
+                                    if f < pipeline {
+                                        alpha_hits.lock().unwrap().push(format!(
+                                            "ALPHA\t{}\t{}\t{}a{}\t{:.4}\tcn={}\tcnnz={}",
+                                            name, label_cur.borrow(), full, asfx,
+                                            f as f64 / pipeline as f64, cn, cnnz
+                                        ));
+                                    }
+                                    if best.map_or(true, |(b, _)| f < b) { best = Some((f, full)); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // 0152: ND orderers (Scotch/KaHIP) on the lifted core — never swept
+            // here (production phase-2 runs METIS only on cores). Recorded as
+            // explicit ND hit lines against the pipeline final.
+            if std::env::var("SSI_SETS_ND").is_ok() && cn <= 30_000 && cnnz <= 400_000 {
+                let mut nd_hit = |tag: &'static str, p: Option<Vec<i32>>| {
+                    let Some(p) = p else { return };
+                    let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                    if !is_bijection(&cp, cn) { return; }
+                    let f = il.prefix_flops.saturating_add(flops_of(&core_pat, &cp));
+                    if f < pipeline {
+                        alpha_hits.lock().unwrap().push(format!(
+                            "ND\t{}\t{}\t{}\t{:.4}\tcn={}\tcnnz={}",
+                            name, label_cur.borrow(), tag,
+                            f as f64 / pipeline as f64, cn, cnnz
+                        ));
+                    }
+                    if best.map_or(true, |(b, _)| f < b) { best = Some((f, tag)); }
+                };
+                nd_hit("scotch", feral_scotch::scotch_order(&ccore).ok());
+                let st = feral_scotch::ScotchOptions { n_sep_trials: 10, ..Default::default() };
+                nd_hit("scotch10", feral_scotch::scotch_order_full(&ccore, &st).ok().map(|(p, _, _)| p));
+                nd_hit("kahip", feral_kahip::kahip_order(&ccore).ok());
+                let ke = feral_kahip::KahipOptions { mode: feral_kahip::KahipMode::Eco, ..Default::default() };
+                nd_hit("kahipeco", feral_kahip::kahip_order_full(&ccore, &ke).ok().map(|(p, _, _)| p));
+            }
+            // 0152b: exact MinFill on the lifted core (the reduce stage runs it,
+            // the indep stage never has) and relabelled-AMD on the core (the
+            // relabel lottery applied one level down).
+            if std::env::var("SSI_SETS_MF").is_ok() {
+                if cn <= 4_000 && cnnz <= 60_000 {
+                    let (p, _charged) = super::minfill_core_order(cn, &il.core_col_ptr, &il.core_row_idx, 8_000_000);
+                    let cp: Vec<usize> = p;
+                    if is_bijection(&cp, cn) {
+                        let f = il.prefix_flops.saturating_add(flops_of(&core_pat, &cp));
+                        if f < pipeline {
+                            alpha_hits.lock().unwrap().push(format!(
+                                "MF\t{}\t{}\tminfill\t{:.4}\tcn={}\tcnnz={}",
+                                name, label_cur.borrow(),
+                                f as f64 / pipeline as f64, cn, cnnz
+                            ));
+                        }
+                        if best.map_or(true, |(b, _)| f < b) { best = Some((f, "minfill")); }
+                    }
+                }
+                for seed in [1u64, 2, 3, 4] {
+                    let q = super::relabel(cn, seed);
+                    let b = permute_pattern(&core_pat, &q);
+                    let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+                    let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+                    let Some(bcore) = feral_ordering_core::CscPattern::new(cn, &bcp, &bri) else { continue };
+                    let Some(pb) = feral_amd::amd_order(&bcore).ok() else { continue };
+                    let cp: Vec<usize> = pb.iter().map(|&x| q[x as usize]).collect();
+                    if is_bijection(&cp, cn) {
+                        let f = il.prefix_flops.saturating_add(flops_of(&core_pat, &cp));
+                        if f < pipeline {
+                            alpha_hits.lock().unwrap().push(format!(
+                                "MF\t{}\t{}\tramd{}\t{:.4}\tcn={}\tcnnz={}",
+                                name, label_cur.borrow(), seed,
+                                f as f64 / pipeline as f64, cn, cnnz
+                            ));
+                        }
+                        if best.map_or(true, |(b2, _)| f < b2) { best = Some((f, "ramd")); }
+                    }
                 }
             }
             best
@@ -2973,6 +3285,7 @@ fn probe_indep_sets() {
         let mut results: Vec<(&'static str, bool, Option<(u64, &'static str)>, f64)> = Vec::new();
         for (label, shipped, in_x) in sets.iter_mut() {
             if std::env::var("SSI_SETS_DETAIL").is_ok() { println!("  SET {name} {label}"); }
+            *label_cur.borrow_mut() = (*label).to_string();
             let t = Instant::now();
             let r = eval(in_x);
             let secs = t.elapsed().as_secs_f64();
@@ -3004,6 +3317,11 @@ fn probe_indep_sets() {
             }
         }
         println!("{line}");
+    }
+    {
+        let hits = alpha_hits.lock().unwrap();
+        println!("--- alpha-variant / ND pass wins vs pipeline final (row, set, pass, ratio) ---");
+        for h in hits.iter() { println!("{h}"); }
     }
     println!("--- marginal wins beyond pipeline ∧ shipped sets (count, Σ ln ratio, Σ secs) ---");
     for (label, (c, s)) in &gains {

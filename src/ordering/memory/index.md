@@ -1,3 +1,57 @@
+[0161: delete the heavy relabelled-AMF dense sub-tier and the hole beside it](experiments/0161-heavy-relabel-amf-dense-tier.md):
+a 20 000-wide gap between two `nnz` sub-tiers, cut to exclude one named corpus
+matrix sitting 1 024 above its lower edge. Deleting the dense tier removes the
+gap and both of its edges, is strictly work-reducing, and moves **0 of 300**
+dev rows.
+
+[0160: re-derive `peo_alt_danger` as the cone three sibling sites already use](experiments/0160-peo-alt-danger-cone.md):
+the two-sided band `(3_000..8_000).contains(&n) && nnz >= 9_000` becomes
+`n >= 1_800 && nnz >= 9_000`. The cone contains the band, so no pattern gains
+work; stage-13 skips go 36 -> 92 of 280 eligible dev rows. Dev **0.792573 ->
+0.792583** (+0.126 bip, 2 movers), worst row 1.320 -> 1.171 s, rows over 1.0 s
+19 -> 10.
+
+[0158: re-derive the heavy-metric dead band as the density law it already used](experiments/0158-heavy-metric-density-law.md):
+a fitted `200k..=500k` hole in a four-step variant ladder is replaced by the
+`nnz <= 6 n` guard the same block already applied one tier lower, plus a
+monotone `band_cap`. Dev **0.792573 -> 0.792573**, **0 of 300 rows move**. The
+alternative monotone envelope (skip at `nnz >= 200k`) costs **2.107 relative dev
+bip** on `faclay75` alone and was rejected.
+
+[0156: deepen `2.descent`, the second-highest-rate stage](experiments/0156-descent-depth.md):
+sweeps 4 -> 8 and both ops budgets doubled on a stage costing 0.56 s corpus-wide.
+Dev **0.792573 -> 0.792612** (worse); `lt_1k`, where the work is, loses 1.44 bip.
+A strictly better stage-2 incumbent is a deeper local optimum and a worse final
+ordering. **Improving an intermediate incumbent is not weakly good.**
+
+[0155: two probes at the terminal transplant and at portfolio depth](experiments/0155-transplant-tie-window-and-portfolio-depth.md):
+the transplant's `sparse_large_tie` window fires on 48 of 300 dev rows when
+opened and improves **none** — deleted. Deepening the low-`nnz` relabel budget
+by 50 % buys **+0.76 bip for +10.8 % of the stage's work** and makes `lt_1k`
+worse — reverted.
+
+[0154: re-derive the relabelled-multi-start restart ladder as monotone laws](experiments/0154-monotone-relabel-restart-law.md):
+the hub `nnz` band, the `n >= 40_000 && nnz <= 200_000` rectangle and the
+giants' lower bound are replaced by half-spaces plus a hub work budget applied
+at every size. Dev **0.792439 -> 0.792573** (-1.69 relative bip, all of it
+`1k_10k`). Proved by enumeration to never raise the restart count on any
+admissible `(n, nnz, max_deg)`.
+
+[0153: the deferred independent-set lift gets its own pipeline pass](experiments/0153-two-arm-lift-pass-on-frontier.md):
+dev **0.792439 -> 0.792354** (4 better / 0 worse) under `n <= 600 && nnz <= 30_000`.
+**Not adopted:** the second pass doubles every row it fires on (1.89x-2.07x)
+and a size gate cannot bound that, because small-row cost is nearly flat in `n`.
+
+[0152: retire stage 13, the alternate-seed PEO chains](experiments/0152-stage13-retirement-isolated.md):
+dev **0.792439 -> 0.792452** (4 worse / 0 better), corpus time -5.1 %.
+**Reverted.** A stage's output is the input to every stage after it, so a
+low-yield stage is not free to delete.
+
+[0151: repair the stale `best_flops` invariant](experiments/0151-best-flops-writeback-isolated.md):
+write-backs at stage 11, the two `lt_1k` refiners and both PEO chains, plus a
+`cfg(test)` guard before the transplant. **Zero dev effect** (0 of 300 rows
+move). The guard still fires on 4 rows: the remaining leak is stage 13.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

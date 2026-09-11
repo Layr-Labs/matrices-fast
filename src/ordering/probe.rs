@@ -3124,3 +3124,223 @@ fn probe_indep_timing() {
         }
     }
 }
+
+/// **Stage-1b deferred-lift arms.** For every row that stage 1b defers a lift
+/// on, runs both pipeline arms — `leader_pass(pat, None)` (the shipped pass) and
+/// `leader_pass(pat, Some(lift))` (the lift given the whole pipeline) — and
+/// reports both final scores plus the per-row oracle `min`.
+///
+/// The oracle is the CEILING of the two-arm mechanism in `order`, reached only
+/// where the cost gate lets the second pass run. Rows that defer nothing are
+/// skipped: their two arms are the same pass.
+#[test]
+#[ignore]
+fn probe_indep_arms() {
+    let corpus = match std::env::var("SSI_CORPUS_FILE") {
+        Ok(path) if !path.trim().is_empty() => {
+            ssi_scoring::load_corpus_jsonl(std::path::Path::new(&path))
+                .unwrap_or_else(|_| crate::corpus::corpus())
+        }
+        _ => crate::corpus::corpus(),
+    };
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+
+    let mut log_pipe = [0.0f64; 3];
+    let mut log_lift = [0.0f64; 3];
+    let mut log_orac = [0.0f64; 3];
+    let mut counts = [0usize; 3];
+    let mut defer = 0usize;
+    let mut lift_wins = 0usize;
+    let mut lift_loses = 0usize;
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+
+        let t0 = Instant::now();
+        let (_p1, f1, deferred) = leader_pass(pat, None);
+        let s1 = t0.elapsed().as_secs_f64();
+        let Some(lift) = deferred else { continue };
+        let t1 = Instant::now();
+        let (_p2, f2, _) = leader_pass(pat, Some(lift));
+        let s2 = t1.elapsed().as_secs_f64();
+
+        let r_p = f1 as f64 / base as f64;
+        let r_l = f2 as f64 / base as f64;
+        let r_o = r_p.min(r_l);
+        let b = bucket(n);
+        counts[b] += 1;
+        log_pipe[b] += r_p.ln();
+        log_lift[b] += r_l.ln();
+        log_orac[b] += r_o.ln();
+        defer += 1;
+        let tag = if f2 < f1 {
+            lift_wins += 1;
+            "LIFT-WINS"
+        } else if f2 > f1 {
+            lift_loses += 1;
+            "LIFT-LOSES"
+        } else {
+            "tie"
+        };
+        println!(
+            "ARMS\t{name}\t{n}\t{}\tpipe={r_p:.6}\tlift={r_l:.6}\tbip={:+.2}\ts1={s1:.4}\ts2={s2:.4}\ttot={:.4}\t{tag}",
+            pat.nnz(),
+            (r_l / r_p - 1.0) * 1.0e4,
+            s1 + s2
+        );
+    }
+
+    println!("\n--- stage-1b arms, over the DEFERRING rows only ---");
+    println!("deferring rows = {defer}, lift wins = {lift_wins}, lift loses = {lift_loses}");
+    for b in 0..3 {
+        if counts[b] > 0 {
+            println!(
+                "{:<8} count={:<5} pipe={:.6} lift={:.6} oracle={:.6}",
+                BUCKET_NAMES[b],
+                counts[b],
+                (log_pipe[b] / counts[b] as f64).exp(),
+                (log_lift[b] / counts[b] as f64).exp(),
+                (log_orac[b] / counts[b] as f64).exp()
+            );
+        }
+    }
+}
+
+/// **Where the two stage-1b arms diverge.** Both arms of every deferring row,
+/// with each arm's per-stage `(incumbent ratio)/(seconds)` trajectory. Answers
+/// the question the retired stage-4 branch could not: at which stage does the
+/// comparison between the two candidates become valid? (Answer: none — the
+/// crossing stage varies by row, so only the final score decides.)
+#[test]
+#[ignore]
+fn probe_indep_trajectory() {
+    let corpus = crate::corpus::corpus();
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let _ = parallel::phase_take();
+        let t0 = Instant::now();
+        let (_p1, f1, deferred) = leader_pass(pat, None);
+        let s1 = t0.elapsed().as_secs_f64();
+        let m1 = parallel::phase_take();
+        let Some(lift) = deferred else { continue };
+        let t1 = Instant::now();
+        let (_p2, f2, _) = leader_pass(pat, Some(lift));
+        let s2 = t1.elapsed().as_secs_f64();
+        let m2 = parallel::phase_take();
+        for (arm, secs, marks, fin) in [
+            ("incumbent", s1, m1, f1),
+            ("lift     ", s2, m2, f2),
+        ] {
+            let mut line = format!("TRAJ\t{name}\t{n}\t{}\t{arm}\t{secs:.4}", pat.nnz());
+            for (l, sec, f) in &marks {
+                line.push_str(&format!("\t{l}={:.4}/{sec:.4}", *f as f64 / base as f64));
+            }
+            line.push_str(&format!("\tFINAL={:.4}", fin as f64 / base as f64));
+            println!("{line}");
+        }
+    }
+}
+
+/// **Stage-1b deferral census.** One production `order()` per row with phase
+/// marks, reporting what stage 1b decided (`parallel::indep_trace_take`) beside
+/// the seconds stages 2-4 spent. Sizes the population that would pay for
+/// running the polish chain on both candidates, and prices the branch.
+#[test]
+#[ignore]
+fn probe_indep_defer() {
+    let corpus = crate::corpus::corpus();
+    let mut kinds = [0usize; 4];
+    let mut defer_rows: Vec<(f64, String, usize, usize, f64, f64, bool)> = Vec::new();
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let _ = parallel::phase_take();
+        let _ = parallel::indep_trace_take();
+        let t0 = Instant::now();
+        let _perm = order(pat);
+        let total = t0.elapsed().as_secs_f64();
+        let marks = parallel::phase_take();
+        let (kind, lift, inc, accepted) = parallel::indep_trace_take();
+        kinds[kind as usize] += 1;
+        let get = |l: &str| -> f64 {
+            marks
+                .iter()
+                .find(|(lbl, _, _)| *lbl == l)
+                .map_or(0.0, |(_, s, _)| *s)
+        };
+        let chain = get("2.descent") + get("3.search") + get("4.subtree");
+        let lead = if inc > 0 {
+            lift as f64 / inc as f64
+        } else {
+            f64::NAN
+        };
+        println!(
+            "DEFER\t{name}\t{n}\t{}\tkind={kind}\tlead={lead:.4}\tchain={chain:.4}\ttotal={total:.4}\taccepted={accepted}",
+            pat.nnz()
+        );
+        if kind == 3 {
+            defer_rows.push((chain, name.clone(), n, pat.nnz(), total, lead, accepted));
+        }
+    }
+    println!("\n--- stage-1b decisions ---");
+    println!("no-lift={} size-adopt={} margin-adopt={} deferred={}", kinds[0], kinds[1], kinds[2], kinds[3]);
+    defer_rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    println!("\n--- deferred rows, most expensive polish chain first ---");
+    println!("chain\tmatrix\tn\tnnz\ttotal\tlead\taccepted4b");
+    let mut sum = 0.0;
+    for (chain, name, n, nnz, total, lead, acc) in &defer_rows {
+        sum += chain;
+        println!("{chain:.4}\t{name}\t{n}\t{nnz}\t{total:.4}\t{lead:.4}\t{acc}");
+    }
+    println!("deferred rows = {}, total chain seconds = {sum:.3}", defer_rows.len());
+    println!(
+        "accepted at 4b = {}",
+        defer_rows.iter().filter(|r| r.6).count()
+    );
+}
+

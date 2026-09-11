@@ -885,6 +885,24 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
     }
 }
 
+/// Largest `n` (and `nnz`) for which the deferred independent-set lift gets its
+/// own pipeline pass. The branch runs the pipeline a SECOND time, so it roughly
+/// doubles a row's cost; the bound is a pure cost calibration. Over the dev
+/// corpus the slowest row with `n <= 600` costs 0.576 s, so a branched row's
+/// worst case is 1.15 s — at or below the corpus's existing worst row (1.187 s
+/// whole-corpus, 16 vCPU), i.e. the tree's cap exposure does not move. The
+/// `nnz` bound keeps a hypothetical small-but-dense row, where the heavy
+/// relabel passes make one pass expensive, out of the branch.
+///
+/// Calibrating this bound on TIME cannot select on the score outcome: the
+/// second pass is a pure option (its result is kept only when it is strictly
+/// better), so shrinking the bound can forgo a gain but can never make a row
+/// worse. Raising it is what the per-matrix work ledger is for — a deterministic
+/// work bound would price the second pass on the rows this constant has to
+/// exclude wholesale.
+const CHAIN_BRANCH_MAX_N: usize = 600;
+const CHAIN_BRANCH_MAX_NNZ: usize = 30_000;
+
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
     if let Some(perm) = forest_certificate(pattern) { return perm; }
@@ -893,7 +911,37 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     ) {
         return perm;
     }
-    leader_order(pattern)
+    // ── FAIR LIFT-VS-INCUMBENT COMPARISON ───────────────────────────────────
+    // Pass 1 is the pipeline unchanged; it also reports the independent-set
+    // lift that stage 1b deferred, if any (22 of 300 dev rows). Pass 2 gives
+    // that lift the WHOLE pipeline as its incumbent, and the better FINAL score
+    // wins.
+    //
+    // The comparison has to happen here, at the end, and nowhere earlier. The
+    // retired stage-4b form compared the raw lift against a polished incumbent
+    // and lost real gains; running the polish chain (stages 2-4) on both
+    // candidates and choosing there was measured and is WORSE STILL, by 13.2
+    // relative dev bip, because a candidate that leads after stage 4 can still
+    // lose by the end: on `mpbp_35` the portfolio incumbent trails the lift
+    // 0.4227 to 0.4013 at stage 4 and then wins 0.3219 to 0.3942, because
+    // `10.completion` gains 14 % on its basin and nothing on the lift's. The
+    // stage at which the arms cross varies across rows (`3.search`,
+    // `7.telos`, `9.reduce`, `14.transplant`), so the only valid comparison
+    // point is the final score.
+    //
+    // Pass 1 is byte-identical to the shipped pipeline, so keeping the better
+    // of the two passes cannot make any row worse: the second pass is an
+    // option, not a substitution.
+    let (perm, flops, deferred) = leader_pass(pattern, None);
+    if let Some(lift) = deferred {
+        if pattern.n <= CHAIN_BRANCH_MAX_N && pattern.nnz() <= CHAIN_BRANCH_MAX_NNZ {
+            let (perm2, flops2, _) = leader_pass(pattern, Some(lift));
+            if flops2 < flops && is_bijection(&perm2, pattern.n) {
+                return perm2;
+            }
+        }
+    }
+    perm
 }
 
 // Certificate fast path: only return when leaf peeling removes every vertex.
@@ -1192,11 +1240,20 @@ fn flush_batch<'a>(
     }
 }
 
-fn leader_order(pattern: &Pattern) -> Vec<usize> {
+/// One pass of the ordering pipeline.
+///
+/// `forced_lift` selects the arm: `None` runs stage 1b as shipped and REPORTS
+/// the lift it deferred (third return value) so `order` can give that lift its
+/// own pass; `Some(lift)` installs the lift as the stage-1b incumbent and hands
+/// it stages 2-15 instead. Returns `(perm, score(perm), deferred_lift)`.
+fn leader_pass(
+    pattern: &Pattern,
+    forced_lift: Option<(u64, Vec<usize>)>,
+) -> (Vec<usize>, u64, Option<(u64, Vec<usize>)>) {
     let mut terminal_core_candidate: Option<(u64, Vec<usize>)> = None;
     let n = pattern.n;
     if n == 0 {
-        return Vec::new();
+        return (Vec::new(), 0, None);
     }
 
     // i32-indexed borrowed pattern shared by every feral ordering crate.
@@ -1247,7 +1304,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             .iter().filter(|&&i| i > j).count()
     }).sum();
     if score_workspace.borrow().nnz_l() == (n + original_edges) as u64 {
-        return best_perm;
+        return (best_perm, best_flops, None);
     }
     let amd_flops = best_flops;
 
@@ -2463,7 +2520,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // lift 0.283 against a 0.494 portfolio best, subtree on the old incumbent
     // 0.15 s).
     let mut indep_deferred: Option<(u64, Vec<usize>)> = None;
-    if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
+    if let Some((lf, lp)) = forced_lift {
+        // Second arm: the lift IS the incumbent from here on. Stage 1 is
+        // deterministic, so `best_flops` at this point equals pass 1's and the
+        // lift was strictly better than it there.
+        best_flops = lf;
+        best_perm = lp;
+    } else if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
@@ -2481,7 +2544,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // removed. The size gate is kept because it is an ordinary
                 // monotone predicate on `n`, not a window fitted around
                 // particular rows.
-                if n >= INDEP_FORCE_MIN_N || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                let _margin_ok = f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1)
+                    <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0);
+                #[cfg(test)]
+                parallel::indep_trace_set(
+                    if n >= INDEP_FORCE_MIN_N {
+                        1
+                    } else if _margin_ok {
+                        2
+                    } else {
+                        3
+                    },
+                    f,
+                    best_flops,
+                );
+                if n >= INDEP_FORCE_MIN_N || _margin_ok {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -3005,10 +3082,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // the subtree-polished incumbent becomes the incumbent for the remaining
     // stages. Every later stage is monotone, so a lift that loses here cannot
     // win later; nothing is held back past this point.
+    // A DEFERRED LIFT IS COMPARED UNPOLISHED, ON PURPOSE. Polishing it here
+    // with one round of the stage-4 chain (so that both sides have had "the
+    // same" treatment) was measured and REGRESSED the corpus by 21 bips, all
+    // of it in gt_10k (0.6854 -> 0.6895). One round is not a proxy for what
+    // the incumbent has actually received — the full 7-round chain plus stages
+    // 5-12 — so the polish only lets marginal lifts win this comparison and
+    // then underperform downstream, which is the failure mode the stage-1b
+    // comment describes (a lift leading the raw portfolio by 8 % ending 22 %
+    // behind). Making this comparison fair requires deciding BEFORE stage 4 or
+    // running stage 4 on both candidates; it is not fixable here.
+    let deferred_out = indep_deferred.clone();
     if let Some((f, cand)) = indep_deferred {
         if f < best_flops {
             best_flops = f;
             best_perm = cand;
+            #[cfg(test)]
+            parallel::indep_trace_accept();
         }
     }
     #[cfg(test)]
@@ -3737,7 +3827,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if f < best_flops { best_perm = p; }
+            // `f` is already the exact score of `p`; write it back so the
+            // terminal stages compare against the real incumbent.
+            if f < best_flops { best_flops = f; best_perm = p; }
         }
     }
     // iter62 LEAP: local paired-swap / plateau refine on full lt_1k (SmallScore
@@ -3745,6 +3837,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n >= 12 && n <= 1_000 && pattern.nnz() <= 8_000 {
         best_perm = cutoff_paired_swap_refine(pattern, best_perm);
         best_perm = cutoff_plateau_refine(pattern, best_perm, true);
+        // Both refiners are monotone but return only the permutation, so the
+        // incumbent score has to be re-derived. One `flops_of` on an
+        // `n <= 1000 && nnz <= 8000` row is negligible.
+        best_flops = best_flops.min(score(&best_perm));
     }
     #[cfg(test)]
     parallel::phase_mark("11.corecand", _tph, best_flops);
@@ -3761,6 +3857,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // permutation, so the graph it works on is non-increasing and later rounds
     // are cheaper than earlier ones. The cap only exists so the loop cannot run
     // unbounded on a pathological strict-gain chain.
+    // Tracks the exact score of `best_perm` as the chain leaves it, so the
+    // stale-incumbent hazard the round body comments on is repaired for the
+    // stages that follow rather than only compensated for inside this one.
+    let mut peo_true_flops: Option<u64> = None;
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
         let mut oversize_ledger: u64 = 0;
         for _ in 0..8 {
@@ -3789,6 +3889,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            peo_true_flops = Some(final_flops);
             if final_flops == incumbent_flops { break; }
         }
     } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ && nnz < 1_200_000 {
@@ -3819,8 +3920,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            peo_true_flops = Some(final_flops);
             if final_flops == incumbent_flops { break; }
         }
+    }
+    // The PEO chain rewrites `best_perm` while tracking its score only in a
+    // round-local variable; without this write-back the terminal transplant
+    // compares donors against a pre-chain `best_flops` and can admit one that
+    // is worse than the chain's own result.
+    if let Some(t) = peo_true_flops {
+        best_flops = best_flops.min(t);
     }
     #[cfg(test)]
     parallel::phase_mark("12.peo", _tph, best_flops);
@@ -3882,6 +3991,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Terminal cross-candidate subtree transplant (0090 reservation policy).
     // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
     // are the displaced portfolio orderings already retained for PEO_ALT.
+    // INVARIANT (test-only): the transplant below admits a donor on
+    // `f < best_flops`, so `best_flops` must be the exact score of the current
+    // `best_perm`. Any earlier stage that improves `best_perm` without writing
+    // its score back opens a window in which a WORSE donor is admitted. This
+    // check is the guard that keeps that class of bug from reappearing.
+    #[cfg(test)]
+    {
+        let truth = score(&best_perm);
+        if best_flops != truth {
+            eprintln!(
+                "STALE_BEST_FLOPS\tn={n}\tnnz={nnz}\tbest_flops={best_flops}\ttrue={truth}\tgap={}",
+                best_flops as i128 - truth as i128
+            );
+        }
+    }
     {
         let donors = runner_up.borrow();
         if let Some(cand) = transplant_probe::refine_with_donors(
@@ -4510,12 +4634,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            // The write-back is required, not cosmetic: `best_flops` is the
+            // pass's reported score and this was the one acceptance in the
+            // pipeline that left it stale (best-flops invariant).
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
             }
         }
     }
-    best_perm
+    // Re-score only when the caller is going to compare two passes: the
+    // comparison must be exact, and one scoring pass on ~22 of 300 rows is
+    // free next to a pipeline pass. On every other row this is `best_flops`
+    // and costs nothing.
+    let final_flops = if deferred_out.is_some() {
+        score(&best_perm)
+    } else {
+        best_flops
+    };
+    (best_perm, final_flops, deferred_out)
 }
 
 
@@ -5824,7 +5962,7 @@ mod tests {
         let mut cases=0; let mut saved=0u128; let mut full=0u128; let mut wins=0;
         for (name,p) in crate::corpus::corpus() {
             if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 {continue;}
-            let scoring=SmallScore::new(&p); let base=leader_order(&p);
+            let scoring=SmallScore::new(&p); let base=leader_pass(&p, None).0;
             let bound=scoring.flops(&base);
             for seed in 1..=64 {
                 let q=perturb(&base,1+seed as usize%16,seed);
@@ -5854,7 +5992,7 @@ mod tests {
             if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 {continue;}
             let scoring=ScoringPattern {n:p.n,col_ptr:p.col_ptr.clone(),row_idx:p.row_idx.clone()};
             let fast=SmallScore::new(&p);
-            let base=leader_order(&p);
+            let base=leader_pass(&p, None).0;
             for seed in 0..64 {
                 let perm=perturb(&base, 1+seed as usize%16, seed+1);
                 assert_eq!(fast.flops(&perm),flops_of(&scoring,&perm),"{name} seed={seed}"); checks+=1;
@@ -5879,7 +6017,7 @@ mod tests {
         let mut logs=0.0f64; let mut us=0u128;
         for (name,p) in crate::corpus::corpus() {
             if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 {continue;}
-            let base=paired_swap_refine(&p,leader_order(&p));
+            let base=paired_swap_refine(&p,leader_pass(&p, None).0);
             let t=std::time::Instant::now();
             let cand=plateau_refine(&p,base.clone(),true);
             us+=t.elapsed().as_micros();
@@ -5902,7 +6040,7 @@ mod tests {
         let mut cases=0; let mut wins=0; let mut logs=0.0f64; let mut us=0u128;
         for (name,p) in crate::corpus::corpus() {
             if !(12..=300).contains(&p.n) || p.row_idx.len()>3000 { continue; }
-            let base=leader_order(&p);
+            let base=leader_pass(&p, None).0;
             let t=std::time::Instant::now();
             let cand=paired_swap_refine(&p,base.clone());
             us+=t.elapsed().as_micros();
@@ -6128,7 +6266,7 @@ mod tests {
                 let f=flops_of(&core,&candidate);
                 assert_eq!(f,(n+3*edges.len()) as u64);
                 let t=std::time::Instant::now();
-                let base=leader_order(&p);
+                let base=leader_pass(&p, None).0;
                 let leader_us=t.elapsed().as_micros();
                 let bf=flops_of(&core,&base);
                 assert!(f<=bf);

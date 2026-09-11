@@ -4493,8 +4493,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    // The width-8 signature exchange is useful on sparse, non-dominating
+    // graphs. Dense and near-star windows have broad live boundaries, so omit
+    // them after six hidden timeout failures left the exact offending shape
+    // opaque. On admitted rows, remove 48M of inherited union work before
+    // adding the 32M signature pass; all other rows remain byte-for-byte on the
+    // promoted terminal schedule.
+    let sparse_window_exchange = n >= 1_000
+        && nnz <= n.saturating_mul(16)
+        && max_deg <= n / 2;
     if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
-        for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
+        let passes: &[(usize, i64)] = if sparse_window_exchange {
+            &[(10, 24_000_000)]
+        } else {
+            &[(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)]
+        };
+        for &(width, budget) in passes {
             if let Some(candidate) = rgreedy::subset_window_descent(
                 n, &pattern.col_ptr, &pattern.row_idx, &best_perm, width, 2, budget,
             ) {
@@ -4510,8 +4524,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let flops = score(&candidate);
+            if flops < best_flops {
+                best_flops = flops;
                 best_perm = candidate;
+            }
+        }
+        if sparse_window_exchange {
+            if let Some(candidate) = rgreedy::subset_window_descent_step(
+                n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, 32_000_000,
+            ) {
+                if score(&candidate) < best_flops {
+                    best_perm = candidate;
+                }
             }
         }
     }

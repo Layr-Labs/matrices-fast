@@ -1,3 +1,9 @@
+[0151: structurally gated sparse terminal exchange](experiments/0151-gated-sparse-terminal-exchange.md):
+on promoted `ab30c0e` / hidden **0.842857**, exchange A+B for a width-8
+signature pass only at `n>=1k`, `nnz<=16n`, `maxdeg<=n/2`. Dev **0.792439 ->
+0.792337**, fill **0.924431**, 28/1 improved/regressed, 120M versus the parent's
+136M terminal allowance; worst complete public call **1.308 s**.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

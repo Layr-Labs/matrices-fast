@@ -3820,6 +3820,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
             if final_flops == incumbent_flops { break; }
+            // 0154: same write-back as stage 11 — keep best_flops exact.
+            if final_flops < best_flops { best_flops = final_flops; }
         }
     }
     #[cfg(test)]

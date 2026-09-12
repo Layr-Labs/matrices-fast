@@ -3841,8 +3841,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
     // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.
     let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 9_000;
+    // Pay for the final width-8 exchange by retiring the alternate-seed PEO
+    // chain on the same sparse, non-dominating terminal envelope. This is a
+    // complete phase removal where it runs, not a smaller nominal ledger.
+    let sparse_window_exchange = n >= 1_000
+        && n <= rgreedy::MAX_N
+        && nnz <= 200_000
+        && nnz <= n.saturating_mul(16)
+        && max_deg <= n / 2;
     if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
         && !peo_alt_danger
+        && !sparse_window_exchange
     {
         let seeds = runner_up.borrow().clone();
         if !seeds.is_empty() {
@@ -4494,7 +4503,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
-        for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
+        let passes: &[(usize, i64)] = if sparse_window_exchange {
+            &[(10, 24_000_000)]
+        } else {
+            &[(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)]
+        };
+        for &(width, budget) in passes {
             if let Some(candidate) = rgreedy::subset_window_descent(
                 n, &pattern.col_ptr, &pattern.row_idx, &best_perm, width, 2, budget,
             ) {
@@ -4510,8 +4524,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let flops = score(&candidate);
+            if flops < best_flops {
+                best_flops = flops;
                 best_perm = candidate;
+            }
+        }
+        if sparse_window_exchange {
+            if let Some(candidate) = rgreedy::subset_window_descent_step(
+                n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, 32_000_000,
+            ) {
+                if score(&candidate) < best_flops {
+                    best_perm = candidate;
+                }
             }
         }
     }

@@ -154,6 +154,10 @@ mod transplant_probe;
 pub mod rgreedy;
 mod completion;
 mod peo_extract;
+mod post_core;
+mod runner_up;
+#[cfg(test)]
+mod terminal_polish;
 mod minl_watch;
 pub mod custom_metrics;
 /// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
@@ -533,7 +537,7 @@ const SWEEP_EXTRA_MAX_NNZ: usize = 150_000;
 const LADDER_FILL_BOUND: u64 = 20_000_000_000;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
-const LADDER_FILL_CAP: usize = 64;
+const LADDER_FILL_CAP: usize = 32;
 
 /// NON-AGGRESSIVE AMD envelope. `aggressive = false` is a genuinely different
 /// elimination order (not just a dense-threshold tweak). It runs at baseline AMD
@@ -1480,10 +1484,10 @@ fn flush_batch<'a>(
             // different ordering converges to a different minimal triangulation,
             // and the leader's is not always the cheapest one.
             let mut r = runner_up.borrow_mut();
-            if f < *best_flops { r.push((*best_flops, best_perm.clone())); } else { r.push((f, perm.clone())); }
-            r.sort_by_key(|(s, _)| *s);
-            r.dedup_by_key(|(s, _)| *s);
-            r.truncate(PEO_ALT_SEEDS);
+            let displaced=f<*best_flops;
+            let key=if displaced {*best_flops} else {f};
+            runner_up::retain(&mut r,key,
+                ||if displaced {best_perm.clone()} else {perm.clone()},PEO_ALT_SEEDS);
         }
         if f < *best_flops {
             *best_flops = f;
@@ -2795,8 +2799,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // lift 0.283 against a 0.494 portfolio best, subtree on the old incumbent
     // 0.15 s).
     let mut indep_deferred: Option<(u64, Vec<usize>)> = None;
+    let mut indep_extra: Option<indep_first::ExtraCores> = None;
     if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
-        if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
+        if let Some((core_total, cand, cores)) = indep_first::run_with_cores(&scoring_pat, INDEP_WORK_LEDGER) {
+            indep_extra = Some(cores);
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
                 // ADOPTION RULE. The lift is taken at once when it leads by
@@ -5292,13 +5298,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // additionally obeys its factor-nonzero limits before materializing fill.
     // Reject an expensive existing ledger before scoring again. Admission
     // below still requires the fresh exact score and factor-nonzero bound.
+    let mut final_symbolic = None;
     let terminal_followup = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
         && best_flops <= LADDER_FILL_BOUND;
     #[cfg(test)]
     let terminal_followup = terminal_followup && probe::terminal_followup::enabled();
     if terminal_followup {
         let mut final_flops = score(&best_perm);
-        if final_flops <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= 150_000 {
+        let fill = score_workspace.borrow().nnz_l();
+        final_symbolic = Some((final_flops,fill));
+        if final_flops <= LADDER_FILL_BOUND && fill <= 150_000 {
             // The same fixed window allowance also covers dense/hub patterns;
             // preparation and elimination are charged regardless of density.
             if nnz > n.saturating_mul(16) || max_deg > n / 2 {
@@ -5308,7 +5317,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 ) {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
-                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                        if f < final_flops {
+                            best_perm = candidate; final_flops = f;
+                            final_symbolic = Some((f,score_workspace.borrow().nnz_l()));
+                        }
                     }
                 }
             }
@@ -5323,7 +5335,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 ) {
                     for candidate in candidates {
                         let f = score(&candidate);
-                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                        if f < final_flops {
+                            best_perm = candidate; final_flops = f;
+                            final_symbolic = Some((f,score_workspace.borrow().nnz_l()));
+                        }
                     }
                 }
                 if final_flops == before { break; }
@@ -5342,12 +5357,51 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 ) {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
-                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                        if f < final_flops {
+                            best_perm = candidate; final_flops = f;
+                            final_symbolic = Some((f,score_workspace.borrow().nnz_l()));
+                        }
                     }
                 }
             }
         }
     }
+    // The independent-set stage already built these competitive cores. Reuse
+    // at most two for one missing quotient metric, after the winning prefix.
+    // Refresh the exact original factor count before authorizing the late walk.
+    if let Some(cores) = indep_extra {
+        if !cores.is_empty() &&n<=18_000 &&nnz<=80_000 &&best_flops<=LADDER_FILL_BOUND {
+            // Carry only exact observations of the accepted incumbent. This
+            // avoids another eligibility score on rows the terminal pass saw.
+            let (f,fill) = final_symbolic.unwrap_or_else(|| {
+                let f=score(&best_perm);(f,score_workspace.borrow().nnz_l())
+            });
+            #[cfg(test)]
+            {
+                assert_eq!(score(&best_perm),f,"final symbolic cache flops");
+                assert_eq!(score_workspace.borrow().nnz_l(),fill,"final symbolic cache fill");
+            }
+            let mut changed=false;
+            if fill<=200_000 {
+                if let Some(candidate) = cores.refine(f,&score) {
+                    best_perm=post_core::refine(pattern,&candidate,1,200_000,&score,
+                        &permute_current,||score_workspace.borrow().nnz_l()).unwrap_or(candidate);
+                    changed=true;
+                }
+            }
+            let (search_f,search_fill)=if changed {
+                let sf=score(&best_perm);(sf,score_workspace.borrow().nnz_l())
+            } else {(f,fill)};
+            if search_f<=LADDER_FILL_BOUND &&search_fill<=100_000 {
+                if let Some(candidate)=cores.refine_search(&best_perm,search_f,&score) {
+                    best_perm=post_core::refine(pattern,&candidate,1,200_000,&score,
+                        &permute_current,||score_workspace.borrow().nnz_l()).unwrap_or(candidate);
+                }
+            }
+        }
+    }
+    if let Some(candidate)=post_core::refine_priority(pattern,&best_perm,&score,
+        &permute_current,||score_workspace.borrow().nnz_l()) {best_perm=candidate;}
     best_perm
 }
 

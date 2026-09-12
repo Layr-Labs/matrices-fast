@@ -72,6 +72,12 @@ use feral_ordering_core::quotient_graph::{
     Workspace, WorkspaceOptions, NONE,
 };
 use feral_ordering_core::{CscPattern, OrderingError};
+use super::pivot_powers::{FloatPower, IntegerPower};
+
+struct ScorePowers {
+    degree: IntegerPower,
+    fill: FloatPower,
+}
 
 /// Which score formula `finalize_step_variant` computes at re-insertion. See
 /// the module doc for what each one estimates and why it was kept.
@@ -164,6 +170,7 @@ fn finalize_step_variant(
     elenme: i32,
     aggressive: bool,
     variant: ScoreVariant,
+    powers: &mut ScorePowers,
 ) -> StepFlops {
     let n = ws.n;
     let mut degme = degme;
@@ -430,15 +437,14 @@ fn finalize_step_variant(
                     }
                 }
                 ScoreVariant::DegSqrt => raw_deg.sqrt(),
-                ScoreVariant::DegP075 => raw_deg.powf(0.75),
-                ScoreVariant::DegP125 => raw_deg.powf(1.25),
+                ScoreVariant::DegP075 | ScoreVariant::DegP125 => powers.degree.get(raw_deg as usize),
                 ScoreVariant::DegDivNvSqrtWf => {
                     let a = wf_f.abs().sqrt();
                     let wf_signed = if wf_f < 0.0 { -a } else { a };
                     raw_deg / (nvi_i as f64 + 1.0) + 0.5 * wf_signed
                 }
                 ScoreVariant::DegDivNvWfP15 => {
-                    let a = wf_f.abs().powf(1.5);
+                    let a = powers.fill.get(wf_f.abs());
                     let wf_signed = if wf_f < 0.0 { -a } else { a };
                     raw_deg / (nvi_i as f64 + 1.0) + 0.1 * wf_signed
                 }
@@ -509,6 +515,15 @@ fn run_elimination_variant(
     variant: ScoreVariant,
 ) -> Result<StepFlops, OrderingError> {
     let mut flops = StepFlops::default();
+    let exponent = match variant {
+        ScoreVariant::DegP075 => 0.75,
+        ScoreVariant::DegP125 => 1.25,
+        _ => 1.0,
+    };
+    let mut powers = ScorePowers {
+        degree: IntegerPower::new(ws.n, exponent),
+        fill: FloatPower::new(if variant == ScoreVariant::DegDivNvWfP15 { 1.5 } else { 1.0 }),
+    };
     while ws.nel < ws.n {
         let me = match select_pivot_amf(ws) {
             Some(m) => m,
@@ -517,7 +532,7 @@ fn run_elimination_variant(
         let elenme = ws.elen[me];
         let (pme1, pme2, nvpiv, degme) = create_element_amf(ws, me)?;
         let step = finalize_step_variant(
-            ws, me, pme1, pme2, nvpiv, degme, elenme, aggressive, variant,
+            ws, me, pme1, pme2, nvpiv, degme, elenme, aggressive, variant, &mut powers,
         );
         // `StepFlops::accumulate` is private to the vendor crate; its fields
         // are public, so add manually (a trivial field-wise +=).

@@ -332,6 +332,7 @@ enum Pass {
     Amd,
     Amf,
     Metis,
+    MetisNip16,
     Metric(super::custom_metrics::ScoreVariant),
 }
 
@@ -343,6 +344,12 @@ fn run_pass(ccore: &feral_ordering_core::CscPattern<'_>, pass: Pass) -> Option<V
             feral_amf::amf_order_opts(ccore, &o).ok().map(|(p, ..)| p)
         }
         Pass::Metis => feral_metis::metis_order_full(ccore, &feral_metis::MetisOptions::default()).ok().map(|(p, ..)| p),
+        Pass::MetisNip16 => feral_metis::metis_order_full(
+            ccore,
+            &feral_metis::MetisOptions { niparts: 16, ..Default::default() },
+        )
+        .ok()
+        .map(|(p, ..)| p),
         Pass::Metric(v) => super::custom_metrics::order_variant(ccore, 10.0, true, v).ok(),
     }
 }
@@ -448,6 +455,22 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         let dense_input = nnz >= 12 * n;
         let extra_caps: &[usize] = if dense_input {
             &[20, 15, 9, 7, 5, 3]
+        } else if nnz <= 40_000 || (n >= 20_000 && nnz <= 120_000) {
+            // 0152: trailing cap 2 on the GIANT band only (the same monotone
+            // threshold as INDEP_FORCE_MIN_N). Unconditional, the extra set
+            // wins gabriel09 (1.0000 -> 0.9790) but shifts crudeoil_lee4_09
+            // (n 15.9k, below the band) into a worse downstream basin
+            // (+2.6 %) — the basin sensitivity 0150 documents for stage-1b
+            // admission changes. The (xs, pairs) dedup keeps it free wherever
+            // cap 2 selects the same set as cap 3.
+            //
+            // 0152b: an nnz ceiling joins the band gate after the first
+            // bundle (cap 2 up to nnz 400k) FAILED the hidden 2 s cap — the
+            // exposure concentrates in the 120k-400k giants (nuclear104 /
+            // mpbp_48 class) where one extra lift plus a basin shift is the
+            // exact mechanism behind the fe871f1 timing death. gabriel09
+            // (nnz 89.7k) stays inside; the ceiling is monotone in nnz.
+            &[15, 9, 5, 3, 2]
         } else {
             &[15, 9, 5, 3]
         };
@@ -545,10 +568,33 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         if metis_ok[i] && cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ {
             tasks.push((i, Pass::Metis));
         }
+        // 0156: METIS niparts=16 shape on SMALL rows' top cores only (census:
+        // pooling_sppa9pq 0.9985; ~2x one default METIS pass, and n<=8000
+        // keeps every slow band out by construction).
+        if n <= 8_000 && metis_ok[i] && cn <= METIS_CORE_MAX_N && cnnz <= METIS_CORE_MAX_NNZ {
+            tasks.push((i, Pass::MetisNip16));
+        }
         if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
             // iter265a RC: broader quotient-metric family (0145 census winners)
             for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
                 tasks.push((i, Pass::Metric(v)));
+            }
+            // 0156: DegDivNvWfP15 as a seventh metric on the same small-core
+            // envelope as AmindNorm (census: second-best pass on edgecross's
+            // x9 core, 0.834 vs 0.796).
+            if cn <= 12_000 && cnnz <= 100_000 {
+                tasks.push((i, Pass::Metric(V::DegDivNvWfP15)));
+            }
+            // 0151: AmindNorm on SMALL cores only. The census found it the
+            // sole mover on edgecross24-115's x9 core (cn 8.7k, cnnz 85k:
+            // 0.8173 -> 0.7960 at 15 ms), but on crudeoil_pooling_dt3's
+            // cores (cn 15-22k, cnnz 128-144k) the same walk costs 0.1-0.9 s
+            // and scores 141-261x AMD — the variant's cost does not track
+            // the other six, so it carries its own core-size ceiling below
+            // the measured blow-up band (same pattern as
+            // HEAVY_METRIC_WF2_MAX_NNZ).
+            if cn <= 12_000 && cnnz <= 100_000 {
+                tasks.push((i, Pass::Metric(V::AmindNorm)));
             }
         }
     }

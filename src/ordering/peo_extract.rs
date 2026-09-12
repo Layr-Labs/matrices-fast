@@ -9,6 +9,8 @@ pub(super) const MAX_LNNZ: usize = 300_000;
 
 #[cfg(test)]
 mod pooled_reference;
+#[cfg(test)]
+mod priority_reference;
 
 #[cfg(test)]
 thread_local! { static USE_POOLED_REFERENCE: std::cell::Cell<bool> = std::cell::Cell::new(false); }
@@ -205,6 +207,77 @@ fn reconstruct(
         }
     }
     Some(Completion { row_ptr, neighbors })
+}
+
+/// MCS with a fixed structural priority for ties in visited-neighbor count.
+/// The completed graph is reconstructed once; lazy heap updates are bounded
+/// by its edge count. Existing linear/LIFO candidates remain unchanged.
+#[cfg(test)]
+pub(super) fn priority_candidate_bounded(
+    n: usize, cp: &[usize], ri: &[usize], parent: &[Option<usize>],
+    counts: &[usize], incumbent: &[usize], original_degree: &[usize],
+    policy: usize,
+) -> Option<Vec<usize>> {
+    priority_candidate_with_limits(n,cp,ri,parent,counts,incumbent,original_degree,
+        policy,12_000,200_000,150_000)
+}
+
+pub(super) fn priority_candidate_with_limits(
+    n:usize,cp:&[usize],ri:&[usize],parent:&[Option<usize>],counts:&[usize],
+    incumbent:&[usize],original_degree:&[usize],policy:usize,
+    max_n:usize,max_input:usize,max_factor:usize,
+) -> Option<Vec<usize>> {
+    if original_degree.len() != n || policy > 11 { return None; }
+    let adj = reconstruct(n, cp, ri, parent, counts, incumbent,
+        max_n,max_input,max_factor)?;
+    Some(priority_mcs(&adj, incumbent, counts, original_degree, policy))
+}
+
+fn priority_mcs(adj: &Completion, incumbent: &[usize], counts: &[usize],
+    original_degree: &[usize], policy: usize) -> Vec<usize> {
+    let n = adj.len();
+    let mut priority = vec![0u64; n];
+    for (pos, &v) in incumbent.iter().enumerate() {
+        let rank = (n - pos) as u64;
+        priority[v] = match policy {
+            0 => ((n.saturating_sub(original_degree[v]) as u64) << 32) | rank,
+            1 => ((original_degree[v] as u64) << 32) | rank,
+            2 => ((n.saturating_sub(adj[v].len()) as u64) << 32) | rank,
+            3 => ((n.saturating_sub(counts[pos]) as u64) << 32) | rank,
+            4 => pos as u64,
+            6 => ((original_degree[v] as u64) << 32) | pos as u64,
+            7 => ((adj[v].len() as u64) << 32) | rank,
+            8 => ((adj[v].len() as u64) << 32) | pos as u64,
+            9 => ((n.saturating_sub(adj[v].len().saturating_sub(original_degree[v])) as u64) << 32) | rank,
+            10 => ((adj[v].len().saturating_sub(original_degree[v]) as u64) << 32) | rank,
+            11 => (((original_degree[v] as u64).saturating_mul(65_536)
+                / (adj[v].len() as u64+1)).min(u32::MAX as u64) << 32) | rank,
+            _ => {
+                let mut h = (pos as u64).wrapping_add(0x9e37_79b9_7f4a_7c15);
+                h = (h ^ (h >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+                h = (h ^ (h >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+                h ^ (h >> 31)
+            }
+        };
+    }
+    let mut heap = std::collections::BinaryHeap::with_capacity(n);
+    for v in 0..n { heap.push((0usize, priority[v], v)); }
+    let mut weights = vec![0usize; n];
+    let mut visited = vec![false; n];
+    let mut out = Vec::with_capacity(n);
+    while let Some((weight, _, v)) = heap.pop() {
+        if visited[v] || weight != weights[v] { continue; }
+        visited[v] = true; out.push(v);
+        if out.len()==n {break;}
+        for &u in &adj[v] {
+            let u = u as usize;
+            if !visited[u] {
+                weights[u] += 1;
+                heap.push((weights[u], priority[u], u));
+            }
+        }
+    }
+    out.reverse(); out
 }
 
 #[cfg(test)]
@@ -429,6 +502,16 @@ mod tests {
                         let f = flops_of(&pat, &candidate);
                         best = best.min(f);
                         assert!(f <= baseline, "n={n}, mask={mask}, order={incumbent:?}");
+                    }
+                    let degrees: Vec<_> = graph.iter().map(|r| r.iter().filter(|&&e| e).count()).collect();
+                    for policy in 0..12 {
+                        let candidate = priority_mcs(&reconstructed, &incumbent, &counts, &degrees, policy);
+                        assert_eq!(candidate,priority_reference::reference(&reconstructed,
+                            &incumbent,&counts,&degrees,policy));
+                        assert!(is_peo(&filled, &candidate), "policy={policy}");
+                        assert_eq!(candidate, priority_mcs(&reconstructed, &incumbent, &counts, &degrees, policy));
+                        assert!(flops_of(&pat, &candidate) <= baseline,
+                            "n={n}, mask={mask}, order={incumbent:?}, policy={policy}");
                     }
                     assert!(best <= baseline);
                     if !next_permutation(&mut incumbent) { break; }

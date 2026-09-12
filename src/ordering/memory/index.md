@@ -1,9 +1,3 @@
-[0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
-compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
-keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->
-0.792439** (-1.75 relative bip). Isolated on purpose: it is also the single
-candidate being tested against the 2 s cap.
-
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so

@@ -1,3 +1,198 @@
+[0220 shared late budget](experiments/0220-shared-terminal-core-budget.md):
+terminal exchange/admitted follow-up and late retained-core search are mutually
+exclusive; actual attempted work spends the budget even on no improvement.
+Larger core wins remain eligible; original-incidence research remains test-only.
+Public screen and checks pending; campaign2 rejected/9 failed, frontierfe4f40c.
+
+[0219 final failure](experiments/0219-scored-core-and-promoted-window-baseline.md):
+2a68edc7 FAILED hidden 2.0s cap, workflow34724057192 Benchmark105.58s.
+No hidden score, entire8586225 tree matches0edf040. Campaign2 rejected/9 failed.
+Next: budget exclusion between terminal windows and late core search.
+Test-only large-pattern original tie screen0.790789084587,8 wins,helper max0.055402s.
+
+[0219: scored core continuation and promoted terminal schedule](experiments/0219-scored-core-and-promoted-window-baseline.md):
+returns to scored de17cd31 core code and verified newjordan fe4f40c windows.
+Wide priority MCS/LexBFS, their modules and callers are cfg(test) only;
+medium100M/64 fence disabled, scored20B/32 retained. Full public screen
+**0.791087437358**, 15 losses/285 ties vs failed10, maximum0.735453s.
+127 active release tests pass,75 ignored; generated64 calls pass,3 wins/0 losses/13 ties.
+Required sandbox all300 **0.791087 / fill0.924023**, each symbolic tuple matches.
+This combined source needs its own official grade. No eleventh upload yet.
+Queued **2a68edc7**, immutable tested/uploaded **0edf040**, coauthornewjordan;
+official hidden result pending, no hidden validity claimed.
+Original-incidence proposal remains test-only on failed10, not this score.
+Campaign2 rejected/8 failed/0 own promotions; current frontierfe4f40c0.841858.
+
+[0217: promoted terminal schedule with acceptance-state cost gates](experiments/0217-promoted-window-schedule-integration.md):
+newjordan's verified fe4f40c schedule: 536870912 exchange ledger, four PEO
+rounds and five spans. Retains original 12k/200k/150k followup geometry.
+Public screen **0.790176632480**,
+22 wins/1 loss/277 ties vs attempt9. PEO only after priority win, LexBFS only
+after priority helper wins: both gates preserve all 300 exact permutations.
+Focused finished-completion kernel comparison old/new outputs all equal,
+PEO reconstructions 302->16 and LexBFS calls 290->4, total 1.144744->0.617229 s ARM.
+Promoted schedule credited to newjordan; disabled fanout not imported.
+Original-incidence tie prototype still cfg(test) only; its new four-win screen
+**0.790098120936** is not this production's claimed score. Fresh no-override
+production all300 exact permutations pass, **0.790176632480**, max **0.797872 s**.
+126 active release tests pass; 64 generated calls pass, 7 wins/0 losses/9 ties
+vs attempt9, maximum **0.806936 s**. Required sandbox all300
+**0.790177 / fill0.923617**, each full symbolic tuple matches. Ready to upload
+with coauthor newjordan. Campaign 2 rejected/7 failed.
+Queued **074ed992**, immutable tested/uploaded **5b86779**; hidden grade pending.
+Final **074ed992 FAILED hidden2.0s cap**, workflow34723170151 Benchmark104.86s,
+entire remote74ff811 matches. Gates do not fix the whole cap. Next production
+removes wide completion stages and medium fence; current frontierfe4f40c0.841858.
+
+[0216: earlier medium-cost candidate prefixes](experiments/0216-medium-cost-candidate-batch-fence.md):
+100M/64 new producer fence, retain existing 20B/32. Paired all300 and fresh
+production permutations agree, exact **0.790415074615**, 1 win/0 losses/299 ties
+vs attempt8. 126 active release tests pass; 64 generated calls pass, 3 score
+tradeoffs/13 ties, all at or below AMD; saves up to 0.305138 s on paired ARM
+fixtures. Original-incidence MCS exploration is test-only. Required sandbox
+all300 **0.790415 / fill0.923716**, each full symbolic tuple matches. Ready to upload.
+Queued **2ee07107**, immutable tested/uploaded **b13227d**; hidden grade pending.
+Final **2ee07107 FAILED hidden2.0s cap**, workflow34722194684 Benchmark102.96s,
+entire remote11eb4af tree matches. No hidden score; campaign2 rejected/7 failed.
+Fresh frontier: **fe4f40c / 256152b (newjordan)** promoted hidden **0.841858**,
+fill **0.944586**. Public note read, source fetched read-only for later controlled
+integration. No borrowed production code in this batch-fence candidate.
+
+[0207: continued optimization campaign](experiments/0207-optimization-campaign.md):
+active campaign from promoted `07f0e8a2`, hidden **0.842377**; stop after four
+official rejections. Rejections **2/4**, failed workflows **8**, promotions **0**.
+[0215: eager MCS queue and fixed LexBFS](experiments/0215-indexed-mcs-and-lex-bfs.md):
+292 old/new public MCS kernel pairs match exactly; 9.6x measured kernel speedup.
+All n<=5 graphs/orders and twelve policies match frozen MCS reference; six
+LexBFS modes match the independent label oracle and PEO/full-score checks.
+One fixed reverse LexBFS plus conditional PEO2 improves six more public rows,
+exact **0.790519213141**. Selected helper and fresh complete production match
+all 300 permutations; max **0.807537 s**. 126 active tests and 64 generated
+calls pass, all 16 generated scores tie the preceding 1M control. Required
+sandbox all 300 **0.790519 / fill 0.923754**, each symbolic tuple matches.
+Attempt eight **49cad5eb FAILED hidden 2.0 s cap**, tested/uploaded **c0b9562**,
+entire remote **6fbb5bd** tree matches. Workflow **34721058461**, Benchmark
+**104.14 s**. Indexed queue preserves semantics and lowers local kernel time,
+but does not resolve the whole hidden time cap. Earlier batch runtime under
+stricter producer prefixes is investigated next; no hidden score for attempt8.
+[0215 literature](literature/0215-lex-bfs-partition-refinement.md): primary
+LexBFS partition-refinement provenance and independent implementation mapping.
+
+[0214: original AMD work guard and larger sparse factors](experiments/0214-amd-work-guard-and-larger-factors.md):
+new terminal stage only for original AMD flops <=1B, dimension <=50k,
+input nnz <=1.3M and factor <=1M. Independently replayed and fresh complete
+public permutations agree on all 300, exact **0.790704642081**, maximum
+**0.910646 s**; 126 active release tests and 64 generated calls on 16 fixtures
+pass, all generated scores tie the protected 300k control. Sandboxed all 300
+passes **0.790705 / fill 0.923840**, every symbolic row matches independent replay.
+500k/1M/2M scope screens archived; 2M not active. Attempt seven **d895008f**
+**FAILED hidden 2.0 s cap**, tested/uploaded **7946bcf**, remote **6a1cdea**
+matches the complete ordering tree. Workflow **34720094107**, Benchmark
+**102.81 s**. Original-AMD guard does not resolve this cap failure. No hidden
+score. Indexed-queue runtime and LexBFS investigation follows independently.
+
+First candidate [0208](experiments/0208-small-factor-post-window-refinement.md)
+passes sandboxed 300 at **0.791821**, 13/0/287; 123 active tests and 44 paired
+stress orders pass. **91dac999 FAILED hidden 2 s cap**, no hidden score.
+Failed tail removed from subsequent production; next hypothesis reuses existing
+independent-set cores for a competitive final metric pass.
+
+[0209: bounded metric on retained independent-set cores](experiments/0209-retained-independent-core-metric.md):
+public **0.791864560331 -> 0.791703147252**, 1/0/299, approximately 2.04
+relative basis points. Original driver byte-identical on 218 paired inputs;
+no repeated lifts or METIS. Late AmindNorm under factor/core/competitiveness
+limits and 80M deterministic work allowance; 124 active tests and 44 stress
+orders pass. Sandboxed **0.791703**, fill **0.925316**, all 300 counts match.
+Fill trades upward for the primary flop gain; `5a8c5623` FAILED hidden 2 s cap
+in workflow `34714573617`, uploaded ordering matches tested `12e8c2b`.
+
+[0207 literature: MCS structural priorities](literature/0207-mcs-structural-ties.md):
+primary 1984 MCS reference and bounded tie-priority hypothesis; no fetched code.
+
+[0210: sparse deficiency runtime fund](experiments/0210-sparse-deficiency-runtime-fund.md):
+all 300 full public permutations identical to 0209, **0.791703147252**; skip
+zero neighborhood words with original logical charges, checked x86 popcnt
+entries, adaptive 1M..80M retained AmindNorm allowance. Seven state/RNG checks
+pass. Corpus diagnostic **89.283527 s / max 0.731966** on ARM. All 124 active
+tests and 44 paired generated orders pass. Sandboxed **0.791703 / 0.925316**
+on all 300 with exact count agreement; **77d73135 FAILED hidden 2 s cap**, workflow
+**34715439117**, immutable source matches tested `ec93920`. Prior hidden cap
+failures are not scored rejections.
+
+[0211: earlier budget and winning-core PEO](experiments/0211-early-budget-and-winning-core-peo.md):
+fresh all-300 score **0.791635371701**, all permutations match independently
+polished control; 125 active tests, 48 direct PEO calls and 44 generated orders
+pass. High-flop batch cap64->32 above20B, exact lazy eight-entry runner-up
+ledger, one-round PEO only after late core win. Cap64/32 has zero losses on
+11 generated fixtures and saves ~0.19–0.20 s on two >20B examples. Sandboxed
+all 300 passes at **0.791635**, fill **0.924192**, all counts match. Upload
+**30eb4c76 REJECTED tied incumbent**, hidden **0.842377 / 0.944856**; workflow
+34716429064 SUCCESS, Benchmark ~536 s, upload matches tested 9bc3e94. Best
+promoted hidden remains 07f0e8a2; valid cap32 baseline for further work.
+
+[0212: compact exact search on retained cores](experiments/0212-compact-search-on-retained-cores.md):
+public **0.791635371701 -> 0.791316868681**, one gt_10k win, zero losses;
+at most one exact core search under 100k full/core factor bounds and replay
+allowance 8M..240M, skip certified fill-free cores. Added diagnostic
+**0.798339 s / max 0.059367**, all300 fresh permutations match, 125 active
+tests and 44 generated complete orders pass. Sandboxed all 300 at **0.791317**,
+fill **0.924124**, every exact count matches the independent screen; campaign
+**2/4 rejected, 3 failed, 0 promotions**. `de17cd31` REJECTED at hidden
+**0.842374 / fill 0.944855**, raw gain below promotion floor. Workflow
+34717388778 SUCCESS, upload matches bf72aac. Best raw source is retained;
+promoted frontier remains 07f0e8a2 at 0.842377.
+
+[0213: completion priorities and negative generic metrics](experiments/0213-completion-priority-and-negative-metrics.md):
+45 bounded generic metric/alpha arms have no marginal gains, diagnostic only.
+Higher-original-degree MCS ties plus ordinary PEO at 18k/80k/150k yield exact
+**0.791290026731**, six wins/zero losses, all required checks passed; preserved
+tested control **50a91b5 / bounded-priority-control**. Wider 30k/180k/300k gives
+exact **0.791259803417**, ten wins/zero losses, independent helper all 300
+permutations match. 200k cap loses gains; six extra priorities do not beat
+the selected single policy. Final wider all 300 complete permutations match;
+126 active tests pass, completed-visit reference preserves every recorded
+permutation, 60 generated repeated orders pass (1 win/14 ties). Sandboxed
+all 300 **0.791260 / fill 0.924091**, every exact count matches. Ready to upload.
+`bf85d92d` FAILED hidden 2.0 s cap, workflow 34718929020, Benchmark 98.32 s;
+upload ce1ffee matches remote 5d3c2f9. No hidden score. Next revision guards
+new terminal work by original AMD cost. Campaign **2/4 rejected, 4 failed**.
+
+[0206: factor-bounded terminal PEO and smaller windows](experiments/0206-factor-bounded-terminal-polish.md):
+**PROMOTED `07f0e8a2` / `52affcb`, current best: hidden 0.842526 -> 0.842377**,
+fill **0.944856**. Full workflow `34711543900` passes, Benchmark 554 s,
+all hidden caps and determinism checks satisfied. Winning Rust matches
+tested `433fa88`; final status updates are Markdown only.
+revision after `026c5a9c` timed out; **sandboxed 0.792030 -> 0.791865**,
+fill 0.924246, 23 wins / 0 losses; all 300 counts match. Add 150k factor-nnz
+gate and existing-ledger precheck;
+remove late watcher, halve window allowance to 16M + 16M + 32M. Preserve the
+promoted prefix and exact component ceiling 14. All 123 active tests and
+44 generated paired orders pass; maximum new minimum 0.993 s. Winning source
+is preserved on `factor-bounded-terminal-polish`, with the previous best on
+`fenced-terminal-window`.
+
+[0205: final completion and sparse spans](experiments/0205-post-search-completion-and-sparse-spans.md):
+**local 0.792030 -> 0.791769**, fill **0.924200**, 30 wins / 0 losses against
+promoted `fb35d11` (hidden **0.842526**). Late PEO, 4M watcher and bounded
+span/narrow windows; exact component ceiling 14, 12k/200k/20-billion-flop gate.
+All 300 sandboxed counts match; 123 active tests and 44 generated paired orders
+pass, maximum new minimum 0.987 s. Submission **`026c5a9c` / `c508ad7`**
+**failed the hidden 2 s cap** in workflow `34710571494`, 106 s into Benchmark;
+no hidden score. Remote ordering matches tested `a427c32`; narrower follow-up
+will be measured separately.
+
+[0203: exact kernels and post-search terminal window](experiments/0203-exact-kernels-terminal-window.md):
+**PROMOTED `c5e6c2ff` / `fb35d11`: hidden 0.842716 -> 0.842526**, fill
+**0.944945**, all workflow checks and hidden time caps passed. Winning Rust
+source is saved on `fenced-terminal-window`; later admission screen is separate.
+Prior promoted `7fd61df` baseline passes all 300 at **0.792226**, previous target
+**0.842716**. A terminal width-8/step-3/64M screen reaches **0.792029985254**,
+35 wins / 0 regressions; keep the full 50k alternate-PEO phase and 64-candidate
+high-flop fence. Exact flat/pooled PEO comparisons cover 535 cases; sorted CSC
+matches feral on 1,200 cases; 121 active release tests pass. Integrated
+sandboxed run passes all 300 at **0.792030**, fill **0.924364**; every emitted
+flop count matches the screen. Official hidden improvement is confirmed above.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

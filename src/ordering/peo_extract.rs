@@ -9,6 +9,18 @@ pub(super) const MAX_LNNZ: usize = 300_000;
 
 #[cfg(test)]
 mod pooled_reference;
+#[cfg(test)]
+mod priority_reference;
+#[cfg(test)]
+mod indexed_priority;
+#[cfg(test)]
+mod lex_bfs;
+#[cfg(test)]
+mod original_priority;
+#[cfg(test)]
+thread_local! {static USE_INDEXED_PRIORITY:std::cell::Cell<bool>=std::cell::Cell::new(true);}
+#[cfg(test)]
+pub(super) fn set_indexed_priority(active:bool) {USE_INDEXED_PRIORITY.with(|c|c.set(active));}
 
 #[cfg(test)]
 thread_local! { static USE_POOLED_REFERENCE: std::cell::Cell<bool> = std::cell::Cell::new(false); }
@@ -207,6 +219,113 @@ fn reconstruct(
     Some(Completion { row_ptr, neighbors })
 }
 
+/// MCS with a fixed structural priority for ties in visited-neighbor count.
+/// The completed graph is reconstructed once; lazy heap updates are bounded
+/// by its edge count. Existing linear/LIFO candidates remain unchanged.
+#[cfg(test)]
+#[cfg(test)]
+pub(super) fn priority_candidate_bounded(
+    n: usize, cp: &[usize], ri: &[usize], parent: &[Option<usize>],
+    counts: &[usize], incumbent: &[usize], original_degree: &[usize],
+    policy: usize,
+) -> Option<Vec<usize>> {
+    priority_candidate_with_limits(n,cp,ri,parent,counts,incumbent,original_degree,
+        policy,12_000,200_000,150_000)
+}
+
+#[cfg(test)]
+pub(super) fn priority_candidate_with_limits(
+    n:usize,cp:&[usize],ri:&[usize],parent:&[Option<usize>],counts:&[usize],
+    incumbent:&[usize],original_degree:&[usize],policy:usize,
+    max_n:usize,max_input:usize,max_factor:usize,
+) -> Option<Vec<usize>> {
+    if original_degree.len() != n || policy > 11 { return None; }
+    let adj = reconstruct(n, cp, ri, parent, counts, incumbent,
+        max_n,max_input,max_factor)?;
+    Some(priority_mcs(&adj, incumbent, counts, original_degree, policy))
+}
+
+#[cfg(test)]
+pub(super) fn lex_candidates_with_limits(n:usize,cp:&[usize],ri:&[usize],
+    parent:&[Option<usize>],counts:&[usize],incumbent:&[usize],degrees:&[usize],
+    modes:&[usize],max_n:usize,max_input:usize,max_factor:usize)->Option<Vec<Vec<usize>>> {
+    if degrees.len()!=n ||modes.iter().any(|&mode|mode>5) {return None;}
+    let adj=reconstruct(n,cp,ri,parent,counts,incumbent,max_n,max_input,max_factor)?;
+    let mut reverse=incumbent.to_vec();reverse.reverse();
+    let mut degree=incumbent.to_vec();
+    if modes.iter().any(|&mode|mode>=4) {degree.sort_by_key(|&v|std::cmp::Reverse(degrees[v]));}
+    Some(modes.iter().map(|&mode|lex_bfs::order(&adj,
+        match mode/2 {0=>incumbent,1=>&reverse,_=>&degree},mode%2!=0)).collect())
+}
+
+#[cfg(test)]
+pub(super) fn original_candidates_with_limits(n:usize,original_cp:&[usize],original_ri:&[usize],
+    cp:&[usize],ri:&[usize],parent:&[Option<usize>],counts:&[usize],incumbent:&[usize],
+    modes:&[usize],max_n:usize,max_input:usize,max_factor:usize)->Option<Vec<Vec<usize>>> {
+    if original_cp.len()!=n+1 ||original_cp.first().copied()!=Some(0)
+        ||original_cp.last().copied()!=Some(original_ri.len()) ||original_ri.len()>max_input
+        ||original_cp.windows(2).any(|w|w[0]>w[1]) ||original_ri.iter().any(|&v|v>=n)
+        ||modes.iter().any(|&mode|mode>3) {return None;}
+    let adj=reconstruct(n,cp,ri,parent,counts,incumbent,max_n,max_input,max_factor)?;
+    Some(modes.iter().map(|&mode|original_priority::order(&adj,original_cp,original_ri,incumbent,mode)).collect())
+}
+
+#[cfg(test)]
+fn priority_mcs(adj: &Completion, incumbent: &[usize], counts: &[usize],
+    original_degree: &[usize], policy: usize) -> Vec<usize> {
+    let n = adj.len();
+    let mut priority = vec![0u64; n];
+    for (pos, &v) in incumbent.iter().enumerate() {
+        let rank = (n - pos) as u64;
+        priority[v] = match policy {
+            0 => ((n.saturating_sub(original_degree[v]) as u64) << 32) | rank,
+            1 => ((original_degree[v] as u64) << 32) | rank,
+            2 => ((n.saturating_sub(adj[v].len()) as u64) << 32) | rank,
+            3 => ((n.saturating_sub(counts[pos]) as u64) << 32) | rank,
+            4 => pos as u64,
+            6 => ((original_degree[v] as u64) << 32) | pos as u64,
+            7 => ((adj[v].len() as u64) << 32) | rank,
+            8 => ((adj[v].len() as u64) << 32) | pos as u64,
+            9 => ((n.saturating_sub(adj[v].len().saturating_sub(original_degree[v])) as u64) << 32) | rank,
+            10 => ((adj[v].len().saturating_sub(original_degree[v]) as u64) << 32) | rank,
+            11 => (((original_degree[v] as u64).saturating_mul(65_536)
+                / (adj[v].len() as u64+1)).min(u32::MAX as u64) << 32) | rank,
+            _ => {
+                let mut h = (pos as u64).wrapping_add(0x9e37_79b9_7f4a_7c15);
+                h = (h ^ (h >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+                h = (h ^ (h >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+                h ^ (h >> 31)
+            }
+        };
+    }
+    #[cfg(test)]
+    if !USE_INDEXED_PRIORITY.with(|c|c.get()) {return priority_mcs_stale_keys(adj,&priority);}
+    indexed_priority::order(adj,&priority)
+}
+
+#[cfg(test)]
+fn priority_mcs_stale_keys(adj:&Completion,priority:&[u64])->Vec<usize> {
+    let n=adj.len();
+    let mut heap = std::collections::BinaryHeap::with_capacity(n);
+    for v in 0..n { heap.push((0usize, priority[v], v)); }
+    let mut weights = vec![0usize; n];
+    let mut visited = vec![false; n];
+    let mut out = Vec::with_capacity(n);
+    while let Some((weight, _, v)) = heap.pop() {
+        if visited[v] || weight != weights[v] { continue; }
+        visited[v] = true; out.push(v);
+        if out.len()==n {break;}
+        for &u in &adj[v] {
+            let u = u as usize;
+            if !visited[u] {
+                weights[u] += 1;
+                heap.push((weights[u], priority[u], u));
+            }
+        }
+    }
+    out.reverse(); out
+}
+
 #[cfg(test)]
 fn mcs_peo_stale(adj: &Completion, incumbent: &[usize], reverse_adj: bool) -> Vec<usize> {
     let n = adj.len();
@@ -397,6 +516,7 @@ mod tests {
 
     #[test]
     fn peo_extraction_exhaustive_graphs_and_orders() {
+        set_indexed_priority(false);
         for n in 1..=5 {
             let edges: Vec<_> = (0..n).flat_map(|u| (u + 1..n).map(move |v| (u, v))).collect();
             for mask in 0..(1usize << edges.len()) {
@@ -430,11 +550,78 @@ mod tests {
                         best = best.min(f);
                         assert!(f <= baseline, "n={n}, mask={mask}, order={incumbent:?}");
                     }
+                    let degrees: Vec<_> = graph.iter().map(|r| r.iter().filter(|&&e| e).count()).collect();
+                    for policy in 0..12 {
+                        let candidate = priority_mcs(&reconstructed, &incumbent, &counts, &degrees, policy);
+                        assert_eq!(candidate,priority_reference::reference(&reconstructed,
+                            &incumbent,&counts,&degrees,policy));
+                        set_indexed_priority(true);
+                        let indexed=priority_mcs(&reconstructed,&incumbent,&counts,&degrees,policy);
+                        set_indexed_priority(false);
+                        assert_eq!(candidate,indexed,"indexed priority={policy}");
+                        assert!(is_peo(&filled, &candidate), "policy={policy}");
+                        assert_eq!(candidate, priority_mcs(&reconstructed, &incumbent, &counts, &degrees, policy));
+                        assert!(flops_of(&pat, &candidate) <= baseline,
+                            "n={n}, mask={mask}, order={incumbent:?}, policy={policy}");
+                    }
+                    for seed in 0..3 {
+                        let mut initial=incumbent.clone();
+                        if seed==1 {initial.reverse();}
+                        if seed==2 {initial.sort_by_key(|&v|std::cmp::Reverse(degrees[v]));}
+                        for reverse in [false,true] {
+                            let candidate=lex_bfs::order(&reconstructed,&initial,reverse);
+                            assert_eq!(candidate,lex_bfs::reference(&reconstructed,&initial,reverse),"LexBFS seed={seed} reverse={reverse}");
+                            assert!(is_peo(&filled,&candidate),"LexBFS seed={seed}");
+                            assert!(flops_of(&pat,&candidate)<=baseline,"LexBFS n={n} mask={mask} seed={seed}");
+                        }
+                    }
+                    for mode in 0..4 {
+                        let candidate=original_priority::order(&reconstructed,&pat.col_ptr,&pat.row_idx,&incumbent,mode);
+                        assert_eq!(candidate,original_priority::reference(&reconstructed,&pat.col_ptr,&pat.row_idx,&incumbent,mode),"original incidences mode={mode}");
+                        assert!(is_peo(&filled,&candidate),"original incidence PEO mode={mode}");
+                        assert!(flops_of(&pat,&candidate)<=baseline,"original incidence n={n} mask={mask} mode={mode}");
+                    }
                     assert!(best <= baseline);
                     if !next_permutation(&mut incumbent) { break; }
                 }
             }
         }
+        set_indexed_priority(true);
+    }
+
+    #[test]
+    fn original_incidence_queue_larger_directed_duplicate_weights() {
+        let mut state=0x1973_218a_1958_cde1_u64;
+        let mut next=|| {state^=state<<13;state^=state>>7;state^=state<<17;state};
+        for n in [7usize,17,31,64,127] {for density in [2u64,10,25,65] {
+            let mut graph=vec![vec![false;n];n];
+            for u in 0..n {for v in u+1..n {
+                if next()%100<density {graph[u][v]=true;graph[v][u]=true;}
+            }}
+            let pat=pattern(&graph);let mut incumbent:Vec<_>=(0..n).collect();
+            for i in (1..n).rev() {incumbent.swap(i,next() as usize%(i+1));}
+            let pp=permute_pattern(&pat,&incumbent);let et=EliminationTree::from_pattern(&pp);
+            let counts=column_counts_gnp(&pp,&et);let filled=complete(&graph,&incumbent);
+            let adj=reconstruct(n,&pp.col_ptr,&pp.row_idx,&et.parent,&counts,
+                &incumbent,MAX_N,MAX_INPUT_NNZ,MAX_LNNZ).unwrap();
+            // Deliberately asymmetric and duplicated heuristic incidences;
+            // completion cardinality must still dominate every secondary key.
+            let mut cp=vec![0usize];let mut ri=Vec::new();
+            for v in 0..n {
+                for &u in &pat.row_idx[pat.col_ptr[v]..pat.col_ptr[v+1]] {
+                    if next()%4!=0 {ri.push(u);if next()%2==0 {ri.push(u);}}
+                }
+                if next()%2==0 {ri.push(v);ri.push(v);}
+                cp.push(ri.len());
+            }
+            let initial=flops_of(&pat,&incumbent);
+            for mode in 0..4 {
+                let candidate=original_priority::order(&adj,&cp,&ri,&incumbent,mode);
+                assert_eq!(candidate,original_priority::reference(&adj,&cp,&ri,&incumbent,mode),
+                    "n={n} density={density} mode={mode}");
+                assert!(is_peo(&filled,&candidate));assert!(flops_of(&pat,&candidate)<=initial);
+            }
+        }}
     }
 
     #[test]

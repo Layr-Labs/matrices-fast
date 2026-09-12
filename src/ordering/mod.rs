@@ -3737,7 +3737,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if f < best_flops { best_perm = p; }
+            // 0154: write the accepted score back. The stale best_flops
+            // let later strict-acceptance stages (transplant, final refine)
+            // compare against a value the incumbent has already beaten, so a
+            // worse-than-incumbent candidate could be accepted; the repair is
+            // dev-invisible but fixes a real inversion on any row where this
+            // stage wins (Xo1otl's passed 0.842833 package carried the same
+            // repair for stages 11/12).
+            if f < best_flops { best_flops = f; best_perm = p; }
         }
     }
     // iter62 LEAP: local paired-swap / plateau refine on full lt_1k (SmallScore
@@ -3790,6 +3797,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
             if final_flops == incumbent_flops { break; }
+            // 0154: same write-back as stage 11 — keep best_flops exact.
+            if final_flops < best_flops { best_flops = final_flops; }
         }
     } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ && nnz < 1_200_000 {
         // Above the gate the incumbent completion has had no cleanup at all: neither the
@@ -3820,6 +3829,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
             if final_flops == incumbent_flops { break; }
+            // 0154: same write-back as stage 11 — keep best_flops exact.
+            if final_flops < best_flops { best_flops = final_flops; }
         }
     }
     #[cfg(test)]

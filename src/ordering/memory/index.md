@@ -1,3 +1,14 @@
+[0151: AmindNorm metric pass on small lifted cores](experiments/0151-amindnorm-on-small-cores.md):
+dev 0.792439 -> **0.792039**, single row (edgecross24-115 −7.57 % after polish),
+299 rows bit-identical, timing-neutral; the gate (cn≤12k/cnnz≤100k) excludes a
+measured 0.1–0.9 s/core blow-up band on crudeoil_pooling_dt3. Also records the
+exact-MD tie-break artifact and the squfl/emfl forced-fill optimality argument.
+
+[0152: cap-2 independent set on the giant band](experiments/0152-cap2-giant-lift.md):
+dev 0.792439 -> **0.791831** bundled with 0151's AmindNorm keep; gabriel09
+1.0000 -> 0.9789, 2 rows / 0 regressions; also closes scotch/kahip-on-cores,
+minfill-on-cores, relabelled-AMD-on-cores and the supplychain hub-interleave.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

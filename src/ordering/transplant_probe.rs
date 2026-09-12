@@ -39,13 +39,12 @@ pub(super) fn refine_with_donors(
     let mut ws = scoring_ws::ScoreWorkspace::new(n, nnz);
     let inc_f = ws.flops(sp, incumbent);
     let below = amd_flops > 0 && inc_f < amd_flops;
-    // Sparse-large near-AMD ties: tip skipped these (inc_f >= amd). Open them.
-    let sparse_large_tie = (15_000..120_000).contains(&n)
-        && (40_000..500_000).contains(&nnz)
-        && nnz <= 6 * n
-        && amd_flops > 0
-        && inc_f.saturating_mul(100) <= amd_flops.saturating_mul(101);
-    if !below && !sparse_large_tie {
+    // 0153: the `sparse_large_tie` opening (two-sided n and nnz windows plus a
+    // 1% ratio band, commented after the facility/transswitch dev families)
+    // is removed. It is the same identity-fitted-window class 0150 removed at
+    // stage 1b and the class whose removal moved the hidden grade in the
+    // 0.842833 control package; the below-anchor gate is structural and stays.
+    if !below {
         return None;
     }
     let donor_perms: Vec<&[usize]> = donors.iter().map(|(_, p)| p.as_slice()).collect();

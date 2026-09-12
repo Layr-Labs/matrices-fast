@@ -567,9 +567,86 @@ pub fn order_variant(
     Ok(finalize_permutation(&mut ws))
 }
 
+/// Optional deterministic allowance for a late portfolio candidate. The
+/// existing entry point and its elimination loop are unchanged. Exhaustion
+/// discards the candidate, so a caller can retain its valid incumbent.
+pub(super) fn order_variant_limited(core:&CscPattern<'_>, dense_alpha:f64,
+    aggressive:bool, variant:ScoreVariant, allowance:u64)->Option<Vec<i32>> {
+    let opts = WorkspaceOptions {dense_alpha};
+    let mut remaining = allowance;
+    let setup = (5*core.n).saturating_add(2*core.row_idx.len()) as u64;
+    remaining = remaining.checked_sub(setup)?;
+    let mut ws = Workspace::new_with_n_buckets(core,&opts,2*core.n+2).ok()?;
+    let exponent = match variant {ScoreVariant::DegP075=>0.75,
+        ScoreVariant::DegP125=>1.25,_=>1.0};
+    let mut powers = ScorePowers {degree:IntegerPower::new(ws.n,exponent),
+        fill:FloatPower::new(if variant==ScoreVariant::DegDivNvWfP15 {1.5} else {1.0})};
+    while ws.nel<ws.n {
+        let Some(me) = select_pivot_amf(&mut ws) else {break};
+        let mass = ws.nv[me].max(1) as u64;
+        let width = (ws.degree[me].max(0) as u64).saturating_add(mass);
+        let charge = width.saturating_mul(width).saturating_mul(mass)
+            .max(ws.n.saturating_sub(ws.nel) as u64);
+        remaining = remaining.checked_sub(charge)?;
+        let elenme = ws.elen[me];
+        let (pme1,pme2,nvpiv,degme) = create_element_amf(&mut ws,me).ok()?;
+        let actual_mass = nvpiv.max(1) as u64;
+        let actual_width = (degme as u64).saturating_add(actual_mass);
+        let actual_charge = actual_width.saturating_mul(actual_width).saturating_mul(actual_mass);
+        remaining = remaining.checked_sub(actual_charge.saturating_sub(charge))?;
+        finalize_step_variant(&mut ws,me,pme1,pme2,nvpiv,degme,elenme,
+            aggressive,variant,&mut powers);
+    }
+    Some(finalize_permutation(&mut ws))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn limited_metric_matches_completed_original_and_abandons_exhaustion() {
+        let n = 49;
+        let mut random = 0x584a_9332_1914u64;
+        let mut fixtures = vec![(0..n-1).map(|v|(v,v+1)).collect::<Vec<_>>(),
+            (1..n).map(|v|(0,v)).collect::<Vec<_>>()];
+        let mut grid = Vec::new();
+        for v in 0..n {
+            if v%7<6 {grid.push((v,v+1));}
+            if v+7<n {grid.push((v,v+7));}
+        }
+        fixtures.push(grid);
+        for threshold in [5,35] {
+            let mut edges = Vec::new();
+            for u in 0..n {for v in u+1..n {
+                random^=random<<13;random^=random>>7;random^=random<<17;
+                if random%100<threshold {edges.push((u,v));}
+            }} fixtures.push(edges);
+        }
+        for edges in fixtures {
+            let (cp,ri) = sample_core(n,&edges);
+            let core = CscPattern::new(n,&cp,&ri).unwrap();
+            for variant in [ScoreVariant::SqDiv,ScoreVariant::SqPure,
+                ScoreVariant::Ammf,ScoreVariant::AmindNorm,ScoreVariant::DegSqrt,
+                ScoreVariant::DegP075,ScoreVariant::DegP125,
+                ScoreVariant::DegDivNvSqrtWf,ScoreVariant::DegDivNvWfP15,
+                ScoreVariant::DegPlusDegme,ScoreVariant::DegDivNvDegme] {
+                for aggressive in [false,true] {for dense_alpha in [-1.0,10.0] {
+                    let original = order_variant(&core,dense_alpha,aggressive,variant).unwrap();
+                    assert_eq!(Some(original.clone()),order_variant_limited(&core,dense_alpha,aggressive,variant,u64::MAX));
+                    if let Some(p) = order_variant_limited(&core,dense_alpha,aggressive,variant,64_000_000) {
+                        assert_eq!(p,original);
+                    }
+                }}
+            }
+        }
+        let (cp,ri) = sample_core(4,&[(0,1),(1,2),(2,3),(0,3)]);
+        let core = CscPattern::new(4,&cp,&ri).unwrap();
+        let setup = (5*core.n+2*core.row_idx.len()) as u64;
+        assert!(order_variant_limited(&core,-1.0,true,ScoreVariant::AmindNorm,0).is_none());
+        assert!(order_variant_limited(&core,-1.0,true,ScoreVariant::AmindNorm,setup+1).is_none());
+        assert_eq!(order_variant_limited(&core,-1.0,true,ScoreVariant::AmindNorm,u64::MAX),Some(order_variant(&core,-1.0,true,ScoreVariant::AmindNorm).unwrap()));
+    }
 
     fn assert_bijection(perm: &[i32], n: usize) {
         assert_eq!(perm.len(), n, "permutation length");

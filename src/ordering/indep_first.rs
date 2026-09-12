@@ -30,6 +30,9 @@ use std::hash::BuildHasherDefault;
 
 type EdgeSet = HashSet<u64, BuildHasherDefault<EdgeHasher>>;
 
+#[cfg(test)]
+mod candidate_probe;
+
 /// Core size above which only the AMD pass runs (see `run`).
 const GIANT_CORE_NNZ: usize = 600_000;
 /// METIS-on-core envelope in core NODES first (see `run`): ~0.2 s worst.
@@ -387,6 +390,52 @@ struct LiftedCore {
     cri: Vec<i32>,
 }
 
+/// Retain already-built competitive cores for a cheap final metric pass.
+pub(crate) struct ExtraCores { cores: Vec<(u64,LiftedCore)> }
+
+impl ExtraCores {
+    pub(crate) fn is_empty(&self)->bool { self.cores.is_empty() }
+    pub(crate) fn refine<S>(&self, incumbent: u64, score: S) -> Option<Vec<usize>>
+    where S: Fn(&[usize]) -> u64 {
+        #[cfg(test)]
+        if !extra_enabled() { return None; }
+        let mut best = incumbent;
+        let mut result = None;
+        for (amd,lc) in &self.cores {
+            if amd.saturating_mul(2)>incumbent.saturating_mul(3) {continue;}
+            if lc.il.core_nnz()>12*lc.il.core_n() {continue;}
+            let Some(core) = feral_ordering_core::CscPattern::new(lc.core_pat.n,&lc.ccp,&lc.cri) else {continue};
+            #[cfg(test)]
+            let t = std::time::Instant::now();
+            let Some(p) = super::custom_metrics::order_variant_limited(&core,10.0,true,
+                super::custom_metrics::ScoreVariant::AmindNorm,
+                incumbent.saturating_mul(4).clamp(1_000_000,80_000_000)) else {continue};
+            let p: Vec<usize> = p.into_iter().map(|v|v as usize).collect();
+            if !super::is_bijection(&p,lc.il.core_n()) { continue; }
+            let candidate = splice(&lc.il,&p);
+            if !super::is_bijection(&candidate,lc.il.prefix.len()+lc.il.core_n()) { continue; }
+            let f = score(&candidate);
+            #[cfg(test)]
+            println!("EXTRA_METRIC\t{}\t{}\t{}\t{:.6}\t{f}",
+                lc.il.prefix.len()+lc.il.core_n(),lc.il.core_n(),lc.il.core_nnz(),t.elapsed().as_secs_f64());
+            if f<best { best=f;result=Some(candidate); }
+        }
+        result
+    }
+}
+
+#[cfg(test)]
+thread_local! { static EXTRA_ENABLED: std::cell::Cell<bool> = std::cell::Cell::new(true); }
+#[cfg(test)]
+pub(super) fn set_extra_enabled(enabled:bool) { EXTRA_ENABLED.with(|c|c.set(enabled)); }
+#[cfg(test)]
+fn extra_enabled()->bool { EXTRA_ENABLED.with(|c|c.get()) }
+
+pub(crate) fn run_with_cores(sp:&ScoringPattern, ledger:u64)
+    ->Option<(u64,Vec<usize>,ExtraCores)> {
+    run_impl(sp,ledger,true)
+}
+
 /// Work-ledgered production driver.
 ///
 /// Sets: the greedy maximal independent set by `(degree, index)` at caps
@@ -410,6 +459,11 @@ struct LiftedCore {
 /// alone: a set whose predicted pairs or core would exceed the allowance is
 /// skipped, never started.
 pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    run_impl(sp,ledger,false).map(|(f,p,_)|(f,p))
+}
+
+fn run_impl(sp: &ScoringPattern, ledger: u64, retain:bool)
+    ->Option<(u64,Vec<usize>,ExtraCores)> {
     use super::custom_metrics::ScoreVariant as V;
     let n = sp.n;
     let nnz = sp.row_idx.len();
@@ -594,7 +648,20 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         }
     }
     let (f, i, cp) = best?;
-    Some((f, splice(&cores[i].0.il, &cp)))
+    let order = splice(&cores[i].0.il, &cp);
+    let mut kept = Vec::new();
+    if retain &&n<=18_000 &&nnz<=80_000 {
+        let selected: Vec<_> = by_amd.iter().take(2).copied().collect();
+        for (index,(lc,amd,_)) in cores.into_iter().enumerate() {
+            if selected.contains(&index) &&lc.il.core_nnz()<=150_000
+                &&lc.il.core_nnz()<=12*lc.il.core_n()
+                &&amd.saturating_mul(2)<=best_amd.saturating_mul(3) {
+                kept.push((amd,index,lc));
+            }
+        }
+        kept.sort_by_key(|(amd,index,_)|(*amd,*index));
+    }
+    Some((f,order,ExtraCores {cores:kept.into_iter().map(|(amd,_,lc)|(amd,lc)).collect()}))
 }
 
 fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {

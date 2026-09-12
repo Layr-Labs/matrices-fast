@@ -154,6 +154,8 @@ mod transplant_probe;
 pub mod rgreedy;
 mod completion;
 mod peo_extract;
+#[cfg(test)]
+mod terminal_polish;
 mod minl_watch;
 pub mod custom_metrics;
 /// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
@@ -2795,8 +2797,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // lift 0.283 against a 0.494 portfolio best, subtree on the old incumbent
     // 0.15 s).
     let mut indep_deferred: Option<(u64, Vec<usize>)> = None;
+    let mut indep_extra: Option<indep_first::ExtraCores> = None;
     if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
-        if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
+        if let Some((core_total, cand, cores)) = indep_first::run_with_cores(&scoring_pat, INDEP_WORK_LEDGER) {
+            indep_extra = Some(cores);
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
                 // ADOPTION RULE. The lift is taken at once when it leads by
@@ -5292,13 +5296,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // additionally obeys its factor-nonzero limits before materializing fill.
     // Reject an expensive existing ledger before scoring again. Admission
     // below still requires the fresh exact score and factor-nonzero bound.
+    let mut final_symbolic = None;
     let terminal_followup = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
         && best_flops <= LADDER_FILL_BOUND;
     #[cfg(test)]
     let terminal_followup = terminal_followup && probe::terminal_followup::enabled();
     if terminal_followup {
         let mut final_flops = score(&best_perm);
-        if final_flops <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= 150_000 {
+        let fill = score_workspace.borrow().nnz_l();
+        final_symbolic = Some((final_flops,fill));
+        if final_flops <= LADDER_FILL_BOUND && fill <= 150_000 {
             // The same fixed window allowance also covers dense/hub patterns;
             // preparation and elimination are charged regardless of density.
             if nnz > n.saturating_mul(16) || max_deg > n / 2 {
@@ -5308,7 +5315,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 ) {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
-                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                        if f < final_flops {
+                            best_perm = candidate; final_flops = f;
+                            final_symbolic = Some((f,score_workspace.borrow().nnz_l()));
+                        }
                     }
                 }
             }
@@ -5323,7 +5333,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 ) {
                     for candidate in candidates {
                         let f = score(&candidate);
-                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                        if f < final_flops {
+                            best_perm = candidate; final_flops = f;
+                            final_symbolic = Some((f,score_workspace.borrow().nnz_l()));
+                        }
                     }
                 }
                 if final_flops == before { break; }
@@ -5342,9 +5355,32 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 ) {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
-                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                        if f < final_flops {
+                            best_perm = candidate; final_flops = f;
+                            final_symbolic = Some((f,score_workspace.borrow().nnz_l()));
+                        }
                     }
                 }
+            }
+        }
+    }
+    // The independent-set stage already built these competitive cores. Reuse
+    // at most two for one missing quotient metric, after the winning prefix.
+    // Refresh the exact original factor count before authorizing the late walk.
+    if let Some(cores) = indep_extra {
+        if !cores.is_empty() &&n<=18_000 &&nnz<=80_000 &&best_flops<=LADDER_FILL_BOUND {
+            // Carry only exact observations of the accepted incumbent. This
+            // avoids another eligibility score on rows the terminal pass saw.
+            let (f,fill) = final_symbolic.unwrap_or_else(|| {
+                let f=score(&best_perm);(f,score_workspace.borrow().nnz_l())
+            });
+            #[cfg(test)]
+            {
+                assert_eq!(score(&best_perm),f,"final symbolic cache flops");
+                assert_eq!(score_workspace.borrow().nnz_l(),fill,"final symbolic cache fill");
+            }
+            if fill<=200_000 {
+                if let Some(candidate) = cores.refine(f,&score) { best_perm=candidate; }
             }
         }
     }

@@ -1,10 +1,36 @@
+[0207: continued optimization campaign](experiments/0207-optimization-campaign.md):
+active campaign from promoted `07f0e8a2`, hidden **0.842377**; stop after four
+official rejections. Rejections **0/4**, failed workflows **1**, promotions **0**.
+First candidate [0208](experiments/0208-small-factor-post-window-refinement.md)
+passes sandboxed 300 at **0.791821**, 13/0/287; 123 active tests and 44 paired
+stress orders pass. **91dac999 FAILED hidden 2 s cap**, no hidden score.
+Failed tail removed from subsequent production; next hypothesis reuses existing
+independent-set cores for a competitive final metric pass.
+
+[0209: bounded metric on retained independent-set cores](experiments/0209-retained-independent-core-metric.md):
+public **0.791864560331 -> 0.791703147252**, 1/0/299, approximately 2.04
+relative basis points. Original driver byte-identical on 218 paired inputs;
+no repeated lifts or METIS. Late AmindNorm under factor/core/competitiveness
+limits and 80M deterministic work allowance; 124 active tests and 44 stress
+orders pass. Sandboxed **0.791703**, fill **0.925316**, all 300 counts match.
+Fill trades upward for the primary flop gain; attempt-two upload pending.
+
+[0207 literature: MCS structural priorities](literature/0207-mcs-structural-ties.md):
+primary 1984 MCS reference and bounded tie-priority hypothesis; no fetched code.
+
 [0206: factor-bounded terminal PEO and smaller windows](experiments/0206-factor-bounded-terminal-polish.md):
+**PROMOTED `07f0e8a2` / `52affcb`, current best: hidden 0.842526 -> 0.842377**,
+fill **0.944856**. Full workflow `34711543900` passes, Benchmark 554 s,
+all hidden caps and determinism checks satisfied. Winning Rust matches
+tested `433fa88`; final status updates are Markdown only.
 revision after `026c5a9c` timed out; **sandboxed 0.792030 -> 0.791865**,
 fill 0.924246, 23 wins / 0 losses; all 300 counts match. Add 150k factor-nnz
 gate and existing-ledger precheck;
 remove late watcher, halve window allowance to 16M + 16M + 32M. Preserve the
 promoted prefix and exact component ceiling 14. All 123 active tests and
-44 generated paired orders pass; maximum new minimum 0.993 s. Submission pending.
+44 generated paired orders pass; maximum new minimum 0.993 s. Winning source
+is preserved on `factor-bounded-terminal-polish`, with the previous best on
+`fenced-terminal-window`.
 
 [0205: final completion and sparse spans](experiments/0205-post-search-completion-and-sparse-spans.md):
 **local 0.792030 -> 0.791769**, fill **0.924200**, 30 wins / 0 losses against

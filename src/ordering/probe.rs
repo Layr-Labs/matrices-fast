@@ -139,6 +139,17 @@ fn probe_timing_and_score() {
         }
         let mine = flops_of(&sp, &perm);
         println!("COUNTS\t{name}\t{n}\t{}\t{base}\t{mine}", pat.nnz());
+        // Output-identity digest of the permutation itself (FNV-1a over the
+        // index stream), so a refactor can be checked for bit-identical
+        // output rather than merely equal flops.
+        {
+            let mut h: u64 = 0xcbf29ce484222325;
+            for &v in &perm {
+                h ^= v as u64;
+                h = h.wrapping_mul(0x100000001b3);
+            }
+            println!("PERM\t{name}\t{h:016x}");
+        }
         let ratio = mine as f64 / base as f64;
 
         let b = bucket(n);
@@ -3123,4 +3134,102 @@ fn probe_indep_timing() {
             println!("    {l}");
         }
     }
+}
+
+/// MICRO-BENCHMARK (test-only): time `custom_metrics::order_variant` and
+/// `metric_sweep::order_generic` alone on the rows named in `SSI_PROBE_ONLY`
+/// (default: every row), every light-tier `(variant, alpha)` pair the tree
+/// queues plus every `EXTRA_METRICS` spec at alpha 10. Prints one `MICRO`
+/// line per pass (min of `SSI_PROBE_REPEAT` runs) with an FNV digest of the
+/// permutation, so a kernel refactor can be checked for bit-identical output
+/// per pass before the full-corpus identity run, and a `MICRO_TOTAL` line per
+/// row. Set `SSI_MICRO_VARIANTS=a,b` to restrict to named variants.
+#[test]
+#[ignore]
+fn probe_order_variant_micro() {
+    use custom_metrics::ScoreVariant as V;
+    let corpus = crate::corpus::corpus();
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let vonly: Option<std::collections::HashSet<String>> = std::env::var("SSI_MICRO_VARIANTS")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let repeat: usize = std::env::var("SSI_PROBE_REPEAT").ok().and_then(|v| v.parse().ok()).unwrap_or(1).max(1);
+    let variants = [
+        V::SqDiv, V::SqPure, V::Ammf, V::AmindNorm, V::DegDivNvSqrtWf, V::DegDivNvWfP15,
+        V::DegP075, V::DegP125, V::DegPlusDegme, V::DegDivNvDegme, V::DegSqrt,
+    ];
+    fn digest(perm: &[i32]) -> u64 {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for &v in perm {
+            h ^= v as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+        h
+    }
+    let mut grand_v = 0.0f64;
+    let mut grand_g = 0.0f64;
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let mut tot_v = 0.0f64;
+        let mut tot_g = 0.0f64;
+        for &variant in &variants {
+            if let Some(set) = &vonly {
+                if !set.contains(&format!("{variant:?}")) {
+                    continue;
+                }
+            }
+            let alphas: &[f64] = if variant == V::AmindNorm { &[10.0, 1.0] } else { &[10.0, 5.0, 2.5, 1.0] };
+            for &alpha in alphas {
+                let mut best = f64::MAX;
+                let mut h = 0u64;
+                for _ in 0..repeat {
+                    let t0 = Instant::now();
+                    let p = custom_metrics::order_variant(&core, alpha, true, variant).unwrap();
+                    let s = t0.elapsed().as_secs_f64();
+                    if s < best {
+                        best = s;
+                    }
+                    h = digest(&p);
+                }
+                tot_v += best;
+                println!("MICRO\t{name}\t{variant:?}\t{alpha}\t{best:.5}\t{h:016x}");
+            }
+        }
+        for spec in metric_sweep::EXTRA_METRICS {
+            if let Some(set) = &vonly {
+                if !set.contains(spec.name) {
+                    continue;
+                }
+            }
+            let mut best = f64::MAX;
+            let mut h = 0u64;
+            for _ in 0..repeat {
+                let t0 = Instant::now();
+                let p = metric_sweep::order_generic(&core, 10.0, true, spec).unwrap();
+                let s = t0.elapsed().as_secs_f64();
+                if s < best {
+                    best = s;
+                }
+                h = digest(&p);
+            }
+            tot_g += best;
+            println!("MICRO\t{name}\t{}\t10\t{best:.5}\t{h:016x}", spec.name);
+        }
+        grand_v += tot_v;
+        grand_g += tot_g;
+        println!("MICRO_TOTAL\t{name}\t{n}\t{}\tvariant={tot_v:.4}\tgeneric={tot_g:.4}", pat.nnz());
+    }
+    println!("MICRO_GRAND\tvariant={grand_v:.4}\tgeneric={grand_g:.4}");
 }

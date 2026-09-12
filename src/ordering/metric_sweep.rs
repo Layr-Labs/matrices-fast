@@ -7,14 +7,15 @@
 //! were dropped; `mod.rs`'s `EXTRA_METRICS` constant hard-codes the 15
 //! specific specs this shot ships, chosen offline by that research sweep.
 //!
-//! Forked from `custom_metrics.rs`'s `finalize_step_variant` — Pass-1/Pass-2
-//! graph bookkeeping is copied UNCHANGED (same trust argument: reuses
-//! `select_pivot_amf`/`create_element_amf` verbatim from the vendor crate,
-//! and the raw-degree write-back path is the same one `custom_metrics::SqDiv`
-//! /`SqPure` already ship). Only the re-insertion score formula is
-//! parameterized by [`MetricSpec`] instead of hard-coded per variant, and the
-//! bucket stride is also parameterizable (default matches the shipped `/8`
-//! convention exactly; only a small, separately-reported sub-sweep varies it).
+//! Shares `qg_kernel.rs`'s elimination step with `custom_metrics.rs` —
+//! Pass-1/Pass-2 graph bookkeeping is the vendor's UNCHANGED (same trust
+//! argument: reuses `select_pivot_amf`/`create_element_amf` verbatim from the
+//! vendor crate, and the raw-degree write-back path is the same one
+//! `custom_metrics::SqDiv`/`SqPure` already ship). Only the re-insertion
+//! score formula (`impl Reinsert for SpecScorer`) is parameterized by
+//! [`MetricSpec`] instead of hard-coded per variant, and the bucket stride
+//! is also parameterizable (default matches the shipped `/8` convention
+//! exactly; only a small, separately-reported sub-sweep varies it).
 //!
 //! This module exists to answer the open question in
 //! `memory/open-questions.md`: "Does candidate diversity saturate?" — by
@@ -35,11 +36,10 @@
 //! by default, matching the existing custom-metrics envelope, unless
 //! specifically noted otherwise after an isolated check.
 
-use feral_ordering_core::quotient_graph::{
-    clear_flag, create_element_amf, finalize_permutation, flip, select_pivot_amf, StepFlops,
-    Workspace, WorkspaceOptions, NONE,
-};
+use feral_ordering_core::quotient_graph::{finalize_permutation, Workspace, WorkspaceOptions};
 use feral_ordering_core::{CscPattern, OrderingError};
+
+use super::qg_kernel::{run_elimination, PowTable, Reinsert, SCORE_DUMMY_I32};
 
 /// One point in the sweep grid. All fields are pure numbers so the grid can
 /// be generated programmatically; `name` is only for reporting.
@@ -72,372 +72,74 @@ pub struct MetricSpec {
 
 const DEFAULT_BUCKET_DIV: usize = 8;
 
-/// Saturation cap mirroring `algo::AMF_DUMMY_I32` — identical convention to
-/// `custom_metrics::SCORE_DUMMY_I32`, copied rather than shared (private to
-/// its module).
-const SCORE_DUMMY_I32: i32 = i32::MAX - 1;
-
-/// Quantize an `i64` score into a bucket index, generalized over the coarse
-/// stride divisor. `bucket_div = 8` is byte-identical to
-/// `custom_metrics::score_bucket_of` / the vendor AMF convention.
-#[inline(always)]
-fn score_bucket_of_generic(score: i64, n: usize, bucket_div: usize) -> usize {
-    if score <= 0 {
-        return 0;
-    }
-    let s = score as usize;
-    if s <= n {
-        return s;
-    }
-    let pas = (n / bucket_div.max(1)).max(1);
-    let nbbuck = 2 * n;
-    ((s - n) / pas + n).min(nbbuck)
+/// Re-insertion scorer for one [`MetricSpec`]. The two `powf` calls whose
+/// argument is integer-valued (`raw_deg.powf(deg_pow)` and
+/// `(nvi + 1).powf(nv_pow)`) are memoised by exact integer key; the `wf`
+/// power (arbitrary magnitude) is evaluated directly as before.
+struct SpecScorer {
+    spec: MetricSpec,
+    deg_pow: PowTable,
+    nv_pow: PowTable,
 }
 
-/// Fork of `custom_metrics::finalize_step_variant`, generalized re-insertion
-/// block. Pass-1/Pass-2 bookkeeping copied unchanged.
-#[allow(clippy::too_many_arguments)]
-fn finalize_step_generic(
-    ws: &mut Workspace,
-    me: usize,
-    pme1: usize,
-    pme2_excl: usize,
-    nvpiv: i32,
-    degme: usize,
-    elenme: i32,
-    aggressive: bool,
-    spec: &MetricSpec,
-) -> StepFlops {
-    let n = ws.n;
-    let mut degme = degme;
-    let mut nvpiv = nvpiv;
-
-    // Pass 1: identical to finalize_step_amf / finalize_step_variant.
-    for pme in pme1..pme2_excl {
-        let i = ws.iw[pme] as usize;
-        let eln = ws.elen[i];
-        if eln > 0 {
-            let nvi = -ws.nv[i];
-            let wnvi = ws.wflg - nvi;
-            let pi = ws.pe[i] as usize;
-            for k in 0..eln as usize {
-                let e = ws.iw[pi + k] as usize;
-                let mut we = ws.w[e];
-                if we >= ws.wflg {
-                    we -= nvi;
-                } else if we != 0 {
-                    we = ws.degree[e] + wnvi;
-                    ws.wf[e] = 0;
-                }
-                ws.w[e] = we;
-            }
+impl SpecScorer {
+    fn new(spec: &MetricSpec, n: usize) -> Self {
+        Self {
+            spec: *spec,
+            deg_pow: PowTable::new(spec.deg_pow, n),
+            nv_pow: PowTable::new(spec.nv_pow, n + 1),
         }
     }
+}
 
-    // Pass 2: identical structure to finalize_step_amf / finalize_step_variant.
-    for pme in pme1..pme2_excl {
-        let i = ws.iw[pme] as usize;
-        let p1 = ws.pe[i] as usize;
-        let p2 = p1 + ws.elen[i] as usize;
-        let mut pn = p1;
-        let mut deg: usize = 0;
-        let mut hash: usize = 0;
-        let mut wf3: i64 = 0;
-        let mut wf4: i64 = 0;
-        let nvi = -ws.nv[i];
-
-        if aggressive {
-            for p in p1..p2 {
-                let e = ws.iw[p] as usize;
-                let we = ws.w[e];
-                if we != 0 {
-                    let dext = we - ws.wflg;
-                    if dext > 0 {
-                        if ws.wf[e] == 0 {
-                            let d = dext as i64;
-                            let de = ws.degree[e] as i64;
-                            ws.wf[e] = d * (2 * de - d - 1);
-                        }
-                        wf4 += ws.wf[e];
-                        deg += dext as usize;
-                        ws.iw[pn] = e as i32;
-                        pn += 1;
-                        hash = hash.wrapping_add(e);
-                    } else {
-                        ws.pe[e] = flip(me as i32);
-                        ws.w[e] = 0;
-                    }
-                }
-            }
-        } else {
-            for p in p1..p2 {
-                let e = ws.iw[p] as usize;
-                let we = ws.w[e];
-                if we != 0 {
-                    let dext = (we - ws.wflg) as usize;
-                    if ws.wf[e] == 0 {
-                        let d = dext as i64;
-                        let de = ws.degree[e] as i64;
-                        ws.wf[e] = d * (2 * de - d - 1);
-                    }
-                    wf4 += ws.wf[e];
-                    deg += dext;
-                    ws.iw[pn] = e as i32;
-                    pn += 1;
-                    hash = hash.wrapping_add(e);
-                }
-            }
-        }
-
-        ws.elen[i] = (pn - p1 + 1) as i32;
-        let p3 = pn;
-        let p4 = p1 + ws.len[i] as usize;
-        for p in p2..p4 {
-            let j = ws.iw[p] as usize;
-            let nvj = ws.nv[j];
-            if nvj > 0 {
-                deg += nvj as usize;
-                wf3 += nvj as i64;
-                ws.iw[pn] = j as i32;
-                pn += 1;
-                hash = hash.wrapping_add(j);
-            }
-        }
-
-        if ws.elen[i] == 1 && p3 == pn {
-            ws.pe[i] = flip(me as i32);
-            let nvi_sv = -ws.nv[i];
-            degme -= nvi_sv as usize;
-            nvpiv += nvi_sv;
-            ws.nel += nvi_sv as usize;
-            ws.nv[i] = 0;
-            ws.elen[i] = NONE;
-            ws.n_mass_elim += 1;
-        } else {
-            if ws.degree[i] < deg as i32 {
-                wf3 = 0;
-                wf4 = 0;
-            } else {
-                ws.degree[i] = deg as i32;
-            }
-            ws.wf[i] = wf4 + 2 * nvi as i64 * wf3;
-
-            if p1 != pn {
-                ws.iw[pn] = ws.iw[p3];
-            }
-            if p3 != p1 {
-                ws.iw[p3] = ws.iw[p1];
-            }
-            ws.iw[p1] = me as i32;
-            ws.len[i] = (pn - p1 + 1) as i32;
-
-            let h = hash % n;
-            let j = ws.head[h];
-            if j <= NONE {
-                ws.next[i] = flip(j);
-                ws.head[h] = flip(i as i32);
-            } else {
-                ws.next[i] = ws.last[j as usize];
-                ws.last[j as usize] = i as i32;
-            }
-            ws.last[i] = h as i32;
-        }
+impl Reinsert for SpecScorer {
+    #[inline(always)]
+    fn bucket_div(&self) -> usize {
+        self.spec.bucket_div
     }
 
-    let degme_i32 = degme as i32;
-    ws.degree[me] = degme_i32;
-    if degme_i32 > ws.lemax {
-        ws.lemax = degme_i32;
-    }
-    ws.wflg += ws.lemax;
-    ws.wflg = clear_flag(ws.wflg, ws.wbig, &mut ws.w);
+    /// Generalized re-insertion score block: returns `(score_f, degree[i]
+    /// write-back)`; the write-back is always `raw_deg` here.
+    #[inline(always)]
+    fn score(&mut self, deg_i: i32, degme_i: i32, nvi_i: i32, wf: i64, nleft: usize) -> (f64, i32) {
+        let spec = &self.spec;
+        let dummy_f = SCORE_DUMMY_I32 as f64;
+        let deg_f = deg_i as f64;
+        let wf_f = wf as f64;
 
-    // Supervariable detection: identical to finalize_step_amf.
-    for pme in pme1..pme2_excl {
-        let i_anchor = ws.iw[pme] as usize;
-        if ws.nv[i_anchor] >= 0 {
-            continue;
-        }
-        let h = ws.last[i_anchor] as usize;
-        let j_head = ws.head[h];
-        let mut i: i32 = if j_head == NONE {
-            NONE
-        } else if j_head < NONE {
-            ws.head[h] = NONE;
-            flip(j_head)
+        let raw_deg = (deg_f + degme_i as f64 - nvi_i as f64)
+            .max(0.0)
+            .min((nleft - nvi_i as usize) as f64);
+        let new_degree = raw_deg as i32;
+
+        let deg_term = if spec.nv_pow == 0.0 {
+            self.deg_pow.powf(raw_deg)
         } else {
-            let chain_start = ws.last[j_head as usize];
-            ws.last[j_head as usize] = NONE;
-            chain_start
+            self.deg_pow.powf(raw_deg) / self.nv_pow.powf(nvi_i as f64 + 1.0)
         };
-        while i != NONE && ws.next[i as usize] != NONE {
-            let i_u = i as usize;
-            let ln = ws.len[i_u];
-            let eln = ws.elen[i_u];
-            let pi = ws.pe[i_u];
-            for p in (pi + 1) as usize..(pi + ln) as usize {
-                ws.w[ws.iw[p] as usize] = ws.wflg;
-            }
-            let mut jlast = i_u;
-            let mut jp = ws.next[i_u];
-            while jp != NONE {
-                let jj = jp as usize;
-                let mut ok = ws.len[jj] == ln && ws.elen[jj] == eln;
-                if ok {
-                    let pj = ws.pe[jj];
-                    for p in (pj + 1) as usize..(pj + ln) as usize {
-                        if ws.w[ws.iw[p] as usize] != ws.wflg {
-                            ok = false;
-                            break;
-                        }
-                    }
-                }
-                if ok {
-                    ws.pe[jj] = flip(i);
-                    let wf_j = ws.wf[jj];
-                    if wf_j > ws.wf[i_u] {
-                        ws.wf[i_u] = wf_j;
-                    }
-                    ws.nv[i_u] += ws.nv[jj];
-                    ws.nv[jj] = 0;
-                    ws.elen[jj] = NONE;
-                    jp = ws.next[jj];
-                    ws.next[jlast] = jp;
-                    ws.n_supervar_merge += 1;
-                } else {
-                    jlast = jj;
-                    jp = ws.next[jj];
-                }
-            }
-            ws.wflg += 1;
-            i = ws.next[i_u];
-        }
-    }
-
-    // ── Re-insertion: THE GENERIC SCORE BLOCK ───────────────────────────
-    let dummy_f = SCORE_DUMMY_I32 as f64;
-    let n_f = if n == 0 { 1.0 } else { n as f64 };
-    let mut p_write = pme1;
-    let nleft = ws.n - ws.nel;
-    for pme in pme1..pme2_excl {
-        let i = ws.iw[pme] as usize;
-        let nvi = -ws.nv[i];
-        if nvi > 0 {
-            ws.nv[i] = nvi;
-            let degme_i = degme_i32;
-            let nvi_i = nvi;
-            let deg_i = ws.degree[i];
-            let deg_f = deg_i as f64;
-            let wf_f = ws.wf[i] as f64;
-
-            // AMD's own loose-degree estimate, computed and written back
-            // unconditionally (the `SqDiv`/`SqPure` world, not the AMF
-            // saturated-RMF branch — see module doc).
-            let raw_deg = (deg_f + degme_i as f64 - nvi_i as f64)
-                .max(0.0)
-                .min((nleft - nvi_i as usize) as f64);
-            ws.degree[i] = raw_deg as i32;
-
-            let deg_term = if spec.nv_pow == 0.0 {
-                raw_deg.powf(spec.deg_pow)
-            } else {
-                raw_deg.powf(spec.deg_pow) / (nvi_i as f64 + 1.0).powf(spec.nv_pow)
-            };
-            let wf_term = if spec.wf_weight != 0.0 {
-                let a = wf_f.abs().powf(spec.wf_pow);
-                let signed = if wf_f < 0.0 { -a } else { a };
-                spec.wf_weight * signed
-            } else {
-                0.0
-            };
-            let degme_term = if spec.degme_weight != 0.0 {
-                spec.degme_weight * (degme_i as f64) / (nvi_i as f64 + 1.0)
-            } else {
-                0.0
-            };
-            let mut score_f = deg_term + wf_term + degme_term;
-            if spec.perverse {
-                score_f = 1.0 / (1.0 + score_f.max(0.0));
-            }
-            if !score_f.is_finite() {
-                score_f = dummy_f;
-            }
-
-            let qscore: i32 = if score_f < dummy_f {
-                score_f.round() as i32
-            } else if score_f / n_f < dummy_f {
-                (score_f / n_f).round() as i32
-            } else {
-                SCORE_DUMMY_I32
-            };
-            ws.wf[i] = qscore.max(1) as i64;
-
-            let d = score_bucket_of_generic(ws.wf[i], n, spec.bucket_div);
-            let inext = ws.head[d];
-            if inext != NONE {
-                ws.last[inext as usize] = i as i32;
-            }
-            ws.next[i] = inext;
-            ws.last[i] = NONE;
-            ws.head[d] = i as i32;
-            if d < ws.mindeg {
-                ws.mindeg = d;
-            }
-            ws.iw[p_write] = i as i32;
-            p_write += 1;
-        }
-    }
-
-    ws.nv[me] = nvpiv;
-    ws.len[me] = (p_write as i32) - pme1 as i32;
-    if ws.len[me] == 0 {
-        ws.pe[me] = NONE;
-        ws.w[me] = 0;
-    }
-    if elenme != 0 {
-        ws.pfree = p_write;
-    }
-
-    let f = nvpiv as f64;
-    let r = degme_i32 as f64 + ws.ndense as f64;
-    let lnzme = f * r + (f - 1.0) * f / 2.0;
-    let s = f * r * r + r * (f - 1.0) * f + (f - 1.0) * f * (2.0 * f - 1.0) / 6.0;
-    StepFlops {
-        ndiv: lnzme,
-        nms_lu: s,
-        nms_ldl: (s + lnzme) / 2.0,
-    }
-}
-
-fn run_elimination_generic(
-    ws: &mut Workspace,
-    aggressive: bool,
-    spec: &MetricSpec,
-) -> Result<StepFlops, OrderingError> {
-    let mut flops = StepFlops::default();
-    while ws.nel < ws.n {
-        let me = match select_pivot_amf(ws) {
-            Some(m) => m,
-            None => break,
+        let wf_term = if spec.wf_weight != 0.0 {
+            let a = wf_f.abs().powf(spec.wf_pow);
+            let signed = if wf_f < 0.0 { -a } else { a };
+            spec.wf_weight * signed
+        } else {
+            0.0
         };
-        let elenme = ws.elen[me];
-        let (pme1, pme2, nvpiv, degme) = create_element_amf(ws, me)?;
-        let step = finalize_step_generic(ws, me, pme1, pme2, nvpiv, degme, elenme, aggressive, spec);
-        flops.ndiv += step.ndiv;
-        flops.nms_lu += step.nms_lu;
-        flops.nms_ldl += step.nms_ldl;
+        let degme_term = if spec.degme_weight != 0.0 {
+            spec.degme_weight * (degme_i as f64) / (nvi_i as f64 + 1.0)
+        } else {
+            0.0
+        };
+        let mut score_f = deg_term + wf_term + degme_term;
+        if spec.perverse {
+            score_f = 1.0 / (1.0 + score_f.max(0.0));
+        }
+        if !score_f.is_finite() {
+            score_f = dummy_f;
+        }
+        (score_f, new_degree)
     }
-    let f = ws.ndense as f64;
-    let lnzme = (f - 1.0) * f / 2.0;
-    let s = (f - 1.0) * f * (2.0 * f - 1.0) / 6.0;
-    flops.ndiv += lnzme;
-    flops.nms_lu += s;
-    flops.nms_ldl += (s + lnzme) / 2.0;
-    Ok(flops)
 }
 
-/// Public entry point: run `spec` on `core`, deterministic pure function of
-/// `(core, dense_alpha, aggressive, spec)`.
 pub fn order_generic(
     core: &CscPattern<'_>,
     dense_alpha: f64,
@@ -447,21 +149,11 @@ pub fn order_generic(
     let opts = WorkspaceOptions { dense_alpha };
     let n_buckets = 2 * core.n + 2;
     let mut ws = Workspace::new_with_n_buckets(core, &opts, n_buckets)?;
-    run_elimination_generic(&mut ws, aggressive, spec)?;
+    let mut scorer = SpecScorer::new(spec, core.n);
+    run_elimination(&mut ws, aggressive, &mut scorer)?;
     Ok(finalize_permutation(&mut ws))
 }
 
-/// SHOT C — the next 15 positive-marginal specs (of the 42-point research
-/// grid) beyond the 7 already shipped as `custom_metrics::ScoreVariant`.
-/// Ranked by greedy forward-selection against the REAL portfolio on the
-/// 427-matrix reconstructed corpus (`sbx-metrics2`'s
-/// `probe_diversity_marginal_sweep`, `nnz<130_000`-gated matrices only): the
-/// full 30-variant selection flattens the portfolio from 0.840926 (top-7) to
-/// 0.840468 and adds nothing past that point — this array is exactly picks
-/// #8-#22 of that greedy order (the ones that still moved the combined
-/// score). All use the same unconditional raw-degree write-back "world" as
-/// the shipped `SqDiv`/`SqPure`/win-F variants (never the saturated-RMF
-/// branch responsible for the `AmindNorm` cost cliff).
 pub const EXTRA_METRICS: &[MetricSpec] = &[
     MetricSpec { name: "extra_deg3_div_nv", deg_pow: 3.00, nv_pow: 1.00, wf_weight: 0.00, wf_pow: 1.00, degme_weight: 0.00, perverse: false, bucket_div: DEFAULT_BUCKET_DIV },
     MetricSpec { name: "extra_deg2_div_nv_wf002", deg_pow: 2.00, nv_pow: 1.00, wf_weight: 0.02, wf_pow: 1.00, degme_weight: 0.00, perverse: false, bucket_div: DEFAULT_BUCKET_DIV },
@@ -500,6 +192,44 @@ mod tests {
             pat.col_ptr.iter().map(|&x| x as i32).collect(),
             pat.row_idx.iter().map(|&x| x as i32).collect(),
         )
+    }
+
+    #[test]
+    fn spec_scorer_matches_direct_formula() {
+        // The memoised deg / nv powers reproduce the direct expression bit
+        // for bit, on first and repeated evaluation.
+        for spec in EXTRA_METRICS {
+            let mut s = SpecScorer::new(spec, 64);
+            for pass in 0..2 {
+                for deg in 0..30i32 {
+                    for nvi in 1..4i32 {
+                        // degme 2 -> raw_deg = deg + 2 - nvi (clamped to [0, 64 - nvi]).
+                        let (got, wb) = s.score(deg, 2, nvi, -7, 64);
+                        let raw = ((deg + 2 - nvi).max(0) as f64).min((64 - nvi) as f64);
+                        assert_eq!(wb, raw as i32);
+                        let deg_term = if spec.nv_pow == 0.0 {
+                            raw.powf(spec.deg_pow)
+                        } else {
+                            raw.powf(spec.deg_pow) / (nvi as f64 + 1.0).powf(spec.nv_pow)
+                        };
+                        let wf_f = -7f64;
+                        let wf_term = if spec.wf_weight != 0.0 {
+                            let a = wf_f.abs().powf(spec.wf_pow);
+                            spec.wf_weight * (if wf_f < 0.0 { -a } else { a })
+                        } else {
+                            0.0
+                        };
+                        let degme_term = if spec.degme_weight != 0.0 {
+                            spec.degme_weight * 2.0 / (nvi as f64 + 1.0)
+                        } else {
+                            0.0
+                        };
+                        let want = deg_term + wf_term + degme_term;
+                        assert_eq!(got.to_bits(), want.to_bits(), "{} deg {deg} nvi {nvi} pass {pass}", spec.name);
+                    }
+                }
+            }
+        }
     }
 
     #[test]

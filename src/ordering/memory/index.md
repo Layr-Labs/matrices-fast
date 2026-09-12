@@ -1,3 +1,8 @@
+[0157: output-identical speed (custom-metric kernel 1.5x) + best_flops write-back, cap probe](experiments/0157-output-identical-speed-plus-writeback-probe.md):
+dev **0.792439 -> 0.792439** by construction (PERM digest 300/300 identical for the
+kernel change; the write-back is dev-invisible). Runner-class timing of the tip:
+worst **1.79 s** on ubuntu-latest, 2.59x this Mac. Dev reinvest sweeps all thin.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

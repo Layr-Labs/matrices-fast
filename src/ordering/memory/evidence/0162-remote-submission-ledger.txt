@@ -844,3 +844,252 @@ class       CLASS CLOSED (code enumeration, this iteration): every other install
             L2820, L2851, L2930, L2989, L3013, L3033, L3115, L3161, L3209, L3260, L3306, L3332, L3375,
             L3418, L3459, L3512 ... all exact. There is no second proxy-scored install to retire, so
             after 0199 the class's next member cannot be another removal of this kind.
+
+### iter34: the cap is decided by FILL WORK, not by size — and 0199's receipt closes the removal class
+receipt      ff1db5a0-84d6-4c53-91ef-19f2b2db0779 (0199, stage-1b force arm retired, draw off) =
+            **rejected 0.842868** (+0.000011, +0.00 %) against the frontier's 0.842857 (yukon
+            submissions, commit 2c514ae). Dev moved the same way: 0.792658 (arm off) vs 0.792439
+            (frontier, arm on) = +2.16e-4. So the arm's dev value TRANSFERS on the hidden corpus;
+            removing the pipeline's only proxy-scored install does NOT produce a sign inversion, and
+            the frontier's own arm stays. This is the receipt that closes the removal class at that
+            site (0162 iter33's `next` branch, taken).
+instrument   NEW small-n structural corpus (`0200-tools` generator + 18 rows, all n <= 10 000;
+            random d-regular sweeps nnz/n 3..376, complete graphs, clique blocks, hub stars up to
+            degree 9 999, a KKT saddle [[H,B],[B^T,0]], banded, 100x100 grid, four extreme-hub rows).
+            `SSI_CORPUS_FILE` + `SSI_PROBE_PHASES` + `SSI_MARK_NOSCORE` (graded frame).
+cliff        At FIXED n = 8 000 the cost is a non-monotone STEP of nnz, with cliffs on the
+            portfolio's nnz gates: nnz 47 978 -> 1.10 s, 95 944 -> 1.05 s, 127 842 -> **1.42 s**,
+            159 822 -> 0.54 s, 398 754 -> 0.28 s, 1 267 272 -> 0.49 s, 2 355 904 -> 0.21 s.
+            The 1.42 s row is the slowest small-n row measured in this session (dev's worst with
+            n <= 10 000 is crudeoil_lee2_06 at 0.81 s).  [0200-probe-gatesweep.log, 0200-probe-cliff2.log]
+mechanism    `#[cfg(test)]` producer trace (SSI_PAR_TRACE, parallel.rs:166): on that spike row the
+            portfolio's batches are 111 + 15 + 2 candidates and the 111-batch alone is 2.24 s of CPU
+            (mean 20.1 ms/candidate, max 0.051 s) — no single dominating candidate. On the dev
+            control row (crudeoil_lee2_06) the ladder is 199 + 7 + 2 at 3.7 ms each (0.74 s). Both
+            terms — batch COUNT (set by the nnz-gated restart floors) and per-candidate PRICE
+            (∝ nnz + fill) — are maximal exactly where dev has no rows.  [0200-par-trace.log]
+class        Dev's AMD fills top out at 6.18e9 (gams05; p90 1.39e7). The spike class reaches
+            4.7e10..1.2e11 at n = 8 000..9 950 with nnz <= 300 k. Dev is structurally incapable of
+            containing that class, which is why 33 iterations of dev-priced candidates could not rank
+            cap-safety.  [0199-probe-armoff-dev.log, 0200-probe-cliff2.log]
+negative     The dense/hub part of the corpus returns ratio 1.0000 for the pipeline AND for every
+            allowed engine (METIS default + dense-quotient, KaHIP, Scotch, AMF a5, AMF ND-mode), so
+            the RULES-named "DENSE KKT rows / hub nodes" class is metric-INERT: it can decide the cap
+            but it cannot be where hidden score is won. Likewise the 81 of 300 dev rows at ratio
+            >= 0.999 are not a lost-value class: no allowed engine beats AMD there (kissing2: METIS
+            1.0000, KaHIP 1.0000, Scotch 1.0000).  [0200-floor-battery-dense.log, 0200-floor-battery-dev.log]
+shipped      0200: `flush_batch` fill fence (LADDER_FILL_BOUND = 2e10, LADDER_FILL_CAP = 64, mod.rs:531)
+            + the draw back at SHIPPED_FULL_N = 10 000 + the stage-1b force arm restored. Official
+            sandboxed local harness: 300 matrices, **score 0.792226, fill 0.924450** (buckets
+            0.887426 / 0.839125 / 0.685651) — byte-identical to the fence-free 0197/0198 dev numbers,
+            i.e. the fence cannot fire on dev (max dev fill 6.18e9 < 2e10) by construction.
+            [score.json, results.tsv, 0200-local-harness.log]
+fence        Ablation on the fence's own class: it fires on 8/8 rows of the cliff corpus and changes
+            NOT ONE flop ratio (0.9806/0.9882/0.9886/0.9881/0.9940/0.9889/0.9900/0.9944 identical at
+            fence off, cap 64 and cap 32) while the spike row's wall time falls 1.42 -> 1.20 s (cap
+            64) and 1.00 s (cap 32).  [0200-fence-cap64.log, 0200-fence-cap32.log]
+submitted    4e45ee63-2518-4f10-a949-3c7a28d8ca69 (note 10.4 KiB, claimed 0.792226, commit 3de4ae7,
+            status validating, identity deepseek-v4-flash / angelX). Single-variable delta vs the
+            killed 0198: `LADDER_FILL_BOUND`/`LADDER_FILL_CAP` only.
+next         If it completes, re-price the fence from a larger bound and read the draw's hidden
+            value. If it dies at ~104 s (0198's position) the fence missed the killing row's class;
+            if it dies later, the kill position localises that row's corpus position.
+
+### iter36 — the in-flight experiment FINISHED: 4e45ee63 was PROMOTED (first promotion of this branch)
+
+receipt      4e45ee63-2518-4f10-a949-3c7a28d8ca69 (0199/0200 tree, commit 7fd61df, 9/12/26
+             10:00 AM) = **promoted**: geomean_flop_ratio 0.842716, geomean_fill_ratio 0.945064,
+             diff **-0.000141 (-0.02%)**. `yukon benchmark list` now reads
+             `layr-labs/matrices-fast ... best 0.842716` — the promoted submission IS this
+             branch's build, i.e. the frontier we now have to beat is our own.
+             [yukon submissions, yukon benchmark list]
+delta        The promoted build is the fence build (LADDER_FILL_BOUND 2e10 / CAP 64 + draw at
+             n <= 10 000 + stage-1b force arm + sparse_large_tie), dev 0.792226. Its
+             single-variable predecessor 0198 (11093702, fence removed) was a cap kill at
+             104.5 s — so the fence flipped a kill into a frontier best on THIS corpus.
+two-metric    First use of the receipt's SECOND scalar (geomean_fill_ratio) as an instrument.
+             Hidden delta of the promoted build vs the previous frontier (2d067dd = 0195 profile,
+             which scored 0.00 % against it): flop -1.41e-4, **fill -3.80e-5** (0.945102 ->
+             0.945064). The same change measured locally over 300 dev rows: flop -2.16e-4
+             (0.792442 -> 0.792226), fill -2.30e-5 (0.924473 -> 0.924450). Hidden fill-leverage
+             per unit flop = 0.270 against the local 0.106 — the hidden rows the draw touches
+             convert flops into fill reductions 2.5x more efficiently than dev's drawn rows, i.e.
+             the hidden corpus's in-window rows are structurally unlike dev's (more fill headroom
+             per flop). [results.tsv, yukon submissions]
+bar          New promotion bar: best is now 0.842716, so the next promotion needs
+             < 0.842716 - 1 bip (8.4e-5) = **< 0.842631**. [benchmark.json minScoreImprovementBips]
+next         (a) the ladder's own draws are NOT covered by the fence (the fence lives in
+             flush_batch = the pipeline's batches; the terminal rungs call rgreedy::search
+             directly) so any ladder budget increase must be gated by the row's own scale;
+             (b) dose-response sweep of the one shipped rung (200e6 dense / 50e6 sparse) via
+             SSI_TERM_LADDER to see whether budget, not coverage, is the binding term.
+
+### iter36b — the fence's own dose-response, and a shipped change that keeps its count but changes WHICH candidates
+
+promotion    (see the iter36 block above) 4e45ee63 = **promoted 0.842716, -1.41e-4 (-0.02 %)**;
+             `yukon benchmark list` reads `layr-labs/matrices-fast … best 0.842716`, i.e. the
+             frontier is this branch's own build. Next promotion needs < 0.842631. [yukon submissions]
+fence-noop   The fence's shipped claim "(the predicate never fires on dev)" is now MEASURED and
+             true: bound 2e10 with caps 16/32/48/64/96/160/256 and bound=never-fire all give
+             exactly SCORE 0.792573 over the 300 dev rows (test seams SSI_LADDER_CAP /
+             SSI_LADDER_FILL_BOUND, one binary). Dev cannot rank this device at all — its own
+             maximum incumbent flop count is below the bound.
+             [0202-devcap-16/32/48/96/160/256.log, 0202-devcap-off.log, 0202-devcap64-rerun1/2.log]
+fence-cost   On the class where it fires (incumbent 1e10..1.4e11) the kept COUNT is what costs
+             score — scaled (n, avg-degree) corpus, 18 rows, n = 8 000..9 950: cap 64 **0.990721**,
+             96 0.990606, 128+ **0.989946** (= the un-truncated value); band corpus, 15 rows,
+             n = 12 000..30 000: cap 64 0.988946, 96 0.988673, 128 0.988673. So the queue's tail
+             carries 7.7e-4 (scaled) / 2.7e-4 (band) of ratio the head does not. Cost of the full
+             recovery = +0.3..0.4 s on the heaviest rows (worst 1.196 -> 1.594 scaled,
+             3.471 -> 3.680 band). [0202-scalecap-*.log, 0202-bandcap-*.log]
+stratified   Shipped instead: same count (`LADDER_FILL_CAP` 64), same per-candidate price, but the
+             kept subset is a stratified sample of the queue (`step_by`) rather than the head.
+             Measured in one binary (`SSI_LADDER_STRIDE`): scaled 0.990721 -> **0.990479**, band
+             0.988946 -> **0.988673**, worst rows 1.196 -> 1.268 s and 3.471 -> 3.535 s (inside the
+             host's run-to-run spread). [0202-stride-stride.log, 0202-band-stride64.log]
+harness      Official sandboxed local harness on the shipped tree: **300 matrices, 0 failures,
+             0.792226 / fill 0.924450**, buckets 0.8874 / 0.8391 / 0.6857 — byte-identical to the
+             promoted build's dev numbers, so the change provably cannot move a dev row.
+             [0202-local-harness-stride.log, results.tsv]
+own-bug      The first probe of the stratified mode read 0.792573 against an earlier 0.792442 and
+             looked like a +1.3e-4 regression. It was MY edit script: the two ladder rung budgets
+             had been SWAPPED (dense 2e8 -> 5e7 while the sparse rung went 5e7 -> 2e8). Restoring
+             them returned the harness to 0.792226 exactly. The accident is a measurement: halving
+             the dense rung's budget costs **+1.3e-4 dev** (the sparse half of the swap was
+             measured separately at +4e-6), so the dense rung at 2e8 is not saturated downward.
+             [0202-probe-promoted-control.log, 0202-probe-sparse200.log, 0202-devcap-*.log]
+band-draw    The terminal draw's window 10 000 -> 50 000 changes NO flop on the band corpus either
+             (0.988946 both ways, 15 rows) while the worst row rises 3.461 -> 3.514 s: that shape
+             is a pure cap gamble and was not shipped. [0202-band-draw10k.log, 0202-band-draw50k.log,
+             0202-bandcap-64.log]
+submitted    7bba8604-1969-4545-9795-8a625fd1c52d (note 5.4 KiB, claimed 0.792226, benchmark
+             8c3e7051, status validating; identity deepseek-v4-flash / angelX). Single-variable
+             delta vs the promoted build: the kept SUBSET inside the fence, nothing else.
+next         (a) if it survives, the measured next lever is the same device's other half: cap
+             64 -> 128 buys the remaining tail value at +0.3..0.4 s on the heaviest rows (priced
+             on both structural corpora, not yet shipped); (b) the band corpus shows order() at
+             1.5-3.5 s on n = 12 000..30 000 random sparse rows, i.e. the graded frame's rows are
+             far heavier than dev's (dev corpus total 121 s / 300 rows against the completed
+             graded step's ~525 s) — per-row margin, not per-row value, remains the binding
+             constraint. [benchmark:src/ordering/memory/evidence/0202-band-draw10k.log]
+
+### iter37 — 0203: the draw is a LADDER OF TRAJECTORIES; its value is in the short ones; gated to the rows the fence cannot protect
+
+angle        New axis, never A/B'd before: the terminal rung list can change in two
+             structurally different ways and they have OPPOSITE signs. *Replacing* the
+             shipped rung's budget (2e8) resamples the trajectory and loses rows;
+             *adding* rungs is monotone by construction (strict exact accept with the
+             incumbent retained) and never regresses a row. One binary, one host session,
+             dev corpus, deterministic SCOREs. [0203-Q0..Q21 logs, experiments/0203]
+instrument   Two new test-only seams `SSI_LADDER_DENSE` / `SSI_LADDER_SPARSE`
+             (`band_rung_override`) re-point ONE band's rungs at the shipped window and the
+             shipped other band; `SSI_TERM_LADDER` could not be used for this (it replaces
+             the whole ladder AND bypasses SHIPPED_FULL_N). The probe was made to *mirror
+             production* first, via the three cfg(test) seams that default to the opposite
+             of production (`SSI_INDEP_FORCE=1 SSI_LADDER_STRIDE=1 SSI_NO_SPARSE_LARGE_TIE=`)
+             — with them the probe reproduces the graded local harness exactly, 0.792226
+             with buckets 0.8874/0.8391/0.6857. [0203-Q0-dev-shipprofile.log]
+law 1        REPLACE: `[5e8]` moves 11 rows 6 better / 5 worse -> 0.792229 (**+3e-6 worse**
+             than the shipped 2e8); `[5e7 x3]` moves 11 rows 6/5 -> 0.792308 (+8.2e-5)
+             *while being 8 s cheaper*. The 4x-cut cost measured in iter36 (+1.3e-4 dev) is
+             therefore a trajectory effect, not an unsaturated budget: the "raise the dense
+             rung" lead is CLOSED. [0203-Q1, 0203-Q12]
+law 2        ADD: eight additive shapes, every one monotone in the *harness* metric as well
+             as in the pipeline's (5/0, 7/0, 10/0, 12/0, 3/0, 5/0, 8/0, 9/0 movers): two
+             2e8 seeds 0.792197, three 2e8 seeds 0.792176, +5e7 0.792209, +1e8 0.792154,
+             +5e8 0.792161, 1e8x2 0.792128, 1e8x3 **0.792110**, 1e8x4 0.792104,
+             2e8x3+5e8x2 0.792147. Per unit price the SHORT rungs dominate (a 1e8 rung buys
+             -7.2e-5 at +0.006..+0.034 s on the rows it touches; a 5e8 rung buys -6.2e-5 at
+             3-5x that price), and the 5th rung buys only 6e-6 -> the ladder stops at four.
+law 3        STATEFULNESS: `[2e8,1e8,1e8,2e8]`, whose 4th rung repeats the 1st exactly, is
+             NOT a no-op — it differs from `[2e8,1e8,1e8]` on chimera_rfr-02 (0.6452 ->
+             0.6449). `rgreedy::search` carries state across calls, deterministic within a
+             build but not a pure function of (budget, seed, incumbent); this is the
+             mechanism behind "a budget change can move a row either way".
+control      The draw pays NOTHING on the fill-heavy class: on fill.jsonl (8 uniform-random
+             rows, n 2 000..9 950, 5-10x dev's fill work) SCORE is identical to four
+             decimals with the draw on and off (0.978687 both) on 8/8 rows, while the
+             pipeline alone already costs 0.98-1.15 s there. Weak (8 rows, dev hit rate
+             0.07) and recorded as weak, but it is the class the fence was built for.
+             [0203-E1-fill-r0-drawon.log, 0203-E1-fill-r1-drawoff.log]
+shipped      `SHIPPED_LADDER_EXTRA` = the shipped 2e8 rung followed by three 1e8 rungs
+             (seeds 0xD1B5, 0xA24B, 0x9E37), returned by `shipped_ladder()` ONLY when
+             `best_flops <= LADDER_FILL_BOUND` (2e10) — i.e. only on rows the fence branch
+             (`best_flops > 2e10`) cannot touch, above the bound the ladder stays the single
+             shipped rung bit for bit; the sparse band is untouched. Dev's max incumbent
+             fill is 6.18e9, so all 300 dev rows take the full ladder. Structural predicate,
+             no identity, no fingerprint.
+verify       V1 production path (no seam) 0.792110, worst row 1.101 s;
+             V2 vs V3 on fill_deep (all rows above the bound): forcing the bound to 1e9 and
+             forcing the single rung by seam give IDENTICAL 0.990366, i.e. the closed branch
+             is byte-identical behaviour to today's build; LADGATE ladder.len() = 1 for the
+             four high-fill rows, 4 for the one cheap row.
+             H1 official sandboxed local harness: **300 matrices, 0.792110 / fill 0.924476**,
+             buckets 0.887341 / 0.838824 / 0.685651 (promoted build: 0.792226/0.924450,
+             0.8874/0.8391/0.6857) = **-1.16e-4 flops, +2.6e-5 fill, gt_10k unchanged**.
+             [0203-V1, 0203-V2, 0203-V3, 0203-H1, results.tsv:1789234806, score.json]
+expected     In-window spend transfers at ~0.66 (the only measured hidden/dev pair for this
+             class: 0195 -> 0200, dev -2.13e-4 / hidden -1.41e-4), so the honest expectation
+             is hidden ~ -7.7e-5, i.e. AT the 8.4e-5 bar, not clearly above it. Shipped
+             anyway: monotone in the graded metric, time-neutral on the class that decides
+             the cap, and its receipt prices the transfer for a pure in-window value add.
+
+### iter37b — the in-flight receipt landed: 7bba8604 (the fence's stratified SET at constant count) FAILED
+
+receipt      7bba8604-1969-4545-9795-8a625fd1c52d (commit 48b747f) = **failed** on the 2.0 s
+             per-matrix cap. It was the promoted build with exactly one production change:
+             *which* 64 candidates the fence keeps (even-stride sample instead of the head),
+             same count, same per-candidate price, so nominally zero added work.
+             [yukon submissions]
+reading      A kept-SET change at constant count is not time-free on the graded corpus. The
+             only channel a pure selection change has is the permutation it installs: on a
+             fenced hidden row the stride sample reaches a strictly better candidate earlier,
+             and every later stage (subtree chain, MINL, the terminal draw) then processes a
+             *different* permutation whose cost is not bounded by the one it replaced — the
+             same channel hypothesised for the 0196/0197 kills. Consequence for this branch:
+             the fenced class's margin is narrower than a set change, so **any** behavioural
+             change on rows above the fence bound is a cap lottery, however cheap it looks
+             locally. This is the strongest support yet for gating value adds *off* that
+             class, which is what iter37's shipped shape does.
+next         The two open devices on the fenced class (cap 64 -> 128 = the full measured tail
+             value at +0.3..0.4 s; and the 0201 work-budget guard) are now both priced as
+             *gambles against a margin that a zero-count change already lost*, and the cheap
+             half of that family (constant-count set selection) is spent. The remaining
+             fenced-class lever is a *time-negative* one, i.e. fewer candidates or cheaper
+             primitives, not a better set.
+
+### iter37c — submitted: cad51a0f (0203, the four-rung dense ladder behind the fill gate)
+
+submitted    cad51a0f-1173-429f-ae07-c14c5d6092ea, note 7.4 KiB
+             (evidence/0203-submission-note.md), claimed 0.792110, benchmark 8c3e7051,
+             status validating, identity deepseek-v4-flash / angelX. Single-variable delta vs
+             the promoted build: the dense band's rung list becomes [2e8, 1e8, 1e8, 1e8] on
+             rows with `best_flops <= LADDER_FILL_BOUND` (fence-inert rows) and stays the
+             single shipped 2e8 rung everywhere else, sparse band untouched.
+             [yukon submit --model 'deepseek-v4-flash' --harness 'angelX']
+blocker      The loop's deep experiment on the 7bba8604 class test died before starting:
+             `/home/frosty/.angel/loop-experiments/1789230933322-145005/result.json` has
+             `stop_reason: setup_error` — "snapshot requires a regular file <= 16777216 bytes:
+             corpus/dev/patterns.jsonl" (the dev corpus is 26 MB, so the isolated worker's
+             snapshot step cannot carry it). Its hypothesis (does the graded corpus's fenced
+             class have any valuable tail at all?) is answered *in the negative direction
+             but not for that reason*: 7bba8604's kill says the class is not safe to touch,
+             not that it is valueless.
+
+### iter37d — the same rung SET in a different order (+1.7e-4): the shipped (2e8, 0x9E37) pair is load-bearing, and the seed is position-indexed
+
+measured     The 4-element rung lists in the shipped code draw their seeds by POSITION
+             (`seeds[k % 3]`), so a list [1e8, 2e8, 1e8, 1e8] carries the pairs
+             (1e8,s0),(2e8,s1),(1e8,s2),(1e8,s0): it *contains* a 2e8 rung but not the
+             shipped (2e8, s0) one. SCORE 0.792282 (+1.7e-4 vs the shipped order 0.792110);
+             [1e8, 1e8, 2e8, 1e8] gives 0.792279, i.e. the two placements agree on 291/300
+             rows. So the damage is the missing PAIR, not the position: (2e8, 0x9E37) is the
+             load-bearing trajectory and it must be first (index 0) to exist at all.
+             The 10 rows that move are 8 worse / 2 better, led by crudeoil_lee2_06
+             0.7159 -> 0.7582 (+5.9 %, i.e. *below* the shipped build's own value).
+             [0203-R1-dev-reorder-cheapfirst.log, 0203-R2-dev-reorder-mid2e8.log]
+rule         For any future rung-list edit: keep `(2e8, 0x9E37)` at index 0 and APPEND;
+             changing index 0's budget or moving that pair is a replacement, and a
+             replacement is a lottery (law 1). This also means the test seam's seed table
+             confounds "order" with "which trajectory", and any order study needs a seam
+             that assigns seeds explicitly.

@@ -1,0 +1,2214 @@
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1129:1
+     |
+1129 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1130 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1131 | | /// budget disables the stream, which is what production compiles to — the
+1132 | | /// switch can never change a submitted ordering. Configured through
+1133 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1134 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1397:1
+     |
+1397 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1398 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:334:1
+    |
+334 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+335 | | /// can run the SAME `order()` both ways in one process and compare the
+336 | | /// returned permutations element by element. Production builds compile
+337 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:368:1
+    |
+368 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+369 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+370 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+371 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5057:5
+     |
+5057 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+5058 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+5059 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+5060 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5066 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5067 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5068 |       #[cfg(test)]
+5069 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5070 | |         .ok()
+5071 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5072 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5209:9
+     |
+5209 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5210 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5211 | /         let shipped_ladder = || {
+5212 | |             if nnz < 3 * n {
+5213 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5214 | |             } else {
+...    |
+5217 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4142:9
+     |
+4142 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:396:29
+    |
+396 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:761:7
+    |
+761 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:188:15
+    |
+188 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:313:15
+    |
+313 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:136:4
+    |
+136 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:232:4
+    |
+232 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:600:4
+    |
+600 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:485:19
+    |
+485 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 17 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 0.01s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+FENCEBATCH	n=357	nnz=1080	fill=4025	len=46	work=185150
+FENCEBATCH	n=357	nnz=1080	fill=4025	len=1	work=4025
+FENCEBATCH	n=357	nnz=1080	fill=4025	len=5	work=20125
+FENCEBATCH	n=357	nnz=1080	fill=4025	len=527	work=2121175
+LADGATE	357	10000	0.228	1
+COUNTS	slay06m	357	1080	4025	4025
+FENCEBATCH	n=401	nnz=1200	fill=5389	len=46	work=247894
+FENCEBATCH	n=401	nnz=1200	fill=5389	len=1	work=5389
+FENCEBATCH	n=401	nnz=1200	fill=5389	len=5	work=26945
+FENCEBATCH	n=401	nnz=1200	fill=5389	len=527	work=2840003
+LADGATE	401	10000	0.253	1
+COUNTS	sssd25-08	401	1200	5389	5389
+FENCEBATCH	n=4772	nnz=13836	fill=147553	len=15	work=2213295
+FENCEBATCH	n=4772	nnz=13836	fill=129933	len=1	work=129933
+FENCEBATCH	n=4772	nnz=13836	fill=129933	len=2	work=259866
+FENCEBATCH	n=4772	nnz=13836	fill=129933	len=440	work=57170520
+LADGATE	4772	10000	0.567	1
+COUNTS	rsyn0810m04m	4772	13836	147553	115517
+FENCEBATCH	n=23173	nnz=893724	fill=1153877333	len=3	work=3461631999
+FENCEBATCH	n=23173	nnz=893724	fill=881822939	len=2	work=1763645878
+COUNTS	pooling_sppc3pq	23173	893724	1153877333	325595394
+FENCEBATCH	n=1131	nnz=6676	fill=919582	len=22	work=20230804
+FENCEBATCH	n=1131	nnz=6676	fill=630197	len=1	work=630197
+FENCEBATCH	n=1131	nnz=6676	fill=630197	len=5	work=3150985
+FENCEBATCH	n=1131	nnz=6676	fill=630197	len=527	work=332113819
+FENCEBATCH	n=1131	nnz=6676	fill=609556	len=32	work=19505792
+LADGATE	1131	10000	0.538	1
+COUNTS	sporttournament48	1131	6676	919582	594138
+FENCEBATCH	n=5030	nnz=120730	fill=23971280	len=18	work=431483040
+FENCEBATCH	n=5030	nnz=120730	fill=15653402	len=1	work=15653402
+FENCEBATCH	n=5030	nnz=120730	fill=15653402	len=1	work=15653402
+FENCEBATCH	n=5030	nnz=120730	fill=15653402	len=96	work=1502726592
+LADGATE	5030	10000	0.374	1
+COUNTS	pooling_sppa9pq	5030	120730	23971280	15130622
+FENCEBATCH	n=1053	nnz=5204	fill=126115	len=25	work=3152875
+FENCEBATCH	n=1053	nnz=5204	fill=106194	len=1	work=106194
+FENCEBATCH	n=1053	nnz=5204	fill=106194	len=5	work=530970
+FENCEBATCH	n=1053	nnz=5204	fill=106194	len=527	work=55964238
+FENCEBATCH	n=1053	nnz=5204	fill=106194	len=16	work=1699104
+LADGATE	1053	10000	0.289	1
+COUNTS	edgecross10-090	1053	5204	126115	103179
+FENCEBATCH	n=2372	nnz=207996	fill=1381768944	len=13	work=17962996272
+FENCEBATCH	n=2372	nnz=207996	fill=1115463257	len=1	work=1115463257
+FENCEBATCH	n=2372	nnz=207996	fill=1115463257	len=6	work=6692779542
+COUNTS	maxcsp-ehi-85-297-71	2372	207996	1381768944	1110971341
+FENCEBATCH	n=30	nnz=120	fill=623	len=45	work=28035
+FENCEBATCH	n=30	nnz=120	fill=580	len=1	work=580
+FENCEBATCH	n=30	nnz=120	fill=580	len=5	work=2900
+FENCEBATCH	n=30	nnz=120	fill=580	len=527	work=305660
+FENCEBATCH	n=30	nnz=120	fill=580	len=16	work=9280
+LADGATE	30	10000	0.171	1
+COUNTS	st_bpaf1a	30	120	623	580
+FENCEBATCH	n=1462	nnz=5396	fill=118471	len=24	work=2843304
+FENCEBATCH	n=1462	nnz=5396	fill=78237	len=1	work=78237
+FENCEBATCH	n=1462	nnz=5396	fill=78237	len=5	work=391185
+FENCEBATCH	n=1462	nnz=5396	fill=78237	len=527	work=41230899
+FENCEBATCH	n=1462	nnz=5396	fill=71579	len=32	work=2290528
+LADGATE	1462	10000	0.442	1
+COUNTS	risk2bpb	1462	5396	118471	66041
+FENCEBATCH	n=255	nnz=43748	fill=3802533	len=24	work=91260792
+FENCEBATCH	n=255	nnz=43748	fill=3652461	len=1	work=3652461
+FENCEBATCH	n=255	nnz=43748	fill=3652461	len=4	work=14609844
+FENCEBATCH	n=255	nnz=43748	fill=3652461	len=216	work=788931576
+LADGATE	255	10000	0.150	1
+COUNTS	qap	255	43748	3802533	3650113
+FENCEBATCH	n=7252	nnz=20752	fill=212130	len=7	work=1484910
+FENCEBATCH	n=7252	nnz=20752	fill=200940	len=1	work=200940
+FENCEBATCH	n=7252	nnz=20752	fill=200940	len=1	work=200940
+FENCEBATCH	n=7252	nnz=20752	fill=200940	len=296	work=59478240
+LADGATE	7252	10000	0.524	1
+COUNTS	rsyn0830m04m	7252	20752	212130	171821
+FENCEBATCH	n=1073	nnz=2118	fill=79286	len=14	work=1110004
+FENCEBATCH	n=1073	nnz=2118	fill=69896	len=1	work=69896
+FENCEBATCH	n=1073	nnz=2118	fill=69896	len=5	work=349480
+FENCEBATCH	n=1073	nnz=2118	fill=69896	len=527	work=36835192
+LADGATE	1073	10000	0.264	1
+COUNTS	lop97icx	1073	2118	79286	64044
+FENCEBATCH	n=1201	nnz=4796	fill=16382	len=24	work=393168
+FENCEBATCH	n=1201	nnz=4796	fill=16382	len=1	work=16382
+FENCEBATCH	n=1201	nnz=4796	fill=16382	len=5	work=81910
+FENCEBATCH	n=1201	nnz=4796	fill=16382	len=527	work=8633314
+LADGATE	1201	10000	0.212	1
+COUNTS	chain400	1201	4796	16382	16382
+FENCEBATCH	n=9532	nnz=30810	fill=1368477	len=7	work=9579339
+FENCEBATCH	n=9532	nnz=30810	fill=1368477	len=1	work=1368477
+FENCEBATCH	n=9532	nnz=30810	fill=1368477	len=1	work=1368477
+FENCEBATCH	n=9532	nnz=30810	fill=1368477	len=199	work=272326923
+LADGATE	9532	10000	0.731	1
+COUNTS	mpbp_07	9532	30810	1368477	1248947
+FENCEBATCH	n=440	nnz=2958	fill=37814	len=46	work=1739444
+FENCEBATCH	n=440	nnz=2958	fill=31086	len=1	work=31086
+FENCEBATCH	n=440	nnz=2958	fill=31086	len=5	work=155430
+FENCEBATCH	n=440	nnz=2958	fill=31086	len=527	work=16382322
+FENCEBATCH	n=440	nnz=2958	fill=31086	len=16	work=497376
+LADGATE	440	10000	0.325	1
+COUNTS	sonetgr17	440	2958	37814	30971
+FENCEBATCH	n=2207	nnz=7516	fill=42456	len=24	work=1018944
+FENCEBATCH	n=2207	nnz=7516	fill=42319	len=1	work=42319
+FENCEBATCH	n=2207	nnz=7516	fill=42319	len=5	work=211595
+FENCEBATCH	n=2207	nnz=7516	fill=42319	len=527	work=22302113
+LADGATE	2207	10000	0.398	1
+COUNTS	p_ball_30b_7p_2d_h	2207	7516	42456	42319
+FENCEBATCH	n=19995	nnz=97990	fill=1358716	len=9	work=12228444
+FENCEBATCH	n=19995	nnz=97990	fill=1288424	len=1	work=1288424
+FENCEBATCH	n=19995	nnz=97990	fill=1288424	len=67	work=86324408
+LADGATE	19995	10000	0.721	0
+COUNTS	pinene200	19995	97990	1358716	1134463
+FENCEBATCH	n=146830	nnz=476332	fill=3053940	len=3	work=9161820
+FENCEBATCH	n=146830	nnz=476332	fill=3053940	len=1	work=3053940
+COUNTS	unitcommit_200_100_1_mod_8	146830	476332	3053940	2981835
+FENCEBATCH	n=123	nnz=834	fill=15050	len=45	work=677250
+FENCEBATCH	n=123	nnz=834	fill=11588	len=1	work=11588
+FENCEBATCH	n=123	nnz=834	fill=11588	len=5	work=57940
+FENCEBATCH	n=123	nnz=834	fill=11588	len=527	work=6106876
+FENCEBATCH	n=123	nnz=834	fill=11588	len=32	work=370816
+LADGATE	123	10000	0.333	1
+COUNTS	ex8_3_9	123	834	15050	11503
+FENCEBATCH	n=2486	nnz=6932	fill=38190	len=24	work=916560
+FENCEBATCH	n=2486	nnz=6932	fill=36174	len=1	work=36174
+FENCEBATCH	n=2486	nnz=6932	fill=36174	len=5	work=180870
+FENCEBATCH	n=2486	nnz=6932	fill=36174	len=527	work=19063698
+LADGATE	2486	10000	0.568	1
+COUNTS	rsyn0820m02m	2486	6932	38190	35665
+FENCEBATCH	n=293	nnz=964	fill=6648	len=46	work=305808
+FENCEBATCH	n=293	nnz=964	fill=6547	len=1	work=6547
+FENCEBATCH	n=293	nnz=964	fill=6547	len=5	work=32735
+FENCEBATCH	n=293	nnz=964	fill=6547	len=527	work=3450269
+FENCEBATCH	n=293	nnz=964	fill=6547	len=16	work=104752
+LADGATE	293	10000	0.281	1
+COUNTS	p_ball_10b_5p_2d_m	293	964	6648	6547
+FENCEBATCH	n=170	nnz=936	fill=26842	len=46	work=1234732
+FENCEBATCH	n=170	nnz=936	fill=23254	len=1	work=23254
+FENCEBATCH	n=170	nnz=936	fill=23254	len=5	work=116270
+FENCEBATCH	n=170	nnz=936	fill=23254	len=527	work=12254858
+FENCEBATCH	n=170	nnz=936	fill=23250	len=16	work=372000
+LADGATE	170	10000	0.212	1
+COUNTS	pooling_adhya4tp	170	936	26842	20581
+FENCEBATCH	n=7295	nnz=21600	fill=74520	len=9	work=670680
+FENCEBATCH	n=7295	nnz=21600	fill=74520	len=1	work=74520
+FENCEBATCH	n=7295	nnz=21600	fill=74520	len=1	work=74520
+FENCEBATCH	n=7295	nnz=21600	fill=74520	len=293	work=21834360
+LADGATE	7295	10000	0.250	1
+COUNTS	squfl015-080persp	7295	21600	74520	74520
+FENCEBATCH	n=1053	nnz=5940	fill=170814	len=25	work=4270350
+FENCEBATCH	n=1053	nnz=5940	fill=169831	len=1	work=169831
+FENCEBATCH	n=1053	nnz=5940	fill=169831	len=5	work=849155
+FENCEBATCH	n=1053	nnz=5940	fill=169831	len=527	work=89500937
+LADGATE	1053	10000	0.304	1
+COUNTS	edgecross10-080	1053	5940	170814	164639
+FENCEBATCH	n=590	nnz=1696	fill=7198	len=45	work=323910
+FENCEBATCH	n=590	nnz=1696	fill=6712	len=1	work=6712
+FENCEBATCH	n=590	nnz=1696	fill=6712	len=5	work=33560
+FENCEBATCH	n=590	nnz=1696	fill=6712	len=527	work=3537224
+FENCEBATCH	n=590	nnz=1696	fill=6655	len=16	work=106480
+LADGATE	590	10000	0.339	1
+COUNTS	clay0204hfsg	590	1696	7198	6562
+FENCEBATCH	n=13	nnz=40	fill=143	len=45	work=6435
+FENCEBATCH	n=13	nnz=40	fill=114	len=1	work=114
+FENCEBATCH	n=13	nnz=40	fill=114	len=5	work=570
+FENCEBATCH	n=13	nnz=40	fill=114	len=527	work=60078
+FENCEBATCH	n=13	nnz=40	fill=114	len=32	work=3648
+LADGATE	13	10000	0.114	1
+COUNTS	st_bsj2	13	40	143	114
+FENCEBATCH	n=440	nnz=3038	fill=97870	len=45	work=4404150
+FENCEBATCH	n=440	nnz=3038	fill=90584	len=1	work=90584
+FENCEBATCH	n=440	nnz=3038	fill=90584	len=5	work=452920
+FENCEBATCH	n=440	nnz=3038	fill=90584	len=527	work=47737768
+FENCEBATCH	n=440	nnz=3038	fill=90584	len=16	work=1449344
+LADGATE	440	10000	0.420	1
+COUNTS	chimera_mgw-c8-439-onc8-002	440	3038	97870	86464
+FENCEBATCH	n=5188	nnz=17910	fill=349298	len=8	work=2794384
+FENCEBATCH	n=5188	nnz=17910	fill=334396	len=1	work=334396
+FENCEBATCH	n=5188	nnz=17910	fill=334396	len=2	work=668792
+FENCEBATCH	n=5188	nnz=17910	fill=334396	len=376	work=125732896
+LADGATE	5188	10000	0.557	1
+COUNTS	batchs201210m	5188	17910	349298	303381
+FENCEBATCH	n=5456	nnz=15756	fill=184352	len=7	work=1290464
+FENCEBATCH	n=5456	nnz=15756	fill=175681	len=1	work=175681
+FENCEBATCH	n=5456	nnz=15756	fill=175681	len=2	work=351362
+FENCEBATCH	n=5456	nnz=15756	fill=175681	len=391	work=68691271
+LADGATE	5456	10000	0.629	1
+COUNTS	rsyn0815m04m	5456	15756	184352	144170
+FENCEBATCH	n=560	nnz=1528	fill=5007	len=45	work=225315
+FENCEBATCH	n=560	nnz=1528	fill=4886	len=1	work=4886
+FENCEBATCH	n=560	nnz=1528	fill=4886	len=5	work=24430
+FENCEBATCH	n=560	nnz=1528	fill=4886	len=527	work=2574922
+FENCEBATCH	n=560	nnz=1528	fill=4886	len=16	work=78176
+LADGATE	560	10000	0.320	1
+COUNTS	syn40m	560	1528	5007	4829
+FENCEBATCH	n=2157	nnz=32604	fill=3764003	len=18	work=67752054
+FENCEBATCH	n=2157	nnz=32604	fill=3764003	len=1	work=3764003
+FENCEBATCH	n=2157	nnz=32604	fill=3764003	len=2	work=7528006
+FENCEBATCH	n=2157	nnz=32604	fill=3764003	len=265	work=997460795
+LADGATE	2157	10000	0.269	1
+COUNTS	knp5-44	2157	32604	3764003	3764003
+FENCEBATCH	n=94	nnz=390	fill=2098	len=45	work=94410
+FENCEBATCH	n=94	nnz=390	fill=2098	len=1	work=2098
+FENCEBATCH	n=94	nnz=390	fill=2098	len=5	work=10490
+FENCEBATCH	n=94	nnz=390	fill=2098	len=527	work=1105646
+LADGATE	94	10000	0.200	1
+COUNTS	ex1263a	94	390	2098	2098
+COUNTS	st_e41	8	32	88	88
+FENCEBATCH	n=2305	nnz=6000	fill=42305	len=24	work=1015320
+FENCEBATCH	n=2305	nnz=6000	fill=42305	len=1	work=42305
+FENCEBATCH	n=2305	nnz=6000	fill=42305	len=5	work=211525
+FENCEBATCH	n=2305	nnz=6000	fill=42305	len=527	work=22294735
+LADGATE	2305	10000	0.315	1
+COUNTS	squfl025-030	2305	6000	42305	42305
+FENCEBATCH	n=98	nnz=536	fill=11690	len=45	work=526050
+FENCEBATCH	n=98	nnz=536	fill=9820	len=1	work=9820
+FENCEBATCH	n=98	nnz=536	fill=9820	len=5	work=49100
+FENCEBATCH	n=98	nnz=536	fill=9820	len=527	work=5175140
+FENCEBATCH	n=98	nnz=536	fill=9603	len=16	work=153648
+LADGATE	98	10000	0.254	1
+COUNTS	wastewater05m1	98	536	11690	8036
+COUNTS	cvxnonsep_psig20	20	380	2870	2870
+FENCEBATCH	n=4405	nnz=171604	fill=21923414	len=13	work=285004382
+FENCEBATCH	n=4405	nnz=171604	fill=21922611	len=1	work=21922611
+FENCEBATCH	n=4405	nnz=171604	fill=21922611	len=1	work=21922611
+FENCEBATCH	n=4405	nnz=171604	fill=21922611	len=11	work=241148721
+LADGATE	4405	10000	0.189	1
+COUNTS	meanvar-orl400_05_e_8	4405	171604	21923414	21922611
+FENCEBATCH	n=301	nnz=744	fill=4534	len=45	work=204030
+FENCEBATCH	n=301	nnz=744	fill=4419	len=1	work=4419
+FENCEBATCH	n=301	nnz=744	fill=4419	len=5	work=22095
+FENCEBATCH	n=301	nnz=744	fill=4419	len=527	work=2328813
+FENCEBATCH	n=301	nnz=744	fill=4419	len=16	work=70704
+LADGATE	301	10000	0.301	1
+COUNTS	st_e31	301	744	4534	4257
+FENCEBATCH	n=14100	nnz=477680	fill=812210652	len=3	work=2436631956
+FENCEBATCH	n=14100	nnz=477680	fill=250502371	len=9	work=2254521339
+COUNTS	pooling_sppc1pq	14100	477680	812210652	136686008
+FENCEBATCH	n=31	nnz=96	fill=412	len=45	work=18540
+FENCEBATCH	n=31	nnz=96	fill=403	len=1	work=403
+FENCEBATCH	n=31	nnz=96	fill=403	len=5	work=2015
+FENCEBATCH	n=31	nnz=96	fill=403	len=527	work=212381
+FENCEBATCH	n=31	nnz=96	fill=403	len=16	work=6448
+LADGATE	31	10000	0.173	1
+COUNTS	pooling_haverly1pq	31	96	412	403
+FENCEBATCH	n=128	nnz=672	fill=33446	len=45	work=1505070
+FENCEBATCH	n=128	nnz=672	fill=32566	len=1	work=32566
+FENCEBATCH	n=128	nnz=672	fill=32566	len=5	work=162830
+FENCEBATCH	n=128	nnz=672	fill=32566	len=527	work=17162282
+FENCEBATCH	n=128	nnz=672	fill=32566	len=16	work=521056
+LADGATE	128	10000	0.237	1
+COUNTS	graphpart_3g-0244-0244	128	672	33446	32534
+FENCEBATCH	n=80	nnz=1260	fill=34885	len=47	work=1639595
+FENCEBATCH	n=80	nnz=1260	fill=30190	len=1	work=30190
+FENCEBATCH	n=80	nnz=1260	fill=30190	len=5	work=150950
+FENCEBATCH	n=80	nnz=1260	fill=30190	len=527	work=15910130
+FENCEBATCH	n=80	nnz=1260	fill=30190	len=16	work=483040
+LADGATE	80	10000	0.241	1
+COUNTS	graphpart_clique-20	80	1260	34885	27856
+FENCEBATCH	n=28368	nnz=91016	fill=33835023	len=7	work=236845161
+FENCEBATCH	n=28368	nnz=91016	fill=18479530	len=1	work=18479530
+FENCEBATCH	n=28368	nnz=91016	fill=18479530	len=81	work=1496841930
+LADGATE	28368	10000	0.900	0
+COUNTS	mpbp_48	28368	91016	33835023	16144599
+FENCEBATCH	n=18529	nnz=674470	fill=523815053	len=3	work=1571445159
+FENCEBATCH	n=18529	nnz=674470	fill=218002440	len=11	work=2398026840
+COUNTS	pooling_sppb5pq	18529	674470	523815053	213571545
+FENCEBATCH	n=497	nnz=1512	fill=5740	len=46	work=264040
+FENCEBATCH	n=497	nnz=1512	fill=5740	len=1	work=5740
+FENCEBATCH	n=497	nnz=1512	fill=5740	len=5	work=28700
+FENCEBATCH	n=497	nnz=1512	fill=5740	len=527	work=3024980
+LADGATE	497	10000	0.261	1
+COUNTS	slay07m	497	1512	5740	5740
+COUNTS	nvs19	24	200	1353	884
+FENCEBATCH	n=3270	nnz=8430	fill=36313	len=17	work=617321
+FENCEBATCH	n=3270	nnz=8430	fill=36151	len=1	work=36151
+FENCEBATCH	n=3270	nnz=8430	fill=36151	len=2	work=72302
+FENCEBATCH	n=3270	nnz=8430	fill=36151	len=459	work=16593309
+LADGATE	3270	10000	0.531	1
+COUNTS	oil	3270	8430	36313	34760
+FENCEBATCH	n=2775	nnz=7200	fill=36400	len=25	work=910000
+FENCEBATCH	n=2775	nnz=7200	fill=36400	len=1	work=36400
+FENCEBATCH	n=2775	nnz=7200	fill=36400	len=5	work=182000
+FENCEBATCH	n=2775	nnz=7200	fill=36400	len=527	work=19182800
+LADGATE	2775	10000	0.455	1
+COUNTS	squfl015-060	2775	7200	36400	36400
+FENCEBATCH	n=1112	nnz=5522	fill=299115	len=23	work=6879645
+FENCEBATCH	n=1112	nnz=5522	fill=289305	len=1	work=289305
+FENCEBATCH	n=1112	nnz=5522	fill=289305	len=5	work=1446525
+FENCEBATCH	n=1112	nnz=5522	fill=289305	len=527	work=152463735
+LADGATE	1112	10000	0.424	1
+COUNTS	ndcc12persp	1112	5522	299115	284793
+FENCEBATCH	n=20772	nnz=401024	fill=156414018	len=3	work=469242054
+FENCEBATCH	n=20772	nnz=401024	fill=156414018	len=1	work=156414018
+COUNTS	kissing2	20772	401024	156414018	156414018
+FENCEBATCH	n=1942	nnz=16030	fill=1977163	len=16	work=31634608
+FENCEBATCH	n=1942	nnz=16030	fill=1486246	len=1	work=1486246
+FENCEBATCH	n=1942	nnz=16030	fill=1378569	len=5	work=6892845
+FENCEBATCH	n=1942	nnz=16030	fill=1378569	len=483	work=665848827
+FENCEBATCH	n=1942	nnz=16030	fill=1325679	len=32	work=42421728
+LADGATE	1942	10000	0.529	1
+COUNTS	nuclear25a	1942	16030	1977163	1136191
+FENCEBATCH	n=222	nnz=704	fill=2330	len=46	work=107180
+FENCEBATCH	n=222	nnz=704	fill=2330	len=1	work=2330
+FENCEBATCH	n=222	nnz=704	fill=2330	len=5	work=11650
+FENCEBATCH	n=222	nnz=704	fill=2330	len=527	work=1227910
+LADGATE	222	10000	0.224	1
+COUNTS	clay0204m	222	704	2330	2330
+FENCEBATCH	n=23	nnz=68	fill=207	len=45	work=9315
+FENCEBATCH	n=23	nnz=68	fill=178	len=1	work=178
+FENCEBATCH	n=23	nnz=68	fill=178	len=5	work=890
+FENCEBATCH	n=23	nnz=68	fill=178	len=527	work=93806
+FENCEBATCH	n=23	nnz=68	fill=178	len=16	work=2848
+LADGATE	23	10000	0.134	1
+COUNTS	st_ph13	23	68	207	178
+FENCEBATCH	n=1053	nnz=4654	fill=135854	len=25	work=3396350
+FENCEBATCH	n=1053	nnz=4654	fill=105877	len=1	work=105877
+FENCEBATCH	n=1053	nnz=4654	fill=105877	len=5	work=529385
+FENCEBATCH	n=1053	nnz=4654	fill=105877	len=527	work=55797179
+FENCEBATCH	n=1053	nnz=4654	fill=104855	len=32	work=3355360
+LADGATE	1053	10000	0.370	1
+COUNTS	edgecross10-030	1053	4654	135854	100608
+FENCEBATCH	n=601	nnz=2396	fill=8182	len=47	work=384554
+FENCEBATCH	n=601	nnz=2396	fill=8182	len=1	work=8182
+FENCEBATCH	n=601	nnz=2396	fill=8182	len=5	work=40910
+FENCEBATCH	n=601	nnz=2396	fill=8182	len=527	work=4311914
+LADGATE	601	10000	0.243	1
+COUNTS	chain200	601	2396	8182	8182
+FENCEBATCH	n=25	nnz=66	fill=178	len=45	work=8010
+FENCEBATCH	n=25	nnz=66	fill=178	len=1	work=178
+FENCEBATCH	n=25	nnz=66	fill=178	len=5	work=890
+FENCEBATCH	n=25	nnz=66	fill=178	len=527	work=93806
+LADGATE	25	10000	0.164	1
+COUNTS	ex1223b	25	66	178	178
+FENCEBATCH	n=2718	nnz=7488	fill=36057	len=24	work=865368
+FENCEBATCH	n=2718	nnz=7488	fill=33435	len=1	work=33435
+FENCEBATCH	n=2718	nnz=7488	fill=33435	len=5	work=167175
+FENCEBATCH	n=2718	nnz=7488	fill=33435	len=527	work=17620245
+LADGATE	2718	10000	0.429	1
+COUNTS	slay09h	2718	7488	36057	32385
+FENCEBATCH	n=974	nnz=5982	fill=345696	len=28	work=9679488
+FENCEBATCH	n=974	nnz=5982	fill=345696	len=1	work=345696
+FENCEBATCH	n=974	nnz=5982	fill=345696	len=5	work=1728480
+FENCEBATCH	n=974	nnz=5982	fill=345696	len=527	work=182181792
+FENCEBATCH	n=974	nnz=5982	fill=334432	len=16	work=5350912
+LADGATE	974	10000	0.511	1
+COUNTS	ndcc12	974	5982	345696	329556
+FENCEBATCH	n=1306	nnz=5378	fill=75744	len=22	work=1666368
+FENCEBATCH	n=1306	nnz=5378	fill=75294	len=1	work=75294
+FENCEBATCH	n=1306	nnz=5378	fill=75294	len=5	work=376470
+FENCEBATCH	n=1306	nnz=5378	fill=75294	len=527	work=39679938
+LADGATE	1306	10000	0.402	1
+COUNTS	kall_circlesrectangles_c6r39	1306	5378	75744	74610
+FENCEBATCH	n=9170	nnz=24000	fill=135020	len=8	work=1080160
+FENCEBATCH	n=9170	nnz=24000	fill=135020	len=1	work=135020
+FENCEBATCH	n=9170	nnz=24000	fill=135020	len=1	work=135020
+FENCEBATCH	n=9170	nnz=24000	fill=135020	len=287	work=38750740
+LADGATE	9170	10000	0.420	1
+COUNTS	squfl020-150	9170	24000	135020	135020
+COUNTS	autocorr_bern40-30	43	1534	20034	20034
+FENCEBATCH	n=660	nnz=2016	fill=7796	len=46	work=358616
+FENCEBATCH	n=660	nnz=2016	fill=7796	len=1	work=7796
+FENCEBATCH	n=660	nnz=2016	fill=7796	len=5	work=38980
+FENCEBATCH	n=660	nnz=2016	fill=7796	len=527	work=4108492
+LADGATE	660	10000	0.287	1
+COUNTS	slay08m	660	2016	7796	7796
+FENCEBATCH	n=2032	nnz=15900	fill=3328073	len=15	work=49921095
+FENCEBATCH	n=2032	nnz=15900	fill=3278882	len=1	work=3278882
+FENCEBATCH	n=2032	nnz=15900	fill=3278882	len=2	work=6557764
+FENCEBATCH	n=2032	nnz=15900	fill=3278882	len=474	work=1554190068
+LADGATE	2032	10000	0.603	1
+COUNTS	chimera_mgw-c16-2031-01	2032	15900	3328073	2600520
+FENCEBATCH	n=713	nnz=2658	fill=10614	len=47	work=498858
+FENCEBATCH	n=713	nnz=2658	fill=10582	len=1	work=10582
+FENCEBATCH	n=713	nnz=2658	fill=10582	len=5	work=52910
+FENCEBATCH	n=713	nnz=2658	fill=10582	len=527	work=5576714
+FENCEBATCH	n=713	nnz=2658	fill=10543	len=16	work=168688
+LADGATE	713	10000	0.395	1
+COUNTS	forest	713	2658	10614	10543
+FENCEBATCH	n=280	nnz=29636	fill=1942907	len=24	work=46629768
+FENCEBATCH	n=280	nnz=29636	fill=1935082	len=1	work=1935082
+FENCEBATCH	n=280	nnz=29636	fill=1935082	len=5	work=9675410
+FENCEBATCH	n=280	nnz=29636	fill=1935082	len=307	work=594070174
+FENCEBATCH	n=280	nnz=29636	fill=1935082	len=16	work=30961312
+LADGATE	280	10000	0.186	1
+COUNTS	qspp_0_10_0_1_10_1	280	29636	1942907	1932414
+FENCEBATCH	n=16	nnz=58	fill=274	len=45	work=12330
+FENCEBATCH	n=16	nnz=58	fill=233	len=1	work=233
+FENCEBATCH	n=16	nnz=58	fill=233	len=5	work=1165
+FENCEBATCH	n=16	nnz=58	fill=233	len=527	work=122791
+FENCEBATCH	n=16	nnz=58	fill=233	len=16	work=3728
+LADGATE	16	10000	0.136	1
+COUNTS	st_ph1	16	58	274	233
+FENCEBATCH	n=124	nnz=376	fill=2733	len=45	work=122985
+FENCEBATCH	n=124	nnz=376	fill=2501	len=1	work=2501
+FENCEBATCH	n=124	nnz=376	fill=2501	len=5	work=12505
+FENCEBATCH	n=124	nnz=376	fill=2501	len=527	work=1318027
+FENCEBATCH	n=124	nnz=376	fill=2198	len=16	work=35168
+LADGATE	124	10000	0.195	1
+COUNTS	elf	124	376	2733	2173
+FENCEBATCH	n=18	nnz=36	fill=90	len=45	work=4050
+FENCEBATCH	n=18	nnz=36	fill=83	len=1	work=83
+FENCEBATCH	n=18	nnz=36	fill=83	len=5	work=415
+FENCEBATCH	n=18	nnz=36	fill=83	len=527	work=43741
+FENCEBATCH	n=18	nnz=36	fill=83	len=16	work=1328
+LADGATE	18	10000	0.137	1
+COUNTS	ex3_1_3	18	36	90	83
+COUNTS	cvxnonsep_normcon40r	162	322	645	645
+FENCEBATCH	n=155	nnz=618	fill=3579	len=46	work=164634
+FENCEBATCH	n=155	nnz=618	fill=3426	len=1	work=3426
+FENCEBATCH	n=155	nnz=618	fill=3426	len=5	work=17130
+FENCEBATCH	n=155	nnz=618	fill=3426	len=527	work=1805502
+FENCEBATCH	n=155	nnz=618	fill=3426	len=16	work=54816
+LADGATE	155	10000	0.267	1
+COUNTS	demo7	155	618	3579	3426
+FENCEBATCH	n=615	nnz=2580	fill=155674	len=47	work=7316678
+FENCEBATCH	n=615	nnz=2580	fill=74817	len=1	work=74817
+FENCEBATCH	n=615	nnz=2580	fill=74817	len=5	work=374085
+FENCEBATCH	n=615	nnz=2580	fill=74817	len=527	work=39428559
+FENCEBATCH	n=615	nnz=2580	fill=74817	len=32	work=2394144
+LADGATE	615	10000	0.367	1
+COUNTS	waternd2	615	2580	155674	74817
+FENCEBATCH	n=64	nnz=292	fill=1245	len=47	work=58515
+FENCEBATCH	n=64	nnz=292	fill=1227	len=1	work=1227
+FENCEBATCH	n=64	nnz=292	fill=1227	len=5	work=6135
+FENCEBATCH	n=64	nnz=292	fill=1227	len=527	work=646629
+FENCEBATCH	n=64	nnz=292	fill=1227	len=16	work=19632
+LADGATE	64	10000	0.211	1
+COUNTS	prolog	64	292	1245	1225
+FENCEBATCH	n=11	nnz=30	fill=80	len=45	work=3600
+FENCEBATCH	n=11	nnz=30	fill=80	len=1	work=80
+FENCEBATCH	n=11	nnz=30	fill=80	len=5	work=400
+FENCEBATCH	n=11	nnz=30	fill=80	len=527	work=42160
+LADGATE	11	10000	0.106	1
+COUNTS	ex14_1_8	11	30	80	80
+FENCEBATCH	n=272878	nnz=1379706	fill=3204527350	len=1	work=3204527350
+COUNTS	faclay75	272878	1379706	3204527350	3013800414
+FENCEBATCH	n=55	nnz=548	fill=5467	len=47	work=256949
+FENCEBATCH	n=55	nnz=548	fill=3762	len=1	work=3762
+FENCEBATCH	n=55	nnz=548	fill=3762	len=5	work=18810
+FENCEBATCH	n=55	nnz=548	fill=3762	len=527	work=1982574
+FENCEBATCH	n=55	nnz=548	fill=3762	len=32	work=120384
+LADGATE	55	10000	0.135	1
+COUNTS	st_qpk3	55	548	5467	3762
+FENCEBATCH	n=11556	nnz=40860	fill=3093917	len=7	work=21657419
+FENCEBATCH	n=11556	nnz=40860	fill=2922891	len=1	work=2922891
+FENCEBATCH	n=11556	nnz=40860	fill=1843362	len=2	work=3686724
+FENCEBATCH	n=11556	nnz=40860	fill=1754610	len=114	work=200025540
+LADGATE	11556	10000	0.723	0
+COUNTS	mpbp_34	11556	40860	3093917	893365
+COUNTS	cvxnonsep_normcon20r	82	162	325	325
+COUNTS	cvxnonsep_psig20r	86	170	341	341
+FENCEBATCH	n=18742	nnz=75910	fill=14985540	len=10	work=149855400
+FENCEBATCH	n=18742	nnz=75910	fill=14074112	len=1	work=14074112
+FENCEBATCH	n=18742	nnz=75910	fill=14074112	len=75	work=1055558400
+LADGATE	18742	10000	0.747	0
+COUNTS	crudeoil_pooling_dt2	18742	75910	14985540	9947932
+FENCEBATCH	n=2868	nnz=8270	fill=60979	len=24	work=1463496
+FENCEBATCH	n=2868	nnz=8270	fill=60835	len=1	work=60835
+FENCEBATCH	n=2868	nnz=8270	fill=60835	len=2	work=121670
+FENCEBATCH	n=2868	nnz=8270	fill=60835	len=515	work=31330025
+LADGATE	2868	10000	0.710	1
+COUNTS	rsyn0805m03m	2868	8270	60979	54853
+COUNTS	st_iqpbk1	22	98	295	295
+FENCEBATCH	n=96	nnz=404	fill=4546	len=45	work=204570
+FENCEBATCH	n=96	nnz=404	fill=3317	len=1	work=3317
+FENCEBATCH	n=96	nnz=404	fill=3317	len=5	work=16585
+FENCEBATCH	n=96	nnz=404	fill=3317	len=527	work=1748059
+FENCEBATCH	n=96	nnz=404	fill=3317	len=32	work=106144
+LADGATE	96	10000	0.264	1
+COUNTS	waterund01	96	404	4546	3317
+FENCEBATCH	n=29	nnz=120	fill=577	len=45	work=25965
+FENCEBATCH	n=29	nnz=120	fill=577	len=1	work=577
+FENCEBATCH	n=29	nnz=120	fill=577	len=5	work=2885
+FENCEBATCH	n=29	nnz=120	fill=577	len=527	work=304079
+LADGATE	29	10000	0.152	1
+COUNTS	pointpack04	29	120	577	577
+FENCEBATCH	n=12	nnz=30	fill=77	len=45	work=3465
+FENCEBATCH	n=12	nnz=30	fill=70	len=1	work=70
+FENCEBATCH	n=12	nnz=30	fill=70	len=5	work=350
+FENCEBATCH	n=12	nnz=30	fill=70	len=527	work=36890
+FENCEBATCH	n=12	nnz=30	fill=70	len=16	work=1120
+LADGATE	12	10000	0.097	1
+COUNTS	st_e22	12	30	77	70
+FENCEBATCH	n=16678	nnz=82242	fill=13452923	len=9	work=121076307
+FENCEBATCH	n=16678	nnz=82242	fill=13436871	len=1	work=13436871
+FENCEBATCH	n=16678	nnz=82242	fill=13436871	len=69	work=927144099
+LADGATE	16678	10000	0.487	0
+COUNTS	faclay30	16678	82242	13452923	12850431
+FENCEBATCH	n=4432	nnz=11248	fill=683476	len=15	work=10252140
+FENCEBATCH	n=4432	nnz=11248	fill=680292	len=1	work=680292
+FENCEBATCH	n=4432	nnz=11248	fill=680292	len=2	work=1360584
+FENCEBATCH	n=4432	nnz=11248	fill=680292	len=459	work=312254028
+LADGATE	4432	10000	0.417	1
+COUNTS	arki0002	4432	11248	683476	667374
+FENCEBATCH	n=11659	nnz=48446	fill=404940	len=8	work=3239520
+FENCEBATCH	n=11659	nnz=48446	fill=404940	len=1	work=404940
+FENCEBATCH	n=11659	nnz=48446	fill=404940	len=1	work=404940
+FENCEBATCH	n=11659	nnz=48446	fill=404940	len=107	work=43328580
+LADGATE	11659	10000	0.953	0
+COUNTS	transswitch0300p	11659	48446	404940	378674
+FENCEBATCH	n=30660	nnz=152210	fill=48975085	len=6	work=293850510
+FENCEBATCH	n=30660	nnz=152210	fill=47606030	len=1	work=47606030
+FENCEBATCH	n=30660	nnz=152210	fill=47606030	len=10	work=476060300
+LADGATE	30660	10000	0.847	0
+COUNTS	crudeoil_pooling_dt3	30660	152210	48975085	33883414
+FENCEBATCH	n=22536	nnz=75636	fill=1030380	len=7	work=7212660
+FENCEBATCH	n=22536	nnz=75636	fill=1030380	len=1	work=1030380
+FENCEBATCH	n=22536	nnz=75636	fill=1030380	len=93	work=95825340
+LADGATE	22536	10000	0.748	0
+COUNTS	gasprod_sarawak81	22536	75636	1030380	941231
+FENCEBATCH	n=660	nnz=29646	fill=33444033	len=23	work=769212759
+FENCEBATCH	n=660	nnz=29646	fill=25270789	len=1	work=25270789
+FENCEBATCH	n=660	nnz=29646	fill=25270789	len=5	work=126353945
+FENCEBATCH	n=660	nnz=29646	fill=15049494	len=307	work=4620194658
+FENCEBATCH	n=660	nnz=29646	fill=13106275	len=32	work=419400800
+LADGATE	660	10000	0.411	1
+COUNTS	maxcsp-langford-3-11	660	29646	33444033	10360919
+FENCEBATCH	n=1543	nnz=5224	fill=25843	len=22	work=568546
+FENCEBATCH	n=1543	nnz=5224	fill=25742	len=1	work=25742
+FENCEBATCH	n=1543	nnz=5224	fill=25742	len=5	work=128710
+FENCEBATCH	n=1543	nnz=5224	fill=25742	len=527	work=13566034
+LADGATE	1543	10000	0.352	1
+COUNTS	p_ball_30b_5p_2d_h	1543	5224	25843	25742
+FENCEBATCH	n=6709	nnz=45220	fill=2415136	len=12	work=28981632
+FENCEBATCH	n=6709	nnz=45220	fill=1261104	len=1	work=1261104
+FENCEBATCH	n=6709	nnz=45220	fill=1261104	len=1	work=1261104
+FENCEBATCH	n=6709	nnz=45220	fill=1261104	len=149	work=187904496
+LADGATE	6709	10000	0.366	1
+COUNTS	ringpack_20_3	6709	45220	2415136	865627
+FENCEBATCH	n=4825	nnz=21504	fill=1468261	len=18	work=26428698
+FENCEBATCH	n=4825	nnz=21504	fill=1433519	len=1	work=1433519
+FENCEBATCH	n=4825	nnz=21504	fill=1433519	len=2	work=2867038
+FENCEBATCH	n=4825	nnz=21504	fill=1433519	len=307	work=440090333
+LADGATE	4825	10000	0.568	1
+COUNTS	waste	4825	21504	1468261	1270649
+FENCEBATCH	n=2001	nnz=11192	fill=36373	len=24	work=872952
+FENCEBATCH	n=2001	nnz=11192	fill=36364	len=1	work=36364
+FENCEBATCH	n=2001	nnz=11192	fill=36364	len=2	work=72728
+FENCEBATCH	n=2001	nnz=11192	fill=36364	len=515	work=18727460
+LADGATE	2001	10000	0.251	1
+COUNTS	catmix400	2001	11192	36373	36364
+FENCEBATCH	n=3054	nnz=7968	fill=44604	len=15	work=669060
+FENCEBATCH	n=3054	nnz=7968	fill=44604	len=1	work=44604
+FENCEBATCH	n=3054	nnz=7968	fill=44604	len=5	work=223020
+FENCEBATCH	n=3054	nnz=7968	fill=44604	len=466	work=20785464
+LADGATE	3054	10000	0.521	1
+COUNTS	rsyn0815m02hfsg	3054	7968	44604	41416
+FENCEBATCH	n=1236	nnz=4186	fill=24380	len=22	work=536360
+FENCEBATCH	n=1236	nnz=4186	fill=23744	len=1	work=23744
+FENCEBATCH	n=1236	nnz=4186	fill=23744	len=5	work=118720
+FENCEBATCH	n=1236	nnz=4186	fill=23744	len=527	work=12513088
+LADGATE	1236	10000	0.306	1
+COUNTS	p_ball_10b_7p_3d_h	1236	4186	24380	23744
+FENCEBATCH	n=1225	nnz=3846	fill=613390	len=24	work=14721360
+FENCEBATCH	n=1225	nnz=3846	fill=461597	len=1	work=461597
+FENCEBATCH	n=1225	nnz=3846	fill=461597	len=5	work=2307985
+FENCEBATCH	n=1225	nnz=3846	fill=461597	len=527	work=243261619
+FENCEBATCH	n=1225	nnz=3846	fill=382544	len=32	work=12241408
+LADGATE	1225	10000	0.602	1
+COUNTS	chimera_k64ising-02	1225	3846	613390	372954
+FENCEBATCH	n=3404	nnz=11462	fill=138030	len=16	work=2208480
+FENCEBATCH	n=3404	nnz=11462	fill=138030	len=1	work=138030
+FENCEBATCH	n=3404	nnz=11462	fill=138030	len=2	work=276060
+FENCEBATCH	n=3404	nnz=11462	fill=138030	len=459	work=63355770
+LADGATE	3404	10000	0.473	1
+COUNTS	batchs121208m	3404	11462	138030	128816
+FENCEBATCH	n=11	nnz=46	fill=142	len=45	work=6390
+FENCEBATCH	n=11	nnz=46	fill=142	len=1	work=142
+FENCEBATCH	n=11	nnz=46	fill=142	len=5	work=710
+FENCEBATCH	n=11	nnz=46	fill=142	len=527	work=74834
+LADGATE	11	10000	0.108	1
+COUNTS	nvs02	11	46	142	142
+FENCEBATCH	n=191	nnz=1416	fill=16611	len=46	work=764106
+FENCEBATCH	n=191	nnz=1416	fill=16611	len=1	work=16611
+FENCEBATCH	n=191	nnz=1416	fill=16611	len=5	work=83055
+FENCEBATCH	n=191	nnz=1416	fill=16611	len=527	work=8753997
+LADGATE	191	10000	0.266	1
+COUNTS	wastepaper6	191	1416	16611	16611
+FENCEBATCH	n=399	nnz=1022	fill=3300	len=45	work=148500
+FENCEBATCH	n=399	nnz=1022	fill=3272	len=1	work=3272
+FENCEBATCH	n=399	nnz=1022	fill=3272	len=5	work=16360
+FENCEBATCH	n=399	nnz=1022	fill=3272	len=527	work=1724344
+FENCEBATCH	n=399	nnz=1022	fill=3272	len=16	work=52352
+LADGATE	399	10000	0.273	1
+COUNTS	syn15hfsg	399	1022	3300	3272
+FENCEBATCH	n=36	nnz=246	fill=1635	len=45	work=73575
+FENCEBATCH	n=36	nnz=246	fill=1543	len=1	work=1543
+FENCEBATCH	n=36	nnz=246	fill=1543	len=5	work=7715
+FENCEBATCH	n=36	nnz=246	fill=1543	len=527	work=813161
+FENCEBATCH	n=36	nnz=246	fill=1543	len=16	work=24688
+LADGATE	36	10000	0.163	1
+COUNTS	st_jcbpaf2	36	246	1635	1543
+COUNTS	camshape400	2000	7188	16768	16768
+FENCEBATCH	n=120	nnz=2790	fill=114505	len=47	work=5381735
+FENCEBATCH	n=120	nnz=2790	fill=95945	len=1	work=95945
+FENCEBATCH	n=120	nnz=2790	fill=95945	len=5	work=479725
+FENCEBATCH	n=120	nnz=2790	fill=95945	len=527	work=50563015
+FENCEBATCH	n=120	nnz=2790	fill=95945	len=16	work=1535120
+LADGATE	120	10000	0.258	1
+COUNTS	graphpart_clique-30	120	2790	114505	91153
+FENCEBATCH	n=280	nnz=14910	fill=1413012	len=22	work=31086264
+FENCEBATCH	n=280	nnz=14910	fill=1175405	len=1	work=1175405
+FENCEBATCH	n=280	nnz=14910	fill=1175405	len=5	work=5877025
+FENCEBATCH	n=280	nnz=14910	fill=1175405	len=497	work=584176285
+FENCEBATCH	n=280	nnz=14910	fill=1175405	len=16	work=18806480
+LADGATE	280	10000	0.219	1
+COUNTS	graphpart_clique-70	280	14910	1413012	1144894
+COUNTS	smallinvDAXr1b010-011	39	1120	13510	13319
+FENCEBATCH	n=22074	nnz=60000	fill=289420	len=7	work=2025940
+FENCEBATCH	n=22074	nnz=60000	fill=287064	len=1	work=287064
+FENCEBATCH	n=22074	nnz=60000	fill=287064	len=107	work=30715848
+LADGATE	22074	10000	0.475	0
+COUNTS	nd_netgen-2000-3-4-b-a-ns_7	22074	60000	289420	273394
+FENCEBATCH	n=240	nnz=720	fill=2635	len=45	work=118575
+FENCEBATCH	n=240	nnz=720	fill=2635	len=1	work=2635
+FENCEBATCH	n=240	nnz=720	fill=2635	len=5	work=13175
+FENCEBATCH	n=240	nnz=720	fill=2635	len=527	work=1388645
+LADGATE	240	10000	0.230	1
+COUNTS	slay05m	240	720	2635	2635
+FENCEBATCH	n=2031	nnz=10964	fill=3605628	len=24	work=86535072
+FENCEBATCH	n=2031	nnz=10964	fill=2924790	len=1	work=2924790
+FENCEBATCH	n=2031	nnz=10964	fill=2924790	len=2	work=5849580
+FENCEBATCH	n=2031	nnz=10964	fill=2924790	len=515	work=1506266850
+FENCEBATCH	n=2031	nnz=10964	fill=2605301	len=32	work=83369632
+LADGATE	2031	10000	0.709	1
+COUNTS	chimera_selby-c16-01	2031	10964	3605628	2431621
+FENCEBATCH	n=110	nnz=376	fill=975	len=47	work=45825
+FENCEBATCH	n=110	nnz=376	fill=975	len=1	work=975
+FENCEBATCH	n=110	nnz=376	fill=975	len=5	work=4875
+FENCEBATCH	n=110	nnz=376	fill=975	len=527	work=513825
+LADGATE	110	10000	0.189	1
+COUNTS	csched1	110	376	975	975
+FENCEBATCH	n=1310	nnz=37028	fill=2171882	len=18	work=39093876
+FENCEBATCH	n=1310	nnz=37028	fill=2171882	len=1	work=2171882
+FENCEBATCH	n=1310	nnz=37028	fill=2171882	len=2	work=4343764
+FENCEBATCH	n=1310	nnz=37028	fill=2171882	len=257	work=558173674
+LADGATE	1310	10000	0.146	1
+COUNTS	watercontamination0303r	1310	37028	2171882	2171882
+FENCEBATCH	n=15	nnz=36	fill=117	len=45	work=5265
+FENCEBATCH	n=15	nnz=36	fill=117	len=1	work=117
+FENCEBATCH	n=15	nnz=36	fill=117	len=5	work=585
+FENCEBATCH	n=15	nnz=36	fill=117	len=527	work=61659
+LADGATE	15	10000	0.114	1
+COUNTS	ex9_2_4	15	36	117	117
+FENCEBATCH	n=163	nnz=440	fill=1625	len=46	work=74750
+FENCEBATCH	n=163	nnz=440	fill=1625	len=1	work=1625
+FENCEBATCH	n=163	nnz=440	fill=1625	len=5	work=8125
+FENCEBATCH	n=163	nnz=440	fill=1625	len=527	work=856375
+LADGATE	163	10000	0.194	1
+COUNTS	sssd15-04	163	440	1625	1625
+COUNTS	autocorr_bern35-35fix	38	1264	16214	16214
+FENCEBATCH	n=1491	nnz=4500	fill=31682	len=23	work=728686
+FENCEBATCH	n=1491	nnz=4500	fill=31659	len=1	work=31659
+FENCEBATCH	n=1491	nnz=4500	fill=31659	len=5	work=158295
+FENCEBATCH	n=1491	nnz=4500	fill=31659	len=527	work=16684293
+LADGATE	1491	10000	0.323	1
+COUNTS	sfacloc2_4_90	1491	4500	31682	28843
+FENCEBATCH	n=120395	nnz=557994	fill=835894090	len=3	work=2507682270
+FENCEBATCH	n=120395	nnz=557994	fill=743898465	len=5	work=3719492325
+COUNTS	cont6-qq	120395	557994	835894090	581918900
+FENCEBATCH	n=5205	nnz=174804	fill=21939414	len=13	work=285212382
+FENCEBATCH	n=5205	nnz=174804	fill=21938611	len=1	work=21938611
+FENCEBATCH	n=5205	nnz=174804	fill=21938611	len=1	work=21938611
+FENCEBATCH	n=5205	nnz=174804	fill=21938611	len=9	work=197447499
+LADGATE	5205	10000	0.187	1
+COUNTS	meanvar-orl400_05_e_7	5205	174804	21939414	21935811
+FENCEBATCH	n=10017	nnz=49624	fill=373018	len=9	work=3357162
+FENCEBATCH	n=10017	nnz=49624	fill=370251	len=1	work=370251
+FENCEBATCH	n=10017	nnz=49624	fill=370251	len=1	work=370251
+FENCEBATCH	n=10017	nnz=49624	fill=370251	len=101	work=37395351
+LADGATE	10017	10000	0.414	0
+COUNTS	glider400	10017	49624	373018	327551
+FENCEBATCH	n=4960	nnz=13792	fill=65982	len=15	work=989730
+FENCEBATCH	n=4960	nnz=13792	fill=64501	len=1	work=64501
+FENCEBATCH	n=4960	nnz=13792	fill=64501	len=2	work=129002
+FENCEBATCH	n=4960	nnz=13792	fill=64501	len=440	work=28380440
+LADGATE	4960	10000	0.586	1
+COUNTS	syn40m04m	4960	13792	65982	63282
+FENCEBATCH	n=31	nnz=72	fill=189	len=45	work=8505
+FENCEBATCH	n=31	nnz=72	fill=189	len=1	work=189
+FENCEBATCH	n=31	nnz=72	fill=189	len=5	work=945
+FENCEBATCH	n=31	nnz=72	fill=189	len=527	work=99603
+LADGATE	31	10000	0.164	1
+COUNTS	ex2_1_3	31	72	189	189
+FENCEBATCH	n=705	nnz=87496	fill=12183146	len=22	work=268029212
+FENCEBATCH	n=705	nnz=87496	fill=12183146	len=1	work=12183146
+FENCEBATCH	n=705	nnz=87496	fill=12183146	len=3	work=36549438
+FENCEBATCH	n=705	nnz=87496	fill=12183146	len=154	work=1876204484
+LADGATE	705	10000	0.431	1
+COUNTS	qapw	705	87496	12183146	12183146
+FENCEBATCH	n=14	nnz=60	fill=198	len=45	work=8910
+FENCEBATCH	n=14	nnz=60	fill=198	len=1	work=198
+FENCEBATCH	n=14	nnz=60	fill=198	len=5	work=990
+FENCEBATCH	n=14	nnz=60	fill=198	len=527	work=104346
+LADGATE	14	10000	0.108	1
+COUNTS	himmel11	14	60	198	198
+FENCEBATCH	n=1908	nnz=5288	fill=26094	len=22	work=574068
+FENCEBATCH	n=1908	nnz=5288	fill=26094	len=1	work=26094
+FENCEBATCH	n=1908	nnz=5288	fill=26094	len=5	work=130470
+FENCEBATCH	n=1908	nnz=5288	fill=26094	len=527	work=13751538
+LADGATE	1908	10000	0.367	1
+COUNTS	syn15m04m	1908	5288	26094	25187
+FENCEBATCH	n=118	nnz=654	fill=5876	len=45	work=264420
+FENCEBATCH	n=118	nnz=654	fill=5864	len=1	work=5864
+FENCEBATCH	n=118	nnz=654	fill=5864	len=5	work=29320
+FENCEBATCH	n=118	nnz=654	fill=5864	len=527	work=3090328
+FENCEBATCH	n=118	nnz=654	fill=5847	len=16	work=93552
+LADGATE	118	10000	0.253	1
+COUNTS	pooling_rt2tp	118	654	5876	5796
+FENCEBATCH	n=333	nnz=2204	fill=200484	len=46	work=9222264
+FENCEBATCH	n=333	nnz=2204	fill=81276	len=1	work=81276
+FENCEBATCH	n=333	nnz=2204	fill=81276	len=5	work=406380
+FENCEBATCH	n=333	nnz=2204	fill=81276	len=527	work=42832452
+FENCEBATCH	n=333	nnz=2204	fill=81276	len=32	work=2600832
+LADGATE	333	10000	0.304	1
+COUNTS	waterund14	333	2204	200484	72184
+FENCEBATCH	n=17809	nnz=120632	fill=294531623	len=7	work=2061721361
+FENCEBATCH	n=17809	nnz=120632	fill=274283938	len=1	work=274283938
+FENCEBATCH	n=17809	nnz=120632	fill=274283938	len=77	work=21119863226
+LADGATE	17809	10000	0.998	0
+COUNTS	crudeoil_lee4_10	17809	120632	294531623	184173410
+FENCEBATCH	n=1294	nnz=8302	fill=138692	len=23	work=3189916
+FENCEBATCH	n=1294	nnz=8302	fill=138617	len=1	work=138617
+FENCEBATCH	n=1294	nnz=8302	fill=138617	len=2	work=277234
+FENCEBATCH	n=1294	nnz=8302	fill=138617	len=515	work=71387755
+LADGATE	1294	10000	0.426	1
+COUNTS	pooling_foulds4pq	1294	8302	138692	138540
+FENCEBATCH	n=3097	nnz=19664	fill=1487933	len=18	work=26782794
+FENCEBATCH	n=3097	nnz=19664	fill=1427091	len=1	work=1427091
+FENCEBATCH	n=3097	nnz=19664	fill=1427091	len=2	work=2854182
+FENCEBATCH	n=3097	nnz=19664	fill=1427091	len=391	work=557992581
+LADGATE	3097	10000	0.325	1
+COUNTS	edgecross14-156	3097	19664	1487933	1376964
+FENCEBATCH	n=72	nnz=668	fill=11074	len=47	work=520478
+FENCEBATCH	n=72	nnz=668	fill=7600	len=1	work=7600
+FENCEBATCH	n=72	nnz=668	fill=7600	len=5	work=38000
+FENCEBATCH	n=72	nnz=668	fill=7600	len=527	work=4005200
+FENCEBATCH	n=72	nnz=668	fill=7600	len=32	work=243200
+LADGATE	72	10000	0.211	1
+COUNTS	tspn08	72	668	11074	7600
+FENCEBATCH	n=4225	nnz=14628	fill=680022	len=15	work=10200330
+FENCEBATCH	n=4225	nnz=14628	fill=659841	len=1	work=659841
+FENCEBATCH	n=4225	nnz=14628	fill=659841	len=2	work=1319682
+FENCEBATCH	n=4225	nnz=14628	fill=659841	len=433	work=285711153
+LADGATE	4225	10000	0.565	1
+COUNTS	crudeoil_li05	4225	14628	680022	533589
+FENCEBATCH	n=14416	nnz=41068	fill=13858240	len=7	work=97007680
+FENCEBATCH	n=14416	nnz=41068	fill=9235557	len=1	work=9235557
+FENCEBATCH	n=14416	nnz=41068	fill=9235557	len=107	work=988204599
+LADGATE	14416	10000	0.733	0
+COUNTS	procurement1large	14416	41068	13858240	7376882
+FENCEBATCH	n=1428	nnz=4548	fill=77560	len=22	work=1706320
+FENCEBATCH	n=1428	nnz=4548	fill=69250	len=1	work=69250
+FENCEBATCH	n=1428	nnz=4548	fill=69250	len=5	work=346250
+FENCEBATCH	n=1428	nnz=4548	fill=69250	len=527	work=36494750
+LADGATE	1428	10000	0.306	1
+COUNTS	blend721	1428	4548	77560	66143
+FENCEBATCH	n=2031	nnz=10878	fill=4280329	len=24	work=102727896
+FENCEBATCH	n=2031	nnz=10878	fill=2483846	len=1	work=2483846
+FENCEBATCH	n=2031	nnz=10878	fill=2483846	len=2	work=4967692
+FENCEBATCH	n=2031	nnz=10878	fill=2483846	len=515	work=1279180690
+FENCEBATCH	n=2031	nnz=10878	fill=2378640	len=32	work=76116480
+LADGATE	2031	10000	0.714	1
+COUNTS	chimera_selby-c16-02	2031	10878	4280329	2299955
+FENCEBATCH	n=16640	nnz=57800	fill=2173490	len=7	work=15214430
+FENCEBATCH	n=16640	nnz=57800	fill=2173490	len=1	work=2173490
+FENCEBATCH	n=16640	nnz=57800	fill=2173490	len=107	work=232563430
+LADGATE	16640	10000	0.411	0
+COUNTS	supplychainr1_053050	16640	57800	2173490	2173490
+FENCEBATCH	n=5067	nnz=21424	fill=93048	len=12	work=1116576
+FENCEBATCH	n=5067	nnz=21424	fill=92776	len=1	work=92776
+FENCEBATCH	n=5067	nnz=21424	fill=92776	len=2	work=185552
+FENCEBATCH	n=5067	nnz=21424	fill=92776	len=293	work=27183368
+LADGATE	5067	10000	0.627	1
+COUNTS	sfacloc2_4_80	5067	21424	93048	88884
+COUNTS	st_e24	10	26	64	57
+FENCEBATCH	n=1053	nnz=5116	fill=161851	len=25	work=4046275
+FENCEBATCH	n=1053	nnz=5116	fill=151889	len=1	work=151889
+FENCEBATCH	n=1053	nnz=5116	fill=151889	len=5	work=759445
+FENCEBATCH	n=1053	nnz=5116	fill=151889	len=527	work=80045503
+LADGATE	1053	10000	0.324	1
+COUNTS	edgecross10-040	1053	5116	161851	143522
+FENCEBATCH	n=8232	nnz=40744	fill=1643311	len=8	work=13146488
+FENCEBATCH	n=8232	nnz=40744	fill=1643311	len=1	work=1643311
+FENCEBATCH	n=8232	nnz=40744	fill=1643311	len=1	work=1643311
+FENCEBATCH	n=8232	nnz=40744	fill=1643311	len=161	work=264573071
+LADGATE	8232	10000	0.409	1
+COUNTS	sonet21v6	8232	40744	1643311	1585871
+FENCEBATCH	n=2490	nnz=6400	fill=27665	len=25	work=691625
+FENCEBATCH	n=2490	nnz=6400	fill=27665	len=1	work=27665
+FENCEBATCH	n=2490	nnz=6400	fill=27665	len=5	work=138325
+FENCEBATCH	n=2490	nnz=6400	fill=27665	len=527	work=14579455
+LADGATE	2490	10000	0.334	1
+COUNTS	squfl010-080	2490	6400	27665	27665
+FENCEBATCH	n=221	nnz=1048	fill=19895	len=45	work=895275
+FENCEBATCH	n=221	nnz=1048	fill=19190	len=1	work=19190
+FENCEBATCH	n=221	nnz=1048	fill=19190	len=5	work=95950
+FENCEBATCH	n=221	nnz=1048	fill=19190	len=527	work=10113130
+FENCEBATCH	n=221	nnz=1048	fill=14220	len=32	work=455040
+LADGATE	221	10000	0.245	1
+COUNTS	genpooling_lee2	221	1048	19895	14028
+FENCEBATCH	n=2807	nnz=13904	fill=360081	len=18	work=6481458
+FENCEBATCH	n=2807	nnz=13904	fill=300149	len=1	work=300149
+FENCEBATCH	n=2807	nnz=13904	fill=300149	len=2	work=600298
+FENCEBATCH	n=2807	nnz=13904	fill=300149	len=496	work=148873904
+FENCEBATCH	n=2807	nnz=13904	fill=299982	len=16	work=4799712
+LADGATE	2807	10000	0.588	1
+COUNTS	popdynm25	2807	13904	360081	286846
+FENCEBATCH	n=5211	nnz=16740	fill=509170	len=7	work=3564190
+FENCEBATCH	n=5211	nnz=16740	fill=445619	len=1	work=445619
+FENCEBATCH	n=5211	nnz=16740	fill=445619	len=2	work=891238
+FENCEBATCH	n=5211	nnz=16740	fill=445619	len=382	work=170226458
+FENCEBATCH	n=5211	nnz=16740	fill=412664	len=16	work=6602624
+LADGATE	5211	10000	0.714	1
+COUNTS	chp_partload	5211	16740	509170	374408
+FENCEBATCH	n=560	nnz=120274	fill=16119226	len=22	work=354622972
+FENCEBATCH	n=560	nnz=120274	fill=16038266	len=1	work=16038266
+FENCEBATCH	n=560	nnz=120274	fill=16038266	len=1	work=16038266
+FENCEBATCH	n=560	nnz=120274	fill=16038266	len=152	work=2437816432
+LADGATE	560	10000	0.295	1
+COUNTS	qspp_0_14_0_1_10_1	560	120274	16119226	16038266
+FENCEBATCH	n=24	nnz=66	fill=160	len=45	work=7200
+FENCEBATCH	n=24	nnz=66	fill=160	len=1	work=160
+FENCEBATCH	n=24	nnz=66	fill=160	len=5	work=800
+FENCEBATCH	n=24	nnz=66	fill=160	len=527	work=84320
+LADGATE	24	10000	0.141	1
+COUNTS	st_glmp_ss1	24	66	160	160
+FENCEBATCH	n=2508	nnz=29808	fill=1691033	len=17	work=28747561
+FENCEBATCH	n=2508	nnz=29808	fill=1156790	len=1	work=1156790
+FENCEBATCH	n=2508	nnz=29808	fill=1156790	len=2	work=2313580
+FENCEBATCH	n=2508	nnz=29808	fill=1156790	len=306	work=353977740
+FENCEBATCH	n=2508	nnz=29808	fill=1146012	len=32	work=36672384
+LADGATE	2508	10000	0.469	1
+COUNTS	torsion50	2508	29808	1691033	1119177
+FENCEBATCH	n=40	nnz=340	fill=2045	len=47	work=96115
+FENCEBATCH	n=40	nnz=340	fill=2045	len=1	work=2045
+FENCEBATCH	n=40	nnz=340	fill=2045	len=5	work=10225
+FENCEBATCH	n=40	nnz=340	fill=2045	len=527	work=1077715
+LADGATE	40	10000	0.181	1
+COUNTS	st_rv2	40	340	2045	2045
+FENCEBATCH	n=6885	nnz=15948	fill=55506	len=8	work=444048
+FENCEBATCH	n=6885	nnz=15948	fill=55506	len=1	work=55506
+FENCEBATCH	n=6885	nnz=15948	fill=55506	len=1	work=55506
+FENCEBATCH	n=6885	nnz=15948	fill=55506	len=388	work=21536328
+LADGATE	6885	10000	0.218	1
+COUNTS	emfl100_3_3	6885	15948	55506	55506
+COUNTS	pedigree_sim400	351	23546	1183471	1183168
+COUNTS	polygon75	5846	49652	1171822	1171822
+FENCEBATCH	n=244056	nnz=1148210	fill=1365442310	len=3	work=4096326930
+FENCEBATCH	n=244056	nnz=1148210	fill=1332170335	len=2	work=2664340670
+COUNTS	gabriel10	244056	1148210	1365442310	1267760679
+FENCEBATCH	n=1049	nnz=4336	fill=41668	len=23	work=958364
+FENCEBATCH	n=1049	nnz=4336	fill=38261	len=1	work=38261
+FENCEBATCH	n=1049	nnz=4336	fill=38261	len=5	work=191305
+FENCEBATCH	n=1049	nnz=4336	fill=38261	len=527	work=20163547
+LADGATE	1049	10000	0.286	1
+COUNTS	fo9_ar25_1	1049	4336	41668	38237
+FENCEBATCH	n=1159	nnz=3168	fill=11274	len=22	work=248028
+FENCEBATCH	n=1159	nnz=3168	fill=10732	len=1	work=10732
+FENCEBATCH	n=1159	nnz=3168	fill=10732	len=5	work=53660
+FENCEBATCH	n=1159	nnz=3168	fill=10732	len=527	work=5655764
+LADGATE	1159	10000	0.339	1
+COUNTS	rsyn0840m	1159	3168	11274	10602
+FENCEBATCH	n=548	nnz=2800	fill=69234	len=46	work=3184764
+FENCEBATCH	n=548	nnz=2800	fill=59310	len=1	work=59310
+FENCEBATCH	n=548	nnz=2800	fill=59310	len=5	work=296550
+FENCEBATCH	n=548	nnz=2800	fill=59310	len=527	work=31256370
+FENCEBATCH	n=548	nnz=2800	fill=59310	len=16	work=948960
+test ordering::probe::probe_timing_and_score has been running for over 60 seconds
+LADGATE	548	10000	0.407	1
+COUNTS	gancns	548	2800	69234	58861
+FENCEBATCH	n=1049	nnz=4336	fill=41668	len=23	work=958364
+FENCEBATCH	n=1049	nnz=4336	fill=38261	len=1	work=38261
+FENCEBATCH	n=1049	nnz=4336	fill=38261	len=5	work=191305
+FENCEBATCH	n=1049	nnz=4336	fill=38261	len=527	work=20163547
+LADGATE	1049	10000	0.294	1
+COUNTS	o9_ar4_1	1049	4336	41668	38237
+FENCEBATCH	n=123	nnz=560	fill=3948	len=45	work=177660
+FENCEBATCH	n=123	nnz=560	fill=3769	len=1	work=3769
+FENCEBATCH	n=123	nnz=560	fill=3769	len=5	work=18845
+FENCEBATCH	n=123	nnz=560	fill=3769	len=527	work=1986263
+FENCEBATCH	n=123	nnz=560	fill=3769	len=16	work=60304
+LADGATE	123	10000	0.270	1
+COUNTS	ex1265a	123	560	3948	3750
+FENCEBATCH	n=28	nnz=68	fill=190	len=45	work=8550
+FENCEBATCH	n=28	nnz=68	fill=190	len=1	work=190
+FENCEBATCH	n=28	nnz=68	fill=190	len=5	work=950
+FENCEBATCH	n=28	nnz=68	fill=190	len=527	work=100130
+LADGATE	28	10000	0.175	1
+COUNTS	ex9_2_6	28	68	190	190
+FENCEBATCH	n=481	nnz=88522	fill=10150185	len=22	work=223304070
+FENCEBATCH	n=481	nnz=88522	fill=10097446	len=1	work=10097446
+FENCEBATCH	n=481	nnz=88522	fill=10097446	len=3	work=30292338
+FENCEBATCH	n=481	nnz=88522	fill=10097446	len=154	work=1555006684
+LADGATE	481	10000	0.221	1
+COUNTS	qspp_0_13_0_1_10_1	481	88522	10150185	10097446
+FENCEBATCH	n=146	nnz=432	fill=1554	len=45	work=69930
+FENCEBATCH	n=146	nnz=432	fill=1554	len=1	work=1554
+FENCEBATCH	n=146	nnz=432	fill=1554	len=5	work=7770
+FENCEBATCH	n=146	nnz=432	fill=1554	len=527	work=818958
+LADGATE	146	10000	0.225	1
+COUNTS	slay04m	146	432	1554	1554
+COUNTS	st_e25	20	92	336	262
+FENCEBATCH	n=32	nnz=100	fill=225	len=47	work=10575
+FENCEBATCH	n=32	nnz=100	fill=225	len=1	work=225
+FENCEBATCH	n=32	nnz=100	fill=225	len=5	work=1125
+FENCEBATCH	n=32	nnz=100	fill=225	len=527	work=118575
+LADGATE	32	10000	0.177	1
+COUNTS	ex8_4_1	32	100	225	225
+FENCEBATCH	n=19	nnz=60	fill=199	len=45	work=8955
+FENCEBATCH	n=19	nnz=60	fill=199	len=1	work=199
+FENCEBATCH	n=19	nnz=60	fill=199	len=5	work=995
+FENCEBATCH	n=19	nnz=60	fill=199	len=527	work=104873
+LADGATE	19	10000	0.156	1
+COUNTS	st_e07	19	60	199	199
+FENCEBATCH	n=26	nnz=66	fill=171	len=45	work=7695
+FENCEBATCH	n=26	nnz=66	fill=161	len=1	work=161
+FENCEBATCH	n=26	nnz=66	fill=161	len=5	work=805
+FENCEBATCH	n=26	nnz=66	fill=161	len=527	work=84847
+FENCEBATCH	n=26	nnz=66	fill=161	len=16	work=2576
+LADGATE	26	10000	0.166	1
+COUNTS	ex1225	26	66	171	161
+FENCEBATCH	n=969	nnz=5882	fill=525212	len=28	work=14705936
+FENCEBATCH	n=969	nnz=5882	fill=459848	len=1	work=459848
+FENCEBATCH	n=969	nnz=5882	fill=436612	len=5	work=2183060
+FENCEBATCH	n=969	nnz=5882	fill=391246	len=527	work=206186642
+FENCEBATCH	n=969	nnz=5882	fill=370783	len=32	work=11865056
+LADGATE	969	10000	0.496	1
+COUNTS	ndcc13	969	5882	525212	324727
+FENCEBATCH	n=1224	nnz=3384	fill=13501	len=22	work=297022
+FENCEBATCH	n=1224	nnz=3384	fill=13501	len=1	work=13501
+FENCEBATCH	n=1224	nnz=3384	fill=13501	len=5	work=67505
+FENCEBATCH	n=1224	nnz=3384	fill=13501	len=527	work=7115027
+LADGATE	1224	10000	0.300	1
+COUNTS	syn10m04m	1224	3384	13501	13473
+FENCEBATCH	n=18	nnz=62	fill=204	len=45	work=9180
+FENCEBATCH	n=18	nnz=62	fill=193	len=1	work=193
+FENCEBATCH	n=18	nnz=62	fill=193	len=5	work=965
+FENCEBATCH	n=18	nnz=62	fill=193	len=527	work=101711
+FENCEBATCH	n=18	nnz=62	fill=193	len=16	work=3088
+LADGATE	18	10000	0.146	1
+COUNTS	ex5_2_4	18	62	204	193
+FENCEBATCH	n=72	nnz=1226	fill=16331	len=47	work=767557
+FENCEBATCH	n=72	nnz=1226	fill=16331	len=1	work=16331
+FENCEBATCH	n=72	nnz=1226	fill=16331	len=5	work=81655
+FENCEBATCH	n=72	nnz=1226	fill=16331	len=527	work=8606437
+LADGATE	72	10000	0.215	1
+COUNTS	st_m2	72	1226	16331	16331
+FENCEBATCH	n=16	nnz=44	fill=115	len=45	work=5175
+FENCEBATCH	n=16	nnz=44	fill=108	len=1	work=108
+FENCEBATCH	n=16	nnz=44	fill=108	len=5	work=540
+FENCEBATCH	n=16	nnz=44	fill=108	len=527	work=56916
+FENCEBATCH	n=16	nnz=44	fill=108	len=16	work=1728
+LADGATE	16	10000	0.136	1
+COUNTS	st_bpk1	16	44	115	108
+FENCEBATCH	n=736	nnz=3594	fill=197998	len=49	work=9701902
+FENCEBATCH	n=736	nnz=3594	fill=170933	len=1	work=170933
+FENCEBATCH	n=736	nnz=3594	fill=170933	len=5	work=854665
+FENCEBATCH	n=736	nnz=3594	fill=170933	len=527	work=90081691
+FENCEBATCH	n=736	nnz=3594	fill=170933	len=16	work=2734928
+LADGATE	736	10000	0.524	1
+COUNTS	multiplants_stg1	736	3594	197998	155496
+FENCEBATCH	n=11251	nnz=41918	fill=304705	len=8	work=2437640
+FENCEBATCH	n=11251	nnz=41918	fill=304705	len=1	work=304705
+FENCEBATCH	n=11251	nnz=41918	fill=304705	len=1	work=304705
+FENCEBATCH	n=11251	nnz=41918	fill=304705	len=107	work=32603435
+LADGATE	11251	10000	0.838	0
+COUNTS	powerflow0300p	11251	41918	304705	293009
+FENCEBATCH	n=33155	nnz=90000	fill=922197	len=7	work=6455379
+FENCEBATCH	n=33155	nnz=90000	fill=922197	len=1	work=922197
+FENCEBATCH	n=33155	nnz=90000	fill=922197	len=81	work=74697957
+LADGATE	33155	10000	0.626	0
+COUNTS	nd_netgen-3000-1-1-b-b-ns_7	33155	90000	922197	885186
+FENCEBATCH	n=803	nnz=6462	fill=139703	len=28	work=3911684
+FENCEBATCH	n=803	nnz=6462	fill=94801	len=1	work=94801
+FENCEBATCH	n=803	nnz=6462	fill=94801	len=5	work=474005
+FENCEBATCH	n=803	nnz=6462	fill=94801	len=527	work=49960127
+FENCEBATCH	n=803	nnz=6462	fill=94801	len=32	work=3033632
+LADGATE	803	10000	0.506	1
+COUNTS	sonet23v4	803	6462	139703	94348
+FENCEBATCH	n=1649	nnz=24192	fill=3745896	len=16	work=59934336
+FENCEBATCH	n=1649	nnz=24192	fill=1515157	len=1	work=1515157
+FENCEBATCH	n=1649	nnz=24192	fill=1515157	len=2	work=3030314
+FENCEBATCH	n=1649	nnz=24192	fill=1515157	len=318	work=481819926
+FENCEBATCH	n=1649	nnz=24192	fill=1515018	len=32	work=48480576
+LADGATE	1649	10000	0.445	1
+COUNTS	pooling_sppa0pq	1649	24192	3745896	1234887
+FENCEBATCH	n=645	nnz=4404	fill=229415	len=47	work=10782505
+FENCEBATCH	n=645	nnz=4404	fill=195432	len=1	work=195432
+FENCEBATCH	n=645	nnz=4404	fill=193621	len=5	work=968105
+FENCEBATCH	n=645	nnz=4404	fill=179492	len=527	work=94592284
+FENCEBATCH	n=645	nnz=4404	fill=177683	len=32	work=5685856
+LADGATE	645	10000	0.519	1
+COUNTS	multiplants_mtg1b	645	4404	229415	152043
+FENCEBATCH	n=338	nnz=1168	fill=4654	len=46	work=214084
+FENCEBATCH	n=338	nnz=1168	fill=4654	len=1	work=4654
+FENCEBATCH	n=338	nnz=1168	fill=4654	len=5	work=23270
+FENCEBATCH	n=338	nnz=1168	fill=4654	len=527	work=2452658
+LADGATE	338	10000	0.253	1
+COUNTS	sssd18-08persp	338	1168	4654	4654
+FENCEBATCH	n=19	nnz=54	fill=188	len=45	work=8460
+FENCEBATCH	n=19	nnz=54	fill=179	len=1	work=179
+FENCEBATCH	n=19	nnz=54	fill=179	len=5	work=895
+FENCEBATCH	n=19	nnz=54	fill=179	len=527	work=94333
+FENCEBATCH	n=19	nnz=54	fill=179	len=16	work=2864
+LADGATE	19	10000	0.155	1
+COUNTS	ex9_1_2	19	54	188	179
+FENCEBATCH	n=3670	nnz=19322	fill=4746188	len=15	work=71192820
+FENCEBATCH	n=3670	nnz=19322	fill=4576175	len=1	work=4576175
+FENCEBATCH	n=3670	nnz=19322	fill=4576175	len=2	work=9152350
+FENCEBATCH	n=3670	nnz=19322	fill=4576175	len=395	work=1807589125
+LADGATE	3670	10000	0.738	1
+COUNTS	crudeoil_lee1_07	3670	19322	4746188	3542885
+FENCEBATCH	n=31	nnz=96	fill=423	len=45	work=19035
+FENCEBATCH	n=31	nnz=96	fill=403	len=1	work=403
+FENCEBATCH	n=31	nnz=96	fill=403	len=5	work=2015
+FENCEBATCH	n=31	nnz=96	fill=403	len=527	work=212381
+FENCEBATCH	n=31	nnz=96	fill=403	len=16	work=6448
+LADGATE	31	10000	0.170	1
+COUNTS	pooling_haverly1tp	31	96	423	403
+FENCEBATCH	n=230	nnz=1290	fill=35284	len=46	work=1623064
+FENCEBATCH	n=230	nnz=1290	fill=30110	len=1	work=30110
+FENCEBATCH	n=230	nnz=1290	fill=30110	len=5	work=150550
+FENCEBATCH	n=230	nnz=1290	fill=30110	len=527	work=15867970
+FENCEBATCH	n=230	nnz=1290	fill=30110	len=16	work=481760
+LADGATE	230	10000	0.228	1
+COUNTS	waterund08	230	1290	35284	30110
+FENCEBATCH	n=76	nnz=302	fill=1511	len=45	work=67995
+FENCEBATCH	n=76	nnz=302	fill=1511	len=1	work=1511
+FENCEBATCH	n=76	nnz=302	fill=1511	len=5	work=7555
+FENCEBATCH	n=76	nnz=302	fill=1511	len=527	work=796297
+LADGATE	76	10000	0.154	1
+COUNTS	kall_diffcircles_6	76	302	1511	1511
+FENCEBATCH	n=440	nnz=3040	fill=106479	len=45	work=4791555
+FENCEBATCH	n=440	nnz=3040	fill=88254	len=1	work=88254
+FENCEBATCH	n=440	nnz=3040	fill=88254	len=5	work=441270
+FENCEBATCH	n=440	nnz=3040	fill=88254	len=527	work=46509858
+FENCEBATCH	n=440	nnz=3040	fill=87516	len=16	work=1400256
+LADGATE	440	10000	0.419	1
+COUNTS	chimera_mgw-c8-439-onc8-001	440	3040	106479	80090
+FENCEBATCH	n=160	nnz=828	fill=14818	len=46	work=681628
+FENCEBATCH	n=160	nnz=828	fill=11852	len=1	work=11852
+FENCEBATCH	n=160	nnz=828	fill=11852	len=5	work=59260
+FENCEBATCH	n=160	nnz=828	fill=11852	len=527	work=6246004
+FENCEBATCH	n=160	nnz=828	fill=11852	len=32	work=379264
+LADGATE	160	10000	0.264	1
+COUNTS	waterund11	160	828	14818	10705
+FENCEBATCH	n=16364	nnz=52108	fill=4089003	len=7	work=28623021
+FENCEBATCH	n=16364	nnz=52108	fill=3123098	len=1	work=3123098
+FENCEBATCH	n=16364	nnz=52108	fill=3123098	len=107	work=334171486
+LADGATE	16364	10000	0.766	0
+COUNTS	chp_shorttermplan2d	16364	52108	4089003	2104724
+FENCEBATCH	n=156	nnz=886	fill=17568	len=46	work=808128
+FENCEBATCH	n=156	nnz=886	fill=13744	len=1	work=13744
+FENCEBATCH	n=156	nnz=886	fill=13744	len=5	work=68720
+FENCEBATCH	n=156	nnz=886	fill=13744	len=527	work=7243088
+FENCEBATCH	n=156	nnz=886	fill=13744	len=32	work=439808
+LADGATE	156	10000	0.300	1
+COUNTS	sporttournament18	156	886	17568	13621
+COUNTS	cvxnonsep_psig30	30	870	9455	9455
+FENCEBATCH	n=6089	nnz=40368	fill=1872174	len=12	work=22466088
+FENCEBATCH	n=6089	nnz=40368	fill=1008595	len=1	work=1008595
+FENCEBATCH	n=6089	nnz=40368	fill=1008595	len=1	work=1008595
+FENCEBATCH	n=6089	nnz=40368	fill=1008595	len=152	work=153306440
+LADGATE	6089	10000	0.375	1
+COUNTS	ringpack_20_2	6089	40368	1872174	707413
+FENCEBATCH	n=1386	nnz=4310	fill=70355	len=22	work=1547810
+FENCEBATCH	n=1386	nnz=4310	fill=64050	len=1	work=64050
+FENCEBATCH	n=1386	nnz=4310	fill=64050	len=5	work=320250
+FENCEBATCH	n=1386	nnz=4310	fill=64050	len=527	work=33754350
+LADGATE	1386	10000	0.316	1
+COUNTS	blend718	1386	4310	70355	61466
+FENCEBATCH	n=115	nnz=724	fill=9711	len=46	work=446706
+FENCEBATCH	n=115	nnz=724	fill=7183	len=1	work=7183
+FENCEBATCH	n=115	nnz=724	fill=7183	len=5	work=35915
+FENCEBATCH	n=115	nnz=724	fill=7183	len=527	work=3785441
+FENCEBATCH	n=115	nnz=724	fill=7183	len=32	work=229856
+LADGATE	115	10000	0.283	1
+COUNTS	wastepaper4	115	724	9711	7183
+FENCEBATCH	n=2450	nnz=7200	fill=22825	len=26	work=593450
+FENCEBATCH	n=2450	nnz=7200	fill=22825	len=1	work=22825
+FENCEBATCH	n=2450	nnz=7200	fill=22825	len=5	work=114125
+FENCEBATCH	n=2450	nnz=7200	fill=22825	len=527	work=12028775
+LADGATE	2450	10000	0.397	1
+COUNTS	squfl010-040persp	2450	7200	22825	22825
+FENCEBATCH	n=10429	nnz=55492	fill=65337120	len=7	work=457359840
+FENCEBATCH	n=10429	nnz=55492	fill=56526899	len=1	work=56526899
+FENCEBATCH	n=10429	nnz=55492	fill=56526899	len=1	work=56526899
+FENCEBATCH	n=10429	nnz=55492	fill=56526899	len=107	work=6048378193
+LADGATE	10429	10000	0.959	0
+COUNTS	crudeoil_lee4_06	10429	55492	65337120	32948139
+FENCEBATCH	n=1746	nnz=4928	fill=56838	len=23	work=1307274
+FENCEBATCH	n=1746	nnz=4928	fill=50832	len=1	work=50832
+FENCEBATCH	n=1746	nnz=4928	fill=50832	len=5	work=254160
+FENCEBATCH	n=1746	nnz=4928	fill=50832	len=527	work=26788464
+FENCEBATCH	n=1746	nnz=4928	fill=47475	len=16	work=759600
+LADGATE	1746	10000	0.515	1
+COUNTS	netmod_kar1	1746	4928	56838	43864
+FENCEBATCH	n=14	nnz=46	fill=137	len=45	work=6165
+FENCEBATCH	n=14	nnz=46	fill=128	len=1	work=128
+FENCEBATCH	n=14	nnz=46	fill=128	len=5	work=640
+FENCEBATCH	n=14	nnz=46	fill=128	len=527	work=67456
+FENCEBATCH	n=14	nnz=46	fill=128	len=16	work=2048
+LADGATE	14	10000	0.110	1
+COUNTS	ex8_1_7	14	46	137	128
+FENCEBATCH	n=108	nnz=648	fill=44928	len=45	work=2021760
+FENCEBATCH	n=108	nnz=648	fill=36228	len=1	work=36228
+FENCEBATCH	n=108	nnz=648	fill=36228	len=5	work=181140
+FENCEBATCH	n=108	nnz=648	fill=36228	len=527	work=19092156
+FENCEBATCH	n=108	nnz=648	fill=36228	len=16	work=579648
+LADGATE	108	10000	0.210	1
+COUNTS	graphpart_3g-0333-0333	108	648	44928	36228
+FENCEBATCH	n=760	nnz=2080	fill=9815	len=45	work=441675
+FENCEBATCH	n=760	nnz=2080	fill=9065	len=1	work=9065
+FENCEBATCH	n=760	nnz=2080	fill=9065	len=5	work=45325
+FENCEBATCH	n=760	nnz=2080	fill=9065	len=527	work=4777255
+FENCEBATCH	n=760	nnz=2080	fill=8795	len=16	work=140720
+LADGATE	760	10000	0.342	1
+COUNTS	slay05h	760	2080	9815	8795
+FENCEBATCH	n=156	nnz=712	fill=7241	len=46	work=333086
+FENCEBATCH	n=156	nnz=712	fill=6856	len=1	work=6856
+FENCEBATCH	n=156	nnz=712	fill=6856	len=5	work=34280
+FENCEBATCH	n=156	nnz=712	fill=6856	len=527	work=3613112
+FENCEBATCH	n=156	nnz=712	fill=6835	len=16	work=109360
+LADGATE	156	10000	0.309	1
+COUNTS	korcns	156	712	7241	6599
+FENCEBATCH	n=5065	nnz=18730	fill=121503	len=8	work=972024
+FENCEBATCH	n=5065	nnz=18730	fill=121503	len=1	work=121503
+FENCEBATCH	n=5065	nnz=18730	fill=121503	len=2	work=243006
+FENCEBATCH	n=5065	nnz=18730	fill=121503	len=373	work=45320619
+LADGATE	5065	10000	0.644	1
+COUNTS	powerflow0118p	5065	18730	121503	117447
+FENCEBATCH	n=4799	nnz=20600	fill=84672	len=20	work=1693440
+FENCEBATCH	n=4799	nnz=20600	fill=84672	len=1	work=84672
+FENCEBATCH	n=4799	nnz=20600	fill=84672	len=2	work=169344
+FENCEBATCH	n=4799	nnz=20600	fill=84672	len=311	work=26332992
+LADGATE	4799	10000	0.657	1
+COUNTS	sfacloc2_3_80	4799	20600	84672	81119
+FENCEBATCH	n=6028	nnz=17372	fill=196890	len=7	work=1378230
+FENCEBATCH	n=6028	nnz=17372	fill=187179	len=1	work=187179
+FENCEBATCH	n=6028	nnz=17372	fill=187179	len=1	work=187179
+FENCEBATCH	n=6028	nnz=17372	fill=187179	len=379	work=70940841
+LADGATE	6028	10000	0.537	1
+COUNTS	rsyn0820m04m	6028	17372	196890	152996
+FENCEBATCH	n=1046	nnz=3024	fill=14089	len=22	work=309958
+FENCEBATCH	n=1046	nnz=3024	fill=14089	len=1	work=14089
+FENCEBATCH	n=1046	nnz=3024	fill=14089	len=5	work=70445
+FENCEBATCH	n=1046	nnz=3024	fill=14089	len=527	work=7424903
+LADGATE	1046	10000	0.270	1
+COUNTS	hydroenergy1	1046	3024	14089	14089
+FENCEBATCH	n=181	nnz=1440	fill=8405	len=49	work=411845
+FENCEBATCH	n=181	nnz=1440	fill=8405	len=1	work=8405
+FENCEBATCH	n=181	nnz=1440	fill=8405	len=5	work=42025
+FENCEBATCH	n=181	nnz=1440	fill=8405	len=527	work=4429435
+LADGATE	181	10000	0.194	1
+COUNTS	maxmin	181	1440	8405	8405
+FENCEBATCH	n=8	nnz=18	fill=51	len=45	work=2295
+FENCEBATCH	n=8	nnz=18	fill=44	len=1	work=44
+FENCEBATCH	n=8	nnz=18	fill=44	len=5	work=220
+FENCEBATCH	n=8	nnz=18	fill=44	len=527	work=23188
+FENCEBATCH	n=8	nnz=18	fill=44	len=16	work=704
+LADGATE	8	10000	0.102	1
+COUNTS	st_ht	8	18	51	44
+FENCEBATCH	n=6418	nnz=34646	fill=23299675	len=7	work=163097725
+FENCEBATCH	n=6418	nnz=34646	fill=23299675	len=1	work=23299675
+FENCEBATCH	n=6418	nnz=34646	fill=23299675	len=1	work=23299675
+FENCEBATCH	n=6418	nnz=34646	fill=23299675	len=199	work=4636635325
+LADGATE	6418	10000	0.811	1
+COUNTS	crudeoil_lee2_06	6418	34646	23299675	16680943
+FENCEBATCH	n=3183	nnz=14062	fill=104945	len=17	work=1784065
+FENCEBATCH	n=3183	nnz=14062	fill=104920	len=1	work=104920
+FENCEBATCH	n=3183	nnz=14062	fill=104920	len=2	work=209840
+FENCEBATCH	n=3183	nnz=14062	fill=104634	len=444	work=46457496
+LADGATE	3183	10000	0.452	1
+COUNTS	kan_r3_h1_n4	3183	14062	104945	98731
+FENCEBATCH	n=378	nnz=5610	fill=109639	len=30	work=3289170
+FENCEBATCH	n=378	nnz=5610	fill=95269	len=1	work=95269
+FENCEBATCH	n=378	nnz=5610	fill=95269	len=5	work=476345
+FENCEBATCH	n=378	nnz=5610	fill=95269	len=527	work=50206763
+FENCEBATCH	n=378	nnz=5610	fill=95269	len=16	work=1524304
+LADGATE	378	10000	0.296	1
+COUNTS	primary	378	5610	109639	95258
+FENCEBATCH	n=1071	nnz=2772	fill=9890	len=22	work=217580
+FENCEBATCH	n=1071	nnz=2772	fill=9827	len=1	work=9827
+FENCEBATCH	n=1071	nnz=2772	fill=9827	len=5	work=49135
+FENCEBATCH	n=1071	nnz=2772	fill=9827	len=527	work=5178829
+LADGATE	1071	10000	0.287	1
+COUNTS	syn10m03hfsg	1071	2772	9890	9812
+FENCEBATCH	n=36	nnz=138	fill=848	len=45	work=38160
+FENCEBATCH	n=36	nnz=138	fill=790	len=1	work=790
+FENCEBATCH	n=36	nnz=138	fill=790	len=5	work=3950
+FENCEBATCH	n=36	nnz=138	fill=790	len=527	work=416330
+FENCEBATCH	n=36	nnz=138	fill=790	len=16	work=12640
+LADGATE	36	10000	0.190	1
+COUNTS	wastewater02m1	36	138	848	790
+FENCEBATCH	n=4620	nnz=15680	fill=273140	len=15	work=4097100
+FENCEBATCH	n=4620	nnz=15680	fill=273140	len=1	work=273140
+FENCEBATCH	n=4620	nnz=15680	fill=273140	len=2	work=546280
+FENCEBATCH	n=4620	nnz=15680	fill=273140	len=421	work=114991940
+LADGATE	4620	10000	0.386	1
+COUNTS	supplychainr1_022020	4620	15680	273140	273100
+FENCEBATCH	n=3800	nnz=11250	fill=49925	len=16	work=798800
+FENCEBATCH	n=3800	nnz=11250	fill=49925	len=1	work=49925
+FENCEBATCH	n=3800	nnz=11250	fill=49925	len=2	work=99850
+FENCEBATCH	n=3800	nnz=11250	fill=49925	len=459	work=22915575
+LADGATE	3800	10000	0.241	1
+COUNTS	squfl025-025persp	3800	11250	49925	49925
+FENCEBATCH	n=17999	nnz=121458	fill=12394600	len=12	work=148735200
+FENCEBATCH	n=17999	nnz=121458	fill=5070619	len=1	work=5070619
+FENCEBATCH	n=17999	nnz=121458	fill=5070619	len=65	work=329590235
+LADGATE	17999	10000	0.829	0
+COUNTS	ringpack_30_2	17999	121458	12394600	2873684
+FENCEBATCH	n=39098	nnz=257806	fill=103156931	len=4	work=412627724
+FENCEBATCH	n=39098	nnz=257806	fill=103156931	len=1	work=103156931
+FENCEBATCH	n=39098	nnz=257806	fill=103156931	len=3	work=309470793
+COUNTS	nuclear104	39098	257806	103156931	78332024
+FENCEBATCH	n=4952	nnz=15700	fill=376486	len=15	work=5647290
+FENCEBATCH	n=4952	nnz=15700	fill=331297	len=1	work=331297
+FENCEBATCH	n=4952	nnz=15700	fill=331297	len=2	work=662594
+FENCEBATCH	n=4952	nnz=15700	fill=331297	len=421	work=139476037
+FENCEBATCH	n=4952	nnz=15700	fill=312728	len=16	work=5003648
+LADGATE	4952	10000	0.567	1
+COUNTS	chp_shorttermplan1a	4952	15700	376486	301275
+FENCEBATCH	n=555	nnz=3488	fill=19983	len=47	work=939201
+FENCEBATCH	n=555	nnz=3488	fill=19983	len=1	work=19983
+FENCEBATCH	n=555	nnz=3488	fill=19983	len=5	work=99915
+FENCEBATCH	n=555	nnz=3488	fill=19983	len=527	work=10531041
+FENCEBATCH	n=555	nnz=3488	fill=19938	len=16	work=319008
+LADGATE	555	10000	0.409	1
+COUNTS	rocket50	555	3488	19983	19265
+FENCEBATCH	n=8508	nnz=24272	fill=229914	len=7	work=1609398
+FENCEBATCH	n=8508	nnz=24272	fill=218983	len=1	work=218983
+FENCEBATCH	n=8508	nnz=24272	fill=218983	len=1	work=218983
+FENCEBATCH	n=8508	nnz=24272	fill=218983	len=249	work=54526767
+LADGATE	8508	10000	0.802	1
+COUNTS	rsyn0840m04m	8508	24272	229914	186634
+FENCEBATCH	n=11716	nnz=37660	fill=1691114	len=7	work=11837798
+FENCEBATCH	n=11716	nnz=37660	fill=1691114	len=1	work=1691114
+FENCEBATCH	n=11716	nnz=37660	fill=1691114	len=1	work=1691114
+FENCEBATCH	n=11716	nnz=37660	fill=1691114	len=124	work=209698136
+LADGATE	11716	10000	0.827	0
+COUNTS	mpbp_21	11716	37660	1691114	1456963
+FENCEBATCH	n=172	nnz=1096	fill=10938	len=48	work=525024
+FENCEBATCH	n=172	nnz=1096	fill=10703	len=1	work=10703
+FENCEBATCH	n=172	nnz=1096	fill=10703	len=5	work=53515
+FENCEBATCH	n=172	nnz=1096	fill=10703	len=527	work=5640481
+FENCEBATCH	n=172	nnz=1096	fill=10703	len=16	work=171248
+LADGATE	172	10000	0.242	1
+COUNTS	orth_d4m6_pl	172	1096	10938	10703
+FENCEBATCH	n=1681	nnz=7432	fill=201759	len=22	work=4438698
+FENCEBATCH	n=1681	nnz=7432	fill=201759	len=1	work=201759
+FENCEBATCH	n=1681	nnz=7432	fill=201759	len=5	work=1008795
+FENCEBATCH	n=1681	nnz=7432	fill=201759	len=527	work=106326993
+LADGATE	1681	10000	0.492	1
+COUNTS	kall_circlespolygons_c1p5b	1681	7432	201759	193841
+FENCEBATCH	n=313068	nnz=1292408	fill=34647355	len=2	work=69294710
+COUNTS	acopf_case9241pegase_qcqp	313068	1292408	34647355	33736789
+FENCEBATCH	n=33	nnz=82	fill=244	len=45	work=10980
+FENCEBATCH	n=33	nnz=82	fill=244	len=1	work=244
+FENCEBATCH	n=33	nnz=82	fill=244	len=5	work=1220
+FENCEBATCH	n=33	nnz=82	fill=244	len=527	work=128588
+LADGATE	33	10000	0.193	1
+COUNTS	ex1223	33	82	244	244
+FENCEBATCH	n=10	nnz=48	fill=197	len=45	work=8865
+FENCEBATCH	n=10	nnz=48	fill=153	len=1	work=153
+FENCEBATCH	n=10	nnz=48	fill=153	len=5	work=765
+FENCEBATCH	n=10	nnz=48	fill=153	len=527	work=80631
+FENCEBATCH	n=10	nnz=48	fill=153	len=32	work=4896
+LADGATE	10	10000	0.129	1
+COUNTS	ex6_1_4	10	48	197	153
+FENCEBATCH	n=403	nnz=1630	fill=10761	len=46	work=495006
+FENCEBATCH	n=403	nnz=1630	fill=10361	len=1	work=10361
+FENCEBATCH	n=403	nnz=1630	fill=10361	len=5	work=51805
+FENCEBATCH	n=403	nnz=1630	fill=10361	len=527	work=5460247
+FENCEBATCH	n=403	nnz=1630	fill=10361	len=16	work=165776
+LADGATE	403	10000	0.303	1
+COUNTS	powerflow0014r	403	1630	10761	10361
+FENCEBATCH	n=2065	nnz=31132	fill=3517788	len=18	work=63320184
+FENCEBATCH	n=2065	nnz=31132	fill=3517788	len=1	work=3517788
+FENCEBATCH	n=2065	nnz=31132	fill=3517788	len=2	work=7035576
+FENCEBATCH	n=2065	nnz=31132	fill=3517788	len=265	work=932213820
+LADGATE	2065	10000	0.261	1
+COUNTS	knp5-43	2065	31132	3517788	3517788
+FENCEBATCH	n=21688	nnz=89702	fill=29373994	len=7	work=205617958
+FENCEBATCH	n=21688	nnz=89702	fill=29252641	len=1	work=29252641
+FENCEBATCH	n=21688	nnz=89702	fill=29252641	len=81	work=2369463921
+LADGATE	21688	10000	0.791	0
+COUNTS	gabriel09	21688	89702	29373994	26366112
+FENCEBATCH	n=32	nnz=88	fill=233	len=45	work=10485
+FENCEBATCH	n=32	nnz=88	fill=233	len=1	work=233
+FENCEBATCH	n=32	nnz=88	fill=233	len=5	work=1165
+FENCEBATCH	n=32	nnz=88	fill=233	len=527	work=122791
+LADGATE	32	10000	0.168	1
+COUNTS	tln2	32	88	233	233
+FENCEBATCH	n=22	nnz=76	fill=267	len=45	work=12015
+FENCEBATCH	n=22	nnz=76	fill=232	len=1	work=232
+FENCEBATCH	n=22	nnz=76	fill=232	len=5	work=1160
+FENCEBATCH	n=22	nnz=76	fill=232	len=527	work=122264
+FENCEBATCH	n=22	nnz=76	fill=232	len=16	work=3712
+LADGATE	22	10000	0.149	1
+COUNTS	prob02	22	76	267	232
+FENCEBATCH	n=1422	nnz=4460	fill=78102	len=22	work=1718244
+FENCEBATCH	n=1422	nnz=4460	fill=65412	len=1	work=65412
+FENCEBATCH	n=1422	nnz=4460	fill=65412	len=5	work=327060
+FENCEBATCH	n=1422	nnz=4460	fill=65412	len=527	work=34472124
+FENCEBATCH	n=1422	nnz=4460	fill=65412	len=16	work=1046592
+LADGATE	1422	10000	0.350	1
+COUNTS	blend146	1422	4460	78102	64296
+FENCEBATCH	n=4518	nnz=14492	fill=499547	len=15	work=7493205
+FENCEBATCH	n=4518	nnz=14492	fill=499362	len=1	work=499362
+FENCEBATCH	n=4518	nnz=14492	fill=499362	len=2	work=998724
+FENCEBATCH	n=4518	nnz=14492	fill=499362	len=433	work=216223746
+LADGATE	4518	10000	0.480	1
+COUNTS	mpbp_46	4518	14492	499547	448091
+FENCEBATCH	n=413	nnz=2860	fill=18483	len=48	work=887184
+FENCEBATCH	n=413	nnz=2860	fill=18023	len=1	work=18023
+FENCEBATCH	n=413	nnz=2860	fill=18023	len=5	work=90115
+FENCEBATCH	n=413	nnz=2860	fill=18023	len=527	work=9498121
+FENCEBATCH	n=413	nnz=2860	fill=17713	len=16	work=283408
+LADGATE	413	10000	0.376	1
+COUNTS	tls6	413	2860	18483	17511
+FENCEBATCH	n=21925	nnz=52300	fill=221650	len=7	work=1551550
+FENCEBATCH	n=21925	nnz=52300	fill=221650	len=1	work=221650
+FENCEBATCH	n=21925	nnz=52300	fill=221650	len=107	work=23716550
+LADGATE	21925	10000	0.469	0
+COUNTS	emfl100_5_5	21925	52300	221650	221650
+FENCEBATCH	n=341	nnz=44264	fill=3563707	len=22	work=78401554
+FENCEBATCH	n=341	nnz=44264	fill=3538483	len=1	work=3538483
+FENCEBATCH	n=341	nnz=44264	fill=3538483	len=4	work=14153932
+FENCEBATCH	n=341	nnz=44264	fill=3538483	len=216	work=764312328
+LADGATE	341	10000	0.180	1
+COUNTS	qspp_0_11_0_1_10_1	341	44264	3563707	3531915
+FENCEBATCH	n=403	nnz=1484	fill=13581	len=45	work=611145
+FENCEBATCH	n=403	nnz=1484	fill=13292	len=1	work=13292
+FENCEBATCH	n=403	nnz=1484	fill=13292	len=5	work=66460
+FENCEBATCH	n=403	nnz=1484	fill=13292	len=527	work=7004884
+FENCEBATCH	n=403	nnz=1484	fill=13292	len=16	work=212672
+LADGATE	403	10000	0.292	1
+COUNTS	p_ball_10b_5p_4d_m	403	1484	13581	13288
+FENCEBATCH	n=90	nnz=840	fill=6691	len=49	work=327859
+FENCEBATCH	n=90	nnz=840	fill=6321	len=1	work=6321
+FENCEBATCH	n=90	nnz=840	fill=6321	len=5	work=31605
+FENCEBATCH	n=90	nnz=840	fill=6321	len=527	work=3331167
+FENCEBATCH	n=90	nnz=840	fill=6321	len=16	work=101136
+LADGATE	90	10000	0.239	1
+COUNTS	st_rv9	90	840	6691	6321
+FENCEBATCH	n=3486	nnz=9576	fill=47529	len=15	work=712935
+FENCEBATCH	n=3486	nnz=9576	fill=47529	len=1	work=47529
+FENCEBATCH	n=3486	nnz=9576	fill=47529	len=2	work=95058
+FENCEBATCH	n=3486	nnz=9576	fill=47529	len=459	work=21815811
+LADGATE	3486	10000	0.496	1
+COUNTS	rsyn0840m02m	3486	9576	47529	45000
+FENCEBATCH	n=22	nnz=84	fill=277	len=45	work=12465
+FENCEBATCH	n=22	nnz=84	fill=266	len=1	work=266
+FENCEBATCH	n=22	nnz=84	fill=266	len=5	work=1330
+FENCEBATCH	n=22	nnz=84	fill=266	len=527	work=140182
+FENCEBATCH	n=22	nnz=84	fill=266	len=16	work=4256
+LADGATE	22	10000	0.159	1
+COUNTS	nvs05	22	84	277	266
+COUNTS	autocorr_bern25-19	28	612	5278	5278
+FENCEBATCH	n=356	nnz=1232	fill=4960	len=46	work=228160
+FENCEBATCH	n=356	nnz=1232	fill=4960	len=1	work=4960
+FENCEBATCH	n=356	nnz=1232	fill=4960	len=5	work=24800
+FENCEBATCH	n=356	nnz=1232	fill=4960	len=527	work=2613920
+LADGATE	356	10000	0.263	1
+COUNTS	sssd20-08persp	356	1232	4960	4960
+FENCEBATCH	n=827	nnz=3804	fill=377794	len=48	work=18134112
+FENCEBATCH	n=827	nnz=3804	fill=162532	len=1	work=162532
+FENCEBATCH	n=827	nnz=3804	fill=162532	len=5	work=812660
+FENCEBATCH	n=827	nnz=3804	fill=162532	len=527	work=85654364
+FENCEBATCH	n=827	nnz=3804	fill=162532	len=32	work=5201024
+LADGATE	827	10000	0.558	1
+COUNTS	multiplants_stg5	827	3804	377794	155722
+FENCEBATCH	n=2032	nnz=15140	fill=3860441	len=17	work=65627497
+FENCEBATCH	n=2032	nnz=15140	fill=2976752	len=1	work=2976752
+FENCEBATCH	n=2032	nnz=15140	fill=2976752	len=2	work=5953504
+FENCEBATCH	n=2032	nnz=15140	fill=2976752	len=481	work=1431817712
+FENCEBATCH	n=2032	nnz=15140	fill=2589402	len=32	work=82860864
+LADGATE	2032	10000	0.655	1
+COUNTS	chimera_rfr-02	2032	15140	3860441	2490654
+FENCEBATCH	n=726	nnz=3510	fill=142058	len=50	work=7102900
+FENCEBATCH	n=726	nnz=3510	fill=127595	len=1	work=127595
+FENCEBATCH	n=726	nnz=3510	fill=127595	len=5	work=637975
+FENCEBATCH	n=726	nnz=3510	fill=127595	len=527	work=67242565
+FENCEBATCH	n=726	nnz=3510	fill=127519	len=16	work=2040304
+LADGATE	726	10000	0.557	1
+COUNTS	multiplants_stg1a	726	3510	142058	121443
+FENCEBATCH	n=170	nnz=932	fill=24314	len=46	work=1118444
+FENCEBATCH	n=170	nnz=932	fill=21824	len=1	work=21824
+FENCEBATCH	n=170	nnz=932	fill=21824	len=5	work=109120
+FENCEBATCH	n=170	nnz=932	fill=21824	len=527	work=11501248
+FENCEBATCH	n=170	nnz=932	fill=21728	len=16	work=347648
+LADGATE	170	10000	0.236	1
+COUNTS	pooling_adhya4pq	170	932	24314	16556
+FENCEBATCH	n=17493	nnz=163816	fill=82406325	len=4	work=329625300
+FENCEBATCH	n=17493	nnz=163816	fill=82406325	len=1	work=82406325
+FENCEBATCH	n=17493	nnz=163816	fill=82406325	len=8	work=659250600
+LADGATE	17493	10000	0.761	0
+COUNTS	nuclear10a	17493	163816	82406325	55754381
+FENCEBATCH	n=874	nnz=7260	fill=185654	len=28	work=5198312
+FENCEBATCH	n=874	nnz=7260	fill=111524	len=1	work=111524
+FENCEBATCH	n=874	nnz=7260	fill=111524	len=5	work=557620
+FENCEBATCH	n=874	nnz=7260	fill=111524	len=527	work=58773148
+FENCEBATCH	n=874	nnz=7260	fill=111524	len=32	work=3568768
+LADGATE	874	10000	0.532	1
+COUNTS	sonet24v5	874	7260	185654	110276
+FENCEBATCH	n=69651	nnz=331010	fill=7933133	len=2	work=15866266
+FENCEBATCH	n=69651	nnz=331010	fill=7933133	len=14	work=111063862
+COUNTS	transswitch2736spr	69651	331010	7933133	7281507
+FENCEBATCH	n=8992	nnz=26288	fill=821014	len=7	work=5747098
+FENCEBATCH	n=8992	nnz=26288	fill=586852	len=1	work=586852
+FENCEBATCH	n=8992	nnz=26288	fill=586852	len=1	work=586852
+FENCEBATCH	n=8992	nnz=26288	fill=586852	len=246	work=144365592
+LADGATE	8992	10000	0.521	1
+COUNTS	chp_shorttermplan2a	8992	26288	821014	577543
+FENCEBATCH	n=1001	nnz=5592	fill=18173	len=22	work=399806
+FENCEBATCH	n=1001	nnz=5592	fill=18164	len=1	work=18164
+FENCEBATCH	n=1001	nnz=5592	fill=18164	len=5	work=90820
+FENCEBATCH	n=1001	nnz=5592	fill=18164	len=527	work=9572428
+LADGATE	1001	10000	0.232	1
+COUNTS	catmix200	1001	5592	18173	18164
+COUNTS	nvs23	27	252	1921	1221
+FENCEBATCH	n=20	nnz=40	fill=107	len=45	work=4815
+FENCEBATCH	n=20	nnz=40	fill=107	len=1	work=107
+FENCEBATCH	n=20	nnz=40	fill=107	len=5	work=535
+FENCEBATCH	n=20	nnz=40	fill=107	len=527	work=56389
+LADGATE	20	10000	0.140	1
+COUNTS	oaer	20	40	107	107
+FENCEBATCH	n=168	nnz=388	fill=1103	len=45	work=49635
+FENCEBATCH	n=168	nnz=388	fill=1103	len=1	work=1103
+FENCEBATCH	n=168	nnz=388	fill=1103	len=5	work=5515
+FENCEBATCH	n=168	nnz=388	fill=1103	len=527	work=581281
+LADGATE	168	10000	0.193	1
+COUNTS	hybriddynamic_fixed	168	388	1103	1103
+FENCEBATCH	n=16747	nnz=77352	fill=35096942	len=10	work=350969420
+FENCEBATCH	n=16747	nnz=77352	fill=33394403	len=1	work=33394403
+FENCEBATCH	n=16747	nnz=77352	fill=33394403	len=75	work=2504580225
+LADGATE	16747	10000	0.592	0
+COUNTS	edgecross24-115	16747	77352	35096942	28685704
+FENCEBATCH	n=1178	nnz=4334	fill=23567	len=22	work=518474
+FENCEBATCH	n=1178	nnz=4334	fill=23528	len=1	work=23528
+FENCEBATCH	n=1178	nnz=4334	fill=23528	len=5	work=117640
+FENCEBATCH	n=1178	nnz=4334	fill=23528	len=527	work=12399256
+LADGATE	1178	10000	0.315	1
+COUNTS	space25	1178	4334	23567	22528
+FENCEBATCH	n=23999	nnz=151728	fill=2586036	len=4	work=10344144
+FENCEBATCH	n=23999	nnz=151728	fill=2586036	len=1	work=2586036
+FENCEBATCH	n=23999	nnz=151728	fill=2586036	len=8	work=20688288
+LADGATE	23999	10000	0.638	0
+COUNTS	methanol400	23999	151728	2586036	1864047
+FENCEBATCH	n=1218	nnz=8364	fill=251833	len=25	work=6295825
+FENCEBATCH	n=1218	nnz=8364	fill=173400	len=1	work=173400
+FENCEBATCH	n=1218	nnz=8364	fill=173400	len=2	work=346800
+FENCEBATCH	n=1218	nnz=8364	fill=173400	len=515	work=89301000
+FENCEBATCH	n=1218	nnz=8364	fill=171941	len=32	work=5502112
+LADGATE	1218	10000	0.495	1
+COUNTS	pooling_foulds5tp	1218	8364	251833	171941
+FENCEBATCH	n=5040	nnz=121302	fill=104609262	len=18	work=1882966716
+FENCEBATCH	n=5040	nnz=121302	fill=47597914	len=1	work=47597914
+FENCEBATCH	n=5040	nnz=121302	fill=47597914	len=1	work=47597914
+FENCEBATCH	n=5040	nnz=121302	fill=47597914	len=96	work=4569399744
+LADGATE	5040	10000	0.608	1
+COUNTS	pooling_sppa9tp	5040	121302	104609262	16877457
+COUNTS	st_miqp2	10	18	37	37
+COUNTS	autocorr_bern30-23	33	878	8940	8940
+FENCEBATCH	n=9858	nnz=31692	fill=1496502	len=7	work=10475514
+FENCEBATCH	n=9858	nnz=31692	fill=1496502	len=1	work=1496502
+FENCEBATCH	n=9858	nnz=31692	fill=1496502	len=1	work=1496502
+FENCEBATCH	n=9858	nnz=31692	fill=1496502	len=199	work=297803898
+LADGATE	9858	10000	0.748	1
+COUNTS	mpbp_15	9858	31692	1496502	1197372
+COUNTS	cvxnonsep_psig30r	126	250	501	501
+FENCEBATCH	n=1590	nnz=4100	fill=16168	len=22	work=355696
+FENCEBATCH	n=1590	nnz=4100	fill=15721	len=1	work=15721
+FENCEBATCH	n=1590	nnz=4100	fill=15721	len=5	work=78605
+FENCEBATCH	n=1590	nnz=4100	fill=15721	len=527	work=8284967
+LADGATE	1590	10000	0.451	1
+COUNTS	rsyn0830hfsg	1590	4100	16168	15383
+FENCEBATCH	n=1271	nnz=4642	fill=125127	len=22	work=2752794
+FENCEBATCH	n=1271	nnz=4642	fill=97913	len=1	work=97913
+FENCEBATCH	n=1271	nnz=4642	fill=97913	len=5	work=489565
+FENCEBATCH	n=1271	nnz=4642	fill=97913	len=527	work=51600151
+FENCEBATCH	n=1271	nnz=4642	fill=97913	len=32	work=3133216
+LADGATE	1271	10000	0.524	1
+COUNTS	crudeoil_pooling_ct1	1271	4642	125127	93863
+FENCEBATCH	n=800	nnz=3894	fill=150039	len=50	work=7501950
+FENCEBATCH	n=800	nnz=3894	fill=146974	len=1	work=146974
+FENCEBATCH	n=800	nnz=3894	fill=146974	len=5	work=734870
+FENCEBATCH	n=800	nnz=3894	fill=146974	len=527	work=77455298
+FENCEBATCH	n=800	nnz=3894	fill=146974	len=16	work=2351584
+LADGATE	800	10000	0.561	1
+COUNTS	multiplants_stg1c	800	3894	150039	143020
+FENCEBATCH	n=11	nnz=32	fill=123	len=45	work=5535
+FENCEBATCH	n=11	nnz=32	fill=94	len=1	work=94
+FENCEBATCH	n=11	nnz=32	fill=94	len=5	work=470
+FENCEBATCH	n=11	nnz=32	fill=94	len=527	work=49538
+FENCEBATCH	n=11	nnz=32	fill=94	len=32	work=3008
+LADGATE	11	10000	0.129	1
+COUNTS	st_pan1	11	32	123	94
+FENCEBATCH	n=814	nnz=3992	fill=308612	len=50	work=15430600
+FENCEBATCH	n=814	nnz=3992	fill=193612	len=1	work=193612
+FENCEBATCH	n=814	nnz=3992	fill=193612	len=5	work=968060
+FENCEBATCH	n=814	nnz=3992	fill=193612	len=527	work=102033524
+FENCEBATCH	n=814	nnz=3992	fill=192900	len=32	work=6172800
+LADGATE	814	10000	0.582	1
+COUNTS	multiplants_stg1b	814	3992	308612	187593
+FENCEBATCH	n=11999	nnz=76128	fill=1290836	len=9	work=11617524
+FENCEBATCH	n=11999	nnz=76128	fill=952065	len=1	work=952065
+FENCEBATCH	n=11999	nnz=76128	fill=952065	len=1	work=952065
+FENCEBATCH	n=11999	nnz=76128	fill=952065	len=75	work=71404875
+LADGATE	11999	10000	0.668	0
+COUNTS	methanol200	11999	76128	1290836	905976
+FENCEBATCH	n=26778	nnz=132380	fill=33630126	len=6	work=201780756
+FENCEBATCH	n=26778	nnz=132380	fill=33630126	len=1	work=33630126
+FENCEBATCH	n=26778	nnz=132380	fill=33630126	len=11	work=369931386
+LADGATE	26778	10000	0.636	0
+COUNTS	faclay35	26778	132380	33630126	32021838
+FENCEBATCH	n=13175	nnz=32300	fill=155400	len=7	work=1087800
+FENCEBATCH	n=13175	nnz=32300	fill=155400	len=1	work=155400
+FENCEBATCH	n=13175	nnz=32300	fill=155400	len=130	work=20202000
+LADGATE	13175	10000	0.298	0
+COUNTS	emfl050_5_5	13175	32300	155400	155400
+FENCEBATCH	n=59853	nnz=277562	fill=3946309	len=4	work=15785236
+FENCEBATCH	n=59853	nnz=277562	fill=3946309	len=1	work=3946309
+FENCEBATCH	n=59853	nnz=277562	fill=3946309	len=14	work=55248326
+COUNTS	transswitch2383wpr	59853	277562	3946309	3861509
+FENCEBATCH	n=1120	nnz=6400	fill=668019	len=22	work=14696418
+FENCEBATCH	n=1120	nnz=6400	fill=668019	len=1	work=668019
+FENCEBATCH	n=1120	nnz=6400	fill=668019	len=5	work=3340095
+FENCEBATCH	n=1120	nnz=6400	fill=668019	len=527	work=352046013
+FENCEBATCH	n=1120	nnz=6400	fill=546478	len=16	work=8743648
+LADGATE	1120	10000	0.503	1
+COUNTS	chimera_lga-01	1120	6400	668019	497542
+FENCEBATCH	n=4596	nnz=15316	fill=213850	len=15	work=3207750
+FENCEBATCH	n=4596	nnz=15316	fill=213586	len=1	work=213586
+FENCEBATCH	n=4596	nnz=15316	fill=213586	len=2	work=427172
+FENCEBATCH	n=4596	nnz=15316	fill=213586	len=425	work=90774050
+LADGATE	4596	10000	0.659	1
+COUNTS	gasprod_sarawak16	4596	15316	213850	196064
+FENCEBATCH	n=15904	nnz=101792	fill=208785578	len=7	work=1461499046
+FENCEBATCH	n=15904	nnz=101792	fill=208785578	len=1	work=208785578
+FENCEBATCH	n=15904	nnz=101792	fill=208785578	len=77	work=16076489506
+LADGATE	15904	10000	1.032	0
+COUNTS	crudeoil_lee4_09	15904	101792	208785578	130655525
+FENCEBATCH	n=44909	nnz=160172	fill=390472987	len=4	work=1561891948
+FENCEBATCH	n=44909	nnz=160172	fill=245532086	len=1	work=245532086
+FENCEBATCH	n=44909	nnz=160172	fill=245532086	len=12	work=2946385032
+LADGATE	44909	10000	0.989	0
+COUNTS	arki0013	44909	160172	390472987	157005417
+FENCEBATCH	n=42	nnz=432	fill=3097	len=47	work=145559
+FENCEBATCH	n=42	nnz=432	fill=3097	len=1	work=3097
+FENCEBATCH	n=42	nnz=432	fill=3097	len=5	work=15485
+FENCEBATCH	n=42	nnz=432	fill=3097	len=527	work=1632119
+LADGATE	42	10000	0.157	1
+COUNTS	st_m1	42	432	3097	3097
+FENCEBATCH	n=5310	nnz=17098	fill=730624	len=7	work=5114368
+FENCEBATCH	n=5310	nnz=17098	fill=730624	len=1	work=730624
+FENCEBATCH	n=5310	nnz=17098	fill=730624	len=2	work=1461248
+FENCEBATCH	n=5310	nnz=17098	fill=730624	len=382	work=279098368
+LADGATE	5310	10000	0.643	1
+COUNTS	mpbp_47	5310	17098	730624	652248
+FENCEBATCH	n=821	nnz=2242	fill=8260	len=45	work=371700
+FENCEBATCH	n=821	nnz=2242	fill=7805	len=1	work=7805
+FENCEBATCH	n=821	nnz=2242	fill=7805	len=5	work=39025
+FENCEBATCH	n=821	nnz=2242	fill=7805	len=527	work=4113235
+FENCEBATCH	n=821	nnz=2242	fill=7805	len=16	work=124880
+LADGATE	821	10000	0.460	1
+COUNTS	rsyn0815m	821	2242	8260	7745
+FENCEBATCH	n=7993	nnz=37208	fill=878890	len=12	work=10546680
+FENCEBATCH	n=7993	nnz=37208	fill=846934	len=1	work=846934
+FENCEBATCH	n=7993	nnz=37208	fill=846934	len=1	work=846934
+FENCEBATCH	n=7993	nnz=37208	fill=846934	len=193	work=163458262
+LADGATE	7993	10000	0.919	1
+COUNTS	arki0016	7993	37208	878890	836006
+FENCEBATCH	n=18	nnz=48	fill=121	len=45	work=5445
+FENCEBATCH	n=18	nnz=48	fill=121	len=1	work=121
+FENCEBATCH	n=18	nnz=48	fill=121	len=5	work=605
+FENCEBATCH	n=18	nnz=48	fill=121	len=527	work=63767
+LADGATE	18	10000	0.153	1
+COUNTS	st_glmp_ss2	18	48	121	121
+FENCEBATCH	n=2670	nnz=6964	fill=36862	len=24	work=884688
+FENCEBATCH	n=2670	nnz=6964	fill=35348	len=1	work=35348
+FENCEBATCH	n=2670	nnz=6964	fill=35348	len=5	work=176740
+FENCEBATCH	n=2670	nnz=6964	fill=35348	len=527	work=18628396
+LADGATE	2670	10000	0.652	1
+COUNTS	rsyn0810m02hfsg	2670	6964	36862	34753
+FENCEBATCH	n=55	nnz=276	fill=1497	len=45	work=67365
+FENCEBATCH	n=55	nnz=276	fill=1497	len=1	work=1497
+FENCEBATCH	n=55	nnz=276	fill=1497	len=5	work=7485
+FENCEBATCH	n=55	nnz=276	fill=1497	len=527	work=788919
+LADGATE	55	10000	0.158	1
+COUNTS	pointpack06	55	276	1497	1497
+FENCEBATCH	n=6328	nnz=16896	fill=76232	len=7	work=533624
+FENCEBATCH	n=6328	nnz=16896	fill=74769	len=1	work=74769
+FENCEBATCH	n=6328	nnz=16896	fill=74769	len=1	work=74769
+FENCEBATCH	n=6328	nnz=16896	fill=74769	len=382	work=28561758
+LADGATE	6328	10000	0.349	1
+COUNTS	syn40m04hfsg	6328	16896	76232	73873
+FENCEBATCH	n=258	nnz=840	fill=2742	len=46	work=126132
+FENCEBATCH	n=258	nnz=840	fill=2742	len=1	work=2742
+FENCEBATCH	n=258	nnz=840	fill=2742	len=5	work=13710
+FENCEBATCH	n=258	nnz=840	fill=2742	len=527	work=1445034
+LADGATE	258	10000	0.236	1
+COUNTS	clay0304m	258	840	2742	2742
+FENCEBATCH	n=1218	nnz=8300	fill=159641	len=25	work=3991025
+FENCEBATCH	n=1218	nnz=8300	fill=159641	len=1	work=159641
+FENCEBATCH	n=1218	nnz=8300	fill=159641	len=2	work=319282
+FENCEBATCH	n=1218	nnz=8300	fill=159641	len=515	work=82215115
+LADGATE	1218	10000	0.387	1
+COUNTS	pooling_foulds5pq	1218	8300	159641	159641
+FENCEBATCH	n=1000	nnz=2910	fill=12260	len=40	work=490400
+FENCEBATCH	n=1000	nnz=2910	fill=11510	len=1	work=11510
+FENCEBATCH	n=1000	nnz=2910	fill=11510	len=5	work=57550
+FENCEBATCH	n=1000	nnz=2910	fill=11510	len=527	work=6065770
+FENCEBATCH	n=1000	nnz=2910	fill=11380	len=16	work=182080
+LADGATE	1000	10000	0.428	1
+COUNTS	clay0305hfsg	1000	2910	12260	11240
+FENCEBATCH	n=64	nnz=232	fill=2343	len=45	work=105435
+FENCEBATCH	n=64	nnz=232	fill=1964	len=1	work=1964
+FENCEBATCH	n=64	nnz=232	fill=1964	len=5	work=9820
+FENCEBATCH	n=64	nnz=232	fill=1964	len=527	work=1035028
+FENCEBATCH	n=64	nnz=232	fill=1964	len=16	work=31424
+LADGATE	64	10000	0.208	1
+COUNTS	st_test8	64	232	2343	1964
+FENCEBATCH	n=17364	nnz=252910	fill=6179750712	len=12	work=74157008544
+FENCEBATCH	n=17364	nnz=252910	fill=5685636433	len=1	work=5685636433
+FENCEBATCH	n=17364	nnz=252910	fill=4909743311	len=3	work=14729229933
+COUNTS	gams05	17364	252910	6179750712	3259322396
+FENCEBATCH	n=31	nnz=156	fill=862	len=47	work=40514
+FENCEBATCH	n=31	nnz=156	fill=862	len=1	work=862
+FENCEBATCH	n=31	nnz=156	fill=862	len=5	work=4310
+FENCEBATCH	n=31	nnz=156	fill=862	len=527	work=454274
+LADGATE	31	10000	0.184	1
+COUNTS	sporttournament08	31	156	862	862
+FENCEBATCH	n=1121	nnz=4194	fill=24944	len=25	work=623600
+FENCEBATCH	n=1121	nnz=4194	fill=23714	len=1	work=23714
+FENCEBATCH	n=1121	nnz=4194	fill=23714	len=5	work=118570
+FENCEBATCH	n=1121	nnz=4194	fill=23714	len=527	work=12497278
+LADGATE	1121	10000	0.371	1
+COUNTS	powerflow0030p	1121	4194	24944	23642
+FENCEBATCH	n=22407	nnz=105584	fill=2567878	len=9	work=23110902
+FENCEBATCH	n=22407	nnz=105584	fill=2567878	len=1	work=2567878
+FENCEBATCH	n=22407	nnz=105584	fill=2567878	len=65	work=166912070
+LADGATE	22407	10000	0.893	0
+COUNTS	popdynm200	22407	105584	2567878	2436690
+FENCEBATCH	n=11120	nnz=40790	fill=3037207	len=7	work=21260449
+FENCEBATCH	n=11120	nnz=40790	fill=2641057	len=1	work=2641057
+FENCEBATCH	n=11120	nnz=40790	fill=1785672	len=2	work=3571344
+FENCEBATCH	n=11120	nnz=40790	fill=1785672	len=114	work=203566608
+LADGATE	11120	10000	0.845	0
+COUNTS	mpbp_35	11120	40790	3037207	977650
+FENCEBATCH	n=1492	nnz=3936	fill=13752	len=22	work=302544
+FENCEBATCH	n=1492	nnz=3936	fill=13521	len=1	work=13521
+FENCEBATCH	n=1492	nnz=3936	fill=13521	len=5	work=67605
+FENCEBATCH	n=1492	nnz=3936	fill=13521	len=527	work=7125567
+LADGATE	1492	10000	0.423	1
+COUNTS	syn30m02m	1492	3936	13752	13455
+FENCEBATCH	n=481	nnz=3252	fill=60135	len=46	work=2766210
+FENCEBATCH	n=481	nnz=3252	fill=60068	len=1	work=60068
+FENCEBATCH	n=481	nnz=3252	fill=60068	len=5	work=300340
+FENCEBATCH	n=481	nnz=3252	fill=60068	len=527	work=31655836
+FENCEBATCH	n=481	nnz=3252	fill=60068	len=16	work=961088
+LADGATE	481	10000	0.357	1
+COUNTS	wastewater13m1	481	3252	60135	60068
+FENCEBATCH	n=1022	nnz=2624	fill=8432	len=22	work=185504
+FENCEBATCH	n=1022	nnz=2624	fill=8287	len=1	work=8287
+FENCEBATCH	n=1022	nnz=2624	fill=8287	len=5	work=41435
+FENCEBATCH	n=1022	nnz=2624	fill=8287	len=527	work=4367249
+LADGATE	1022	10000	0.320	1
+COUNTS	syn40hfsg	1022	2624	8432	8155
+FENCEBATCH	n=69	nnz=206	fill=1097	len=45	work=49365
+FENCEBATCH	n=69	nnz=206	fill=1047	len=1	work=1047
+FENCEBATCH	n=69	nnz=206	fill=1047	len=5	work=5235
+FENCEBATCH	n=69	nnz=206	fill=1047	len=527	work=551769
+FENCEBATCH	n=69	nnz=206	fill=1047	len=16	work=16752
+LADGATE	69	10000	0.199	1
+COUNTS	sep1	69	206	1097	1047
+FENCEBATCH	n=2508	nnz=6804	fill=26806	len=24	work=643344
+FENCEBATCH	n=2508	nnz=6804	fill=26806	len=1	work=26806
+FENCEBATCH	n=2508	nnz=6804	fill=26806	len=5	work=134030
+FENCEBATCH	n=2508	nnz=6804	fill=26806	len=527	work=14126762
+LADGATE	2508	10000	0.469	1
+COUNTS	syn30m03m	2508	6804	26806	26552
+COUNTS	st_qpc-m3a	30	304	2330	1574
+FENCEBATCH	n=2644	nnz=11426	fill=1381490	len=25	work=34537250
+FENCEBATCH	n=2644	nnz=11426	fill=1164811	len=1	work=1164811
+FENCEBATCH	n=2644	nnz=11426	fill=1164811	len=2	work=2329622
+FENCEBATCH	n=2644	nnz=11426	fill=1164811	len=515	work=599877665
+FENCEBATCH	n=2644	nnz=11426	fill=972973	len=32	work=31135136
+LADGATE	2644	10000	0.765	1
+COUNTS	crudeoil_pooling_ct3	2644	11426	1381490	867709
+FENCEBATCH	n=634	nnz=3246	fill=29078	len=46	work=1337588
+FENCEBATCH	n=634	nnz=3246	fill=28824	len=1	work=28824
+FENCEBATCH	n=634	nnz=3246	fill=28824	len=5	work=144120
+FENCEBATCH	n=634	nnz=3246	fill=28824	len=527	work=15190248
+FENCEBATCH	n=634	nnz=3246	fill=28631	len=16	work=458096
+LADGATE	634	10000	0.397	1
+COUNTS	space25a	634	3246	29078	27875
+COUNTS	autocorr_bern20-15	23	394	2784	2784
+FENCEBATCH	n=35	nnz=134	fill=352	len=45	work=15840
+FENCEBATCH	n=35	nnz=134	fill=341	len=1	work=341
+FENCEBATCH	n=35	nnz=134	fill=341	len=5	work=1705
+FENCEBATCH	n=35	nnz=134	fill=341	len=527	work=179707
+FENCEBATCH	n=35	nnz=134	fill=341	len=16	work=5456
+LADGATE	35	10000	0.183	1
+COUNTS	ex7_2_1	35	134	352	341
+FENCEBATCH	n=2092	nnz=6236	fill=69051	len=24	work=1657224
+FENCEBATCH	n=2092	nnz=6236	fill=62503	len=1	work=62503
+FENCEBATCH	n=2092	nnz=6236	fill=62503	len=5	work=312515
+FENCEBATCH	n=2092	nnz=6236	fill=62503	len=527	work=32939081
+LADGATE	2092	10000	0.661	1
+COUNTS	hydroenergy2	2092	6236	69051	56014
+FENCEBATCH	n=514	nnz=5340	fill=325989	len=30	work=9779670
+FENCEBATCH	n=514	nnz=5340	fill=301912	len=1	work=301912
+FENCEBATCH	n=514	nnz=5340	fill=301912	len=5	work=1509560
+FENCEBATCH	n=514	nnz=5340	fill=301912	len=527	work=159107624
+FENCEBATCH	n=514	nnz=5340	fill=298475	len=16	work=4775600
+LADGATE	514	10000	0.415	1
+COUNTS	pooling_digabel19	514	5340	325989	277303
+FENCEBATCH	n=132	nnz=420	fill=1348	len=45	work=60660
+FENCEBATCH	n=132	nnz=420	fill=1348	len=1	work=1348
+FENCEBATCH	n=132	nnz=420	fill=1348	len=5	work=6740
+FENCEBATCH	n=132	nnz=420	fill=1348	len=527	work=710396
+LADGATE	132	10000	0.235	1
+COUNTS	clay0203m	132	420	1348	1348
+FENCEBATCH	n=13680	nnz=36000	fill=252605	len=8	work=2020840
+FENCEBATCH	n=13680	nnz=36000	fill=252605	len=1	work=252605
+FENCEBATCH	n=13680	nnz=36000	fill=252605	len=124	work=31323020
+LADGATE	13680	10000	0.373	0
+COUNTS	squfl030-150	13680	36000	252605	252605
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.1593	acopf_case9241pegase_qcqp	313068	1292408	0.9737
+1.0331	gabriel10	244056	1148210	0.9285
+1.0323	crudeoil_lee4_09	15904	101792	0.6258
+0.9987	crudeoil_lee4_10	17809	120632	0.6253
+0.9901	nuclear104	39098	257806	0.7593
+0.9899	arki0013	44909	160172	0.4021
+0.9711	arki0016	7993	37208	0.9512
+0.9597	crudeoil_lee4_06	10429	55492	0.5043
+0.9536	transswitch0300p	11659	48446	0.9351
+0.9506	gams05	17364	252910	0.5274
+0.9008	mpbp_48	28368	91016	0.4772
+0.8940	popdynm200	22407	105584	0.9489
+0.8481	crudeoil_pooling_dt3	30660	152210	0.6919
+0.8456	mpbp_35	11120	40790	0.3219
+0.8402	pooling_sppc3pq	23173	893724	0.2822
+0.8383	powerflow0300p	11251	41918	0.9616
+0.8334	rsyn0840m04m	8508	24272	0.8118
+0.8311	crudeoil_lee2_06	6418	34646	0.7159
+0.8296	ringpack_30_2	17999	121458	0.2318
+0.8276	mpbp_21	11716	37660	0.8615
+0.8174	mpbp_07	9532	30810	0.9127
+0.8110	faclay75	272878	1379706	0.9405
+0.7998	crudeoil_pooling_ct3	2644	11426	0.6281
+0.7919	gabriel09	21688	89702	0.8976
+0.7902	mpbp_15	9858	31692	0.8001
+0.7836	chp_partload	5211	16740	0.7353
+0.7659	chp_shorttermplan2d	16364	52108	0.5147
+0.7620	nuclear10a	17493	163816	0.6766
+0.7564	crudeoil_lee1_07	3670	19322	0.7465
+0.7485	gasprod_sarawak81	22536	75636	0.9135
+0.7473	crudeoil_pooling_dt2	18742	75910	0.6638
+0.7365	chimera_selby-c16-02	2031	10878	0.5373
+0.7340	chimera_selby-c16-01	2031	10964	0.6744
+0.7337	procurement1large	14416	41068	0.5323
+0.7246	rsyn0805m03m	2868	8270	0.8995
+0.7236	mpbp_34	11556	40860	0.2887
+0.7219	pinene200	19995	97990	0.8350
+0.7195	sfacloc2_3_80	4799	20600	0.9580
+0.7090	gasprod_sarawak16	4596	15316	0.9168
+0.7067	powerflow0118p	5065	18730	0.9666
+0.6834	mpbp_47	5310	17098	0.8927
+0.6778	chimera_rfr-02	2032	15140	0.6452
+0.6778	hydroenergy2	2092	6236	0.8112
+0.6769	rsyn0810m02hfsg	2670	6964	0.9428
+0.6756	sfacloc2_4_80	5067	21424	0.9552
+0.6679	methanol200	11999	76128	0.7019
+0.6529	pooling_sppb5pq	18529	674470	0.4077
+0.6482	rsyn0815m04m	5456	15756	0.7820
+0.6447	chimera_k64ising-02	1225	3846	0.6080
+0.6383	methanol400	23999	151728	0.7208
+0.6365	faclay35	26778	132380	0.9522
+0.6360	transswitch2383wpr	59853	277562	0.9785
+0.6325	chp_shorttermplan1a	4952	15700	0.8002
+0.6297	chimera_mgw-c16-2031-01	2032	15900	0.7814
+0.6275	popdynm25	2807	13904	0.7966
+0.6271	nd_netgen-3000-1-1-b-b-ns_7	33155	90000	0.9599
+0.6217	pooling_sppa9tp	5040	121302	0.1613
+0.6198	multiplants_stg1b	814	3992	0.6079
+0.6158	crudeoil_li05	4225	14628	0.7847
+0.6128	batchs201210m	5188	17910	0.8685
+0.6111	waste	4825	21504	0.8654
+0.6045	syn40m04m	4960	13792	0.9591
+0.6026	multiplants_stg1a	726	3510	0.8549
+0.6021	multiplants_stg5	827	3804	0.4122
+0.6014	multiplants_stg1c	800	3894	0.9532
+0.5929	edgecross24-115	16747	77352	0.8173
+0.5898	sporttournament48	1131	6676	0.6461
+0.5811	rsyn0820m02m	2486	6932	0.9339
+0.5806	rsyn0810m04m	4772	13836	0.7829
+0.5733	sonet24v5	874	7260	0.5940
+0.5674	multiplants_stg1	736	3594	0.7853
+0.5661	crudeoil_pooling_ct1	1271	4642	0.7501
+0.5620	transswitch2736spr	69651	331010	0.9179
+0.5586	multiplants_mtg1b	645	4404	0.6627
+0.5561	nuclear25a	1942	16030	0.5747
+0.5502	rsyn0820m04m	6028	17372	0.7771
+0.5500	unitcommit_200_100_1_mod_8	146830	476332	0.9764
+0.5499	ndcc12	974	5982	0.9533
+0.5491	kall_circlespolygons_c1p5b	1681	7432	0.9608
+0.5458	sonet23v4	803	6462	0.6753
+0.5450	oil	3270	8430	0.9572
+0.5439	chimera_lga-01	1120	6400	0.7448
+0.5426	chp_shorttermplan2a	8992	26288	0.7035
+0.5389	rsyn0815m02hfsg	3054	7968	0.9285
+0.5383	rsyn0830m04m	7252	20752	0.8100
+0.5373	mpbp_46	4518	14492	0.8970
+0.5345	netmod_kar1	1746	4928	0.7717
+0.5325	pooling_foulds5tp	1218	8364	0.6828
+0.5313	ndcc13	969	5882	0.6183
+0.5292	batchs121208m	3404	11462	0.9332
+0.5110	rsyn0840m02m	3486	9576	0.9468
+0.4992	torsion50	2508	29808	0.6618
+0.4952	kan_r3_h1_n4	3183	14062	0.9408
+0.4877	faclay30	16678	82242	0.9552
+0.4857	risk2bpb	1462	5396	0.5574
+0.4837	syn30m03m	2508	6804	0.9905
+0.4767	chimera_mgw-c8-439-onc8-001	440	3040	0.7522
+0.4758	nd_netgen-2000-3-4-b-a-ns_7	22074	60000	0.9446
+0.4754	chimera_mgw-c8-439-onc8-002	440	3038	0.8835
+0.4725	pooling_sppa0pq	1649	24192	0.3297
+0.4716	rsyn0815m	821	2242	0.9377
+0.4707	p_ball_30b_7p_2d_h	2207	7516	0.9968
+0.4699	emfl100_5_5	21925	52300	1.0000
+0.4686	squfl015-060	2775	7200	1.0000
+0.4685	rsyn0830hfsg	1590	4100	0.9514
+0.4681	supplychainr1_022020	4620	15680	0.9999
+0.4658	pooling_sppc1pq	14100	477680	0.1683
+0.4657	rocket50	555	3488	0.9641
+0.4657	pooling_foulds4pq	1294	8302	0.9989
+0.4616	qapw	705	87496	1.0000
+0.4602	ndcc12persp	1112	5522	0.9521
+0.4601	sonet21v6	8232	40744	0.9650
+0.4588	gancns	548	2800	0.8502
+0.4574	squfl020-150	9170	24000	1.0000
+0.4534	pooling_digabel19	514	5340	0.8507
+0.4451	space25a	634	3246	0.9586
+0.4450	slay09h	2718	7488	0.8982
+0.4443	cont6-qq	120395	557994	0.6962
+0.4437	forest	713	2658	0.9933
+0.4430	kall_circlesrectangles_c6r39	1306	5378	0.9850
+0.4399	arki0002	4432	11248	0.9764
+0.4397	clay0305hfsg	1000	2910	0.9168
+0.4392	syn30m02m	1492	3936	0.9784
+0.4388	maxcsp-langford-3-11	660	29646	0.3098
+0.4371	kissing2	20772	401024	1.0000
+0.4321	pooling_foulds5pq	1218	8300	1.0000
+0.4291	tls6	413	2860	0.9474
+0.4190	ringpack_20_3	6709	45220	0.3584
+0.4150	powerflow0030p	1121	4194	0.9478
+0.4142	glider400	10017	49624	0.8781
+0.4116	supplychainr1_053050	16640	57800	1.0000
+0.4109	waternd2	615	2580	0.4806
+0.4096	squfl010-040persp	2450	7200	1.0000
+0.4096	edgecross10-030	1053	4654	0.7406
+0.4092	ringpack_20_2	6089	40368	0.3779
+0.4034	wastewater13m1	481	3252	0.9989
+0.4024	ex8_3_9	123	834	0.7643
+0.3900	blend146	1422	4460	0.8232
+0.3896	pooling_sppa9pq	5030	120730	0.6312
+0.3883	p_ball_30b_5p_2d_h	1543	5224	0.9961
+0.3870	korcns	156	712	0.9113
+0.3809	syn15m04m	1908	5288	0.9652
+0.3782	sonetgr17	440	2958	0.8190
+0.3770	sporttournament18	156	886	0.7753
+0.3737	squfl030-150	13680	36000	1.0000
+0.3688	sfacloc2_4_90	1491	4500	0.9104
+0.3678	syn40m04hfsg	6328	16896	0.9691
+0.3633	powerflow0014r	403	1630	0.9628
+0.3606	edgecross10-040	1053	5116	0.8868
+0.3589	wastepaper4	115	724	0.7397
+0.3576	space25	1178	4334	0.9559
+0.3569	waterund14	333	2204	0.3600
+0.3569	squfl010-080	2490	6400	1.0000
+0.3565	blend718	1386	4310	0.8737
+0.3552	slay05h	760	2080	0.8961
+0.3534	clay0204hfsg	590	1696	0.9116
+0.3532	edgecross14-156	3097	19664	0.9254
+0.3527	p_ball_10b_7p_3d_h	1236	4186	0.9739
+0.3508	rsyn0840m	1159	3168	0.9404
+0.3480	blend721	1428	4548	0.8528
+0.3480	ex1265a	123	560	0.9498
+0.3444	p_ball_10b_5p_4d_m	403	1484	0.9784
+0.3422	p_ball_10b_5p_2d_m	293	964	0.9848
+0.3375	waterund01	96	404	0.7297
+0.3375	primary	378	5610	0.8688
+0.3371	demo7	155	618	0.9573
+0.3369	slay08m	660	2016	1.0000
+0.3356	squfl025-030	2305	6000	1.0000
+0.3351	edgecross10-080	1053	5940	0.9638
+0.3351	o9_ar4_1	1049	4336	0.9177
+0.3345	syn40m	560	1528	0.9644
+0.3330	wastepaper6	191	1416	1.0000
+0.3325	syn40hfsg	1022	2624	0.9671
+0.3309	waterund11	160	828	0.7224
+0.3276	wastewater05m1	98	536	0.6874
+0.3274	fo9_ar25_1	1049	4336	0.9177
+0.3271	graphpart_clique-30	120	2790	0.7961
+0.3247	edgecross10-090	1053	5204	0.8181
+0.3198	sssd20-08persp	356	1232	1.0000
+0.3176	pooling_rt2tp	118	654	0.9864
+0.3170	maxcsp-ehi-85-297-71	2372	207996	0.8040
+0.3170	st_e31	301	744	0.9389
+0.3136	slay07m	497	1512	1.0000
+0.3134	graphpart_clique-20	80	1260	0.7985
+0.3125	syn10m04m	1224	3384	0.9979
+0.3095	sssd18-08persp	338	1168	1.0000
+0.3083	st_rv9	90	840	0.9447
+0.3044	syn10m03hfsg	1071	2772	0.9921
+0.3020	clay0203m	132	420	1.0000
+0.3018	catmix400	2001	11192	0.9998
+0.3015	pooling_adhya4pq	170	932	0.6809
+0.3009	orth_d4m6_pl	172	1096	0.9785
+0.3004	graphpart_3g-0244-0244	128	672	0.9727
+0.3003	genpooling_lee2	221	1048	0.7051
+0.2995	chain200	601	2396	1.0000
+0.2991	qspp_0_14_0_1_10_1	560	120274	0.9950
+0.2982	emfl050_5_5	13175	32300	1.0000
+0.2947	clay0304m	258	840	1.0000
+0.2935	knp5-44	2157	32604	1.0000
+0.2912	slay05m	240	720	1.0000
+0.2910	st_test8	64	232	0.8382
+0.2904	prolog	64	292	0.9839
+0.2872	syn15hfsg	399	1022	0.9915
+0.2837	slay06m	357	1080	1.0000
+0.2836	clay0204m	222	704	1.0000
+0.2829	waterund08	230	1290	0.8534
+0.2804	hydroenergy1	1046	3024	1.0000
+0.2782	st_m2	72	1226	1.0000
+0.2757	catmix200	1001	5592	0.9995
+0.2744	wastewater02m1	36	138	0.9316
+0.2742	lop97icx	1073	2118	0.8078
+0.2737	ex1263a	94	390	1.0000
+0.2730	knp5-43	2065	31132	1.0000
+0.2688	tspn08	72	668	0.6863
+0.2684	graphpart_3g-0333-0333	108	648	0.8064
+0.2684	pooling_adhya4tp	170	936	0.7667
+0.2683	elf	124	376	0.7951
+0.2673	squfl015-080persp	7295	21600	1.0000
+0.2664	sssd25-08	401	1200	1.0000
+0.2626	graphpart_clique-70	280	14910	0.8103
+0.2622	csched1	110	376	1.0000
+0.2613	sporttournament08	31	156	1.0000
+0.2591	meanvar-orl400_05_e_7	5205	174804	0.9998
+0.2579	squfl025-025persp	3800	11250	1.0000
+0.2560	st_rv2	40	340	1.0000
+0.2557	ex7_2_1	35	134	0.9688
+0.2531	chain400	1201	4796	1.0000
+0.2519	ex8_4_1	32	100	1.0000
+0.2507	pooling_haverly1pq	31	96	0.9782
+0.2487	meanvar-orl400_05_e_8	4405	171604	1.0000
+0.2437	maxmin	181	1440	1.0000
+0.2414	st_bpaf1a	30	120	0.9310
+0.2411	slay04m	146	432	1.0000
+0.2403	emfl100_3_3	6885	15948	1.0000
+0.2382	pooling_haverly1tp	31	96	0.9527
+0.2309	st_jcbpaf2	36	246	0.9437
+0.2279	nvs05	22	84	0.9603
+0.2248	st_e07	19	60	1.0000
+0.2237	qspp_0_13_0_1_10_1	481	88522	0.9948
+0.2200	st_m1	42	432	1.0000
+0.2198	prob02	22	76	0.8689
+0.2186	pointpack06	55	276	1.0000
+0.2166	sep1	69	206	0.9544
+0.2155	pointpack04	29	120	1.0000
+0.2136	kall_diffcircles_6	76	302	1.0000
+0.2134	ex1223	33	82	1.0000
+0.2109	sssd15-04	163	440	1.0000
+0.2106	ex5_2_4	18	62	0.9461
+0.2097	hybriddynamic_fixed	168	388	1.0000
+0.1993	qspp_0_10_0_1_10_1	280	29636	0.9946
+0.1964	st_ph1	16	58	0.8504
+0.1928	ex9_2_6	28	68	1.0000
+0.1908	ex6_1_4	10	48	0.7766
+0.1859	tln2	32	88	1.0000
+0.1856	qspp_0_11_0_1_10_1	341	44264	0.9911
+0.1828	ex1225	26	66	0.9415
+0.1819	st_qpk3	55	548	0.6881
+0.1819	ex1223b	25	66	1.0000
+0.1812	ex2_1_3	31	72	1.0000
+0.1726	ex9_1_2	19	54	0.9521
+0.1701	ex8_1_7	14	46	0.9343
+0.1697	qap	255	43748	0.9599
+0.1689	nvs02	11	46	1.0000
+0.1682	st_glmp_ss2	18	48	1.0000
+0.1680	himmel11	14	60	1.0000
+0.1678	st_bsj2	13	40	0.7972
+0.1590	watercontamination0303r	1310	37028	1.0000
+0.1560	st_glmp_ss1	24	66	1.0000
+0.1558	oaer	20	40	1.0000
+0.1519	ex3_1_3	18	36	0.9222
+0.1511	st_bpk1	16	44	0.9391
+0.1487	st_ph13	23	68	0.8599
+0.1448	st_pan1	11	32	0.7642
+0.1296	ex9_2_4	15	36	1.0000
+0.1210	ex14_1_8	11	30	1.0000
+0.1166	st_ht	8	18	0.8627
+0.1102	st_e22	12	30	0.9091
+0.0002	polygon75	5846	49652	1.0000
+0.0001	pedigree_sim400	351	23546	0.9997
+0.0000	camshape400	2000	7188	1.0000
+0.0000	autocorr_bern40-30	43	1534	1.0000
+0.0000	autocorr_bern35-35fix	38	1264	1.0000
+0.0000	smallinvDAXr1b010-011	39	1120	0.9859
+0.0000	autocorr_bern30-23	33	878	1.0000
+0.0000	autocorr_bern25-19	28	612	1.0000
+0.0000	cvxnonsep_psig30	30	870	1.0000
+0.0000	autocorr_bern20-15	23	394	1.0000
+0.0000	st_qpc-m3a	30	304	0.6755
+0.0000	cvxnonsep_psig20	20	380	1.0000
+0.0000	nvs23	27	252	0.6356
+0.0000	nvs19	24	200	0.6534
+0.0000	cvxnonsep_normcon40r	162	322	1.0000
+0.0000	st_iqpbk1	22	98	1.0000
+0.0000	st_e25	20	92	0.7798
+0.0000	st_e24	10	26	0.8906
+0.0000	cvxnonsep_psig30r	126	250	1.0000
+0.0000	st_e41	8	32	1.0000
+0.0000	cvxnonsep_normcon20r	82	162	1.0000
+0.0000	st_miqp2	10	18	1.0000
+0.0000	cvxnonsep_psig20r	86	170	1.0000
+matrices under 0.010s: 23/300
+matrices under 0.050s: 23/300
+matrices under 0.100s: 23/300
+matrices under 0.200s: 51/300
+matrices under 0.400s: 163/300
+
+--- per-bucket ---
+lt_1k    count=147   geomean=0.8874
+1k_10k   count=108   geomean=0.8391
+gt_10k   count=45    geomean=0.6857
+SCORE = 0.792226
+WORST order() = 1.159 s
+FORCEAUDIT	stage1b_sites=39	force_fires=10	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=16	tie_pass_run=2
+test ordering::probe::probe_timing_and_score ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 164 filtered out; finished in 124.61s
+

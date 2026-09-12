@@ -375,6 +375,39 @@ fn indep_force_off() -> bool {
     std::env::var("SSI_INDEP_FORCE").is_err()
 }
 
+/// ── 0203: one band's rung budget priced on its own ──────────────────────────
+/// `SSI_TERM_LADDER` (at the draw's gate) replaces the WHOLE ladder **and**
+/// bypasses `SHIPPED_FULL_N`, so a sweep through it also opens the window above
+/// `n = 10 000` and re-budgets the sparse band: it cannot price one band's
+/// budget axis. This seam re-points exactly one band's rungs — comma-separated
+/// `rgreedy` op budgets, one rung each, cycled over the same fixed seeds the
+/// shipped rung uses — leaving the window, the other band and every other
+/// constant at their shipped values. `""`/`none` removes that band's rung
+/// entirely. Test-only: production compiles the shipped constants.
+#[cfg(test)]
+fn band_rung_override(var: &str) -> Option<Vec<(i64, u64)>> {
+    let raw = std::env::var(var).ok()?;
+    if raw.trim().is_empty() || raw.trim() == "none" {
+        return Some(Vec::new());
+    }
+    let seeds = [
+        0x9E37_79B9_7F4A_7C15u64,
+        0xD1B5_4A32_D192_ED03,
+        0xA24B_AED4_963E_E407,
+    ];
+    let rungs: Vec<(i64, u64)> = raw
+        .split(',')
+        .filter_map(|x| x.trim().parse::<i64>().ok())
+        .enumerate()
+        .map(|(k, b)| (b, seeds[k % seeds.len()]))
+        .collect();
+    if rungs.is_empty() {
+        None
+    } else {
+        Some(rungs)
+    }
+}
+
 #[cfg(not(test))]
 #[inline(always)]
 fn indep_force_off() -> bool {
@@ -532,6 +565,28 @@ const LADDER_FILL_BOUND: u64 = 20_000_000_000;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
 const LADDER_FILL_CAP: usize = 64;
+/// ── 0202: which candidates the fence keeps once a batch is over budget ─────
+/// `true` keeps a stratified sample across the whole queue (`step_by`), `false`
+/// keeps the head. Both keep at most `LADDER_FILL_CAP` candidates, so the two
+/// differ only in WHICH producers are replayed — never in the amount of work,
+/// and the batch is replayed in queue order either way.
+///
+/// Measured this run in one binary (test seam `SSI_LADDER_CAP` /
+/// `SSI_LADDER_FILL_BOUND`), after the "(the predicate never fires on dev)"
+/// claim the fence shipped with was put under a direct test: on the 300 dev rows
+/// it is TRUE — bound 2e10, caps 16/32/48/64/96/160/256 and "never fire" all
+/// give exactly SCORE 0.792573 — so the cap cannot move a dev row and neither
+/// can this switch; the harness run is the check.
+///
+/// On the two structural corpora where the fence does fire (every row's
+/// incumbent 1e10..1.4e11) the kept SET is worth score at unchanged count:
+/// scaled (n, avg-degree) corpus 18 rows 0.990721 -> 0.990479, band corpus
+/// (n = 12 000..30 000) 15 rows 0.988946 -> 0.988673, worst row inside host
+/// noise (1.196 -> 1.268 s and 3.471 -> 3.535 s). The kept COUNT is the dear
+/// term on that class (cap 64 0.990721 -> cap 128 0.989946 = the un-truncated
+/// value), so the same corpus prices the cap raise at +0.3..0.4 s on the
+/// heaviest rows — that half stays a candidate, this half is free.
+const LADDER_STRIDE_KEEP: bool = true;
 
 /// NON-AGGRESSIVE AMD envelope. `aggressive = false` is a genuinely different
 /// elimination order (not just a dense-threshold tweak). It runs at baseline AMD
@@ -1460,8 +1515,25 @@ fn flush_batch<'a>(
     );
     #[cfg(not(test))]
     let (fill_bound, fill_cap) = (LADDER_FILL_BOUND, LADDER_FILL_CAP);
+    // ── 0202: WHICH candidates the fence keeps (see LADDER_STRIDE_KEEP) ────
+    // Same count, same per-candidate price; only the kept SET differs. The kept
+    // count is what costs score on the class the fence fires on (scaled corpus:
+    // cap 64 0.990721, 96 0.990606, 128 0.989946 = the un-truncated value), and
+    // the tail of the queue carries ratio the head does not (band corpus
+    // 0.988946 -> 0.988673 at cap 64), so a stratified sample buys back part of
+    // that without paying the cap raise's +0.3 s.
+    #[cfg(test)]
+    let stride_mode: bool = std::env::var_os("SSI_LADDER_STRIDE").is_some();
+    #[cfg(not(test))]
+    let stride_mode: bool = LADDER_STRIDE_KEEP;
     if *best_flops > fill_bound && tasks.len() > fill_cap {
-        tasks.truncate(fill_cap);
+        if stride_mode {
+            let step = tasks.len().div_ceil(fill_cap).max(1);
+            let kept: Vec<parallel::CandFn<'a>> = tasks.drain(..).step_by(step).collect();
+            *tasks = kept;
+        } else {
+            tasks.truncate(fill_cap);
+        }
     }
     let results = parallel::run_candidates(tasks, sp, n, nnz, *best_flops, true);
     tasks.clear();
@@ -5171,6 +5243,41 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         /// the hidden rows whose ladder price is 5x dev's.
         const SHIPPED_FULL_N: usize = 10_000;
         const SHIPPED_LADDER: [(i64, u64); 1] = [(200_000_000i64, 0x9E37_79B9_7F4A_7C15u64)];
+        /// ── 0203: the dense band's draw becomes a LADDER OF TRAJECTORIES ─────
+        /// The rung's op budget is NOT an effort knob: it selects a *trajectory*.
+        /// Measured this run in one binary (test seam `SSI_LADDER_DENSE`, the
+        /// probe mirroring production through the three cfg(test) seams, all
+        /// logs 0203-Q*): every *replacement* of the shipped 2e8 rung resamples
+        /// the trajectory and can LOSE the shipped row wins — `[5e8]` moves 11
+        /// rows 6 better / **5 worse**, SCORE 0.792229 (+3e-6); `[5e7 x3]` moves
+        /// 11 rows 6/5, SCORE 0.792308 (+8.2e-5). Every *addition* is monotone
+        /// (strict accept, incumbent retained) and never regresses a row: 5/5, 7/7,
+        /// 10/10, 12/12 movers all-better and SCORE 0.792197 / 0.792176 / 0.792161
+        /// / 0.792147. The value is concentrated in *short* trajectories: one extra
+        /// 1e8 rung buys -7.2e-5 (5 movers, touched rows +0.006..+0.034 s) where an
+        /// extra 5e8 rung buys -6.2e-5 for 3-5x the price; two extra 1e8 rungs reach
+        /// -9.5e-5 and three reach **0.792110 (-1.16e-4)**. A fourth rung (a repeat
+        /// of an earlier (budget, seed) pair) buys only 6e-6 more, so the ladder
+        /// stops here. `rgreedy::search` is *stateful*: `[2e8,1e8,1e8,2e8]` — whose
+        /// 4th rung repeats the 1st exactly — differs from `[2e8,1e8,1e8]` on
+        /// `chimera_rfr-02` (0.6452 -> 0.6449), so a repeated call is not a no-op
+        /// and the rung cannot be assumed pure in (budget, seed, incumbent).
+        /// Gate: this ladder runs only on rows whose *incumbent* is at or below
+        /// the fence's bound (2e10 = the boundary above which the promoted build's
+        /// fence provably fired, dev's max being 6.18e9). Those rows are exactly
+        /// the ones the fence cannot protect, so they are also the ones whose
+        /// per-rung price is the cheap, dev-calibrated one; above the bound the
+        /// shipped single rung and its measured price are kept bit-for-bit, which
+        /// makes this change *time-neutral by construction* on the class the 2 s
+        /// cap was decided on. Dev: all 300 rows are below the bound, so the dev
+        /// SCORE is the full-ladder number 0.792110 (-1.16e-4 at +0.015 s per
+        /// extra rung per touched row).
+        const SHIPPED_LADDER_EXTRA: [(i64, u64); 4] = [
+            (200_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
+            (100_000_000i64, 0xD1B5_4A32_D192_ED03),
+            (100_000_000i64, 0xA24B_AED4_963E_E407),
+            (100_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
+        ];
         /// ── 0184: the sparse band's draw is priced down ─────────────────────
         /// The draw's cost is now measured IN-RUN (row total minus the pre-draw
         /// pipeline mark the probe prints) instead of by differencing two runs
@@ -5196,8 +5303,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         /// rows, all of them in-window). Structural, never per-matrix.
         let shipped_ladder = || {
             if nnz < 3 * n {
+                #[cfg(test)]
+                if let Some(r) = band_rung_override("SSI_LADDER_SPARSE") {
+                    return r;
+                }
                 SHIPPED_SPARSE_LADDER.to_vec()
+            } else if best_flops <= LADDER_FILL_BOUND {
+                #[cfg(test)]
+                if let Some(r) = band_rung_override("SSI_LADDER_DENSE") {
+                    return r;
+                }
+                SHIPPED_LADDER_EXTRA.to_vec()
             } else {
+                #[cfg(test)]
+                if let Some(r) = band_rung_override("SSI_LADDER_DENSE") {
+                    return r;
+                }
                 SHIPPED_LADDER.to_vec()
             }
         };

@@ -154,6 +154,7 @@ mod transplant_probe;
 pub mod rgreedy;
 mod completion;
 mod peo_extract;
+mod terminal_polish;
 mod minl_watch;
 pub mod custom_metrics;
 /// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
@@ -5345,6 +5346,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         if f < final_flops { best_perm = candidate; final_flops = f; }
                     }
                 }
+            }
+            if let Some(candidate) = terminal_polish::refine(pattern, &best_perm,
+                &score, &permute_current, || score_workspace.borrow().nnz_l()) {
+                best_perm = candidate;
             }
         }
     }

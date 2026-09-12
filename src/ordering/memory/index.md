@@ -1,18 +1,3 @@
-[0203: exact kernels and post-search terminal window](experiments/0203-exact-kernels-terminal-window.md):
-new promoted `7fd61df` baseline passes all 300 at **0.792226**, hidden target
-**0.842716**. A terminal width-8/step-3/64M screen reaches **0.792029985254**,
-35 wins / 0 regressions; keep the full 50k alternate-PEO phase and 64-candidate
-high-flop fence. Exact flat/pooled PEO comparisons cover 535 cases; sorted CSC
-matches feral on 1,200 cases; 121 active release tests pass. Integrated
-sandboxed run passes all 300 at **0.792030**, fill **0.924364**; every emitted
-flop count matches the screen. Hidden improvement not yet established.
-
-[0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
-compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
-keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->
-0.792439** (-1.75 relative bip). Isolated on purpose: it is also the single
-candidate being tested against the 2 s cap.
-
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so

@@ -90,7 +90,20 @@ fn transplant_pass(
     let mut best_f = inc_f;
     let mut best_perm = incumbent.to_vec();
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
+    // iter958a: 957 gates + optional n/3 for n<3000 (odd fraction; NOT denser-n12k nine-list)
+    let mut widths_buf: Vec<usize> = if n < 5_000 {
+        vec![4096, 512, 256, 128, 64, 32, 8]
+    } else if n < 8_000 {
+        vec![4096, 512, 256, 128, 32, 8]
+    } else {
+        vec![4096, 512, 128, 32, 8]
+    };
+    if n < 3_000 {
+        let w = (n / 3).max(8);
+        if !widths_buf.contains(&w) { widths_buf.push(w); }
+        widths_buf.sort_unstable_by(|a,b| b.cmp(a));
+    }
+    'widths: for &width in &widths_buf { // iter958a
         let blks = blocks(&parent, 4, width.min(n));
         if blks.len() < 2 {
             continue;
@@ -202,7 +215,20 @@ fn terminal_pass(
     let mut scored_donors = 0usize;
     let mut stopped_partial = false;
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
+    // iter958a: 957 gates + optional n/3 for n<3000 (odd fraction; NOT denser-n12k nine-list)
+    let mut widths_buf: Vec<usize> = if n < 5_000 {
+        vec![4096, 512, 256, 128, 64, 32, 8]
+    } else if n < 8_000 {
+        vec![4096, 512, 256, 128, 32, 8]
+    } else {
+        vec![4096, 512, 128, 32, 8]
+    };
+    if n < 3_000 {
+        let w = (n / 3).max(8);
+        if !widths_buf.contains(&w) { widths_buf.push(w); }
+        widths_buf.sort_unstable_by(|a,b| b.cmp(a));
+    }
+    'widths: for &width in &widths_buf { // iter958a
         let blocks = blocks(&parent, 4, width.min(n));
         if blocks.len() < 2 { continue; }
         let contribution: Vec<u64> = blocks.iter().map(|&(a, b)|

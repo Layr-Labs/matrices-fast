@@ -24,6 +24,38 @@ pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
 // (facility/transswitch class at ratio≈1) that tip's below-anchor gate skips.
 const TRANSPLANT_LEDGER: u64 = 1_000_000;
 
+/// ── 0196: the `sparse_large_tie` widening is REMOVED ───────────────────────
+/// The window (`n` 15k-120k, `nnz` 40k-500k, `nnz <= 6n`, near-AMD tie) was
+/// the inherited code's only *addition* in this shape: it opened the terminal
+/// donor pass on rows the tip's below-anchor gate skipped, fitted to the
+/// "facility/transswitch class at ratio~1" (`iter647a`). Measured with the
+/// 0196 seam over 327 rows — the 300 dev rows and a 27-row structural stress
+/// corpus (grid 2D/3D, uniform random sparse at fixed average degree,
+/// block-angular KKT, geometric, scale-free, banded) — it is inert:
+///
+///   dev:  16 rows match the window, 2 of them are opened by it ALONE, and
+///         disabling it changes **0 of 300** flop counts (identical COUNTS,
+///         SCORE 0.792442 either way) — the donor pass finds no strict
+///         improvement on either row. Corpus `order()` time did not fall
+///         (112.79 s -> 115.63 s, i.e. noise): two rows is below resolution.
+///   OOD:  3 rows match the window, **0** are opened by it alone.
+///
+/// So the window is cost without measured value on every structure we can
+/// score, and it is exactly the shape the ten hidden cap kills punished: extra
+/// per-row work admitted by a dev-fitted window. Removed. `SSI_SPARSE_LARGE_TIE`
+/// is the test-only seam that re-enables it in one binary for the A/B (the
+/// `#[cfg(not(test))]` arm is `false`, so no submission can compile it in).
+#[cfg(test)]
+fn sparse_large_tie_on() -> bool {
+    std::env::var("SSI_SPARSE_LARGE_TIE").is_ok()
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+fn sparse_large_tie_on() -> bool {
+    false
+}
+
 pub(super) fn refine_with_donors(
     sp: &ScoringPattern,
     incumbent: &[usize],
@@ -40,11 +72,21 @@ pub(super) fn refine_with_donors(
     let inc_f = ws.flops(sp, incumbent);
     let below = amd_flops > 0 && inc_f < amd_flops;
     // Sparse-large near-AMD ties: tip skipped these (inc_f >= amd). Open them.
-    let sparse_large_tie = (15_000..120_000).contains(&n)
+    let sparse_large_tie = sparse_large_tie_on()
+        && (15_000..120_000).contains(&n)
         && (40_000..500_000).contains(&nnz)
         && nnz <= 6 * n
         && amd_flops > 0
         && inc_f.saturating_mul(100) <= amd_flops.saturating_mul(101);
+    #[cfg(test)]
+    if sparse_large_tie {
+        super::force_audit::TIE_WINDOW_OPENED
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if !below {
+            super::force_audit::TIE_PASS_RUN
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
     if !below && !sparse_large_tie {
         return None;
     }

@@ -1,0 +1,9 @@
+    Finished `release` profile [optimized] target(s) in 3.81s
+     Running `target/release/matrices-fast --note 'iter18 cross-instrument fidelity: official sandboxed harness on the SSI_MAX_MATRIX_N=100 sub-corpus (68-70 rows, n<=100) to compare per-row flops(base)/flops(yours)/ratio against the sandboxed probe COUNTS, and to measure the per-row sandbox factor on a quiet host (load ~2.9)'`
+matrix                              n     nnz(A)    flops(base)   flops(yours)    ratio      time
+st_bpaf1a                          30        120            623            580    0.931  (capped)
+st_bsj2                            13         40            143            114    0.797  (capped)
+ex1263a                            94        390           2098           2098    1.000  (capped)
+st_e41                              8         32             88             88    1.000  (capped)
+
+RUN FAILED: wastewater05m1: order() exceeded the 2.0s per-matrix cap and was killed (took ≥ 2.0s). Your ordering must return within 2s on every matrix. This matrix is n=98, nnz=536, nnz/n≈5 — if it is dense, the cost is in order() itself; gate expensive paths by BOTH n and nnz.

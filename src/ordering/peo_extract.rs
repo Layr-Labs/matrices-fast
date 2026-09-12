@@ -7,6 +7,22 @@ pub(super) const MAX_N: usize = 30_000;
 pub(super) const MAX_INPUT_NNZ: usize = 180_000;
 pub(super) const MAX_LNNZ: usize = 300_000;
 
+struct Completion {
+    row_ptr: Vec<usize>,
+    neighbors: Vec<u32>,
+}
+
+impl Completion {
+    fn len(&self) -> usize { self.row_ptr.len() - 1 }
+}
+
+impl std::ops::Index<usize> for Completion {
+    type Output = [u32];
+    fn index(&self, vertex: usize) -> &[u32] {
+        &self.neighbors[self.row_ptr[vertex]..self.row_ptr[vertex + 1]]
+    }
+}
+
 pub(super) fn candidates(
     n: usize,
     cp: &[usize],
@@ -50,7 +66,7 @@ fn reconstruct(
     max_n: usize,
     max_nnz: usize,
     max_lnnz: usize,
-) -> Option<Vec<Vec<u32>>> {
+) -> Option<Completion> {
     if n == 0 || n > max_n || ri.len() > max_nnz
         || cp.len() != n + 1 || parent.len() != n || counts.len() != n
         || cp.first().copied() != Some(0) || cp.last().copied() != Some(ri.len())
@@ -66,53 +82,83 @@ fn reconstruct(
     })?;
     if lnnz > max_lnnz { return None; }
 
-    let mut children = vec![Vec::<usize>::new(); n];
+    let mut child_ptr = vec![0usize; n + 1];
     for (j, &p) in parent.iter().enumerate() {
         if let Some(p) = p {
             if p <= j || p >= n { return None; }
-            children[p].push(j);
+            child_ptr[p + 1] += 1;
         }
     }
-    let mut columns = vec![Vec::<u32>::new(); n];
-    let mut adj = vec![Vec::<u32>::new(); n];
+    for j in 0..n { child_ptr[j + 1] += child_ptr[j]; }
+    let mut cursor = child_ptr[..n].to_vec();
+    let mut children = vec![0u32; child_ptr[n]];
+    for (j, &p) in parent.iter().enumerate() {
+        if let Some(p) = p {
+            children[cursor[p]] = j as u32;
+            cursor[p] += 1;
+        }
+    }
+
+    let edges = lnnz - n;
+    let mut column_ptr = Vec::with_capacity(n + 1);
+    column_ptr.push(0usize);
+    for &count in counts {
+        column_ptr.push(column_ptr.last().copied()?.checked_add(count - 1)?);
+    }
+    let mut columns = Vec::<u32>::with_capacity(edges);
+    let mut degrees = vec![0usize; n];
     let mut mark = vec![usize::MAX; n];
-    let mut total = 0usize;
     for j in 0..n {
-        let mut reach = Vec::<u32>::with_capacity(counts[j] - 1);
         for &i in &ri[cp[j]..cp[j + 1]] {
             if i > j && mark[i] != j {
                 mark[i] = j;
-                reach.push(i as u32);
+                columns.push(i as u32);
             }
         }
-        for &child in &children[j] {
-            for &i in &columns[child] {
-                let i = i as usize;
+        for &child in &children[child_ptr[j]..child_ptr[j + 1]] {
+            let child = child as usize;
+            for offset in column_ptr[child]..column_ptr[child + 1] {
+                let i = columns[offset] as usize;
                 if i > j && mark[i] != j {
                     mark[i] = j;
-                    reach.push(i as u32);
+                    columns.push(i as u32);
                 }
             }
-            columns[child] = Vec::new();
         }
         // Never extract from an unchecked reconstruction. Each column is
         // scanned at most once again, at its unique elimination-tree parent.
-        if reach.len().checked_add(1)? != counts[j] { return None; }
-        total = total.checked_add(reach.len())?;
-        if total > max_lnnz.saturating_sub(n) { return None; }
+        if columns.len() != column_ptr[j + 1] { return None; }
         let v = incumbent[j];
-        for &i in &reach {
+        degrees[v] += counts[j] - 1;
+        for &i in &columns[column_ptr[j]..column_ptr[j + 1]] {
             let w = incumbent[i as usize];
-            adj[v].push(w as u32);
-            adj[w].push(v as u32);
+            degrees[w] += 1;
         }
-        columns[j] = reach;
     }
-    if total.checked_add(n)? != lnnz { return None; }
-    Some(adj)
+    if columns.len() != edges { return None; }
+
+    let mut row_ptr = vec![0usize; n + 1];
+    for v in 0..n { row_ptr[v + 1] = row_ptr[v].checked_add(degrees[v])?; }
+    if row_ptr[n] != edges.checked_mul(2)? { return None; }
+    let mut neighbors = vec![0u32; row_ptr[n]];
+    cursor.copy_from_slice(&row_ptr[..n]);
+    // Replay the original column/neighbor append events. Every row retains
+    // its exact former neighbor order, including the reverse MCS variation.
+    for j in 0..n {
+        let v = incumbent[j];
+        for &i in &columns[column_ptr[j]..column_ptr[j + 1]] {
+            let w = incumbent[i as usize];
+            neighbors[cursor[v]] = w as u32;
+            cursor[v] += 1;
+            neighbors[cursor[w]] = v as u32;
+            cursor[w] += 1;
+        }
+    }
+    Some(Completion { row_ptr, neighbors })
 }
 
-fn mcs_peo(adj: &[Vec<u32>], incumbent: &[usize], reverse_adj: bool) -> Vec<usize> {
+#[cfg(test)]
+fn mcs_peo_stale(adj: &Completion, incumbent: &[usize], reverse_adj: bool) -> Vec<usize> {
     let n = adj.len();
     let mut weight = vec![0usize; n];
     let mut visited = vec![false; n];
@@ -131,9 +177,10 @@ fn mcs_peo(adj: &[Vec<u32>], incumbent: &[usize], reverse_adj: bool) -> Vec<usiz
         if visited[v] || weight[v] != max_weight { continue; }
         visited[v] = true;
         visit.push(v);
-        for offset in 0..adj[v].len() {
-            let index = if reverse_adj { adj[v].len() - 1 - offset } else { offset };
-            let u = adj[v][index] as usize;
+        let neighbors = &adj[v];
+        for offset in 0..neighbors.len() {
+            let index = if reverse_adj { neighbors.len() - 1 - offset } else { offset };
+            let u = neighbors[index] as usize;
             if !visited[u] {
                 weight[u] += 1;
                 let new_weight = weight[u];
@@ -151,11 +198,106 @@ fn mcs_peo(adj: &[Vec<u32>], incumbent: &[usize], reverse_adj: bool) -> Vec<usiz
     visit
 }
 
+// Keep only the current entry for each unvisited vertex. Removing its former
+// bucket entry preserves exactly the order obtained by skipping stale LIFO
+// entries, while all bucket storage is O(n) instead of O(n + |E|).
+fn mcs_peo(adj: &Completion, incumbent: &[usize], reverse_adj: bool) -> Vec<usize> {
+    let n = adj.len();
+    let none = u32::MAX;
+    let mut head = vec![none; n + 1];
+    let mut next = vec![none; n];
+    let mut previous = vec![none; n];
+    let mut weight = vec![0usize; n];
+    let mut visited = vec![false; n];
+    head[0] = incumbent[0] as u32;
+    for pair in incumbent.windows(2) {
+        next[pair[0]] = pair[1] as u32;
+        previous[pair[1]] = pair[0] as u32;
+    }
+    let mut max_weight = 0usize;
+    let mut visit = Vec::with_capacity(n);
+    while visit.len() < n {
+        while head[max_weight] == none && max_weight > 0 { max_weight -= 1; }
+        let v = head[max_weight];
+        if v == none { break; }
+        let v = v as usize;
+        let successor = next[v];
+        head[max_weight] = successor;
+        if successor != none { previous[successor as usize] = none; }
+        visited[v] = true;
+        visit.push(v);
+        let neighbors = &adj[v];
+        for offset in 0..neighbors.len() {
+            let index = if reverse_adj { neighbors.len() - 1 - offset } else { offset };
+            let u = neighbors[index] as usize;
+            if visited[u] { continue; }
+            let old_weight = weight[u];
+            let predecessor = previous[u];
+            let successor = next[u];
+            if predecessor == none { head[old_weight] = successor; }
+            else { next[predecessor as usize] = successor; }
+            if successor != none { previous[successor as usize] = predecessor; }
+            let new_weight = old_weight + 1;
+            weight[u] = new_weight;
+            let successor = head[new_weight];
+            next[u] = successor;
+            previous[u] = none;
+            if successor != none { previous[successor as usize] = u as u32; }
+            head[new_weight] = u as u32;
+            max_weight = max_weight.max(new_weight);
+        }
+    }
+    visit.reverse();
+    visit
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use super::super::{column_counts_gnp, flops_of, is_bijection,
         permute_pattern, EliminationTree, ScoringPattern};
+
+    // Frozen former representation: independent child lists and per-column
+    // reach buffers protect the append order, not just the final edge set.
+    fn legacy_rows(n: usize, cp: &[usize], ri: &[usize], parent: &[Option<usize>],
+        counts: &[usize], incumbent: &[usize]) -> Vec<Vec<u32>>
+    {
+        let mut children = vec![Vec::<usize>::new(); n];
+        for (j, &p) in parent.iter().enumerate() {
+            if let Some(p) = p { children[p].push(j); }
+        }
+        let mut columns = vec![Vec::<u32>::new(); n];
+        let mut adj = vec![Vec::<u32>::new(); n];
+        let mut mark = vec![usize::MAX; n];
+        for j in 0..n {
+            let mut reach = Vec::<u32>::with_capacity(counts[j] - 1);
+            for &i in &ri[cp[j]..cp[j + 1]] {
+                if i > j && mark[i] != j {
+                    mark[i] = j;
+                    reach.push(i as u32);
+                }
+            }
+            for &child in &children[j] {
+                for &i in &columns[child] {
+                    let i = i as usize;
+                    if i > j && mark[i] != j {
+                        mark[i] = j;
+                        reach.push(i as u32);
+                    }
+                }
+                columns[child] = Vec::new();
+            }
+            assert_eq!(reach.len() + 1, counts[j]);
+            let v = incumbent[j];
+            for &i in &reach {
+                let w = incumbent[i as usize];
+                adj[v].push(w as u32);
+                adj[w].push(v as u32);
+            }
+            columns[j] = reach;
+        }
+        adj
+    }
 
     fn pattern(adj: &[Vec<bool>]) -> ScoringPattern {
         let mut cp = vec![0];
@@ -220,7 +362,9 @@ mod tests {
                     let counts = column_counts_gnp(&pp, &et);
                     let filled = complete(&graph, &incumbent);
                     let reconstructed = reconstruct(n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &incumbent, MAX_N, MAX_INPUT_NNZ, MAX_LNNZ).unwrap();
+                    let former = legacy_rows(n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &incumbent);
                     for v in 0..n {
+                        assert_eq!(&reconstructed[v], former[v].as_slice());
                         let mut row = vec![false; n];
                         for &u in &reconstructed[v] { assert!(!row[u as usize]); row[u as usize] = true; }
                         assert_eq!(row, filled[v]);
@@ -229,6 +373,7 @@ mod tests {
                     let mut best = baseline;
                     for reverse in [false, true] {
                         let candidate = mcs_peo(&reconstructed, &incumbent, reverse);
+                        assert_eq!(candidate, mcs_peo_stale(&reconstructed, &incumbent, reverse));
                         assert!(is_peo(&filled, &candidate));
                         // Independent symbolic scorer, not MCS weights/counts.
                         let f = flops_of(&pat, &candidate);
@@ -240,6 +385,123 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn flat_completion_preserves_public_neighbor_order() {
+        let mut cases = 0;
+        for (name, pat) in crate::corpus::corpus() {
+            if pat.n == 0 || pat.n > 50_000 || pat.nnz() > 1_200_000 { continue; }
+            let sp = ScoringPattern { n: pat.n, col_ptr: pat.col_ptr.clone(), row_idx: pat.row_idx.clone() };
+            for ticket in 0..2 {
+                let incumbent = if ticket == 0 {
+                    let cp: Vec<i32> = pat.col_ptr.iter().map(|&v| v as i32).collect();
+                    let ri: Vec<i32> = pat.row_idx.iter().map(|&v| v as i32).collect();
+                    let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+                    feral_amd::amd_order(&core).unwrap().into_iter().map(|v| v as usize).collect()
+                } else { super::super::relabel(pat.n, ticket) };
+                let pp = permute_pattern(&sp, &incumbent);
+                let et = EliminationTree::from_pattern(&pp);
+                let counts = column_counts_gnp(&pp, &et);
+                let Some(flat) = reconstruct(pat.n, &pp.col_ptr, &pp.row_idx, &et.parent,
+                    &counts, &incumbent, 50_000, 1_200_000, 4_000_000) else { continue; };
+                let former = legacy_rows(pat.n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &incumbent);
+                for v in 0..pat.n {
+                    assert_eq!(&flat[v], former[v].as_slice(), "{name}, ticket={ticket}, vertex={v}");
+                }
+                for reverse in [false, true] {
+                    assert_eq!(mcs_peo_stale(&flat, &incumbent, reverse),
+                        mcs_peo(&flat, &incumbent, reverse), "{name}, ticket={ticket}");
+                }
+                cases += 1;
+            }
+        }
+        assert!(cases > 300);
+        println!("FLAT_COMPLETION ordered_rows_preserved_cases={cases}");
+    }
+
+    #[test]
+    #[ignore]
+    fn probe_flat_completion_reconstruction() {
+        use std::{hint::black_box, time::Instant};
+        let mut old_total = 0.0;
+        let mut new_total = 0.0;
+        let mut cases = 0;
+        for (name, pat) in crate::corpus::corpus() {
+            if pat.n < 1_000 || pat.n > 50_000 || pat.nnz() > 1_200_000 { continue; }
+            let sp = ScoringPattern { n: pat.n, col_ptr: pat.col_ptr.clone(), row_idx: pat.row_idx.clone() };
+            let incumbent = super::super::order(&pat);
+            let pp = permute_pattern(&sp, &incumbent);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
+            let Some(flat) = reconstruct(pat.n, &pp.col_ptr, &pp.row_idx, &et.parent,
+                &counts, &incumbent, 50_000, 1_200_000, 4_000_000) else { continue; };
+            let former = legacy_rows(pat.n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &incumbent);
+            for v in 0..pat.n { assert_eq!(&flat[v], former[v].as_slice()); }
+            drop(flat);
+            drop(former);
+            let mut elapsed = [f64::MAX; 2];
+            for pair in 0..3 {
+                for offset in 0..2 {
+                    let variant = (pair + offset) % 2;
+                    let t = Instant::now();
+                    if variant == 0 {
+                        black_box(legacy_rows(pat.n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &incumbent));
+                    } else {
+                        black_box(reconstruct(pat.n, &pp.col_ptr, &pp.row_idx, &et.parent,
+                            &counts, &incumbent, 50_000, 1_200_000, 4_000_000).unwrap());
+                    }
+                    elapsed[variant] = elapsed[variant].min(t.elapsed().as_secs_f64());
+                }
+            }
+            old_total += elapsed[0];
+            new_total += elapsed[1];
+            cases += 1;
+            println!("FLAT_PAIR\t{name}\t{}\t{}\t{:.6}\t{:.6}", pat.n,
+                counts.iter().sum::<usize>(), elapsed[0], elapsed[1]);
+        }
+        println!("FLAT_TOTAL cases={cases} old={old_total:.6} new={new_total:.6}");
+    }
+
+    #[test]
+    #[ignore]
+    fn probe_linked_mcs() {
+        use std::{hint::black_box, time::Instant};
+        let mut totals = [0.0; 2];
+        for (name, pat) in crate::corpus::corpus() {
+            if pat.n < 1_000 || pat.n > 50_000 || pat.nnz() > 1_200_000 { continue; }
+            let cp: Vec<i32> = pat.col_ptr.iter().map(|&v| v as i32).collect();
+            let ri: Vec<i32> = pat.row_idx.iter().map(|&v| v as i32).collect();
+            let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+            let incumbent: Vec<usize> = feral_amd::amd_order(&core).unwrap().into_iter().map(|v| v as usize).collect();
+            let sp = ScoringPattern { n: pat.n, col_ptr: pat.col_ptr.clone(), row_idx: pat.row_idx.clone() };
+            let pp = permute_pattern(&sp, &incumbent);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
+            let Some(flat) = reconstruct(pat.n, &pp.col_ptr, &pp.row_idx, &et.parent,
+                &counts, &incumbent, 50_000, 1_200_000, 4_000_000) else { continue; };
+            let mut elapsed = [f64::MAX; 2];
+            for reverse in [false, true] {
+                assert_eq!(mcs_peo_stale(&flat, &incumbent, reverse), mcs_peo(&flat, &incumbent, reverse));
+            }
+            for pair in 0..3 {
+                for offset in 0..2 {
+                    let variant = (pair + offset) % 2;
+                    let t = Instant::now();
+                    for reverse in [false, true] {
+                        let output = if variant == 0 { mcs_peo_stale(&flat, &incumbent, reverse) }
+                            else { mcs_peo(&flat, &incumbent, reverse) };
+                        black_box(output);
+                    }
+                    elapsed[variant] = elapsed[variant].min(t.elapsed().as_secs_f64());
+                }
+            }
+            totals[0] += elapsed[0];
+            totals[1] += elapsed[1];
+            println!("MCS_PAIR\t{name}\t{}\t{}\t{:.6}\t{:.6}", pat.n,
+                counts.iter().sum::<usize>(), elapsed[0], elapsed[1]);
+        }
+        println!("MCS_TOTAL old={:.6} linked={:.6}", totals[0], totals[1]);
     }
 
     #[test]

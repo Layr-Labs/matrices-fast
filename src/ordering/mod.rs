@@ -162,6 +162,7 @@ mod scoring_ws;
 mod parallel;
 mod candidate_cache;
 mod metric_sweep;
+mod pivot_powers;
 mod minl;
 mod prefix_score;
 mod chordal_certificate;
@@ -3737,7 +3738,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            if f < best_flops { best_perm = p; }
+            if f < best_flops { best_flops = f; best_perm = p; }
         }
     }
     // iter62 LEAP: local paired-swap / plateau refine on full lt_1k (SmallScore
@@ -3745,6 +3746,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n >= 12 && n <= 1_000 && pattern.nnz() <= 8_000 {
         best_perm = cutoff_paired_swap_refine(pattern, best_perm);
         best_perm = cutoff_plateau_refine(pattern, best_perm, true);
+        best_flops = score(&best_perm);
     }
     #[cfg(test)]
     parallel::phase_mark("11.corecand", _tph, best_flops);
@@ -3781,14 +3783,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
                 peo_extract::MAX_N, peo_extract::MAX_INPUT_NNZ, max_lnnz,
             ) else { break; };
-            // Earlier terminal stages can change best_perm without updating
-            // best_flops, so derive the incumbent's exact score afresh.
+            // Counts already provide the exact incumbent cost for this round.
             let incumbent_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
             let mut final_flops = incumbent_flops;
             for candidate in candidates {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            best_flops = final_flops;
             if final_flops == incumbent_flops { break; }
         }
     } else if n >= 16 && nnz <= PEO_LARGE_MAX_NNZ && nnz < 1_200_000 {
@@ -3819,6 +3821,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 let f = score(&candidate);
                 if f < final_flops { final_flops = f; best_perm = candidate; }
             }
+            best_flops = final_flops;
             if final_flops == incumbent_flops { break; }
         }
     }
@@ -3841,8 +3844,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
     // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.
     let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 9_000;
+    // Pay for the final width-8 exchange by retiring the alternate-seed PEO
+    // chain on the same sparse, non-dominating terminal envelope. This is a
+    // complete phase removal where it runs, not a smaller nominal ledger.
+    let sparse_window_exchange = n >= 1_000
+        && n <= rgreedy::MAX_N
+        && nnz <= 200_000
+        && nnz <= n.saturating_mul(16)
+        && max_deg <= n / 2;
     if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
         && !peo_alt_danger
+        && !sparse_window_exchange
     {
         let seeds = runner_up.borrow().clone();
         if !seeds.is_empty() {
@@ -3872,6 +3884,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 if cur_flops < leader_flops { leader_flops = cur_flops; best_perm = cur; }
                 if ledger >= PEO_ALT_LEDGER { break; }
             }
+            // The transplant that follows must compare against this exact
+            // incumbent, including improvements from alternate PEO seeds.
+            best_flops = leader_flops;
         }
     }
 
@@ -4493,8 +4508,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    #[cfg(test)]
+    if sparse_window_exchange {
+        probe::terminal_schedule::capture(&best_perm);
+    }
     if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
-        for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
+        let passes: &[(usize, i64)] = if sparse_window_exchange {
+            &[(10, 24_000_000)]
+        } else {
+            &[(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)]
+        };
+        for &(width, budget) in passes {
             if let Some(candidate) = rgreedy::subset_window_descent(
                 n, &pattern.col_ptr, &pattern.row_idx, &best_perm, width, 2, budget,
             ) {
@@ -4510,8 +4534,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            let flops = score(&candidate);
+            if flops < best_flops {
+                best_flops = flops;
                 best_perm = candidate;
+            }
+        }
+        if sparse_window_exchange {
+            if let Some(candidate) = rgreedy::subset_window_descent_step(
+                n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, 32_000_000,
+            ) {
+                if score(&candidate) < best_flops {
+                    best_perm = candidate;
+                }
             }
         }
     }
@@ -4564,6 +4599,7 @@ fn bitset_row_bits(slice: &[u64], out: &mut Vec<usize>) {
 /// The **charge** is deliberately `|N(v)| · w + 1`, the full-scan cost, so the
 /// allowance buys exactly the same search as the reference implementation and
 /// the ordering is bit-identical. Cheaper words, same ledger.
+#[cfg_attr(target_arch = "x86_64", inline(always))]
 fn bitset_deficiency_summ(
     rows: &[u64], w: usize, wk: &[usize], v: usize, deg: usize, nb: &mut Vec<usize>,
 ) -> (u64, i64) {
@@ -4640,7 +4676,30 @@ fn bitset_deficiency_summ(
 /// implementation's full-scan rate, so the ordering and the returned charge are
 /// bit-identical to `minfill_core_order_ref` on every input; only the time is
 /// smaller. `tests::minfill_core_order_matches_reference` pins that.
-fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budget: i64)
+fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], budget: i64)
+    -> (Vec<usize>, i64)
+{
+    #[cfg(target_arch = "x86_64")]
+    if is_x86_feature_detected!("popcnt") {
+        // SAFETY: the only additional CPU feature is checked above. The body
+        // uses safe slices and exactly the same integer counts and charges.
+        return unsafe { minfill_core_order_popcnt(cn, col_ptr, row_idx, budget) };
+    }
+    minfill_core_order_body(cn, col_ptr, row_idx, budget)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "popcnt")]
+unsafe fn minfill_core_order_popcnt(cn: usize, col_ptr: &[usize], row_idx: &[usize], budget: i64)
+    -> (Vec<usize>, i64)
+{
+    minfill_core_order_body(cn, col_ptr, row_idx, budget)
+}
+
+// Inlining the complete scan, including deficiency evaluation, into the
+// feature-enabled entry makes all its word popcounts use the same CPU path.
+#[cfg_attr(target_arch = "x86_64", inline(always))]
+fn minfill_core_order_body(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budget: i64)
     -> (Vec<usize>, i64)
 {
     if cn == 0 {

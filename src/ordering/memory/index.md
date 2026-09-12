@@ -1,3 +1,29 @@
+[0154: flat completion arrays and exact linked MCS buckets](experiments/0154-flat-completion-linked-mcs.md):
+retain the 0153 sparse exchange, preserving all 300 final public flop counts
+at **0.792346128627**. Exact ordered-row and PEO comparisons cover 535 cases
+and exhaustive graphs/orders through five vertices; 120 active tests pass.
+Paired reconstruction time drops **49%** on 146 cases; paired two-direction
+MCS time drops **37%** on 144 cases. Whole-pipeline and hidden gains are not
+inferred from these kernel percentages. Six terminal variants screened;
+width-8/stride-3 retained. Hidden target **0.842857**, remote outcome pending.
+
+[0153: exact pivot-power reuse and minimum-fill POPCNT dispatch](experiments/0153-exact-powers-popcnt-sparse-exchange.md):
+retain the 0152 sparse exchange, repair incumbent costs, cache exact scalar
+powers, and extend x86 POPCNT to residual-core minimum-fill scans. Production
+dev **0.792346**, fill **0.924436**, all 300 rows unchanged versus the exchange;
+119 active tests pass, full direct worst **0.765 s**, 30 paired complete
+permutations match. Cache-only paired savings are **0–2%**, not the whole
+timing-run difference. Submission `ed253b8a` failed the hidden two-second cap
+(workflow `34684270583`, Benchmark 94.31 s); no hidden score. Target **0.842857**.
+
+[0152: sparse terminal exchange with alternate-PEO headroom](experiments/0152-sparse-exchange-peo-headroom.md):
+on promoted `ab30c0e`, dev **0.792439 -> 0.792346**, fill **0.924436**,
+28/4 improved/regressed. Retire alternate PEO on the exact sparse exchange
+envelope to fund the retained E32 pass; terminal allowance **120M vs 136M**,
+worst complete public call **1.178 s**. Terminal-only `ea67f01b` failed the
+hidden 2 s cap. Both the first combined submission `fb2cef51` and its
+unchanged-source retry `11b33f55` also failed the cap; no hidden score produced.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->
@@ -272,6 +298,8 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [Tarjan-Yannakakis MCS background](literature/tarjan-yannakakis-1984-mcs.md): inspected primary abstract and independent completion-containment derivation.
 
 ## Local follow-up experiments
+
+- [0152: sparse exchange with PEO headroom](experiments/0152-sparse-exchange-peo-headroom.md) — dev **0.792439 -> 0.792346**, 28 wins / 4 losses, 118 active tests pass. First hidden run failed the cap; independently verified unchanged-parent control also failed. One unchanged-Rust-source retry is being submitted; hidden target **0.842857**.
 
 - [0087: stage-6 stream sampling](experiments/0087-stage6-move-sampling-metered-by-fill.md) — multi-set bundle failed; smaller pool/hygiene control completed but missed promotion. Current numbering replaces the local 0085 collision.
 - [0088: cross-candidate subtree transplant](experiments/0088-cross-candidate-subtree-transplant.md) — 600k bundle gained 9.10 dev bips and failed opaquely. Current numbering replaces the local 0086 collision.

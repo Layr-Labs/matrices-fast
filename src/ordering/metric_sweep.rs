@@ -40,6 +40,13 @@ use feral_ordering_core::quotient_graph::{
     Workspace, WorkspaceOptions, NONE,
 };
 use feral_ordering_core::{CscPattern, OrderingError};
+use super::pivot_powers::{FloatPower, IntegerPower};
+
+struct ScorePowers {
+    degree: IntegerPower,
+    supernode: IntegerPower,
+    fill: FloatPower,
+}
 
 /// One point in the sweep grid. All fields are pure numbers so the grid can
 /// be generated programmatically; `name` is only for reporting.
@@ -107,6 +114,7 @@ fn finalize_step_generic(
     elenme: i32,
     aggressive: bool,
     spec: &MetricSpec,
+    powers: &mut ScorePowers,
 ) -> StepFlops {
     let n = ws.n;
     let mut degme = degme;
@@ -339,12 +347,12 @@ fn finalize_step_generic(
             ws.degree[i] = raw_deg as i32;
 
             let deg_term = if spec.nv_pow == 0.0 {
-                raw_deg.powf(spec.deg_pow)
+                powers.degree.get(raw_deg as usize)
             } else {
-                raw_deg.powf(spec.deg_pow) / (nvi_i as f64 + 1.0).powf(spec.nv_pow)
+                powers.degree.get(raw_deg as usize) / powers.supernode.get(nvi_i as usize + 1)
             };
             let wf_term = if spec.wf_weight != 0.0 {
-                let a = wf_f.abs().powf(spec.wf_pow);
+                let a = powers.fill.get(wf_f.abs());
                 let signed = if wf_f < 0.0 { -a } else { a };
                 spec.wf_weight * signed
             } else {
@@ -415,6 +423,11 @@ fn run_elimination_generic(
     spec: &MetricSpec,
 ) -> Result<StepFlops, OrderingError> {
     let mut flops = StepFlops::default();
+    let mut powers = ScorePowers {
+        degree: IntegerPower::new(ws.n, spec.deg_pow),
+        supernode: IntegerPower::new(ws.n + 1, spec.nv_pow),
+        fill: FloatPower::new(spec.wf_pow),
+    };
     while ws.nel < ws.n {
         let me = match select_pivot_amf(ws) {
             Some(m) => m,
@@ -422,7 +435,7 @@ fn run_elimination_generic(
         };
         let elenme = ws.elen[me];
         let (pme1, pme2, nvpiv, degme) = create_element_amf(ws, me)?;
-        let step = finalize_step_generic(ws, me, pme1, pme2, nvpiv, degme, elenme, aggressive, spec);
+        let step = finalize_step_generic(ws, me, pme1, pme2, nvpiv, degme, elenme, aggressive, spec, &mut powers);
         flops.ndiv += step.ndiv;
         flops.nms_lu += step.nms_lu;
         flops.nms_ldl += step.nms_ldl;

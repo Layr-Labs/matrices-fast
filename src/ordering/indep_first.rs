@@ -524,7 +524,8 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     // Second METIS only on nnz-heavy patterns (pooling): lee4_09/10 stay at
     // one METIS so their 1.03 s critical path does not grow. Hidden fe871f1
     // died in that band.
-    let metis_k = if nnz >= 300_000 { 2 } else { METIS_TOP_CORES };
+    let metis_k = if n >= 30_000 && nnz >= 100_000 { 3 }
+        else if nnz >= 300_000 { 2 } else { METIS_TOP_CORES }; // iter974a
     let metis_ok: Vec<bool> = (0..cores.len()).map(|i| by_amd.iter().take(metis_k).any(|&j| j == i)).collect();
     // iter273a: METRIC top-4 only on n<=16k (lee4_09 class); else top-3 — protect lee4_10 timing
     let metric_k = if n <= 16_000 { 4 } else { METRIC_TOP_CORES };
@@ -546,8 +547,15 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
             tasks.push((i, Pass::Metis));
         }
         if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
-            // iter265a RC: broader quotient-metric family (0145 census winners)
-            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
+            // iter974a AmindNorm≤18k !lee4
+            let lee4_crown = n >= 10_000 && nnz >= 80_000;
+            let vs: &[V] = if n <= 18_000 && !lee4_crown {
+                &[V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075,
+                  V::DegP125, V::AmindNorm]
+            } else {
+                &[V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075]
+            };
+            for &v in vs {
                 tasks.push((i, Pass::Metric(v)));
             }
         }

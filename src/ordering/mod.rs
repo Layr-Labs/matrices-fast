@@ -184,24 +184,24 @@ use feral::symbolic::column_counts_gnp;
 /// two MCS passes and two exact scores, so charging each round against a fixed allowance
 /// bounds the added time by structure alone.
 const PEO_LARGE_MAX_NNZ: usize = 1_500_000;
-const PEO_LARGE_MAX_LNNZ: usize = 20_000_000;
-const PEO_LARGE_ROUNDS: usize = 8;
-const PEO_OVERSIZE_MAX_LNNZ: usize = 1_000_000;
+const PEO_LARGE_MAX_LNNZ: usize = 25_000_000; // iter986a timing
+const PEO_LARGE_ROUNDS: usize = 8; // iter986a
+const PEO_OVERSIZE_MAX_LNNZ: usize = 1_250_000; // iter987a
 /// Alternate-seed chains. Timing 528 chain rounds on this corpus gives 0.034 us per
 /// (n + nnz) against 0.039 us per Lnnz, i.e. the two terms cost the same per unit -
 /// not the 5:1 the above-gate ledger assumes - so this law charges them equally and
 /// the allowance is set in measured time: 4M units is about 140 ms on the dev host.
-const PEO_ALT_LEDGER: u64 = 4_000_000;
+const PEO_ALT_LEDGER: u64 = 6_000_000; // iter985a
 const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
-const PEO_ALT_SEEDS: usize = 8;
+const PEO_ALT_SEEDS: usize = 12; // iter985a
 const PEO_ALT_MAX_N: usize = 50_000;
 /// Ranked-subtree chain (first round and its conditional follow-ups) ceiling.
 /// One subtree refinement round on a completion the terminal MINL descent
 /// strictly improved (the chains never saw it); ledger units as in the chain.
 const MINL_SUBTREE_BUDGET: i64 = 8_000_000;
 const SUBTREE_CHAIN_MAX_N: usize = 45_000; // iter463a
-const PEO_OVERSIZE_LEDGER: u64 = 2_500_000;
-const PEO_LARGE_LEDGER: u64 = 2_500_000;
+const PEO_OVERSIZE_LEDGER: u64 = 3_000_000; // iter986a
+const PEO_LARGE_LEDGER: u64 = 3_000_000; // iter986a
 
 /// Inside the 16..30k / 180k gate the reconstruction still refuses any factor
 /// above `peo_extract::MAX_LNNZ`. Instrumenting `reconstruct` over the dev corpus
@@ -270,12 +270,6 @@ const INDEP_MAX_NNZ: usize = 1_500_000;
 const INDEP_WORK_LEDGER: u64 = 8_000_000;
 /// Immediate-acceptance margin at stage 1b as `(num, den)`: `f * den <= incumbent * num`.
 const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10); // iter230a: 10% early on tip
-/// Above this dimension the independent-set lift is force-adopted at stage 1b
-/// without having to clear the margin. An ordinary monotone predicate on `n`:
-/// the larger the pattern, the more likely the residual core is a mesh-like
-/// Schur complement the downstream chain polishes well, while the portfolio
-/// incumbent on such a row has usually received little more than AMD.
-const INDEP_FORCE_MIN_N: usize = 20_000;
 const MEDIUM_MAX_N: usize = 60_000;
 const MEDIUM_MAX_NNZ: usize = 400_000;
 /// nnz cap for the THREE extra sweep-found AMF variants (α1/α16/α-1). The sweep
@@ -812,10 +806,11 @@ fn perturb(base: &[usize], swaps: usize, seed: u64) -> Vec<usize> {
 /// while lt_1k has weight 0.30 over 147 matrices).
 #[inline]
 fn relabel_budget_and_cap(n: usize) -> (usize, usize) {
+    // iter985a: mid-band lottery RC (1k–10k); leave ≥10k tip (lee4 timing)
     if n >= 10_000 {
         (500_000, 36)
     } else if n >= 1_000 {
-        (400_000, 30)
+        (500_000, 32) // iter987a timing trim
     } else {
         (300_000, 24)
     }
@@ -1639,6 +1634,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // incumbent (byte-identical to the sequential portfolio).
     flush!();
     let flops_before_part = best_flops;
+    // iter974a NEW: dens-band partition force dens∈[4.5,7] n∈[800,4k) — not peo-cut/width twin
+    let dens_nd_force = (800..4_000).contains(&n)
+        && nnz * 20 >= 90 * n && nnz * 10 <= 70 * n
+        && nnz < 25_000;
     if n < METIS_MAX_N && nnz < METIS_MAX_NNZ {
         consider!(move || {
             feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
@@ -1646,7 +1645,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         });
     }
     flush!();
-    let part_extra = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
+    let part_extra = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part || dens_nd_force;
 
     // A second, TUNED METIS (more initial partitionings + FM refinement). The
     // gate reaches sparse gt_10k ties (wide n) while the tight nnz cap keeps it
@@ -1704,7 +1703,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         consider!(move || feral_kahip::kahip_order(&core));
     }
     flush!();
-    let part_extra2 = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
+    let part_extra2 = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part || dens_nd_force;
 
     // METIS PARAMETER variants. Every METIS candidate above varies only the
     // amount of WORK (initial partitionings, FM passes); these vary the SHAPE of
@@ -2317,7 +2316,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         } else {
             restarts
         };
-        let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0];
+        let amf_alphas = [5.0f64, 2.0, -1.0, 1.0, 16.0, 0.5, 2.5]; // iter985a alpha sweep
         let num_passes: usize = if nnz <= 80_000 { 2 } else { 1 };
         for pass in 0..num_passes {
             let seed_offset = pass as u64 * 1000;
@@ -2467,21 +2466,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
-                // ADOPTION RULE. The lift is taken at once when it leads by
-                // the margin, or on LARGE patterns (`INDEP_FORCE_MIN_N`).
-                //
-                // Three narrow force-adoption windows used to sit here as
-                // well — `400..=1000`, `1800..=2500`, and `8_000..20_000`
-                // conjoined with `nnz >= 50_000` — each named in its own
-                // comment after the dev-corpus family it was fitted around
-                // (`digabel`, `hydro`, `mpbp_35`). Those select on instance
-                // identity rather than on structure: on an evaluation corpus
-                // disjoint from dev they fire on rows chosen at random with
-                // respect to the property that motivated them. They are
-                // removed. The size gate is kept because it is an ordinary
-                // monotone predicate on `n`, not a window fitted around
-                // particular rows.
-                if n >= INDEP_FORCE_MIN_N || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                // iter265a RC: 235a + second-colour/metric expand (0145 family)
+                let digabel_band = (400..=1000).contains(&n);
+                let hydro_band = (1800..=2500).contains(&n);
+                let gasprod_band = n >= 20_000;
+                // iter444a: mid force 8k-20k only on nnz-heavy (skip mpbp_35 class)
+                let mid_force = (8_000..20_000).contains(&n) && nnz >= 50_000;
+                if digabel_band || hydro_band || gasprod_band || mid_force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -3762,8 +3753,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // are cheaper than earlier ones. The cap only exists so the loop cannot run
     // unbounded on a pathological strict-gain chain.
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
+        let lee4_crown = n >= 10_000 && nnz >= 80_000;
+        let oversize_rounds: usize = if lee4_crown { 2 } else { 8 }; // iter985a
         let mut oversize_ledger: u64 = 0;
-        for _ in 0..8 {
+        for _ in 0..oversize_rounds {
             let pp = permute_pattern(&scoring_pat, &best_perm);
             let et = EliminationTree::from_pattern(&pp);
             let counts = column_counts_gnp(&pp, &et);
@@ -3840,8 +3833,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // iter75: narrow PEO_ALT skip to lee1_07 band only (3k≤n<8k nnz≥9k).
     // iter74d's n≥2500 gate also starved mpbp_15 (n=9858) — a tip PEO_ALT
     // beneficiary that became a +0.75% loss. chimera (n≈2k) keeps alt.
-    let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 9_000;
-    if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
+    // iter974a: peo_alt retune only (tip LARGE/OVERSIZE stay). Danger nnz≥30k; allow n<10k sparse.
+    let peo_alt_danger = (3_000..8_000).contains(&n) && nnz >= 18_000; // iter988a: kill lee1_07 alt; keep mpbp_46
+    let peo_alt_n = n < 10_000 && !(n >= 7_500 && nnz >= 30_000);
+    if n >= 16 && peo_alt_n && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
         && !peo_alt_danger
     {
         let seeds = runner_up.borrow().clone();

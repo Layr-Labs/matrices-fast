@@ -90,7 +90,15 @@ fn transplant_pass(
     let mut best_f = inc_f;
     let mut best_perm = incumbent.to_vec();
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
+    // iter957a: gated +256 n<8k / +64 n<5k on 946 base (KEEP force windows — 949 strip REJECTED 0.843212)
+    let widths: &[usize] = if n < 5_000 {
+        &[4096, 512, 256, 128, 64, 32, 8]
+    } else if n < 8_000 {
+        &[4096, 512, 256, 128, 32, 8]
+    } else {
+        &[4096, 512, 128, 32, 8]
+    };
+    'widths: for &width in widths { // iter957a
         let blks = blocks(&parent, 4, width.min(n));
         if blks.len() < 2 {
             continue;
@@ -202,7 +210,15 @@ fn terminal_pass(
     let mut scored_donors = 0usize;
     let mut stopped_partial = false;
     let mut rank = vec![0usize; n];
-    'widths: for width in [4096usize, 512, 128, 32, 8] { // iter647a
+    // iter957a: gated +256 n<8k / +64 n<5k on 946 base (KEEP force windows — 949 strip REJECTED 0.843212)
+    let widths: &[usize] = if n < 5_000 {
+        &[4096, 512, 256, 128, 64, 32, 8]
+    } else if n < 8_000 {
+        &[4096, 512, 256, 128, 32, 8]
+    } else {
+        &[4096, 512, 128, 32, 8]
+    };
+    'widths: for &width in widths { // iter957a
         let blocks = blocks(&parent, 4, width.min(n));
         if blocks.len() < 2 { continue; }
         let contribution: Vec<u64> = blocks.iter().map(|&(a, b)|

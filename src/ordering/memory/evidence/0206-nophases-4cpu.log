@@ -1,0 +1,62 @@
+probe binary: /home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/target/probe/release/deps/ssi_candidate_worker-9bc17c144118ca64
+
+running 1 test
+test ordering::probe::probe_timing_and_score ... RATIOGATE	0.9	true	90
+LADGATE	7252	10000	0.589	1
+FANGATE	7252	true	1	171821
+COUNTS	rsyn0830m04m	7252	20752	212130	166607
+RATIOGATE	1.0	false	90
+LADGATE	9170	10000	0.546	0
+FANGATE	9170	true	1	135020
+COUNTS	squfl020-150	9170	24000	135020	135020
+RATIOGATE	1.0	false	90
+LADGATE	6885	10000	0.258	0
+FANGATE	6885	true	1	55506
+COUNTS	emfl100_3_3	6885	15948	55506	55506
+RATIOGATE	1.0	false	90
+LADGATE	11251	10000	0.784	0
+FANGATE	11251	true	1	293009
+COUNTS	powerflow0300p	11251	41918	304705	288607
+RATIOGATE	0.8	true	90
+LADGATE	6028	10000	0.588	1
+FANGATE	6028	true	1	152996
+COUNTS	rsyn0820m04m	6028	17372	196890	152996
+RATIOGATE	0.8	true	90
+LADGATE	9858	10000	0.749	4
+FANGATE	9858	true	1	1197372
+COUNTS	mpbp_15	9858	31692	1496502	1193057
+RATIOGATE	1.0	false	90
+LADGATE	7993	10000	1.014	0
+FANGATE	7993	true	1	836006
+COUNTS	arki0016	7993	37208	878890	836006
+RATIOGATE	1.0	false	90
+LADGATE	6328	10000	0.361	0
+FANGATE	6328	true	1	73873
+COUNTS	syn40m04hfsg	6328	16896	76232	73873
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.7949	squfl020-150	9170	24000	1.0000
+1.7915	arki0016	7993	37208	0.9512
+1.7757	rsyn0820m04m	6028	17372	0.7771
+1.7289	emfl100_3_3	6885	15948	1.0000
+1.7189	mpbp_15	9858	31692	0.7972
+1.6229	powerflow0300p	11251	41918	0.9472
+1.5836	syn40m04hfsg	6328	16896	0.9691
+1.5459	rsyn0830m04m	7252	20752	0.7854
+matrices under 0.010s: 0/8
+matrices under 0.050s: 0/8
+matrices under 0.100s: 0/8
+matrices under 0.200s: 0/8
+matrices under 0.400s: 0/8
+
+--- per-bucket ---
+1k_10k   count=7     geomean=0.8918
+gt_10k   count=1     geomean=0.9472
+SCORE = 0.923424
+WORST order() = 1.795 s
+FORCEAUDIT	stage1b_sites=0	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=0	tie_pass_run=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 164 filtered out; finished in 14.05s
+

@@ -1403,7 +1403,7 @@ pub(crate) fn search_par_default_seeds(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn search_par_specs(
+pub(super) fn search_par_specs(
     n: usize,
     col_ptr: &[usize],
     row_idx: &[usize],

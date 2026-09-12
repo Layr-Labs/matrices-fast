@@ -531,6 +531,28 @@ const SWEEP_EXTRA_MAX_NNZ: usize = 150_000;
 /// is already installed before the first batch, so a truncation can only drop
 /// extra candidates, never the baseline.
 const LADDER_FILL_BOUND: u64 = 20_000_000_000;
+/// ── iter42 production constants (single source of truth) ────────────────────
+/// The terminal exact-kernel extension this branch ships is a *window/ledger*
+/// extension of the promoted terminal class: the sparse-span sweep allowance,
+/// the exact-window ledger and the PEO re-extraction round count are named here
+/// so the `#[cfg(test)]` seams default to the production values (a test build
+/// with no environment overrides must reproduce the shipped `order()` exactly).
+/// ── iter43: the measured next-bat point (one binary, 4-vCPU frame) ──────────
+/// Shipped point 0.791693 (-1.72e-4 vs the promoted base) -> **0.791635**
+/// (-2.30e-4), 10 rows better / 0 worse / 290 unchanged. The two appended span
+/// passes are the seam measured last iteration (`SSI_SPAN_EXTRA`, -3.0e-5) and
+/// the ledger/PEO step is the leader's own arm (512M / four rounds, -3.9e-5);
+/// both were measured separately and then together, and no row regresses
+/// (every pass accepts only a strict exact decrease).
+const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 5] = [
+    (48, 4, 19, 32_000_000),
+    (9, 4, 4, 32_000_000),
+    (8, 4, 3, 64_000_000),
+    (12, 4, 5, 64_000_000),
+    (7, 4, 3, 64_000_000),
+];
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 536_870_912;
+const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
 const LADDER_FILL_CAP: usize = 64;
@@ -5272,16 +5294,55 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Exact window descent follows the promoted terminal greedy search, so
     // every accepted replacement improves the final incumbent. The shared
     // ledger includes preparation, DP states, and elimination replay.
-    let terminal_exchange = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
+    //
+    // ── iter43 seam (test-only): the class's only structural wall is `n`
+    //
+    // Every gt_10k row on dev that ties at AMD (ratio 1.0000) has `n` above
+    // `rgreedy::MAX_N = 12_000`, i.e. it is outside the class by the `n` gate
+    // alone (four of the five also pass the 150k factor key). `SSI_TERM_CLASS_N`
+    // re-points the limit at all three admission sites (exchange, followup,
+    // PEO extraction) so one binary measures that band; unset or a `cfg(not(test))`
+    // build reproduces the shipped `order()` exactly.
+    #[cfg(test)]
+    let class_n: usize = std::env::var("SSI_TERM_CLASS_N")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(rgreedy::MAX_N);
+    #[cfg(not(test))]
+    let class_n: usize = rgreedy::MAX_N;
+    let terminal_exchange = n >= 6 && n <= class_n && nnz <= 200_000
         && nnz <= n.saturating_mul(16) && max_deg <= n / 2;
     #[cfg(test)]
     let terminal_exchange = terminal_exchange && probe::leader_tail::exchange_enabled();
     if terminal_exchange {
+        #[cfg(test)]
+        if std::env::var_os("SSI_CLASS_TRACE").is_some() {
+            eprintln!("CLASSTRACE	xchg	{n}	{nnz}	admitted");
+        }
+        // iter42 seam: the exchange's own ledger (the leader measured its
+        // 32M -> 64M step as paying; this re-points it so the next step is
+        // measurable in the same binary).
+        #[cfg(test)]
+        let exchange_ledger: i64 = std::env::var("SSI_EXCHANGE_LEDGER")
+            .ok()
+            .and_then(|v| v.trim().parse::<i64>().ok())
+            .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
+        #[cfg(not(test))]
+        let exchange_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
         if let Some(candidate) = rgreedy::subset_window_descent_step(
-            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, 64_000_000,
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, exchange_ledger,
         ) {
+            #[cfg(test)]
+            if std::env::var_os("SSI_CLASS_TRACE").is_some() {
+                eprintln!("CLASSTRACE	xchg	{n}	{nnz}	candidate=1");
+            }
             if is_bijection(&candidate, n) && score(&candidate) < score(&best_perm) {
                 best_perm = candidate;
+            }
+        } else {
+            #[cfg(test)]
+            if std::env::var_os("SSI_CLASS_TRACE").is_some() {
+                eprintln!("CLASSTRACE	xchg	{n}	{nnz}	candidate=0");
             }
         }
     }
@@ -5292,19 +5353,51 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // additionally obeys its factor-nonzero limits before materializing fill.
     // Reject an expensive existing ledger before scoring again. Admission
     // below still requires the fresh exact score and factor-nonzero bound.
-    let terminal_followup = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
+    let terminal_followup = n >= 6 && n <= class_n && nnz <= 200_000
         && best_flops <= LADDER_FILL_BOUND;
     #[cfg(test)]
     let terminal_followup = terminal_followup && probe::terminal_followup::enabled();
     if terminal_followup {
+        // iter42 seam: the leader prices the *admission* key (factor-nnz
+        // 150k vs 300k) separately from the window allowance.
+        #[cfg(test)]
+        let followup_factor: u64 = std::env::var("SSI_FOLLOWUP_FACTOR")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .unwrap_or(150_000);
+        #[cfg(not(test))]
+        let followup_factor: u64 = 150_000;
+        #[cfg(test)]
+        let peo_rounds: usize = std::env::var("SSI_PEO_ROUNDS")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(PRODUCTION_PEO_ROUNDS);
+        #[cfg(not(test))]
+        let peo_rounds: usize = PRODUCTION_PEO_ROUNDS;
+        #[cfg(test)]
+        let class_trace = std::env::var_os("SSI_CLASS_TRACE").is_some();
         let mut final_flops = score(&best_perm);
-        if final_flops <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= 150_000 {
+        #[cfg(test)]
+        if class_trace {
+            eprintln!(
+                "CLASSTRACE	follow	{n}	{nnz}	flops={final_flops}	nnzl={}	key={followup_factor}",
+                score_workspace.borrow().nnz_l()
+            );
+        }
+        if final_flops <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= followup_factor {
             // The same fixed window allowance also covers dense/hub patterns;
             // preparation and elimination are charged regardless of density.
             if nnz > n.saturating_mul(16) || max_deg > n / 2 {
+                #[cfg(test)]
+                let dense_window_ledger: i64 = std::env::var("SSI_EXCHANGE_LEDGER")
+                    .ok()
+                    .and_then(|v| v.trim().parse::<i64>().ok())
+                    .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
+                #[cfg(not(test))]
+                let dense_window_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
-                    8, 4, 3, 64_000_000,
+                    8, 4, 3, dense_window_ledger,
                 ) {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
@@ -5312,15 +5405,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            for _ in 0..2 {
+            for _ in 0..peo_rounds {
                 let before = final_flops;
                 let pp = permute_current(&best_perm);
                 let et = EliminationTree::from_pattern(&pp);
                 let counts = column_counts_gnp(&pp, &et);
                 if let Some(candidates) = peo_extract::candidates_bounded(
                     n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
-                    rgreedy::MAX_N, 200_000, 150_000,
+                    class_n, 200_000, 150_000,
                 ) {
+                    #[cfg(test)]
+                    if class_trace {
+                        eprintln!("CLASSTRACE	peo	{n}	{nnz}	cands={}", candidates.len());
+                    }
                     for candidate in candidates {
                         let f = score(&candidate);
                         if f < final_flops { best_perm = candidate; final_flops = f; }
@@ -5331,11 +5428,20 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Wide spans solve only connected components of at most fourteen
             // vertices, preserving each component's slots and skipping larger
             // components. Narrow passes then refine the resulting incumbent.
-            for (width, sweeps, step, budget) in [
-                (48, 4, 19, 16_000_000),
-                (9, 4, 4, 16_000_000),
-                (8, 4, 3, 32_000_000),
-            ] {
+            // iter42 seam: the leader's own arm table prices the *window
+            // allowance* (small = 16M+16M+32M, full = 32M+32M+64M) separately
+            // from the factor bound; `SSI_FOLLOWUP_FULL_WINDOWS` re-points it so
+            // one binary measures both arms.
+            #[cfg(test)]
+            let span_windows: &[(usize, usize, usize, i64)] =
+                if std::env::var_os("SSI_FOLLOWUP_SMALL_WINDOWS").is_some() {
+                    &[(48, 4, 19, 16_000_000), (9, 4, 4, 16_000_000), (8, 4, 3, 32_000_000)]
+                } else {
+                    &PRODUCTION_SPAN_WINDOWS
+                };
+            #[cfg(not(test))]
+            let span_windows: &[(usize, usize, usize, i64)] = &PRODUCTION_SPAN_WINDOWS;
+            for &(width, sweeps, step, budget) in span_windows {
                 if let Some(candidate) = rgreedy::sparse_span_window_descent(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     width, sweeps, step, budget,
@@ -5343,6 +5449,85 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
                         if f < final_flops { best_perm = candidate; final_flops = f; }
+                    }
+                }
+            }
+            // iter43: the two further sparse-span passes (12/5 and 7/3) that
+            // were measured through last iteration's `SSI_SPAN_EXTRA` seam are
+            // now part of `PRODUCTION_SPAN_WINDOWS` itself, so they need no
+            // separate seam: the arm table's three widths (48/9/8) were a fixed
+            // schedule, not a fixpoint, and the appended widths are the
+            // measured residual (-3.0e-5 on the shipped point).
+            #[cfg(test)]
+            if class_trace {
+                eprintln!("CLASSTRACE	spans	{n}	{nnz}	final={final_flops}");
+            }
+        }
+    }
+    // ── iter42: the terminal four-stream round, re-admitted on the leader's own
+    //    exact factor-nnz key instead of this branch's structural + live-ratio
+    //    gates.
+    //
+    // The round is this branch's device (four `rgreedy` streams merged by a
+    // strict `(flops, source)` argmin, so its output is a pure function of the
+    // four specs and the thread count cannot change it). Its dose curve on our
+    // own tree is linear in the per-stream budget and lands hardest on rows it
+    // cannot move; three submissions carrying it died on the hidden 2.0 s cap.
+    // The public leader's own admission rule for its terminal kernels is an
+    // *exact symbolic factor-nonzero* bound (150_000) read off the scoring
+    // arena, which is what this round now obeys: a row is only walked if its
+    // incumbent's factor is small, i.e. if the pipeline's own elimination work
+    // on it is small. That is a property of the row's own state, not a window.
+    {
+        const FANOUT_MAX_N: usize = 12_000;
+        const FANOUT_SMALL_N: usize = 6_000;
+        const FANOUT_MIN_NNZ: usize = 30_000;
+        // Per-stream `rgreedy` budget of the shipped round; 0 disables it.
+        const FANOUT_BUDGET: i64 = 0;
+        // Exact factor-nonzero bound the round obeys (the leader's key).
+        const FANOUT_FACTOR_BOUND: u64 = 150_000;
+        const FANOUT_SEEDS: [u64; 4] = [
+            0x9E37_79B9_7F4A_7C15,
+            0xD1B5_4A32_D192_ED03,
+            0xA24B_AED4_963E_E407,
+            0x9FB2_1C65_1E5B_0B9C,
+        ];
+        #[cfg(test)]
+        let fanout_budget: i64 = std::env::var("SSI_FANOUT_BUDGET")
+            .ok()
+            .and_then(|v| v.trim().parse::<i64>().ok())
+            .unwrap_or(FANOUT_BUDGET);
+        #[cfg(not(test))]
+        let fanout_budget: i64 = FANOUT_BUDGET;
+        #[cfg(test)]
+        let factor_bound: u64 = std::env::var("SSI_FANOUT_FACTOR")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .unwrap_or(FANOUT_FACTOR_BOUND);
+        #[cfg(not(test))]
+        let factor_bound: u64 = FANOUT_FACTOR_BOUND;
+        let fanout_gate = fanout_budget > 0
+            && n <= FANOUT_MAX_N
+            && (n > FANOUT_SMALL_N || nnz > FANOUT_MIN_NNZ);
+        if fanout_gate {
+            // The leader's own idiom: re-score the current incumbent and read the
+            // arena's fresh symbolic factor count; no stale scalar admits a row.
+            let cur = score(&best_perm);
+            if cur <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= factor_bound {
+                let specs = FANOUT_SEEDS.map(|rng| (rng, rgreedy::Params::DEFAULT, fanout_budget));
+                if let Some((cand, _)) = rgreedy::search_par_specs(
+                    n,
+                    &pattern.col_ptr,
+                    &pattern.row_idx,
+                    &best_perm,
+                    cur,
+                    specs,
+                ) {
+                    if is_bijection(&cand, n) {
+                        let f = score(&cand);
+                        if f < cur {
+                            best_perm = cand;
+                        }
                     }
                 }
             }

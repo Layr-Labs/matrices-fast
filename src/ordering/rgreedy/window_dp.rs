@@ -151,17 +151,17 @@ fn refine_window(
     if !work.charge(8 * k * k + 8 * k) {
         return None;
     }
-    let mut unseen = if k == 64 { u64::MAX } else { (1u64 << k) - 1 };
+    let mut unseen = (1u16 << k) - 1;
     let mut changed = false;
     while unseen != 0 {
-        let mut component = 1u64 << unseen.trailing_zeros();
+        let mut component = 1u16 << unseen.trailing_zeros();
         let mut frontier = component;
         while frontier != 0 {
             let i = frontier.trailing_zeros() as usize;
             frontier &= frontier - 1;
             let v = window[i];
             for (j, &u) in window.iter().enumerate() {
-                let bit = 1u64 << j;
+                let bit = 1u16 << j;
                 if unseen & bit != 0
                     && component & bit == 0
                     && game.adj[v * game.w + u / 64] & (1u64 << (u % 64)) != 0
@@ -172,10 +172,7 @@ fn refine_window(
             }
         }
         unseen &= !component;
-        // Large spans are useful when their live induced graph separates into
-        // small components. Leave oversized components in their original
-        // positions; their elimination cannot affect another component here.
-        if component.count_ones() < 2 || component.count_ones() as usize > MAX_WIDTH {
+        if component.count_ones() < 2 {
             continue;
         }
         let positions: Vec<usize> = (0..k).filter(|&i| component & (1 << i) != 0).collect();
@@ -224,7 +221,6 @@ pub(crate) fn subset_window_descent(
         (width / 2).max(1),
         budget,
         ChargeModel::UnionParity,
-        MAX_WIDTH,
     )
 }
 
@@ -248,25 +244,7 @@ pub(crate) fn subset_window_descent_step(
         offset_step,
         budget,
         ChargeModel::SignatureTrue,
-        MAX_WIDTH,
     )
-}
-
-/// Wider contiguous spans, with the same 14-vertex exact component ceiling.
-/// Components remain in their original slots, so their interleaving and the
-/// residual graph after the span are unchanged. Oversized components are kept.
-pub(crate) fn sparse_span_window_descent(
-    n: usize,
-    col_ptr: &[usize],
-    row_idx: &[usize],
-    seed: &[usize],
-    width: usize,
-    sweeps: usize,
-    offset_step: usize,
-    budget: i64,
-) -> Option<Vec<usize>> {
-    subset_window_descent_config(n, col_ptr, row_idx, seed, width, sweeps,
-        offset_step, budget, ChargeModel::SignatureTrue, 64)
 }
 
 fn subset_window_descent_config(
@@ -279,11 +257,10 @@ fn subset_window_descent_config(
     offset_step: usize,
     budget: i64,
     charge_model: ChargeModel,
-    max_span: usize,
 ) -> Option<Vec<usize>> {
     if n < 2
         || n > MAX_DIMENSION
-        || !(2..=max_span).contains(&width)
+        || !(2..=MAX_WIDTH).contains(&width)
         || offset_step >= width
         || sweeps == 0
         || budget <= 0
@@ -294,7 +271,7 @@ fn subset_window_descent_config(
     }
     #[cfg(test)]
     let mut report = WorkReport {
-        width: width.min(16),
+        width,
         completed: false,
     };
     let mut work = TripleWork { remaining: budget };
@@ -368,49 +345,6 @@ fn subset_window_descent_config(
 mod tests {
     use super::*;
     use crate::Pattern;
-
-    #[test]
-    fn sparse_spans_preserve_large_components_and_handle_high_mask_bits() {
-        let n = 65;
-        let mut edges = vec![(0, 1), (0, 2), (0, 3), (60, 61), (60, 62),
-            (60, 63), (1, 64), (61, 64)];
-        for v in 4..22 { for u in v + 1..22 { edges.push((v, u)); } }
-        let p = Pattern::from_edges(n, &edges);
-        let pristine = Game::build_adj(n, &p.col_ptr, &p.row_idx).unwrap();
-        let mut game = Game::new(n, &pristine).unwrap();
-        let seed: Vec<_> = (0..n).collect();
-        let before = game.replay_flops(&seed);
-        let changed = sparse_span_window_descent(n, &p.col_ptr, &p.row_idx,
-            &seed, 64, 1, 27, 64_000_000).unwrap();
-        assert_eq!(&changed[4..22], &seed[4..22]);
-        assert_eq!(changed[64], 64);
-        assert!(game.replay_flops(&changed) < before);
-        game.reset(); for &v in &seed[..64] { game.eliminate(v); }
-        let suffix = game.adj.clone();
-        game.reset(); for &v in &changed[..64] { game.eliminate(v); }
-        assert_eq!(game.adj, suffix);
-        assert!(sparse_span_window_descent(n, &p.col_ptr, &p.row_idx,
-            &seed, 65, 1, 27, 64_000_000).is_none());
-    }
-
-    #[test]
-    fn sparse_spans_match_original_descent_within_exact_width_limit() {
-        for n in [7usize, 19, 67, 131] {
-            let edges: Vec<_> = (0..n).flat_map(|v| (v+1..n)
-                .filter(move |&u| (v * 31 + u * 17) % 23 < 3)
-                .map(move |u| (v, u))).collect();
-            let p = Pattern::from_edges(n, &edges);
-            let seed: Vec<_> = (0..n).rev().collect();
-            for (width, step) in [(7, 2), (8, 3), (12, 5), (14, 5)] {
-                for budget in [100, 40_000, 16_000_000] {
-                    assert_eq!(subset_window_descent_step(n, &p.col_ptr, &p.row_idx,
-                        &seed, width, 4, step, budget),
-                        sparse_span_window_descent(n, &p.col_ptr, &p.row_idx,
-                            &seed, width, 4, step, budget));
-                }
-            }
-        }
-    }
 
     #[test]
     #[ignore]

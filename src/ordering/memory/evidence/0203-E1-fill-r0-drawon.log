@@ -1,0 +1,227 @@
+### 0203-E1 R0: fill.jsonl, SHIPPED profile (draw ON: dense 2e8, sparse 5e7, window 10k), REPEAT=2, fence trace on
+   Compiling ssi-candidate-worker v0.1.0 (/home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/candidate-worker)
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1151:1
+     |
+1151 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1152 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1153 | | /// budget disables the stream, which is what production compiles to — the
+1154 | | /// switch can never change a submitted ordering. Configured through
+1155 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1156 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1419:1
+     |
+1419 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1420 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:334:1
+    |
+334 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+335 | | /// can run the SAME `order()` both ways in one process and compare the
+336 | | /// returned permutations element by element. Production builds compile
+337 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:368:1
+    |
+368 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+369 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+370 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+371 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5082:5
+     |
+5082 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+5083 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+5084 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+5085 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5091 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5092 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5093 |       #[cfg(test)]
+5094 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5095 | |         .ok()
+5096 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5097 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5234:9
+     |
+5234 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5235 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5236 | /         let shipped_ladder = || {
+5237 | |             if nnz < 3 * n {
+5238 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5239 | |             } else {
+...    |
+5242 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4142:9
+     |
+4142 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:396:29
+    |
+396 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `LADDER_STRIDE_KEEP` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:556:7
+    |
+556 | const LADDER_STRIDE_KEEP: bool = true;
+    |       ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:783:7
+    |
+783 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:188:15
+    |
+188 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:313:15
+    |
+313 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:136:4
+    |
+136 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:232:4
+    |
+232 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:600:4
+    |
+600 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:485:19
+    |
+485 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 18 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 14.51s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+LADGATE	2000	10000	0.983	1
+LADGATE	2000	10000	1.009	1
+COUNTS	fd_n2000_d8	2000	16000	230549984	219947100
+LADGATE	4000	10000	0.850	1
+LADGATE	4000	10000	0.836	1
+COUNTS	fd_n4000_d8	4000	32000	1846592893	1804968019
+LADGATE	6000	10000	1.033	1
+LADGATE	6000	10000	1.009	1
+COUNTS	fd_n6000_d8	6000	48000	6165762522	6012633419
+LADGATE	8000	10000	1.076	1
+LADGATE	8000	10000	1.058	1
+COUNTS	fd_n8000_d8	8000	64000	14468049251	14103477420
+LADGATE	9500	10000	0.996	1
+LADGATE	9500	10000	0.981	1
+COUNTS	fd_n9500_d8	9500	76000	23973576667	23548538510
+LADGATE	9950	10000	0.979	1
+LADGATE	9950	10000	0.947	1
+COUNTS	fd_n9950_d7	9950	69650	21024417808	20801119101
+LADGATE	9950	10000	0.987	1
+LADGATE	9950	10000	0.985	1
+COUNTS	fd_n9950_d9	9950	89550	35475650256	35066295722
+LADGATE	9950	10000	1.079	1
+LADGATE	9950	10000	1.078	1
+COUNTS	fd_n9950_d11	9950	109450	49571324309	48998334084
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.1592	fd_n9950_d11	9950	109450	0.9884
+1.1038	fd_n8000_d8	8000	64000	0.9748
+1.0617	fd_n9950_d9	9950	89550	0.9885
+1.0436	fd_n9500_d8	9500	76000	0.9823
+1.0290	fd_n6000_d8	6000	48000	0.9752
+1.0088	fd_n9950_d7	9950	69650	0.9894
+0.9952	fd_n2000_d8	2000	16000	0.9540
+0.8497	fd_n4000_d8	4000	32000	0.9775
+matrices under 0.010s: 0/8
+matrices under 0.050s: 0/8
+matrices under 0.100s: 0/8
+matrices under 0.200s: 0/8
+matrices under 0.400s: 0/8
+
+--- per-bucket ---
+1k_10k   count=8     geomean=0.9787
+SCORE = 0.978687
+WORST order() = 1.159 s
+FORCEAUDIT	stage1b_sites=12	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=0	tie_pass_run=0
+test ordering::probe::probe_timing_and_score ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 164 filtered out; finished in 16.80s
+

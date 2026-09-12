@@ -387,6 +387,22 @@ struct LiftedCore {
     cri: Vec<i32>,
 }
 
+/// Counterfactual switch for the `1800..=2500` narrow substitution window
+/// (0151): when set, the 180a sequential arm is bypassed and the general
+/// open-set path runs instead, so one build can price removing the window (a
+/// fingerprint-shaped predicate) against the shipped ordering. Production
+/// compiles the `false` arm, so the switch can never change a submission.
+#[cfg(test)]
+fn indep_window_off() -> bool {
+    std::env::var("SSI_INDEP_NO_WINDOW").is_ok()
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+fn indep_window_off() -> bool {
+    false
+}
+
 /// Work-ledgered production driver.
 ///
 /// Sets: the greedy maximal independent set by `(degree, index)` at caps
@@ -417,7 +433,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         return None;
     }
     // iter235a: hydro-class — 180a sequential AMF α5+relabel (tip misses 0.8529 indep)
-    if (1800..=2500).contains(&n) {
+    if (1800..=2500).contains(&n) && !indep_window_off() {
         return run_sequential_180(sp, ledger);
     }
     // Admission is decided up front from the pattern alone. A set is trimmed

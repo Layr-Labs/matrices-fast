@@ -1,4 +1,0 @@
-matrix                              n     nnz(A)    flops(base)   flops(yours)    ratio      time
-slay06m                           357       1080           4025           4025    1.000  (capped)
-sssd25-08                         401       1200           5389           5389    1.000  (capped)
-rsyn0810m04m                     4772      13836         147553         115517    0.783  (capped)

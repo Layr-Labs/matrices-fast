@@ -464,6 +464,35 @@ pub fn order_generic(
     Ok(finalize_permutation(&mut ws))
 }
 
+/// Abandonable sibling used to screen late residual-core candidates. The
+/// original elimination entry point and all pivot bookkeeping stay unchanged.
+#[cfg(test)]
+pub(super) fn order_generic_limited(core:&CscPattern<'_>,dense_alpha:f64,
+    aggressive:bool,spec:&MetricSpec,allowance:u64)->Option<Vec<i32>> {
+    let setup=(5*core.n).saturating_add(2*core.row_idx.len()) as u64;
+    let mut remaining=allowance.checked_sub(setup)?;
+    let mut ws=Workspace::new_with_n_buckets(core,&WorkspaceOptions {dense_alpha},
+        2*core.n+2).ok()?;
+    let mut powers=ScorePowers {degree:IntegerPower::new(ws.n,spec.deg_pow),
+        supernode:IntegerPower::new(ws.n+1,spec.nv_pow),fill:FloatPower::new(spec.wf_pow)};
+    while ws.nel<ws.n {
+        let Some(me)=select_pivot_amf(&mut ws) else {break};
+        let mass=ws.nv[me].max(1) as u64;
+        let width=(ws.degree[me].max(0) as u64).saturating_add(mass);
+        let charge=width.saturating_mul(width).saturating_mul(mass)
+            .max(ws.n.saturating_sub(ws.nel) as u64);
+        remaining=remaining.checked_sub(charge)?;
+        let elenme=ws.elen[me];
+        let (p1,p2,nvpiv,degme)=create_element_amf(&mut ws,me).ok()?;
+        let actual_mass=nvpiv.max(1) as u64;
+        let actual_width=(degme as u64).saturating_add(actual_mass);
+        let actual_charge=actual_width.saturating_mul(actual_width).saturating_mul(actual_mass);
+        remaining=remaining.checked_sub(actual_charge.saturating_sub(charge))?;
+        finalize_step_generic(&mut ws,me,p1,p2,nvpiv,degme,elenme,aggressive,spec,&mut powers);
+    }
+    Some(finalize_permutation(&mut ws))
+}
+
 /// SHOT C — the next 15 positive-marginal specs (of the 42-point research
 /// grid) beyond the 7 already shipped as `custom_metrics::ScoreVariant`.
 /// Ranked by greedy forward-selection against the REAL portfolio on the
@@ -496,6 +525,41 @@ pub const EXTRA_METRICS: &[MetricSpec] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn limited_generic_preserves_completed_orders_and_abandons_exhaustion() {
+        let n=49;let mut random=0x71ac_684b_225du64;
+        let mut fixtures=vec![(0..n-1).map(|v|(v,v+1)).collect::<Vec<_>>(),
+            (1..n).map(|v|(0,v)).collect::<Vec<_>>()];
+        let mut edges=Vec::new();
+        for v in 0..n {
+            if v%7<6 {edges.push((v,v+1));}
+            if v+7<n {edges.push((v,v+7));}
+            for _ in 0..2 {
+                random^=random<<13;random^=random>>7;random^=random<<17;
+                let u=random as usize%n;if u!=v {edges.push((u,v));}
+            }
+        }
+        fixtures.push(edges);
+        for edges in fixtures {
+            let (cp,ri)=sample_core(n,&edges);let core=CscPattern::new(n,&cp,&ri).unwrap();
+            let setup=(5*n+2*ri.len()) as u64;
+            for spec in EXTRA_METRICS {
+                for alpha in [10.0,2.5,-1.0] {
+                    for aggressive in [false,true] {
+                        let original=order_generic(&core,alpha,aggressive,spec).unwrap();
+                        assert_eq!(Some(original.clone()),order_generic_limited(&core,alpha,
+                            aggressive,spec,u64::MAX),"{}",spec.name);
+                        if let Some(p)=order_generic_limited(&core,alpha,aggressive,spec,64_000_000) {
+                            assert_eq!(p,original,"{}",spec.name);
+                        }
+                        assert!(order_generic_limited(&core,alpha,aggressive,spec,0).is_none());
+                        assert!(order_generic_limited(&core,alpha,aggressive,spec,setup+1).is_none());
+                    }
+                }
+            }
+        }
+    }
 
     fn assert_bijection(perm: &[i32], n: usize) {
         assert_eq!(perm.len(), n, "permutation length");

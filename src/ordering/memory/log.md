@@ -1,4 +1,6 @@
 
+2026-09-12 | [0203](experiments/0203-exact-kernels-terminal-window.md) promoted `7fd61df` dev **0.792225529081 -> 0.792029985254**, 35 wins / 0 regressions | preserve the full 50k alternate-PEO phase, producer batch head/cap64, and terminal greedy stream; append width-8/step-3/64M exact window descent and carry over exact flat/linear runtime kernels. 535 flat/pooled PEO cases, 1,200 exact sorted CSC comparisons, 121 active release tests, and eight generated stress families pass. Official integrated sandboxed run passes all 300 at **0.792030**, fill **0.924364**; all emitted flop counts match the screen. Hidden target **0.842716**, no hidden win claimed.
+
 ## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
 
 2026-09-08 | tip 0.806243 → **0.805536** (−7.07 bip) | **iter74d timing-cut of iter72 family** — danger skip core-exact + late polish cost>20M skip + densify lean + medium 4-ticket floor on danger + PEO_ALT skip n≥2500 nnz≥9k | **24/4 movers**, worst **1.087s** (confirm 1.093). Submitted `b6040276` validating. Prior iter72 0.805384 / 29/0 / 1.196s FAIL; iter73 gated polish regress.

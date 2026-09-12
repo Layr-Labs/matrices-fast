@@ -159,9 +159,11 @@ pub mod custom_metrics;
 /// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
 mod core_lift;
 mod scoring_ws;
+mod sorted_permutation;
 mod parallel;
 mod candidate_cache;
 mod metric_sweep;
+mod pivot_powers;
 mod minl;
 mod prefix_score;
 mod chordal_certificate;
@@ -1495,7 +1497,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // shipped ladder is NOT clock-conditioned: see the 0176 window docs at the
     // bottom of the pipeline). Started one frame below `order()`, and per call,
     // because the probe scores 300 rows in one process.
-    #[cfg_attr(not(test), allow(unused_variables))]
+    #[cfg(test)]
     let t_pipeline = std::time::Instant::now();
     let mut terminal_core_candidate: Option<(u64, Vec<usize>)> = None;
     let n = pattern.n;
@@ -1601,6 +1603,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // skipping it is bit-identical, not a heuristic.
     let mut amd_seen_agg: Vec<usize> = vec![dense_deferred_count(n, &col_deg, 10.0)];
     let mut amd_seen_nonagg: Vec<usize> = Vec::new();
+    let sorted_workspace = std::cell::RefCell::new(sorted_permutation::SortedPermutation::new(&scoring_pat));
+    let permute_current = |p: &[usize]| sorted_workspace.borrow_mut().permute(p);
     let amd_pass_is_new = |seen: &mut Vec<usize>, alpha: f64| -> bool {
         let c = dense_deferred_count(n, &col_deg, alpha);
         if seen.contains(&c) {
@@ -1919,7 +1923,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         };
         for seed in 1..=minfill_restarts {
             let q = relabel(n, seed);
-            let b = permute_pattern(&scoring_pat, &q);
+            let b = permute_current(&q);
             let b_pat = Pattern {
                 n,
                 col_ptr: b.col_ptr,
@@ -3102,12 +3106,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // arki0013, nuclear104, gabriel10, unitcommit). It stays where it wins
     // (pooling_sppc1pq -0.45, pooling_sppc3pq -0.15, mpbp_35 -0.10, all n < 30k).
     if (SUBTREE_MIN_N..=SUBTREE_CHAIN_MAX_N).contains(&n) && nnz <= 1_500_000 {
-        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let permuted = permute_current(&best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
         let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
 
-        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_pattern = permute_current(&candidate);
         let post_etree = EliminationTree::from_pattern(&post_pattern);
         let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
             .into_iter()
@@ -3167,12 +3171,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // Round 2: Refine the newly improved incumbent's elimination tree.
                 // Uses round = 1 to activate diversified search seeds across blocks.
                 // Bounded at 24 blocks and 1M ops per block, strictly monotonic.
-                let permuted2 = permute_pattern(&scoring_pat, &best_perm);
+                let permuted2 = permute_current(&best_perm);
                 let etree2 = EliminationTree::from_pattern(&permuted2);
                 let post2 = etree2.postorder();
                 let mut candidate2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
 
-                let post_pattern2 = permute_pattern(&scoring_pat, &candidate2);
+                let post_pattern2 = permute_current(&candidate2);
                 let post_etree2 = EliminationTree::from_pattern(&post_pattern2);
                 let counts2: Vec<u32> = column_counts_gnp(&post_pattern2, &post_etree2)
                     .into_iter()
@@ -3220,13 +3224,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         // Same 1M ops per block, so the whole phase stays a
                         // deterministic bounded-work chain; strictly
                         // monotonic (accepted only on fewer flops).
-                        let permuted3 = permute_pattern(&scoring_pat, &best_perm);
+                        let permuted3 = permute_current(&best_perm);
                         let etree3 = EliminationTree::from_pattern(&permuted3);
                         let post3 = etree3.postorder();
                         let mut candidate3: Vec<usize> =
                             post3.iter().map(|&j| best_perm[j]).collect();
 
-                        let post_pattern3 = permute_pattern(&scoring_pat, &candidate3);
+                        let post_pattern3 = permute_current(&candidate3);
                         let post_etree3 = EliminationTree::from_pattern(&post_pattern3);
                         let counts3: Vec<u32> = column_counts_gnp(&post_pattern3, &post_etree3)
                             .into_iter()
@@ -3266,13 +3270,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                 // 64M per block only in the measured-safe
                                 // lower-medium band; retain the hidden-proven
                                 // 32M budget everywhere else.
-                                let permuted4 = permute_pattern(&scoring_pat, &best_perm);
+                                let permuted4 = permute_current(&best_perm);
                                 let etree4 = EliminationTree::from_pattern(&permuted4);
                                 let post4 = etree4.postorder();
                                 let mut candidate4: Vec<usize> =
                                     post4.iter().map(|&j| best_perm[j]).collect();
 
-                                let post_pattern4 = permute_pattern(&scoring_pat, &candidate4);
+                                let post_pattern4 = permute_current(&candidate4);
                                 let post_etree4 = EliminationTree::from_pattern(&post_pattern4);
                                 let counts4: Vec<u32> =
                                     column_counts_gnp(&post_pattern4, &post_etree4)
@@ -3312,13 +3316,13 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                         // Round 5: one more pass over the round-4
                                         // incumbent. Same block count (32), min_s 16,
                                         // max_s 768, round = 4 seed diversification.
-                                        let permuted5 = permute_pattern(&scoring_pat, &best_perm);
+                                        let permuted5 = permute_current(&best_perm);
                                         let etree5 = EliminationTree::from_pattern(&permuted5);
                                         let post5 = etree5.postorder();
                                         let mut candidate5: Vec<usize> =
                                             post5.iter().map(|&j| best_perm[j]).collect();
 
-                                        let post_pattern5 = permute_pattern(&scoring_pat, &candidate5);
+                                        let post_pattern5 = permute_current(&candidate5);
                                         let post_etree5 = EliminationTree::from_pattern(&post_pattern5);
                                         let counts5: Vec<u32> =
                                             column_counts_gnp(&post_pattern5, &post_etree5)
@@ -3392,12 +3396,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // the promoted frontier while retaining the stronger search allocation.
     if (SUBTREE_MIN_N..=80_000).contains(&n) && nnz <= 250_000 {
         let incumbent_flops = score(&best_perm);
-        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let permuted = permute_current(&best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
         let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
 
-        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_pattern = permute_current(&candidate);
         let post_etree = EliminationTree::from_pattern(&post_pattern);
         let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
             .into_iter()
@@ -3431,11 +3435,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         || (n >= 10_000 && nnz <= 60_000)
                         || (n >= 10_000 && nnz <= 100_000 && best_flops < amd_flops))
                 {
-                    let permuted2 = permute_pattern(&scoring_pat, &best_perm);
+                    let permuted2 = permute_current(&best_perm);
                     let etree2 = EliminationTree::from_pattern(&permuted2);
                     let post2 = etree2.postorder();
                     let mut candidate2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
-                    let post_pattern2 = permute_pattern(&scoring_pat, &candidate2);
+                    let post_pattern2 = permute_current(&candidate2);
                     let post_etree2 = EliminationTree::from_pattern(&post_pattern2);
                     let counts2: Vec<u32> = column_counts_gnp(&post_pattern2, &post_etree2)
                         .into_iter()
@@ -3472,11 +3476,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                             if (n < 10_000 && nnz <= 100_000)
                                 || (n >= 10_000 && nnz <= 80_000 && best_flops < amd_flops)
                             {
-                                let permuted3 = permute_pattern(&scoring_pat, &best_perm);
+                                let permuted3 = permute_current(&best_perm);
                                 let etree3 = EliminationTree::from_pattern(&permuted3);
                                 let post3 = etree3.postorder();
                                 let mut candidate3: Vec<usize> = post3.iter().map(|&j| best_perm[j]).collect();
-                                let post_pattern3 = permute_pattern(&scoring_pat, &candidate3);
+                                let post_pattern3 = permute_current(&candidate3);
                                 let post_etree3 = EliminationTree::from_pattern(&post_pattern3);
                                 let counts3: Vec<u32> = column_counts_gnp(&post_pattern3, &post_etree3)
                                     .into_iter()
@@ -3525,11 +3529,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Large matrices are excluded: they own the local worst case, and an
     // additive pass there is what failed hidden validation in 0060.
     if best_flops < amd_flops && n < 10_000 && nnz <= 100_000 && n >= SUBTREE_MIN_N {
-        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let permuted = permute_current(&best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
         let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
-        let post_pattern = permute_pattern(&scoring_pat, &candidate);
+        let post_pattern = permute_current(&candidate);
         let post_etree = EliminationTree::from_pattern(&post_pattern);
         let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
             .into_iter()
@@ -4066,7 +4070,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
    // Terminal completion cleanup leaves every existing descent seed intact.
     // The exact scorer admits only a strict improvement over the final result.
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
-        let pp = permute_pattern(&scoring_pat, &best_perm);
+        let pp = permute_current(&best_perm);
         let et = EliminationTree::from_pattern(&pp);
         let counts = column_counts_gnp(&pp, &et);
         // Reserve the independent candidate's 2M allowance from the existing
@@ -4095,7 +4099,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Give a strictly winning independent candidate the same bounded
             // completion cleanup, without replacing any inherited search seed.
             if n >= 16 && n <= 30_000 && nnz <= 180_000 {
-                let pp = permute_pattern(&scoring_pat, &p);
+                let pp = permute_current(&p);
                 let et = EliminationTree::from_pattern(&pp);
                 let counts = column_counts_gnp(&pp, &et);
                 if let Some(q) = completion::refine_limited(
@@ -4135,7 +4139,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
         let mut oversize_ledger: u64 = 0;
         for _ in 0..8 {
-            let pp = permute_pattern(&scoring_pat, &best_perm);
+            let pp = permute_current(&best_perm);
             let et = EliminationTree::from_pattern(&pp);
             let counts = column_counts_gnp(&pp, &et);
             // An oversize round pays before it runs; an ordinary one is free.
@@ -4170,7 +4174,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // is what stopped at the gate, so cost is what the ledger bounds.
         let mut ledger: u64 = 0;
         for _ in 0..PEO_LARGE_ROUNDS {
-            let pp = permute_pattern(&scoring_pat, &best_perm);
+            let pp = permute_current(&best_perm);
             let et = EliminationTree::from_pattern(&pp);
             let counts = column_counts_gnp(&pp, &et);
             let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
@@ -4253,7 +4257,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                     #[cfg(test)]
                     let _tprep = std::time::Instant::now();
-                    let pp = permute_pattern(&scoring_pat, &cur);
+                    let pp = permute_current(&cur);
                     let et = EliminationTree::from_pattern(&pp);
                     let counts = column_counts_gnp(&pp, &et);
                     #[cfg(test)]
@@ -4355,11 +4359,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // budget-cut descent sits on the big-fill rows, where the round is
         // the most expensive and the completion is not minimal anyway).
         if descent_completed && cur_flops < entry_flops && n <= SUBTREE_CHAIN_MAX_N {
-            let permuted_m = permute_pattern(&scoring_pat, &best_perm);
+            let permuted_m = permute_current(&best_perm);
             let etree_m = EliminationTree::from_pattern(&permuted_m);
             let post_m = etree_m.postorder();
             let mut candidate_m: Vec<usize> = post_m.iter().map(|&j| best_perm[j]).collect();
-            let post_pattern_m = permute_pattern(&scoring_pat, &candidate_m);
+            let post_pattern_m = permute_current(&candidate_m);
             let post_etree_m = EliminationTree::from_pattern(&post_pattern_m);
             let counts_m: Vec<u32> = column_counts_gnp(&post_pattern_m, &post_etree_m)
                 .into_iter()
@@ -4412,7 +4416,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if k >= n {
                 break;
             }
-            let pp = permute_pattern(&scoring_pat, &best_perm);
+            let pp = permute_current(&best_perm);
             let et = EliminationTree::from_pattern(&pp);
             let counts = column_counts_gnp(&pp, &et);
             let mut cnt = vec![0usize; n];
@@ -4523,11 +4527,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Strict exact-score admit → structurally 0 worse. Gate n+nnz ≤ 400k.
     let best_flops_before_final = best_flops;
     if n >= SUBTREE_MIN_N && n + nnz <= FINAL_REFINE_MAX_WORK {
-        let permuted = permute_pattern(&scoring_pat, &best_perm);
+        let permuted = permute_current(&best_perm);
         let etree = EliminationTree::from_pattern(&permuted);
         let post = etree.postorder();
         let base_cand: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
-        let post_pattern = permute_pattern(&scoring_pat, &base_cand);
+        let post_pattern = permute_current(&base_cand);
         let post_etree = EliminationTree::from_pattern(&post_pattern);
         let raw_counts = column_counts_gnp(&post_pattern, &post_etree);
         let mut cur_flops: u64 = raw_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
@@ -4566,11 +4570,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // buys depth only where a strict gain already paid for the row.
         if cur_flops < best_flops_before_final {
             let before_rebuild = cur_flops;
-            let permuted2 = permute_pattern(&scoring_pat, &best_perm);
+            let permuted2 = permute_current(&best_perm);
             let etree2 = EliminationTree::from_pattern(&permuted2);
             let post2 = etree2.postorder();
             let base2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
-            let post_pat2 = permute_pattern(&scoring_pat, &base2);
+            let post_pat2 = permute_current(&base2);
             let post_et2 = EliminationTree::from_pattern(&post_pat2);
             let raw2 = column_counts_gnp(&post_pat2, &post_et2);
             let counts2: Vec<u32> = raw2.into_iter().map(|c| c as u32).collect();
@@ -4609,11 +4613,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // (c7c1a8a) and the ungated copy (5f4e82b) both failed hidden
             // timing. lt_1k cannot see lee1_07 / lee4_09.
             if cur_flops < before_rebuild && n <= 1_000 {
-                let permuted3 = permute_pattern(&scoring_pat, &best_perm);
+                let permuted3 = permute_current(&best_perm);
                 let etree3 = EliminationTree::from_pattern(&permuted3);
                 let post3 = etree3.postorder();
                 let base3: Vec<usize> = post3.iter().map(|&j| best_perm[j]).collect();
-                let post_pat3 = permute_pattern(&scoring_pat, &base3);
+                let post_pat3 = permute_current(&base3);
                 let post_et3 = EliminationTree::from_pattern(&post_pat3);
                 let raw3 = column_counts_gnp(&post_pat3, &post_et3);
                 let counts3: Vec<u32> = raw3.into_iter().map(|c| c as u32).collect();
@@ -4866,7 +4870,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     let _tph = std::time::Instant::now();
     if n >= 16 && n <= 1_000 && nnz <= 20_000 {
         let before_comp = best_flops;
-        let pp = permute_pattern(&scoring_pat, &best_perm);
+        let pp = permute_current(&best_perm);
         let et = EliminationTree::from_pattern(&pp);
         let counts = column_counts_gnp(&pp, &et);
         if let Some(candidate) = completion::refine_limited(
@@ -5265,6 +5269,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // Exact window descent follows the promoted terminal greedy search, so
+    // every accepted replacement improves the final incumbent. The shared
+    // ledger includes preparation, DP states, and elimination replay.
+    let terminal_exchange = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
+        && nnz <= n.saturating_mul(16) && max_deg <= n / 2;
+    #[cfg(test)]
+    let terminal_exchange = terminal_exchange && probe::leader_tail::exchange_enabled();
+    if terminal_exchange {
+        if let Some(candidate) = rgreedy::subset_window_descent_step(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, 64_000_000,
+        ) {
+            if is_bijection(&candidate, n) && score(&candidate) < score(&best_perm) {
+                best_perm = candidate;
+            }
+        }
+    }
     best_perm
 }
 
@@ -5314,6 +5334,7 @@ fn bitset_row_bits(slice: &[u64], out: &mut Vec<usize>) {
 /// The **charge** is deliberately `|N(v)| · w + 1`, the full-scan cost, so the
 /// allowance buys exactly the same search as the reference implementation and
 /// the ordering is bit-identical. Cheaper words, same ledger.
+#[cfg_attr(target_arch = "x86_64", inline(always))]
 fn bitset_deficiency_summ(
     rows: &[u64], w: usize, wk: &[usize], v: usize, deg: usize, nb: &mut Vec<usize>,
 ) -> (u64, i64) {
@@ -5390,7 +5411,30 @@ fn bitset_deficiency_summ(
 /// implementation's full-scan rate, so the ordering and the returned charge are
 /// bit-identical to `minfill_core_order_ref` on every input; only the time is
 /// smaller. `tests::minfill_core_order_matches_reference` pins that.
-fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budget: i64)
+fn minfill_core_order(cn: usize, col_ptr: &[usize], row_idx: &[usize], budget: i64)
+    -> (Vec<usize>, i64)
+{
+    #[cfg(target_arch = "x86_64")]
+    if is_x86_feature_detected!("popcnt") {
+        // SAFETY: the only additional CPU feature is checked above. The body
+        // uses safe slices and exactly the same integer counts and charges.
+        return unsafe { minfill_core_order_popcnt(cn, col_ptr, row_idx, budget) };
+    }
+    minfill_core_order_body(cn, col_ptr, row_idx, budget)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "popcnt")]
+unsafe fn minfill_core_order_popcnt(cn: usize, col_ptr: &[usize], row_idx: &[usize], budget: i64)
+    -> (Vec<usize>, i64)
+{
+    minfill_core_order_body(cn, col_ptr, row_idx, budget)
+}
+
+// Inlining the complete scan, including deficiency evaluation, into the
+// feature-enabled entry makes all its word popcounts use the same CPU path.
+#[cfg_attr(target_arch = "x86_64", inline(always))]
+fn minfill_core_order_body(cn: usize, col_ptr: &[usize], row_idx: &[usize], mut budget: i64)
     -> (Vec<usize>, i64)
 {
     if cn == 0 {

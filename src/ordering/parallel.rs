@@ -164,6 +164,7 @@ pub(crate) fn run_candidates(
         incumbent,
         keep_all,
         &|i: usize| {
+            #[cfg(test)]
             let t0 = std::time::Instant::now();
             let r = match std::panic::catch_unwind(AssertUnwindSafe(|| (tasks[i])())) {
                 Ok(Ok(perm_i32)) => Some(perm_i32.into_iter().map(|x| x as usize).collect()),

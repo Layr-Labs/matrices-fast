@@ -885,6 +885,43 @@ fn relabel_restarts_tuned(budget: usize, cap: usize, n: usize, nnz: usize, max_d
     }
 }
 
+/// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+/// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+/// budget disables the stream, which is what production compiles to — the
+/// switch can never change a submitted ordering. Configured through
+/// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+/// several gate/budget points.
+#[cfg(test)]
+std::thread_local! {
+    static MID_ENGINE: std::cell::Cell<Option<(i64, u8, u8)>> =
+        const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+fn mid_engine_cfg() -> (i64, u8, u8) {
+    MID_ENGINE.with(|c| {
+        if let Some(v) = c.get() {
+            return v;
+        }
+        let parsed = std::env::var("SSI_MID_ENGINE").ok().and_then(|s| {
+            let mut it = s.split(':');
+            let v: u8 = it.next()?.trim().parse().ok()?;
+            let b: i64 = it.next()?.trim().parse().ok()?;
+            let k: u8 = it.next().and_then(|x| x.trim().parse().ok()).unwrap_or(1);
+            Some((b, v, k.max(1)))
+        });
+        let v = parsed.unwrap_or((0, 0, 0));
+        c.set(Some(v));
+        v
+    })
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+fn mid_engine_cfg() -> (i64, u8, u8) {
+    (0, 0, 0)
+}
+
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
     if let Some(perm) = forest_certificate(pattern) { return perm; }
@@ -2442,7 +2479,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     flush!();
     drop(generator_cache);
     #[cfg(test)]
-    parallel::phase_mark("1.portfolio", _tph, best_flops);
+    parallel::phase_mark("1.portfolio", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // ── INDEPENDENT-SET-FIRST LIFT (see `indep_first`) ──────────────────────
@@ -2491,7 +2528,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
     #[cfg(test)]
-    parallel::phase_mark("1b.indep", _tph, best_flops);
+    parallel::phase_mark("1b.indep", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // ── TERMINAL ADJACENT-PAIR DESCENT (local search on exact objective) ────
@@ -2522,6 +2559,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     };
     let well_below;
     let medium_exact_gate;
+    let mid_engine_gate;
 
     if pair_descent_gate {
         if let Some(cand) = rgreedy::adjacent_pair_descent(
@@ -2578,8 +2616,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         && n <= 6_000
         && (nnz <= 30_000 || (well_below && nnz <= 50_000));
 
+    // ── MID-SIZE EXACT SEARCH GATE (0154 engine census) ───────────────────
+    // The two branches below stop at nnz <= 30_000 (50_000 on the `well_below`
+    // extension) or n <= 6_000, so every row in between runs unsearched today.
+    // The 0154 census pointed the SAME engine at those rows and found the two
+    // largest single-row gains left anywhere on dev (crudeoil_lee2_06 −6.0 %,
+    // rsyn0830m04m −3.0 %) plus ten smaller movers in 37 rows.
+    let (mid_engine_budget, mid_engine_variant, mid_engine_streams) = mid_engine_cfg();
+    mid_engine_gate = mid_engine_budget > 0
+        && n <= 12_000
+        && match mid_engine_variant {
+            1 => true,
+            2 => nnz <= 60_000,
+            _ => nnz <= 60_000 || n <= 1_000,
+        };
+
     #[cfg(test)]
-    parallel::phase_mark("2.descent", _tph, best_flops);
+    parallel::phase_mark("2.descent", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // ── EXACT RANDOMIZED GREEDY ELIMINATION SEARCH (Area 2 on small graphs) ──
@@ -2694,6 +2747,30 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
+    } else if mid_engine_gate {
+        // Two fixed seeds, one budget each — the census's own two draws. Each
+        // stream is strictly-better accepted, so a row can only improve.
+        const MID_ENGINE_SEEDS: [u64; 2] = [0x9E37_79B9_7F4A_7C15, 0xD1B5_4A32_D192_ED03];
+        for k in 0..mid_engine_streams as usize {
+            let seed = MID_ENGINE_SEEDS[k % MID_ENGINE_SEEDS.len()];
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                mid_engine_budget,
+                seed,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
+            }
+        }
     }
 
     // On the medium exact-search gate, refine the new incumbent once more.
@@ -2715,7 +2792,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     #[cfg(test)]
-    parallel::phase_mark("3.search", _tph, best_flops);
+    parallel::phase_mark("3.search", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // Search bounded, disjoint blocks of the incumbent elimination tree. An
@@ -2998,7 +3075,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     #[cfg(test)]
-    parallel::phase_mark("4.subtree", _tph, best_flops);
+    parallel::phase_mark("4.subtree", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // Independent-set-first acceptance (see stage 1b): a lift that still beats
@@ -3012,7 +3089,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
     #[cfg(test)]
-    parallel::phase_mark("4b.indep-accept", _tph, best_flops);
+    parallel::phase_mark("4b.indep-accept", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // Replace the frontier's 24M independent terminal pass with a deeper 16M
@@ -3147,7 +3224,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     #[cfg(test)]
-    parallel::phase_mark("5.terminal", _tph, best_flops);
+    parallel::phase_mark("5.terminal", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // One extra ranked-subtree ticket on below-anchor small/medium graphs.
@@ -3194,11 +3271,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     #[cfg(test)]
-    parallel::phase_mark("6.extra", _tph, best_flops);
+    parallel::phase_mark("6.extra", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     #[cfg(test)]
-    parallel::phase_mark("7.telos", _tph, best_flops);
+    parallel::phase_mark("7.telos", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // ── POST-TERMINAL LOCAL CLEANUP ─────────────────────────────────────────
@@ -3265,7 +3342,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     #[cfg(test)]
-    parallel::phase_mark("8.cleanup", _tph, best_flops);
+    parallel::phase_mark("8.cleanup", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // ── REDUCE-THEN-AMF, TERMINAL, MULTI-DEPTH (matrices_mage 0062/0064) ──
@@ -3689,7 +3766,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     #[cfg(test)]
-    parallel::phase_mark("9.reduce", _tph, best_flops);
+    parallel::phase_mark("9.reduce", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
    // Terminal completion cleanup leaves every existing descent seed intact.
@@ -3715,7 +3792,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     #[cfg(test)]
-    parallel::phase_mark("10.completion", _tph, best_flops);
+    parallel::phase_mark("10.completion", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // Admit independent relabel candidates only after every inherited pass.
@@ -3747,7 +3824,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         best_perm = cutoff_plateau_refine(pattern, best_perm, true);
     }
     #[cfg(test)]
-    parallel::phase_mark("11.corecand", _tph, best_flops);
+    parallel::phase_mark("11.corecand", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // Re-extract two PEOs from the fully finished result, then repeat only
@@ -3823,7 +3900,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
     #[cfg(test)]
-    parallel::phase_mark("12.peo", _tph, best_flops);
+    parallel::phase_mark("12.peo", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // A stalled chain has reached a minimal triangulation, so more cleanup cannot help;
@@ -3876,7 +3953,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     #[cfg(test)]
-    parallel::phase_mark("13.alt", _tph, best_flops);
+    parallel::phase_mark("13.alt", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // Terminal cross-candidate subtree transplant (0090 reservation policy).
@@ -3896,7 +3973,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
     #[cfg(test)]
-    parallel::phase_mark("14.transplant", _tph, best_flops);
+    parallel::phase_mark("14.transplant", _tph, score(&best_perm));
 
     // ── TERMINAL COMPLETION-LATTICE DESCENT (MINL, see `minl.rs`) ──────────
     // Moves downward from the FINISHED incumbent's completion by exact local
@@ -3972,7 +4049,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         best_flops = best_flops.min(cur_flops);
     }
     #[cfg(test)]
-    parallel::phase_mark("15.minl", _tph, best_flops);
+    parallel::phase_mark("15.minl", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
 
@@ -4018,7 +4095,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         best_flops = best_flops.min(cur_flops);
     }
     #[cfg(test)]
-    parallel::phase_mark("15.peel", _tph, best_flops);
+    parallel::phase_mark("15.peel", _tph, score(&best_perm));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
 
@@ -4090,6 +4167,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    #[cfg(test)]
+    parallel::phase_mark("16.late", _tph, score(&best_perm));
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
     // iter108/110: refine the ordering the pipeline actually ships (Xo1otl family),
     // then chained rebuild + terminal simplicial/pair on the shipped incumbent.
     // Stage-3 subtree passes run before reduce/PEO/MINL/late polish; any later
@@ -4226,6 +4307,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    #[cfg(test)]
+    parallel::phase_mark("17.final", _tph, score(&best_perm));
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
     // iter110: re-apply stage-3 local mechs on the *shipped* incumbent.
     // Simplicial / adjacent-pair run before reduce/PEO/MINL/late polish/FINAL_REFINE;
     // those stages can replace the perm, leaving the new tree unpromoted.
@@ -4274,6 +4359,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    #[cfg(test)]
+    parallel::phase_mark("18.simp", _tph, score(&best_perm));
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
     // Terminal five-descent on the *shipped* incumbent (crown, n<=4000), then
     // n<=1000-only leftover four/triple/pair and a second five. The full 5/4/3
     // package and five2-at-n<=3000 both failed hidden; n<=1000 cannot see the
@@ -4380,6 +4469,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    #[cfg(test)]
+    parallel::phase_mark("19.five", _tph, score(&best_perm));
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
     // Terminal SmallScore local refine on the *shipped* incumbent, including
     // any five-descent / rebuild2 replacement above. Stage-11 paired-swap /
     // plateau runs before PEO / MINL / FINAL_REFINE / simp / pair / five, so
@@ -4422,6 +4515,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    #[cfg(test)]
+    parallel::phase_mark("20.lt1k", _tph, score(&best_perm));
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
     if n >= 16 && n <= 1_000 && nnz <= 20_000 {
         let before_comp = best_flops;
         let pp = permute_pattern(&scoring_pat, &best_perm);
@@ -4493,6 +4590,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    #[cfg(test)]
+    parallel::phase_mark("21.comp", _tph, score(&best_perm));
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
     if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
         for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
             if let Some(candidate) = rgreedy::subset_window_descent(
@@ -4506,12 +4607,88 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    #[cfg(test)]
+    parallel::phase_mark("22.win", _tph, score(&best_perm));
+    #[cfg(test)]
+    let _tph = std::time::Instant::now();
     if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
-            if score(&candidate) < best_flops {
+            // Write-back: this site improves `best_perm` from a local score
+            // variable, so `best_flops` must follow or every later stage (the
+            // terminal ladder below included) prices the incumbent too high.
+            let f = score(&candidate);
+            if f < best_flops {
+                best_flops = f;
                 best_perm = candidate;
+            }
+        }
+    }
+
+    // ── TERMINAL ENGINE LADDER (0154 census, priced by the 0166 ladder) ─────
+    // The 0154 engine census pointed `rgreedy` at rows the small/medium exact
+    // gates do not cover and found the two largest single-row gains left on
+    // dev. The 0166 ladder then measured the SAME mechanism in the placement
+    // the census used — terminal, seeded from the finished incumbent, so
+    // nothing downstream can be perturbed — as a budget ladder over all 263
+    // rows with n <= 12 000 (dev score 0.792439, worst order() 1.085 s):
+    //
+    //   streams            movers   dev score   mean add   worst add (row)
+    //   one 2e8             15      0.792216     0.042 s    0.231 s
+    //   two 2e8             19      0.792188     0.080 s    0.196 s
+    //   2e8 + 5e8           24      0.792133     0.216 s    0.470 s
+    //
+    // The 5e8 rung buys 0.55 bips for 2.7x the added time, and the sandboxed
+    // harness is several times slower per call than this probe (the same
+    // 2e8+5e8 build was killed at `demo7`, n=155, whose probe time went
+    // 0.294 s -> 0.584 s), so the two 2e8 draws ship: they keep the added
+    // per-row time inside the measurement noise of the untouched rows and
+    // still move 19 rows across all three buckets. Acceptance is strict
+    // against the exact score, so no row can regress; the gate is a monotone
+    // predicate on `n` and selects nothing by identity.
+    if n <= 12_000 {
+        // Shipped ladder; `SSI_TERM_LADDER` (test builds only) re-prices it.
+        const SHIPPED_LADDER: [(i64, u64); 2] = [
+            (200_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
+            (200_000_000, 0xD1B5_4A32_D192_ED03),
+        ];
+        #[cfg(test)]
+        let ladder: Vec<(i64, u64)> = match std::env::var("SSI_TERM_LADDER") {
+            Ok(v) => v
+                .split(',')
+                .filter_map(|x| x.trim().parse::<i64>().ok())
+                .enumerate()
+                .map(|(k, b)| {
+                    let seeds = [
+                        0x9E37_79B9_7F4A_7C15u64,
+                        0xD1B5_4A32_D192_ED03,
+                        0xA24B_AED4_963E_E407,
+                    ];
+                    (b, seeds[k % seeds.len()])
+                })
+                .collect(),
+            Err(_) => SHIPPED_LADDER.to_vec(),
+        };
+        #[cfg(not(test))]
+        let ladder: Vec<(i64, u64)> = SHIPPED_LADDER.to_vec();
+        for (budget, seed) in ladder {
+            if let Some((cand, _)) = rgreedy::search(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                &best_perm,
+                best_flops,
+                budget,
+                seed,
+            ) {
+                if is_bijection(&cand, n) {
+                    let f = score(&cand);
+                    if f < best_flops {
+                        best_flops = f;
+                        best_perm = cand;
+                    }
+                }
             }
         }
     }

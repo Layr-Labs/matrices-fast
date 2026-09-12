@@ -532,6 +532,28 @@ const LADDER_FILL_BOUND: u64 = 20_000_000_000;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
 const LADDER_FILL_CAP: usize = 64;
+/// ── 0202: which candidates the fence keeps once a batch is over budget ─────
+/// `true` keeps a stratified sample across the whole queue (`step_by`), `false`
+/// keeps the head. Both keep at most `LADDER_FILL_CAP` candidates, so the two
+/// differ only in WHICH producers are replayed — never in the amount of work,
+/// and the batch is replayed in queue order either way.
+///
+/// Measured this run in one binary (test seam `SSI_LADDER_CAP` /
+/// `SSI_LADDER_FILL_BOUND`), after the "(the predicate never fires on dev)"
+/// claim the fence shipped with was put under a direct test: on the 300 dev rows
+/// it is TRUE — bound 2e10, caps 16/32/48/64/96/160/256 and "never fire" all
+/// give exactly SCORE 0.792573 — so the cap cannot move a dev row and neither
+/// can this switch; the harness run is the check.
+///
+/// On the two structural corpora where the fence does fire (every row's
+/// incumbent 1e10..1.4e11) the kept SET is worth score at unchanged count:
+/// scaled (n, avg-degree) corpus 18 rows 0.990721 -> 0.990479, band corpus
+/// (n = 12 000..30 000) 15 rows 0.988946 -> 0.988673, worst row inside host
+/// noise (1.196 -> 1.268 s and 3.471 -> 3.535 s). The kept COUNT is the dear
+/// term on that class (cap 64 0.990721 -> cap 128 0.989946 = the un-truncated
+/// value), so the same corpus prices the cap raise at +0.3..0.4 s on the
+/// heaviest rows — that half stays a candidate, this half is free.
+const LADDER_STRIDE_KEEP: bool = true;
 
 /// NON-AGGRESSIVE AMD envelope. `aggressive = false` is a genuinely different
 /// elimination order (not just a dense-threshold tweak). It runs at baseline AMD
@@ -1460,8 +1482,25 @@ fn flush_batch<'a>(
     );
     #[cfg(not(test))]
     let (fill_bound, fill_cap) = (LADDER_FILL_BOUND, LADDER_FILL_CAP);
+    // ── 0202: WHICH candidates the fence keeps (see LADDER_STRIDE_KEEP) ────
+    // Same count, same per-candidate price; only the kept SET differs. The kept
+    // count is what costs score on the class the fence fires on (scaled corpus:
+    // cap 64 0.990721, 96 0.990606, 128 0.989946 = the un-truncated value), and
+    // the tail of the queue carries ratio the head does not (band corpus
+    // 0.988946 -> 0.988673 at cap 64), so a stratified sample buys back part of
+    // that without paying the cap raise's +0.3 s.
+    #[cfg(test)]
+    let stride_mode: bool = std::env::var_os("SSI_LADDER_STRIDE").is_some();
+    #[cfg(not(test))]
+    let stride_mode: bool = LADDER_STRIDE_KEEP;
     if *best_flops > fill_bound && tasks.len() > fill_cap {
-        tasks.truncate(fill_cap);
+        if stride_mode {
+            let step = tasks.len().div_ceil(fill_cap).max(1);
+            let kept: Vec<parallel::CandFn<'a>> = tasks.drain(..).step_by(step).collect();
+            *tasks = kept;
+        } else {
+            tasks.truncate(fill_cap);
+        }
     }
     let results = parallel::run_candidates(tasks, sp, n, nnz, *best_flops, true);
     tasks.clear();

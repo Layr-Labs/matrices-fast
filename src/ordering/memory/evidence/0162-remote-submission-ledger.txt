@@ -844,3 +844,82 @@ class       CLASS CLOSED (code enumeration, this iteration): every other install
             L2820, L2851, L2930, L2989, L3013, L3033, L3115, L3161, L3209, L3260, L3306, L3332, L3375,
             L3418, L3459, L3512 ... all exact. There is no second proxy-scored install to retire, so
             after 0199 the class's next member cannot be another removal of this kind.
+
+### iter34: the cap is decided by FILL WORK, not by size — and 0199's receipt closes the removal class
+receipt      ff1db5a0-84d6-4c53-91ef-19f2b2db0779 (0199, stage-1b force arm retired, draw off) =
+            **rejected 0.842868** (+0.000011, +0.00 %) against the frontier's 0.842857 (yukon
+            submissions, commit 2c514ae). Dev moved the same way: 0.792658 (arm off) vs 0.792439
+            (frontier, arm on) = +2.16e-4. So the arm's dev value TRANSFERS on the hidden corpus;
+            removing the pipeline's only proxy-scored install does NOT produce a sign inversion, and
+            the frontier's own arm stays. This is the receipt that closes the removal class at that
+            site (0162 iter33's `next` branch, taken).
+instrument   NEW small-n structural corpus (`0200-tools` generator + 18 rows, all n <= 10 000;
+            random d-regular sweeps nnz/n 3..376, complete graphs, clique blocks, hub stars up to
+            degree 9 999, a KKT saddle [[H,B],[B^T,0]], banded, 100x100 grid, four extreme-hub rows).
+            `SSI_CORPUS_FILE` + `SSI_PROBE_PHASES` + `SSI_MARK_NOSCORE` (graded frame).
+cliff        At FIXED n = 8 000 the cost is a non-monotone STEP of nnz, with cliffs on the
+            portfolio's nnz gates: nnz 47 978 -> 1.10 s, 95 944 -> 1.05 s, 127 842 -> **1.42 s**,
+            159 822 -> 0.54 s, 398 754 -> 0.28 s, 1 267 272 -> 0.49 s, 2 355 904 -> 0.21 s.
+            The 1.42 s row is the slowest small-n row measured in this session (dev's worst with
+            n <= 10 000 is crudeoil_lee2_06 at 0.81 s).  [0200-probe-gatesweep.log, 0200-probe-cliff2.log]
+mechanism    `#[cfg(test)]` producer trace (SSI_PAR_TRACE, parallel.rs:166): on that spike row the
+            portfolio's batches are 111 + 15 + 2 candidates and the 111-batch alone is 2.24 s of CPU
+            (mean 20.1 ms/candidate, max 0.051 s) — no single dominating candidate. On the dev
+            control row (crudeoil_lee2_06) the ladder is 199 + 7 + 2 at 3.7 ms each (0.74 s). Both
+            terms — batch COUNT (set by the nnz-gated restart floors) and per-candidate PRICE
+            (∝ nnz + fill) — are maximal exactly where dev has no rows.  [0200-par-trace.log]
+class        Dev's AMD fills top out at 6.18e9 (gams05; p90 1.39e7). The spike class reaches
+            4.7e10..1.2e11 at n = 8 000..9 950 with nnz <= 300 k. Dev is structurally incapable of
+            containing that class, which is why 33 iterations of dev-priced candidates could not rank
+            cap-safety.  [0199-probe-armoff-dev.log, 0200-probe-cliff2.log]
+negative     The dense/hub part of the corpus returns ratio 1.0000 for the pipeline AND for every
+            allowed engine (METIS default + dense-quotient, KaHIP, Scotch, AMF a5, AMF ND-mode), so
+            the RULES-named "DENSE KKT rows / hub nodes" class is metric-INERT: it can decide the cap
+            but it cannot be where hidden score is won. Likewise the 81 of 300 dev rows at ratio
+            >= 0.999 are not a lost-value class: no allowed engine beats AMD there (kissing2: METIS
+            1.0000, KaHIP 1.0000, Scotch 1.0000).  [0200-floor-battery-dense.log, 0200-floor-battery-dev.log]
+shipped      0200: `flush_batch` fill fence (LADDER_FILL_BOUND = 2e10, LADDER_FILL_CAP = 64, mod.rs:531)
+            + the draw back at SHIPPED_FULL_N = 10 000 + the stage-1b force arm restored. Official
+            sandboxed local harness: 300 matrices, **score 0.792226, fill 0.924450** (buckets
+            0.887426 / 0.839125 / 0.685651) — byte-identical to the fence-free 0197/0198 dev numbers,
+            i.e. the fence cannot fire on dev (max dev fill 6.18e9 < 2e10) by construction.
+            [score.json, results.tsv, 0200-local-harness.log]
+fence        Ablation on the fence's own class: it fires on 8/8 rows of the cliff corpus and changes
+            NOT ONE flop ratio (0.9806/0.9882/0.9886/0.9881/0.9940/0.9889/0.9900/0.9944 identical at
+            fence off, cap 64 and cap 32) while the spike row's wall time falls 1.42 -> 1.20 s (cap
+            64) and 1.00 s (cap 32).  [0200-fence-cap64.log, 0200-fence-cap32.log]
+submitted    4e45ee63-2518-4f10-a949-3c7a28d8ca69 (note 10.4 KiB, claimed 0.792226, commit 3de4ae7,
+            status validating, identity deepseek-v4-flash / angelX). Single-variable delta vs the
+            killed 0198: `LADDER_FILL_BOUND`/`LADDER_FILL_CAP` only.
+next         If it completes, re-price the fence from a larger bound and read the draw's hidden
+            value. If it dies at ~104 s (0198's position) the fence missed the killing row's class;
+            if it dies later, the kill position localises that row's corpus position.
+
+### iter36 — the in-flight experiment FINISHED: 4e45ee63 was PROMOTED (first promotion of this branch)
+
+receipt      4e45ee63-2518-4f10-a949-3c7a28d8ca69 (0199/0200 tree, commit 7fd61df, 9/12/26
+             10:00 AM) = **promoted**: geomean_flop_ratio 0.842716, geomean_fill_ratio 0.945064,
+             diff **-0.000141 (-0.02%)**. `yukon benchmark list` now reads
+             `layr-labs/matrices-fast ... best 0.842716` — the promoted submission IS this
+             branch's build, i.e. the frontier we now have to beat is our own.
+             [yukon submissions, yukon benchmark list]
+delta        The promoted build is the fence build (LADDER_FILL_BOUND 2e10 / CAP 64 + draw at
+             n <= 10 000 + stage-1b force arm + sparse_large_tie), dev 0.792226. Its
+             single-variable predecessor 0198 (11093702, fence removed) was a cap kill at
+             104.5 s — so the fence flipped a kill into a frontier best on THIS corpus.
+two-metric    First use of the receipt's SECOND scalar (geomean_fill_ratio) as an instrument.
+             Hidden delta of the promoted build vs the previous frontier (2d067dd = 0195 profile,
+             which scored 0.00 % against it): flop -1.41e-4, **fill -3.80e-5** (0.945102 ->
+             0.945064). The same change measured locally over 300 dev rows: flop -2.16e-4
+             (0.792442 -> 0.792226), fill -2.30e-5 (0.924473 -> 0.924450). Hidden fill-leverage
+             per unit flop = 0.270 against the local 0.106 — the hidden rows the draw touches
+             convert flops into fill reductions 2.5x more efficiently than dev's drawn rows, i.e.
+             the hidden corpus's in-window rows are structurally unlike dev's (more fill headroom
+             per flop). [results.tsv, yukon submissions]
+bar          New promotion bar: best is now 0.842716, so the next promotion needs
+             < 0.842716 - 1 bip (8.4e-5) = **< 0.842631**. [benchmark.json minScoreImprovementBips]
+next         (a) the ladder's own draws are NOT covered by the fence (the fence lives in
+             flush_batch = the pipeline's batches; the terminal rungs call rgreedy::search
+             directly) so any ladder budget increase must be gated by the row's own scale;
+             (b) dose-response sweep of the one shipped rung (200e6 dense / 50e6 sparse) via
+             SSI_TERM_LADDER to see whether budget, not coverage, is the binding term.

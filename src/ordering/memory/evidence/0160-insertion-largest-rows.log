@@ -1,0 +1,13 @@
+probe binary: /home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/target/probe/release/deps/ssi_candidate_worker-9bc17c144118ca64
+
+running 1 test
+test ordering::probe::probe_insertion_search ... INS	unitcommit_200_100_1_mod_8	bucket=2	n=146830	nnz=476332	base=3053940	inc=2981835	best=2981835	inc_r=0.976390	best_r=0.976390	gain_pct=0.0000	order_s=0.602	search_s=9.776	evals=2000	strict=0	plateau=1255
+INS	faclay75	bucket=2	n=272878	nnz=1379706	base=3204527350	inc=3013800414	best=3013800414	inc_r=0.940482	best_r=0.940482	gain_pct=0.0000	order_s=0.816	search_s=21.710	evals=2000	strict=0	plateau=993
+INS	cont6-qq	bucket=2	n=120395	nnz=557994	base=835894090	inc=581918900	best=581915482	inc_r=0.696163	best_r=0.696159	gain_pct=0.0006	order_s=0.445	search_s=10.394	evals=2000	strict=20	plateau=786
+INS	gabriel10	bucket=2	n=244056	nnz=1148210	base=1365442310	inc=1267760679	best=1267760679	inc_r=0.928462	best_r=0.928462	gain_pct=0.0000	order_s=1.036	search_s=23.803	evals=2000	strict=0	plateau=1232
+INS	acopf_case9241pegase_qcqp	bucket=2	n=313068	nnz=1292408	base=34647355	inc=33736789	best=33736789	inc_r=0.973719	best_r=0.973719	gain_pct=0.0000	order_s=1.067	search_s=37.395	evals=2000	strict=0	plateau=375
+INS	transswitch2736spr	bucket=2	n=69651	nnz=331010	base=7933133	inc=7281507	best=7281317	inc_r=0.917860	best_r=0.917836	gain_pct=0.0026	order_s=0.539	search_s=7.911	evals=2000	strict=7	plateau=624
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 162 filtered out; finished in 116.47s
+

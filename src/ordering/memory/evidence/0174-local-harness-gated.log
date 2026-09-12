@@ -1,0 +1,176 @@
+local-candidate-build: building ssi-candidate-worker under bubblewrap (network denied)
+   Compiling proc-macro2 v1.0.106
+   Compiling crossbeam-utils v0.8.21
+   Compiling feral-ordering-core v0.2.1
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+   Compiling autocfg v1.5.1
+   Compiling serde_core v1.0.228
+   Compiling version_check v0.9.5
+   Compiling zmij v1.0.21
+   Compiling libm v0.2.16
+   Compiling rayon-core v1.13.0
+   Compiling paste v1.0.15
+   Compiling serde v1.0.228
+   Compiling bitflags v2.13.0
+   Compiling serde_json v1.0.150
+   Compiling bytemuck v1.25.0
+   Compiling itoa v1.0.18
+   Compiling cfg-if v1.0.4
+   Compiling either v1.16.0
+   Compiling memchr v2.8.2
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling reborrow v0.5.5
+   Compiling raw-cpuid v11.6.0
+   Compiling pulp v0.22.3
+   Compiling num-traits v0.2.19
+   Compiling feral-amd v0.2.1
+   Compiling feral-amf v0.2.1
+   Compiling feral-metis v0.2.1
+   Compiling crossbeam-epoch v0.9.18
+   Compiling feral-kahip v0.2.1
+   Compiling feral-scotch v0.2.1
+   Compiling crossbeam-deque v0.8.6
+   Compiling syn v2.0.118
+   Compiling num-complex v0.4.6
+   Compiling rayon v1.12.0
+   Compiling serde_derive v1.0.228
+   Compiling feral v0.11.0
+   Compiling ssi-scoring v0.1.0 (/workspace/ssi-scoring)
+   Compiling ssi-worker-protocol v0.1.0 (/workspace/ssi-worker-protocol)
+   Compiling ssi-candidate-worker v0.1.0 (/workspace/candidate-worker)
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:396:29
+    |
+396 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `RELABEL_BUDGET` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:456:7
+    |
+456 | const RELABEL_BUDGET: usize = 300_000;
+    |       ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `RELABEL_MAX_RESTARTS` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:457:7
+    |
+457 | const RELABEL_MAX_RESTARTS: usize = 24;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:520:7
+    |
+520 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+
+warning: function `relabel_restarts` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:824:4
+    |
+824 | fn relabel_restarts(budget: usize, cap: usize, nnz: usize) -> usize {
+    |    ^^^^^^^^^^^^^^^^
+
+warning: function `paired_swap_refine` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:958:4
+    |
+958 | fn paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `plateau_refine` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:981:4
+    |
+981 | fn plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<usize> {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `capture` is never used
+  --> candidate-worker/src/../../src/ordering/transplant_probe.rs:11:15
+   |
+11 | pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
+   |               ^^^^^^^
+
+warning: function `terminal_pass` is never used
+   --> candidate-worker/src/../../src/ordering/transplant_probe.rs:179:4
+    |
+179 | fn terminal_pass(
+    |    ^^^^^^^^^^^^^
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: function `candidates` is never used
+  --> candidate-worker/src/../../src/ordering/peo_extract.rs:10:15
+   |
+10 | pub(super) fn candidates(
+   |               ^^^^^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:175:15
+    |
+175 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:300:15
+    |
+300 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:136:4
+    |
+136 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:232:4
+    |
+232 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `order` is never used
+  --> candidate-worker/src/../../src/ordering/chordal_certificate.rs:32:15
+   |
+32 | pub(crate) fn order(n: usize, cp: &[usize], ri: &[usize]) -> Option<Vec<usize>> {
+   |               ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker") generated 17 warnings
+    Finished `release` profile [optimized] target(s) in 11.11s
+local-candidate-build: staged /home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/target/release/ssi-candidate-worker
+    Finished `release` profile [optimized] target(s) in 0.01s
+     Running `target/release/matrices-fast --note 'iter20 headroom-gated terminal ladder (limits 0.95/0.90) on a quiet host (load~1.4): official sandboxed harness, full dev corpus'`
+matrix                              n     nnz(A)    flops(base)   flops(yours)    ratio      time
+slay06m                           357       1080           4025           4025    1.000  (capped)
+sssd25-08                         401       1200           5389           5389    1.000  (capped)
+rsyn0810m04m                     4772      13836         147553         115517    0.783  (capped)
+pooling_sppc3pq                 23173     893724     1153877333      325595394    0.282  (capped)
+sporttournament48                1131       6676         919582         594138    0.646  (capped)
+pooling_sppa9pq                  5030     120730       23971280       15130622    0.631  (capped)
+edgecross10-090                  1053       5204         126115         103179    0.818  (capped)
+maxcsp-ehi-85-297-71             2372     207996     1381768944     1110971341    0.804  (capped)
+st_bpaf1a                          30        120            623            580    0.931  (capped)
+risk2bpb                         1462       5396         118471          66041    0.557  (capped)
+qap                               255      43748        3802533        3650113    0.960  (capped)
+rsyn0830m04m                     7252      20752         212130         171801    0.810  (capped)
+lop97icx                         1073       2118          79286          64044    0.808  (capped)
+chain400                         1201       4796          16382          16382    1.000  (capped)
+mpbp_07                          9532      30810        1368477        1248947    0.913  (capped)
+sonetgr17                         440       2958          37814          30971    0.819  (capped)
+p_ball_30b_7p_2d_h               2207       7516          42456          42319    0.997  (capped)
+pinene200                       19995      97990        1358716        1134463    0.835  (capped)
+unitcommit_200_100_1_mod_8     146830     476332        3053940        2981835    0.976  (capped)
+ex8_3_9                           123        834          15050          11503    0.764  (capped)
+
+RUN FAILED: rsyn0820m02m: order() exceeded the 2.0s per-matrix cap and was killed (took ≥ 2.0s). Your ordering must return within 2s on every matrix. This matrix is n=2486, nnz=6932, nnz/n≈2 — if it is dense, the cost is in order() itself; gate expensive paths by BOTH n and nnz.

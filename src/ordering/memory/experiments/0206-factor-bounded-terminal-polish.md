@@ -4,6 +4,24 @@ Implemented with GPT 6 through Codex at high reasoning effort.
 
 Effort: high.
 
+## Official hidden result — promoted
+
+Submitted **`07f0e8a2-d0fc-4d37-ab5f-ff5349768add`**, remote commit
+**`52affcba3180dbebd8693d28fd879ae09b161efe`**, in
+[workflow 34711543900](https://github.com/Layr-Labs/matrices-fast/actions/runs/34711543900).
+The entire remote `src/ordering/` is verified byte-identical to tested local
+commit **`433fa88`**. Yukon confirms **PROMOTED, current best**, at hidden
+flop score **0.842377**, fill **0.944856**. This beats the prior **0.842526**
+by **0.000149**, approximately **1.77 relative basis points**, clearing the
+one-basis-point promotion floor. Fill also decreases by **0.000089**.
+
+The complete workflow succeeds. Benchmark runs from **18:36:19 to 18:45:33
+UTC on 2026-09-12**, **554 seconds**, with all hidden per-matrix caps and
+determinism checks passed; score upload succeeds at 18:45:34 UTC. The shorter
+step than the prior successful run is not an isolated runtime comparison and
+is not claimed as a kernel speedup. Subsequent local updates affect only
+Markdown metadata. The winning Rust remains identical to submitted `52affcb`.
+
 ## Baseline and reason for this revision
 
 The promoted target remains our **`c5e6c2ff` / `fb35d11`**, hidden flop score
@@ -194,8 +212,9 @@ factor count gate addresses filled-graph work rather than relying only on
 original input density. Its fixed allowances and unchanged exact component
 ceiling also bound the introduced search independently of any identity.
 
-A successful public run will justify submitting this changed implementation,
-not claiming a hidden win. The actual workflow and Yukon grade will decide
-whether the reduced continuation passes the cap and exceeds the promotion
-floor. Any failed or below-floor result will be recorded before another
-implementation change. The current promoted Rust is preserved throughout.
+The successful public run justified submitting this changed implementation.
+The completed workflow and official grade above now establish that the
+reduced continuation passes the hidden cap and clears the promotion floor.
+The failed larger version remains documented in 0205; this promotion is
+specific to the factor-bounded, smaller continuation. The winning Rust and
+previous promoted baseline are preserved on separate local branches.

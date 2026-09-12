@@ -1,10 +1,67 @@
+[0207: continued optimization campaign](experiments/0207-optimization-campaign.md):
+active campaign from promoted `07f0e8a2`, hidden **0.842377**; stop after four
+official rejections. Rejections **1/4**, failed workflows **3**, promotions **0**.
+First candidate [0208](experiments/0208-small-factor-post-window-refinement.md)
+passes sandboxed 300 at **0.791821**, 13/0/287; 123 active tests and 44 paired
+stress orders pass. **91dac999 FAILED hidden 2 s cap**, no hidden score.
+Failed tail removed from subsequent production; next hypothesis reuses existing
+independent-set cores for a competitive final metric pass.
+
+[0209: bounded metric on retained independent-set cores](experiments/0209-retained-independent-core-metric.md):
+public **0.791864560331 -> 0.791703147252**, 1/0/299, approximately 2.04
+relative basis points. Original driver byte-identical on 218 paired inputs;
+no repeated lifts or METIS. Late AmindNorm under factor/core/competitiveness
+limits and 80M deterministic work allowance; 124 active tests and 44 stress
+orders pass. Sandboxed **0.791703**, fill **0.925316**, all 300 counts match.
+Fill trades upward for the primary flop gain; `5a8c5623` FAILED hidden 2 s cap
+in workflow `34714573617`, uploaded ordering matches tested `12e8c2b`.
+
+[0207 literature: MCS structural priorities](literature/0207-mcs-structural-ties.md):
+primary 1984 MCS reference and bounded tie-priority hypothesis; no fetched code.
+
+[0210: sparse deficiency runtime fund](experiments/0210-sparse-deficiency-runtime-fund.md):
+all 300 full public permutations identical to 0209, **0.791703147252**; skip
+zero neighborhood words with original logical charges, checked x86 popcnt
+entries, adaptive 1M..80M retained AmindNorm allowance. Seven state/RNG checks
+pass. Corpus diagnostic **89.283527 s / max 0.731966** on ARM. All 124 active
+tests and 44 paired generated orders pass. Sandboxed **0.791703 / 0.925316**
+on all 300 with exact count agreement; **77d73135 FAILED hidden 2 s cap**, workflow
+**34715439117**, immutable source matches tested `ec93920`. Prior hidden cap
+failures are not scored rejections.
+
+[0211: earlier budget and winning-core PEO](experiments/0211-early-budget-and-winning-core-peo.md):
+fresh all-300 score **0.791635371701**, all permutations match independently
+polished control; 125 active tests, 48 direct PEO calls and 44 generated orders
+pass. High-flop batch cap64->32 above20B, exact lazy eight-entry runner-up
+ledger, one-round PEO only after late core win. Cap64/32 has zero losses on
+11 generated fixtures and saves ~0.19–0.20 s on two >20B examples. Sandboxed
+all 300 passes at **0.791635**, fill **0.924192**, all counts match. Upload
+**30eb4c76 REJECTED tied incumbent**, hidden **0.842377 / 0.944856**; workflow
+34716429064 SUCCESS, Benchmark ~536 s, upload matches tested 9bc3e94. Best
+promoted hidden remains 07f0e8a2; valid cap32 baseline for further work.
+
+[0212: compact exact search on retained cores](experiments/0212-compact-search-on-retained-cores.md):
+public **0.791635371701 -> 0.791316868681**, one gt_10k win, zero losses;
+at most one exact core search under 100k full/core factor bounds and replay
+allowance 8M..240M, skip certified fill-free cores. Added diagnostic
+**0.798339 s / max 0.059367**, all300 fresh permutations match, 125 active
+tests and 44 generated complete orders pass. Sandboxed all 300 at **0.791317**,
+fill **0.924124**, every exact count matches the independent screen; campaign
+**1/4 rejected, 3 failed, 0 promotions**.
+
 [0206: factor-bounded terminal PEO and smaller windows](experiments/0206-factor-bounded-terminal-polish.md):
+**PROMOTED `07f0e8a2` / `52affcb`, current best: hidden 0.842526 -> 0.842377**,
+fill **0.944856**. Full workflow `34711543900` passes, Benchmark 554 s,
+all hidden caps and determinism checks satisfied. Winning Rust matches
+tested `433fa88`; final status updates are Markdown only.
 revision after `026c5a9c` timed out; **sandboxed 0.792030 -> 0.791865**,
 fill 0.924246, 23 wins / 0 losses; all 300 counts match. Add 150k factor-nnz
 gate and existing-ledger precheck;
 remove late watcher, halve window allowance to 16M + 16M + 32M. Preserve the
 promoted prefix and exact component ceiling 14. All 123 active tests and
-44 generated paired orders pass; maximum new minimum 0.993 s. Submission pending.
+44 generated paired orders pass; maximum new minimum 0.993 s. Winning source
+is preserved on `factor-bounded-terminal-polish`, with the previous best on
+`fenced-terminal-window`.
 
 [0205: final completion and sparse spans](experiments/0205-post-search-completion-and-sparse-spans.md):
 **local 0.792030 -> 0.791769**, fill **0.924200**, 30 wins / 0 losses against

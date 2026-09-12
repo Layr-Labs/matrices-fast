@@ -174,8 +174,6 @@ fn probe_timing_and_score() {
     }
     println!("SCORE = {:.6}", aggregate(&log_sums, &counts));
     println!("WORST order() = {:.3} s", rows[0].0);
-    // 0196: soundness audit of the stage-1b force-adoption (see `force_audit`).
-    println!("{}", super::force_audit::report());
 }
 
 /// SELF-INFLICTED-LOSS AUDIT.

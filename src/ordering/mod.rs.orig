@@ -352,33 +352,6 @@ const INDEP_IMMEDIATE_MARGIN: (u64, u64) = (9, 10); // iter230a: 10% early on ti
 /// incumbent on such a row has usually received little more than AMD.
 const INDEP_FORCE_MIN_N: usize = 20_000;
 
-/// ── 0197: counterfactual seam for the stage-1b force-adoption ───────────────
-/// The receipt-refined class: the only hidden gain on this board that clears
-/// the 1-bips bar is the frontier's own step from `62654a5` (0.843173) to
-/// `ab30c0e` (0.842857), which removed three narrow *force-adoption* windows at
-/// stage 1b — the three predicates that decided whether the independent-set
-/// lift was installed immediately or held for the deferred, subtree-polished
-/// comparison at 4b — keeping only this monotone `n >= INDEP_FORCE_MIN_N` gate.
-/// 2d067ddb (0195) then priced the *other* half of that class at zero: removing
-/// a whole-path substitution window moved the hidden score by exactly 0
-/// (rejected at the frontier's own 0.842857, 0.00%), so what transfers is the
-/// adoption *trajectory*, not the substitution.
-///
-/// `SSI_INDEP_NO_FORCE` (test-only; the production arm is `false`, so the
-/// shipped ordering is unchanged by this seam) prices the generalisation of
-/// that move: defer the lift on every row, i.e. always let the lift clear the
-/// `INDEP_IMMEDIATE_MARGIN` lead instead of being installed for `n` alone.
-#[cfg(test)]
-fn indep_force_off() -> bool {
-    std::env::var("SSI_INDEP_NO_FORCE").is_ok()
-}
-
-#[cfg(not(test))]
-#[inline(always)]
-fn indep_force_off() -> bool {
-    false
-}
-
 /// ── 0196: soundness audit of the stage-1b force-adoption ────────────────────
 /// The adoption at 1b is guarded by `core_total < best_flops`, where
 /// `core_total` is the value `indep_first::run` *returns* and `best_flops` is
@@ -408,11 +381,6 @@ pub(crate) mod force_audit {
     /// Worst forced adoption seen: `(incumbent, adopted)`.
     pub(crate) static WORST: AtomicU64 = AtomicU64::new(0);
     pub(crate) static WORST_ADOPTED: AtomicU64 = AtomicU64::new(0);
-    /// 0196: rows the `sparse_large_tie` widening in
-    /// `transplant_probe::refine_with_donors` opens (rows the inherited tip
-    /// skipped) and how many of those actually run the donor pass.
-    pub(crate) static TIE_WINDOW_OPENED: AtomicU64 = AtomicU64::new(0);
-    pub(crate) static TIE_PASS_RUN: AtomicU64 = AtomicU64::new(0);
 
     #[inline]
     pub(crate) fn note(force: bool, core_total: u64, exact: u64, incumbent: u64) {
@@ -444,7 +412,7 @@ pub(crate) mod force_audit {
     /// Compact one-line report for a probe run.
     pub(crate) fn report() -> String {
         format!(
-            "FORCEAUDIT\tstage1b_sites={}\tforce_fires={}\tunsound={}\tcore_total_mismatch={}\tmax_drift_ppm={}\tworst_incumbent={}\tworst_adopted={}\ttie_window_opened={}\ttie_pass_run={}",
+            "FORCEAUDIT\tstage1b_sites={}\tforce_fires={}\tunsound={}\tcore_total_mismatch={}\tmax_drift_ppm={}\tworst_incumbent={}\tworst_adopted={}",
             SITES.load(Ordering::Relaxed),
             FORCE_FIRES.load(Ordering::Relaxed),
             UNSOUND.load(Ordering::Relaxed),
@@ -452,8 +420,6 @@ pub(crate) mod force_audit {
             MAX_DRIFT_PPM.load(Ordering::Relaxed),
             WORST.load(Ordering::Relaxed),
             WORST_ADOPTED.load(Ordering::Relaxed),
-            TIE_WINDOW_OPENED.load(Ordering::Relaxed),
-            TIE_PASS_RUN.load(Ordering::Relaxed),
         )
     }
 
@@ -465,8 +431,6 @@ pub(crate) mod force_audit {
         MAX_DRIFT_PPM.store(0, Ordering::Relaxed);
         WORST.store(0, Ordering::Relaxed);
         WORST_ADOPTED.store(0, Ordering::Relaxed);
-        TIE_WINDOW_OPENED.store(0, Ordering::Relaxed);
-        TIE_PASS_RUN.store(0, Ordering::Relaxed);
     }
 }
 const MEDIUM_MAX_N: usize = 60_000;
@@ -2741,10 +2705,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // removed. The size gate is kept because it is an ordinary
                 // monotone predicate on `n`, not a window fitted around
                 // particular rows.
-                let force = !indep_force_off() && n >= INDEP_FORCE_MIN_N;
-                #[cfg(test)]
-                force_audit::note(force, core_total, f, best_flops);
-                if force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
+                if n >= INDEP_FORCE_MIN_N || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
                     best_flops = f;
                     best_perm = cand;
                 } else if f < best_flops {
@@ -5060,29 +5021,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         /// SSI_TERM_LADDER) intact while shipping no rung at all: the sparse
         /// and dense rungs live above the bound and `SHIPPED_WIDE_LADDER` is
         /// already empty, so every row selects the empty rung list.
-        /// ── 0197: the draw returns BELOW the chain's band, and only there ────
-        /// Ten receipts put the frontier's own margin in 10 000 <= n <= 50 000
-        /// at essentially zero: every build that added per-row work on a row
-        /// above n = 10 000 died on the 2 s cap (the draw in the band: 9fa0b9c1
-        /// at 102 s; both spenders in 10 000 < n <= 12 000: e5a3c6b4, 55d9ed93,
-        /// 7c76ef6a; a doubled chain allowance: 305e9572 at 80 s), while the two
-        /// shapes that ever finished add nothing above n = 10 000 or carry the
-        /// frontier's own chain there. The draw's *value* is dev-measured and
-        /// lives entirely below 12 000: no draw 0.792439 -> 3 000 0.792383 ->
-        /// 5 000 0.792364 -> 12 000 0.792212. So the draw's window is set at
-        /// 10 000, strictly below the band: every row the draw touches is a row
-        /// the frontier's chain also touches (the 71c2c5fe coexistence that
-        /// survived), and every row above 10 000 carries exactly the frontier's
-        /// own profile — its chain, at its own 4e6 allowance, and nothing else.
-        ///
-        /// Measured locally: SCORE 0.792226 against 0.792442 with the draw off
-        /// (2.16 bips of dev value kept out of the 2.30 the 12 000 window has),
-        /// worst dev row 1.172 s against the frontier's 1.160 s. On the 0196
-        /// out-of-distribution structural stress corpus the draw costs
-        /// +0.01..+0.09 s on the six rows it touches (all n <= 8 200) and
-        /// changes zero flops there, so its cost is bounded on structures it
-        /// was never fitted to.
-        const SHIPPED_FULL_N: usize = 10_000;
+        const SHIPPED_FULL_N: usize = 0;
         const SHIPPED_LADDER: [(i64, u64); 1] = [(200_000_000i64, 0x9E37_79B9_7F4A_7C15u64)];
         /// ── 0184: the sparse band's draw is priced down ─────────────────────
         /// The draw's cost is now measured IN-RUN (row total minus the pre-draw

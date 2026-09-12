@@ -1,0 +1,932 @@
+ties: 77
+probe binary: /home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/target/probe/release/deps/ssi_candidate_worker-9bc17c144118ca64
+
+running 1 test
+test ordering::probe::probe_tie_headroom ... TIEH	slay06m	n=357	nnz=1080	max_deg=20	deg_le1=120	base=4025	amd_nnzl=1113	lower=897	fill=216	top1_share=0.0358	top10_share=0.1665
+   45.24447205  identity
+   1.99875776  reversed
+   127.08993789  random0
+   251.42633540  random1
+   317.04596273  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	sssd25-08	n=401	nnz=1200	max_deg=28	deg_le1=56	base=5389	amd_nnzl=1325	lower=1001	fill=324	top1_share=0.0150	top10_share=0.1503
+   26.61365745  identity
+   659.01298942  reversed
+   345.37298200  random0
+   254.39190945  random1
+   92.24438671  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT scotch
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	chain400	n=1201	nnz=4796	max_deg=401	deg_le1=0	base=16382	amd_nnzl=4398	lower=3599	fill=799	top1_share=0.0010	top10_share=0.0098
+   1317.94518374  identity
+   2664.09266268  reversed
+   9307.85123916  random0
+   33.87297033  random1
+   7237.62031498  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	squfl015-080persp	n=7295	nnz=21600	max_deg=240	deg_le1=2400	base=74520	amd_nnzl=20600	lower=18095	fill=2505	top1_share=0.0034	top10_share=0.0344
+   58005.72966989  identity
+   7034.66794149  reversed
+   61286.03161567  random0
+   123459.04745035  random1
+   65601.58808374  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT cm SqDiv a=10
+   1.00000000  BAT cm Ammf a=10
+   1.00276436  BAT cm DegDivNvSqrtWf a=10
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	knp5-44	n=2157	nnz=32604	max_deg=946	deg_le1=946	base=3764003	amd_nnzl=38039	lower=18459	fill=19580	top1_share=0.0130	top10_share=0.1245
+   118.58454364  identity
+   1.04146915  reversed
+   206.16622330  random0
+   224.92115734  random1
+   269.03756426  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	ex1263a	n=94	nnz=390	max_deg=13	deg_le1=35	base=2098	amd_nnzl=392	lower=289	fill=103	top1_share=0.0386	top10_share=0.2631
+   7.58198284  identity
+   2.99714013  reversed
+   14.53288847  random0
+   14.21687321  random1
+   13.10629171  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	st_e41	n=8	nnz=32	max_deg=5	deg_le1=2	base=88	amd_nnzl=24	lower=24	fill=0	top1_share=0.2841	top10_share=1.0000
+   1.12500000  identity
+   1.72727273  reversed
+   1.39772727  random0
+   1.62500000  random1
+   1.36363636  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	squfl025-030	n=2305	nnz=6000	max_deg=30	deg_le1=750	base=42305	amd_nnzl=7105	lower=5305	fill=1800	top1_share=0.0160	top10_share=0.1598
+   3082.92140409  identity
+   3083.13414490  reversed
+   4349.60756412  random0
+   5318.14518378  random1
+   5252.23701690  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT minfill
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	cvxnonsep_psig20	n=20	nnz=380	max_deg=19	deg_le1=0	base=2870	amd_nnzl=210	lower=210	fill=0	top1_share=0.1394	top10_share=0.8659
+   1.00000000  identity
+   1.00000000  reversed
+   1.00000000  random0
+   1.00000000  random1
+   1.00000000  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	meanvar-orl400_05_e_8	n=4405	nnz=171604	max_deg=404	deg_le1=1602	base=21923414	amd_nnzl=91408	lower=90207	fill=1201	top1_share=0.0074	top10_share=0.0724
+   65.67675167  identity
+   14.68217546  reversed
+   32.13851652  random0
+   35.66946266  random1
+   101.99551507  random2
+   0.99996337  BAT cm SqDiv a=10
+   0.99996337  BAT cm Ammf a=10
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amf a=10
+   best=0.99996337 [cm SqDiv a=10] (21 candidates)
+TIEH	slay07m	n=497	nnz=1512	max_deg=24	deg_le1=168	base=5740	amd_nnzl=1554	lower=1253	fill=301	top1_share=0.0341	top10_share=0.1716
+   84.93257840  identity
+   1.98048780  reversed
+   404.82421603  random0
+   483.34878049  random1
+   269.44006969  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	squfl015-060	n=2775	nnz=7200	max_deg=60	deg_le1=900	base=36400	amd_nnzl=8280	lower=6375	fill=1905	top1_share=0.0070	top10_share=0.0703
+   5868.22376374  identity
+   5868.52046703  reversed
+   10947.17068681  random0
+   10593.20532967  random1
+   7940.63387363  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT minfill
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	kissing2	n=20772	nnz=401024	max_deg=298	deg_le1=10000	base=156414018	amd_nnzl=482006	lower=221284	fill=260722	top1_share=0.0038	top10_share=0.0377
+   2391.28573090  identity
+   1.01922209  reversed
+   4376.78421715  random0
+   4412.28071768  random1
+   4322.17104690  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (15 candidates)
+TIEH	clay0204m	n=222	nnz=704	max_deg=20	deg_le1=80	base=2330	amd_nnzl=682	lower=574	fill=108	top1_share=0.0275	top10_share=0.1391
+   29.36223176  identity
+   1.97854077  reversed
+   72.75064378  random0
+   106.64892704  random1
+   57.59613734  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	chain200	n=601	nnz=2396	max_deg=201	deg_le1=0	base=8182	amd_nnzl=2198	lower=1799	fill=399	top1_share=0.0020	top10_share=0.0196
+   334.30432657  identity
+   682.17624053  reversed
+   1781.61170863  random0
+   1029.10217551  random1
+   2404.34771450  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	ex1223b	n=25	nnz=66	max_deg=7	deg_le1=10	base=178	amd_nnzl=64	lower=58	fill=6	top1_share=0.0899	top10_share=0.6236
+   2.64044944  identity
+   2.49438202  reversed
+   5.74157303  random0
+   5.52808989  random1
+   2.45505618  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	squfl020-150	n=9170	nnz=24000	max_deg=150	deg_le1=3000	base=135020	amd_nnzl=27360	lower=21170	fill=6190	top1_share=0.0033	top10_share=0.0327
+   60392.04447489  identity
+   60392.31110206  reversed
+   75568.11037624  random0
+   151467.93122500  random1
+   97188.10624352  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT cm SqDiv a=10
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	autocorr_bern40-30	n=43	nnz=1534	max_deg=42	deg_le1=2	base=20034	amd_nnzl=810	lower=810	fill=0	top1_share=0.0480	top10_share=0.4797
+   1.00000000  identity
+   1.36937207  reversed
+   1.15663372  random0
+   1.21763003  random1
+   1.23415194  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	slay08m	n=660	nnz=2016	max_deg=28	deg_le1=224	base=7796	amd_nnzl=2068	lower=1668	fill=400	top1_share=0.0328	top10_share=0.1802
+   146.39866598  identity
+   1.96254489  reversed
+   1352.18137506  random0
+   1090.29630580  random1
+   727.49499743  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	cvxnonsep_normcon40r	n=162	nnz=322	max_deg=41	deg_le1=81	base=645	amd_nnzl=323	lower=323	fill=0	top1_share=0.0062	top10_share=0.0620
+   1.31007752  identity
+   145.46511628  reversed
+   81.45271318  random0
+   126.01550388  random1
+   3.21860465  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT metis def
+   1.00000000  BAT metis ni16
+   1.00000000  BAT rcm
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	ex14_1_8	n=11	nnz=30	max_deg=5	deg_le1=4	base=80	amd_nnzl=28	lower=26	fill=2	top1_share=0.2000	top10_share=0.9875
+   1.65000000  identity
+   1.82500000  reversed
+   1.87500000  random0
+   3.23750000  random1
+   2.61250000  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	cvxnonsep_normcon20r	n=82	nnz=162	max_deg=21	deg_le1=41	base=325	amd_nnzl=163	lower=163	fill=0	top1_share=0.0123	top10_share=0.1231
+   1.30769231  identity
+   40.35384615  reversed
+   34.69538462  random0
+   11.30769231  random1
+   10.53538462  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT metis def
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	cvxnonsep_psig20r	n=86	nnz=170	max_deg=22	deg_le1=43	base=341	amd_nnzl=171	lower=171	fill=0	top1_share=0.0117	top10_share=0.1173
+   1.30791789  identity
+   44.02639296  reversed
+   2.07038123  random0
+   46.06158358  random1
+   36.56304985  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT metis def
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	st_iqpbk1	n=22	nnz=98	max_deg=9	deg_le1=7	base=295	amd_nnzl=71	lower=71	fill=0	top1_share=0.2169	top10_share=0.7966
+   2.70847458  identity
+   1.28474576  reversed
+   3.11186441  random0
+   3.15932203  random1
+   3.20000000  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	pointpack04	n=29	nnz=120	max_deg=8	deg_le1=10	base=577	amd_nnzl=113	lower=89	fill=24	top1_share=0.1404	top10_share=0.7730
+   1.99133449  identity
+   1.55112652  reversed
+   3.70710572  random0
+   3.38474870  random1
+   2.71750433  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	nvs02	n=11	nnz=46	max_deg=7	deg_le1=3	base=142	amd_nnzl=36	lower=34	fill=2	top1_share=0.1761	top10_share=0.9930
+   1.52112676  identity
+   1.84507042  reversed
+   1.63380282  random0
+   2.16901408  random1
+   2.16901408  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	wastepaper6	n=191	nnz=1416	max_deg=26	deg_le1=4	base=16611	amd_nnzl=1511	lower=899	fill=612	top1_share=0.0195	top10_share=0.1951
+   4.64920836  identity
+   29.99957859  reversed
+   53.74763711  random0
+   43.34338691  random1
+   33.13394738  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amd agg=false a=0.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	camshape400	n=2000	nnz=7188	max_deg=9	deg_le1=800	base=16768	amd_nnzl=5594	lower=5594	fill=0	top1_share=0.0010	top10_share=0.0095
+   15382.08385019  identity
+   1.78572281  reversed
+   350.73568702  random0
+   137.90666746  random1
+   185.65094227  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	slay05m	n=240	nnz=720	max_deg=16	deg_le1=80	base=2635	amd_nnzl=745	lower=600	fill=145	top1_share=0.0380	top10_share=0.1727
+   21.58481973  identity
+   2.01707780  reversed
+   96.43377609  random0
+   114.40948767  random1
+   98.46717268  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	csched1	n=110	nnz=376	max_deg=22	deg_le1=10	base=975	amd_nnzl=323	lower=298	fill=25	top1_share=0.0164	top10_share=0.1569
+   4.97948718  identity
+   15.63384615  reversed
+   7.24205128  random0
+   37.64102564  random1
+   43.55179487  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	watercontamination0303r	n=1310	nnz=37028	max_deg=187	deg_le1=555	base=2171882	amd_nnzl=20194	lower=19824	fill=370	top1_share=0.0159	top10_share=0.1517
+   39.13735046  identity
+   1.07967330  reversed
+   24.42940685  random0
+   31.31475099  random1
+   22.87294844  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT cm Ammf a=10
+   1.00000000  BAT cm DegDivNvSqrtWf a=10
+   1.03053297  BAT amd agg=true a=2.5
+   1.03053297  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	ex9_2_4	n=15	nnz=36	max_deg=3	deg_le1=1	base=117	amd_nnzl=41	lower=33	fill=8	top1_share=0.0769	top10_share=0.7692
+   1.35897436  identity
+   1.41880342  reversed
+   1.49572650  random0
+   1.49572650  random1
+   1.49572650  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	sssd15-04	n=163	nnz=440	max_deg=18	deg_le1=28	base=1625	amd_nnzl=497	lower=383	fill=114	top1_share=0.0154	top10_share=0.1538
+   14.49600000  identity
+   73.66707692  reversed
+   49.16123077  random0
+   87.24738462  random1
+   34.74276923  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	autocorr_bern35-35fix	n=38	nnz=1264	max_deg=37	deg_le1=2	base=16214	amd_nnzl=670	lower=670	fill=0	top1_share=0.0799	top10_share=0.6171
+   1.00000000  identity
+   1.17299864  reversed
+   1.01017639  random0
+   1.07974590  random1
+   1.02201801  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	ex2_1_3	n=31	nnz=72	max_deg=5	deg_le1=16	base=189	amd_nnzl=73	lower=67	fill=6	top1_share=0.0847	top10_share=0.5873
+   2.31216931  identity
+   4.82539683  reversed
+   9.42328042  random0
+   4.55555556  random1
+   3.91005291  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT metis def
+   1.00000000  BAT metis ni16
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	qapw	n=705	nnz=87496	max_deg=199	deg_le1=0	base=12183146	amd_nnzl=69878	lower=44453	fill=25425	top1_share=0.0042	top10_share=0.0399
+   1.15088320  identity
+   3.17903389  reversed
+   4.88534259  random0
+   4.93599166  random1
+   5.14370090  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT cm SqDiv a=10
+   1.00000000  BAT cm DegDivNvSqrtWf a=10
+   1.00435282  BAT cm Ammf a=10
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	himmel11	n=14	nnz=60	max_deg=8	deg_le1=4	base=198	amd_nnzl=48	lower=44	fill=4	top1_share=0.1818	top10_share=0.9343
+   1.60101010  identity
+   2.21717172  reversed
+   1.82828283  random0
+   2.25252525  random1
+   1.77272727  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	supplychainr1_053050	n=16640	nnz=57800	max_deg=62	deg_le1=4990	base=2173490	amd_nnzl=77190	lower=45540	fill=31650	top1_share=0.0051	top10_share=0.0507
+   19131.44816171  identity
+   14511.43124882  reversed
+   60634.55345136  random0
+   54943.81883330  random1
+   56047.25741503  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	squfl010-080	n=2490	nnz=6400	max_deg=80	deg_le1=800	base=27665	amd_nnzl=7335	lower=5690	fill=1645	top1_share=0.0044	top10_share=0.0437
+   5082.71281402  identity
+   5083.05982288  reversed
+   12152.58745708  random0
+   5910.83173685  random1
+   10116.82089282  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT minfill
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	st_glmp_ss1	n=24	nnz=66	max_deg=11	deg_le1=9	base=160	amd_nnzl=60	lower=57	fill=3	top1_share=0.1000	top10_share=0.6062
+   5.15625000  identity
+   1.71875000  reversed
+   6.81250000  random0
+   8.96250000  random1
+   6.20000000  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	st_rv2	n=40	nnz=340	max_deg=21	deg_le1=10	base=2045	amd_nnzl=255	lower=210	fill=45	top1_share=0.0489	top10_share=0.4054
+   1.00000000  identity
+   4.42053790  reversed
+   4.95892421  random0
+   5.63569682  random1
+   5.45183374  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	emfl100_3_3	n=6885	nnz=15948	max_deg=116	deg_le1=1980	base=55506	amd_nnzl=18972	lower=14859	fill=4113	top1_share=0.0058	top10_share=0.0343
+   8279.36307787  identity
+   82909.56880337  reversed
+   36662.85511476  random0
+   45216.96108529  random1
+   37733.86830253  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	polygon75	n=5846	nnz=49652	max_deg=223	deg_le1=2849	base=1171822	amd_nnzl=30672	lower=30672	fill=0	top1_share=0.0187	top10_share=0.1758
+   7380.45538060  identity
+   1.07526826  reversed
+   7420.40165913  random0
+   7852.19935195  random1
+   7301.73801908  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amf a=10
+   1.00000000  BAT metis def
+   1.00000000  BAT metis ni16
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	ex9_2_6	n=28	nnz=68	max_deg=4	deg_le1=2	base=190	amd_nnzl=70	lower=62	fill=8	top1_share=0.0474	top10_share=0.4737
+   1.36842105  identity
+   1.74736842  reversed
+   1.63157895  random0
+   1.18421053  random1
+   1.29473684  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	slay04m	n=146	nnz=432	max_deg=12	deg_le1=48	base=1554	amd_nnzl=450	lower=362	fill=88	top1_share=0.0412	top10_share=0.2085
+   8.96138996  identity
+   2.03474903  reversed
+   32.30373230  random0
+   41.50514801  random1
+   42.88931789  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	ex8_4_1	n=32	nnz=100	max_deg=20	deg_le1=10	base=225	amd_nnzl=83	lower=82	fill=1	top1_share=0.0400	top10_share=0.4000
+   3.36444444  identity
+   17.97777778  reversed
+   5.15555556  random0
+   20.15555556  random1
+   12.17777778  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amf a=10
+   1.00000000  BAT metis def
+   1.00000000  BAT metis ni16
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	st_e07	n=19	nnz=60	max_deg=5	deg_le1=3	base=199	amd_nnzl=59	lower=49	fill=10	top1_share=0.0804	top10_share=0.7337
+   1.59296482  identity
+   2.03015075  reversed
+   2.59798995  random0
+   3.65326633  random1
+   2.13567839  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	st_m2	n=72	nnz=1226	max_deg=31	deg_le1=21	base=16331	amd_nnzl=895	lower=685	fill=210	top1_share=0.0296	top10_share=0.2937
+   1.00000000  identity
+   2.85003980  reversed
+   3.70644786  random0
+   3.65593044  random1
+   3.28938828  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	sssd18-08persp	n=338	nnz=1168	max_deg=21	deg_le1=56	base=4654	amd_nnzl=1142	lower=922	fill=220	top1_share=0.0174	top10_share=0.1740
+   32.41792007  identity
+   317.01031371  reversed
+   119.08551783  random0
+   105.64911904  random1
+   267.55586592  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT minfill
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	kall_diffcircles_6	n=76	nnz=302	max_deg=12	deg_le1=30	base=1511	amd_nnzl=281	lower=227	fill=54	top1_share=0.1118	top10_share=0.5645
+   9.34877565  identity
+   1.43084050  reversed
+   12.51290536  random0
+   13.70681668  random1
+   12.86631370  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	cvxnonsep_psig30	n=30	nnz=870	max_deg=29	deg_le1=0	base=9455	amd_nnzl=465	lower=465	fill=0	top1_share=0.0952	top10_share=0.6965
+   1.00000000  identity
+   1.00000000  reversed
+   1.00000000  random0
+   1.00000000  random1
+   1.00000000  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	squfl010-040persp	n=2450	nnz=7200	max_deg=120	deg_le1=800	base=22825	amd_nnzl=6895	lower=6050	fill=845	top1_share=0.0053	top10_share=0.0530
+   6818.39605696  identity
+   843.51500548  reversed
+   10978.24026287  random0
+   7514.54527930  random1
+   10306.33410734  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT cm SqDiv a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	hydroenergy1	n=1046	nnz=3024	max_deg=11	deg_le1=404	base=14089	amd_nnzl=3435	lower=2558	fill=877	top1_share=0.0045	top10_share=0.0454
+   1032.31982398  identity
+   34.12747534  reversed
+   893.06175030  random0
+   750.88466179  random1
+   515.63652495  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.01085954  BAT minfill
+   1.01376961  BAT cm DegDivNvSqrtWf a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	maxmin	n=181	nnz=1440	max_deg=78	deg_le1=78	base=8405	amd_nnzl=925	lower=901	fill=24	top1_share=0.0744	top10_share=0.5098
+   33.27876264  identity
+   1.38334325  reversed
+   61.85211184  random0
+   50.95585961  random1
+   47.45353956  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amf a=10
+   1.00000000  BAT metis def
+   1.00000000  BAT metis ni16
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	supplychainr1_022020	n=4620	nnz=15680	max_deg=42	deg_le1=1380	base=273140	amd_nnzl=20540	lower=12460	fill=8080	top1_share=0.0074	top10_share=0.0741
+   3327.53580581  identity
+   2463.57468697  reversed
+   9981.11770887  random0
+   10100.96856557  random1
+   10118.27370579  random2
+   0.99985355  BAT cm DegDivNvSqrtWf a=10
+   0.99985355  BAT cm DegDivNvSqrtWf a=1
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   best=0.99985355 [cm DegDivNvSqrtWf a=10] (21 candidates)
+TIEH	squfl025-025persp	n=3800	nnz=11250	max_deg=75	deg_le1=1250	base=49925	amd_nnzl=10975	lower=9425	fill=1550	top1_share=0.0135	top10_share=0.1354
+   12568.53680521  identity
+   1533.63244867  reversed
+   23322.54083125  random0
+   12169.65077616  random1
+   17236.55256885  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT cm SqDiv a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	ex1223	n=33	nnz=82	max_deg=7	deg_le1=11	base=244	amd_nnzl=86	lower=74	fill=12	top1_share=0.0656	top10_share=0.5123
+   2.32377049  identity
+   2.60655738  reversed
+   2.80327869  random0
+   4.29098361  random1
+   8.25409836  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	knp5-43	n=2065	nnz=31132	max_deg=903	deg_le1=903	base=3517788	amd_nnzl=36336	lower=17631	fill=18705	top1_share=0.0133	top10_share=0.1272
+   111.44841560  identity
+   1.04235474  reversed
+   201.55593430  random0
+   195.57348396  random1
+   204.38878608  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	tln2	n=32	nnz=88	max_deg=6	deg_le1=12	base=233	amd_nnzl=83	lower=76	fill=7	top1_share=0.0687	top10_share=0.5064
+   4.73819742  identity
+   1.97424893  reversed
+   2.28326180  random0
+   2.97854077  random1
+   4.37339056  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	emfl100_5_5	n=21925	nnz=52300	max_deg=148	deg_le1=6300	base=221650	amd_nnzl=62300	lower=48075	fill=14225	top1_share=0.0113	top10_share=0.0938
+   96151.59943605  identity
+   673030.06414618  reversed
+   376266.66339725  random0
+   264734.79803745  random1
+   352289.27518159  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	autocorr_bern25-19	n=28	nnz=612	max_deg=27	deg_le1=2	base=5278	amd_nnzl=334	lower=334	fill=0	top1_share=0.0758	top10_share=0.7150
+   1.00000000  identity
+   1.46153846  reversed
+   1.24782114  random0
+   1.20917014  random1
+   1.17639257  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	sssd20-08persp	n=356	nnz=1232	max_deg=23	deg_le1=56	base=4960	amd_nnzl=1208	lower=972	fill=236	top1_share=0.0163	top10_share=0.1633
+   32.91975806  identity
+   392.84193548  reversed
+   239.92358871  random0
+   126.82903226  random1
+   149.40161290  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT minfill
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	oaer	n=20	nnz=40	max_deg=4	deg_le1=8	base=107	amd_nnzl=45	lower=40	fill=5	top1_share=0.0841	top10_share=0.6542
+   1.38317757  identity
+   2.12149533  reversed
+   2.36448598  random0
+   2.32710280  random1
+   1.79439252  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	hybriddynamic_fixed	n=168	nnz=388	max_deg=3	deg_le1=33	base=1103	amd_nnzl=421	lower=362	fill=59	top1_share=0.0082	top10_share=0.0816
+   14.64188577  identity
+   6.41795104  reversed
+   3.23662738  random0
+   3.22665458  random1
+   5.87307344  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	st_miqp2	n=10	nnz=18	max_deg=3	deg_le1=5	base=37	amd_nnzl=19	lower=19	fill=0	top1_share=0.1081	top10_share=1.0000
+   1.27027027  identity
+   2.37837838  reversed
+   1.40540541  random0
+   2.18918919  random1
+   1.86486486  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	autocorr_bern30-23	n=33	nnz=878	max_deg=32	deg_le1=2	base=8940	amd_nnzl=472	lower=472	fill=0	top1_share=0.0644	top10_share=0.6287
+   1.00000000  identity
+   1.40145414  reversed
+   1.16599553  random0
+   1.14004474  random1
+   1.12841163  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	cvxnonsep_psig30r	n=126	nnz=250	max_deg=32	deg_le1=63	base=501	amd_nnzl=251	lower=251	fill=0	top1_share=0.0080	top10_share=0.0798
+   1.30938124  identity
+   89.91616766  reversed
+   97.29341317  random0
+   2.79640719  random1
+   36.04191617  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT metis def
+   1.00000000  BAT metis ni16
+   1.00000000  BAT rcm
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	emfl050_5_5	n=13175	nnz=32300	max_deg=98	deg_le1=3800	base=155400	amd_nnzl=38550	lower=29325	fill=9225	top1_share=0.0161	top10_share=0.1338
+   39608.40534106  identity
+   204260.13895109  reversed
+   111370.17364221  random0
+   91478.09871300  random1
+   140478.35496139  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+TIEH	st_m1	n=42	nnz=432	max_deg=21	deg_le1=11	base=3097	amd_nnzl=313	lower=258	fill=55	top1_share=0.0465	top10_share=0.4650
+   1.00000000  identity
+   3.82079432  reversed
+   3.44720697  random0
+   2.48207943  random1
+   3.32483048  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	st_glmp_ss2	n=18	nnz=48	max_deg=8	deg_le1=6	base=121	amd_nnzl=45	lower=42	fill=3	top1_share=0.1322	top10_share=0.7603
+   3.23140496  identity
+   1.65289256  reversed
+   1.54545455  random0
+   4.22314050  random1
+   2.04132231  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	pointpack06	n=55	nnz=276	max_deg=15	deg_le1=21	base=1497	amd_nnzl=241	lower=193	fill=48	top1_share=0.1129	top10_share=0.5585
+   4.92518370  identity
+   1.49899800  reversed
+   8.83433534  random0
+   7.22378090  random1
+   8.51235805  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	clay0304m	n=258	nnz=840	max_deg=24	deg_le1=96	base=2742	amd_nnzl=798	lower=678	fill=120	top1_share=0.0233	top10_share=0.1182
+   32.64405543  identity
+   1.96717724  reversed
+   68.21444201  random0
+   260.38584974  random1
+   70.19730124  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT amf a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	pooling_foulds5pq	n=1218	nnz=8300	max_deg=129	deg_le1=47	base=159641	amd_nnzl=9583	lower=5368	fill=4215	top1_share=0.0150	top10_share=0.1456
+   44.27358260  identity
+   391.44301902  reversed
+   857.25771575  random0
+   1123.77901040  random1
+   1113.02817572  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amf a=10
+   1.00000000  BAT cm SqDiv a=10
+   1.00211725  BAT cm Ammf a=10
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	sporttournament08	n=31	nnz=156	max_deg=30	deg_le1=2	base=862	amd_nnzl=154	lower=109	fill=45	top1_share=0.0742	top10_share=0.5278
+   1.90603248  identity
+   12.08352668  reversed
+   4.51160093  random0
+   1.79930394  random1
+   3.01276102  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT metis def
+   1.00000000  BAT metis ni16
+   1.00000000  BAT scotch
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	autocorr_bern20-15	n=23	nnz=394	max_deg=22	deg_le1=2	base=2784	amd_nnzl=220	lower=220	fill=0	top1_share=0.0920	top10_share=0.8154
+   1.00000000  identity
+   1.55316092  reversed
+   1.39331897  random0
+   1.12571839  random1
+   1.10596264  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amf a=10
+   1.00000000  BAT metis def
+   1.00000000  BAT metis ni16
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	clay0203m	n=132	nnz=420	max_deg=16	deg_le1=48	base=1348	amd_nnzl=402	lower=342	fill=60	top1_share=0.0267	top10_share=0.1602
+   13.15578635  identity
+   1.97032641  reversed
+   50.39465875  random0
+   64.73516320  random1
+   73.46142433  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=true a=0.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   best=1.00000000 [amd agg=true a=10] (22 candidates)
+TIEH	squfl030-150	n=13680	nnz=36000	max_deg=150	deg_le1=4500	base=252605	amd_nnzl=41115	lower=31680	fill=9435	top1_share=0.0038	top10_share=0.0380
+   112578.91809347  identity
+   112579.13186596  reversed
+   169392.98779122  random0
+   213044.54004869  random1
+   137588.40942974  random2
+   1.00000000  BAT amd agg=true a=10
+   1.00000000  BAT amd agg=true a=2.5
+   1.00000000  BAT amd agg=false a=10
+   1.00000000  BAT amd agg=false a=2.5
+   1.00000000  BAT cm SqDiv a=10
+   best=1.00000000 [amd agg=true a=10] (21 candidates)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 158 filtered out; finished in 2.32s
+

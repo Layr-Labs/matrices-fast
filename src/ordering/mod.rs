@@ -5285,6 +5285,69 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    // Revisit the completion after the greedy search and its exact windows.
+    // Earlier PEO/watcher rounds saw a different incumbent. Retain the entire
+    // winning prefix; every replacement below is a strict exact decrease.
+    // The high-flop class keeps its existing searches, and completion construction
+    // additionally obeys its factor-nonzero limits before materializing fill.
+    // Reject an expensive existing ledger before scoring again. Admission
+    // below still requires the fresh exact score and factor-nonzero bound.
+    let terminal_followup = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
+        && best_flops <= LADDER_FILL_BOUND;
+    #[cfg(test)]
+    let terminal_followup = terminal_followup && probe::terminal_followup::enabled();
+    if terminal_followup {
+        let mut final_flops = score(&best_perm);
+        if final_flops <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= 150_000 {
+            // The same fixed window allowance also covers dense/hub patterns;
+            // preparation and elimination are charged regardless of density.
+            if nnz > n.saturating_mul(16) || max_deg > n / 2 {
+                if let Some(candidate) = rgreedy::subset_window_descent_step(
+                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
+                    8, 4, 3, 64_000_000,
+                ) {
+                    if is_bijection(&candidate, n) {
+                        let f = score(&candidate);
+                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                    }
+                }
+            }
+            for _ in 0..2 {
+                let before = final_flops;
+                let pp = permute_current(&best_perm);
+                let et = EliminationTree::from_pattern(&pp);
+                let counts = column_counts_gnp(&pp, &et);
+                if let Some(candidates) = peo_extract::candidates_bounded(
+                    n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
+                    rgreedy::MAX_N, 200_000, 150_000,
+                ) {
+                    for candidate in candidates {
+                        let f = score(&candidate);
+                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                    }
+                }
+                if final_flops == before { break; }
+            }
+            // Wide spans solve only connected components of at most fourteen
+            // vertices, preserving each component's slots and skipping larger
+            // components. Narrow passes then refine the resulting incumbent.
+            for (width, sweeps, step, budget) in [
+                (48, 4, 19, 16_000_000),
+                (9, 4, 4, 16_000_000),
+                (8, 4, 3, 32_000_000),
+            ] {
+                if let Some(candidate) = rgreedy::sparse_span_window_descent(
+                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
+                    width, sweeps, step, budget,
+                ) {
+                    if is_bijection(&candidate, n) {
+                        let f = score(&candidate);
+                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                    }
+                }
+            }
+        }
+    }
     best_perm
 }
 

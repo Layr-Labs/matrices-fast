@@ -1,0 +1,12 @@
+probe binary: /home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/target/probe/release/deps/ssi_candidate_worker-9bc17c144118ca64
+
+running 1 test
+test ordering::probe::probe_insertion_search ... INS	kissing2	bucket=2	n=20772	nnz=401024	base=156414018	inc=156414018	best=156414018	inc_r=1.000000	best_r=1.000000	gain_pct=0.0000	order_s=0.463	search_s=8.114	evals=4000	strict=0	plateau=1965
+INS	supplychainr1_053050	bucket=2	n=16640	nnz=57800	base=2173490	inc=2173490	best=2173490	inc_r=1.000000	best_r=1.000000	gain_pct=0.0000	order_s=0.415	search_s=1.738	evals=4000	strict=0	plateau=1052
+INS	emfl100_5_5	bucket=2	n=21925	nnz=52300	base=221650	inc=221650	best=221650	inc_r=1.000000	best_r=1.000000	gain_pct=0.0000	order_s=0.411	search_s=2.258	evals=4000	strict=0	plateau=2910
+INS	emfl050_5_5	bucket=2	n=13175	nnz=32300	base=155400	inc=155400	best=155400	inc_r=1.000000	best_r=1.000000	gain_pct=0.0000	order_s=0.290	search_s=1.441	evals=4000	strict=0	plateau=2705
+INS	squfl030-150	bucket=2	n=13680	nnz=36000	base=252605	inc=252605	best=252605	inc_r=1.000000	best_r=1.000000	gain_pct=0.0000	order_s=0.335	search_s=1.452	evals=4000	strict=0	plateau=2672
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 162 filtered out; finished in 17.51s
+

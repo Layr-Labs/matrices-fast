@@ -157,6 +157,8 @@ pub(crate) struct Game<'a> {
     tmp: Vec<u64>,
     /// Its surviving vertices remain a clique as eliminations only add edges.
     known_clique: Vec<u64>,
+    #[cfg(target_arch = "x86_64")]
+    native_popcnt: bool,
     #[cfg(test)]
     reference_kernels: bool,
     #[cfg(test)]
@@ -264,6 +266,8 @@ impl<'a> Game<'a> {
             cand: Vec::with_capacity(n),
             tmp: vec![0u64; w],
             known_clique: vec![0u64; w],
+            #[cfg(target_arch = "x86_64")]
+            native_popcnt: is_x86_feature_detected!("popcnt"),
             #[cfg(test)]
             reference_kernels: false,
             #[cfg(test)]
@@ -349,6 +353,20 @@ impl<'a> Game<'a> {
         if self.reference_kernels {
             return game_cpu_tests::reference_eliminate(self, v);
         }
+        #[cfg(target_arch = "x86_64")]
+        if self.native_popcnt {
+            // SAFETY: construction checked the only extra CPU feature.
+            return unsafe { self.eliminate_popcnt(v) };
+        }
+        self.eliminate_body(v)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "popcnt")]
+    unsafe fn eliminate_popcnt(&mut self,v:usize)->u64 { self.eliminate_body(v) }
+
+    #[cfg_attr(target_arch = "x86_64",inline(always))]
+    fn eliminate_body(&mut self,v:usize)->u64 {
         let w = self.w;
         self.tmp.copy_from_slice(&self.adj[v * w..v * w + w]);
         // Materialize N(v).
@@ -459,6 +477,20 @@ impl<'a> Game<'a> {
         if self.reference_kernels {
             return game_cpu_tests::reference_deficiency(self, v);
         }
+        #[cfg(target_arch = "x86_64")]
+        if self.native_popcnt {
+            // SAFETY: construction checked the only extra CPU feature.
+            return unsafe { self.deficiency_popcnt(v) };
+        }
+        self.deficiency_body(v)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "popcnt")]
+    unsafe fn deficiency_popcnt(&mut self,v:usize)->u32 { self.deficiency_body(v) }
+
+    #[cfg_attr(target_arch = "x86_64",inline(always))]
+    fn deficiency_body(&mut self,v:usize)->u32 {
         let w = self.w;
         self.tmp.copy_from_slice(&self.adj[v * w..v * w + w]);
         if self.deg[v] <= 1
@@ -475,6 +507,11 @@ impl<'a> Game<'a> {
             }
             return 0;
         }
+        self.nonzero_words.clear();
+        for (q,&word) in self.tmp.iter().enumerate() {
+            if word!=0 { self.nonzero_words.push(q); }
+        }
+        let sparse_words=self.nonzero_words.len()<w;
         let mut missing: u32 = 0;
         for k in 0..w {
             let mut word = self.tmp[k];
@@ -484,8 +521,14 @@ impl<'a> Game<'a> {
                 let u = k * 64 + b;
                 let base = u * w;
                 let mut m = 0u32;
-                for q in 0..w {
-                    m += (self.tmp[q] & !self.adj[base + q]).count_ones();
+                if sparse_words {
+                    for &q in &self.nonzero_words {
+                        m += (self.tmp[q] & !self.adj[base + q]).count_ones();
+                    }
+                } else {
+                    for q in 0..w {
+                        m += (self.tmp[q] & !self.adj[base + q]).count_ones();
+                    }
                 }
                 // `u` itself is in `tmp` and never in `adj[u]`.
                 missing += m - 1;
@@ -1403,7 +1446,7 @@ pub(crate) fn search_par_default_seeds(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn search_par_specs(
+fn search_par_specs(
     n: usize,
     col_ptr: &[usize],
     row_idx: &[usize],

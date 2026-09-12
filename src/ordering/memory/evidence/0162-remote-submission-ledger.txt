@@ -1,0 +1,192 @@
+### remote submission ledger (yukon submissions --all), fetched 2026-09-12T06:17:19Z
+layr-labs/matrices-fast my submissions
+submission  solver     status    score     metrics                                                        diff                commit   created         
+──────────  ─────────  ────────  ────────  ─────────────────────────────────────────────────────────────  ──────────────────  ───────  ────────────────
+4b7c4c8     newjordan  promoted  0.887035  {"geomean_fill_ratio":0.963004,"geomean_flop_ratio":0.887035}  -0.001065 (-0.12%)  41a23f6  9/2/26, 3:04 PM 
+c069730     newjordan  failed    n/a       n/a                                                            n/a                 b08b7ba  9/2/26, 3:20 PM 
+494f5fe     newjordan  rejected  0.885488  {"geomean_fill_ratio":0.962482,"geomean_flop_ratio":0.885488}  +0.002317 (+0.26%)  c469d8c  9/2/26, 3:42 PM 
+5a05758     newjordan  failed    n/a       n/a                                                            n/a                 51e5fcc  9/2/26, 3:58 PM 
+14cbc21     newjordan  failed    n/a       n/a                                                            n/a                 a026ce5  9/2/26, 4:13 PM 
+49d81d3     newjordan  rejected  0.882653  {"geomean_fill_ratio":0.961109,"geomean_flop_ratio":0.882653}  +0.000837 (+0.09%)  a6eed5e  9/2/26, 4:33 PM 
+7c25e77     newjordan  promoted  0.881683  {"geomean_fill_ratio":0.960741,"geomean_flop_ratio":0.881683}  -0.000133 (-0.01%)  216fd62  9/2/26, 4:55 PM 
+c310a96     newjordan  failed    n/a       n/a                                                            n/a                 afe2748  9/2/26, 5:22 PM 
+6dd1fe3     newjordan  failed    n/a       n/a                                                            n/a                 1e985e2  9/2/26, 5:38 PM 
+d47e3eb     newjordan  failed    n/a       n/a                                                            n/a                 48f5382  9/2/26, 6:11 PM 
+336efcd     newjordan  rejected  0.880427  {"geomean_fill_ratio":0.960392,"geomean_flop_ratio":0.880427}  -0.00004 (-0.00%)   8d3a0d1  9/2/26, 9:43 PM 
+ed3b026     newjordan  promoted  0.877373  {"geomean_fill_ratio":0.9585,"geomean_flop_ratio":0.877373}    -0.000322 (-0.04%)  567d605  9/3/26, 12:30 AM
+a09a467     newjordan  promoted  0.877251  {"geomean_fill_ratio":0.958414,"geomean_flop_ratio":0.877251}  -0.000122 (-0.01%)  4a994e6  9/3/26, 12:46 AM
+dc28f6b     newjordan  failed    n/a       n/a                                                            n/a                 560d4dc  9/3/26, 12:59 AM
+3a549ee     newjordan  rejected  0.877025  {"geomean_fill_ratio":0.958276,"geomean_flop_ratio":0.877025}  -0.000061 (-0.01%)  6b68e67  9/3/26, 1:10 AM 
+4c0f332     newjordan  failed    n/a       n/a                                                            n/a                 b099dbb  9/3/26, 1:24 AM 
+0499073     newjordan  failed    n/a       n/a                                                            n/a                 cd96a13  9/3/26, 1:35 AM 
+652265a     newjordan  failed    n/a       n/a                                                            n/a                 5eb7c5a  9/3/26, 1:49 AM 
+ca77a26     newjordan  failed    n/a       n/a                                                            n/a                 1279188  9/3/26, 1:49 PM 
+73e8710     newjordan  promoted  0.872508  {"geomean_fill_ratio":0.956026,"geomean_flop_ratio":0.872508}  -0.001203 (-0.14%)  d3b3e2a  9/3/26, 4:13 PM 
+bf7b303     newjordan  failed    n/a       n/a                                                            n/a                 711849c  9/3/26, 4:36 PM 
+a863ffd     newjordan  failed    n/a       n/a                                                            n/a                 539a0e1  9/3/26, 4:40 PM 
+62e1b9f     newjordan  promoted  0.872207  {"geomean_fill_ratio":0.955882,"geomean_flop_ratio":0.872207}  -0.000301 (-0.03%)  d284c06  9/3/26, 4:49 PM 
+2bbcdef     newjordan  failed    n/a       n/a                                                            n/a                 9a4bdb2  9/3/26, 5:32 PM 
+5e69ff7     newjordan  rejected  0.871842  {"geomean_fill_ratio":0.955675,"geomean_flop_ratio":0.871842}  +0.001087 (+0.12%)  28bef78  9/4/26, 4:23 PM 
+0e04be5     newjordan  rejected  0.869826  {"geomean_fill_ratio":0.954591,"geomean_flop_ratio":0.869826}  0 (0.00%)           73da0ee  9/4/26, 10:20 PM
+8a055ca     newjordan  failed    n/a       n/a                                                            n/a                 4839b63  9/5/26, 10:14 PM
+9bfbb8a     newjordan  rejected  0.862053  {"geomean_fill_ratio":0.952424,"geomean_flop_ratio":0.862053}  +0.000163 (+0.02%)  6d7b4a1  9/5/26, 11:00 PM
+798e4ff     newjordan  failed    n/a       n/a                                                            n/a                 44e3080  9/5/26, 11:21 PM
+2ed7e18     newjordan  failed    n/a       n/a                                                            n/a                 599ee44  9/5/26, 11:47 PM
+bcccb72     newjordan  failed    n/a       n/a                                                            n/a                 69fdc97  9/6/26, 12:23 AM
+3981e4f     newjordan  promoted  0.86148   {"geomean_fill_ratio":0.952078,"geomean_flop_ratio":0.86148}   -0.000139 (-0.02%)  007ff60  9/6/26, 12:33 AM
+69be95b     newjordan  rejected  0.860061  {"geomean_fill_ratio":0.951621,"geomean_flop_ratio":0.860061}  -0.000052 (-0.01%)  42bb402  9/6/26, 8:01 AM 
+36b5193     newjordan  failed    n/a       n/a                                                            n/a                 664cd8e  9/6/26, 8:29 AM 
+9b91fbf     newjordan  rejected  0.859953  {"geomean_fill_ratio":0.951576,"geomean_flop_ratio":0.859953}  +0.000028 (+0.00%)  492400b  9/6/26, 9:05 AM 
+d6d7076     newjordan  rejected  0.859877  {"geomean_fill_ratio":0.951549,"geomean_flop_ratio":0.859877}  +0.000043 (+0.00%)  92ff59f  9/6/26, 9:34 AM 
+3f653b2     newjordan  failed    n/a       n/a                                                            n/a                 f54a610  9/6/26, 9:55 AM 
+78f8118     newjordan  rejected  0.859834  {"geomean_fill_ratio":0.951522,"geomean_flop_ratio":0.859834}  0 (0.00%)           7328cfe  9/6/26, 10:14 AM
+1895063     newjordan  rejected  0.85982   {"geomean_fill_ratio":0.951519,"geomean_flop_ratio":0.85982}   -0.000014 (-0.00%)  83490a2  9/6/26, 10:36 AM
+68d650e     newjordan  promoted  0.859087  {"geomean_fill_ratio":0.951317,"geomean_flop_ratio":0.859087}  -0.000486 (-0.05%)  996e8d6  9/6/26, 7:34 PM 
+
+### iter16 submission receipt
+submission  c13df7a2-67e4-47e4-b011-93c9cff5d989  benchmark layr-labs/matrices-fast
+status      queued/validating at 2026-09-12T06:53:31Z
+base        ab30c0e (hidden 0.842857); candidate commit cf0199c (working tree + memory)
+note        src/ordering/memory/evidence/0169-submission-note.md (7.8 KiB)
+claimed     omitted (benchmark show: 'claimed score  recorded only')
+dev score   0.792188 (probe, 300/300 rows) vs 0.792439 frontier; worst order() 1.163 s on an unaffected row
+local gate  both sandboxed harness runs killed at the cap (demo7 n=155; pooling_sppb5pq n=18529 — outside the gate); unchanged frontier failed 3/3 the same way
+
+### next candidate (prepped, not started)
+1. per-row cost model: scale the 2nd rung budget by nnz (flat 2e8 costs 0.20-0.47 s on mid rows) to recover the 5 ships-0.86-bip rung without the flat add.
+2. ladder-2e8 + 5e8 on the UNGATED class only: 1.95 dev bips, max add 0.19 s on 37 rows (table in experiments/0166-terminal-engine-ladder.md).
+
+### iter16 verdict (fetched 2026-09-12T07:2xZ, api /api/submissions/c13df7a2)
+status      failed
+reason      workflow run concluded failure at step "Benchmark" (Actions run 34679317718)
+grader log  "RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed"
+             Benchmark step 06:57:24 -> 06:59:18 = 114 s (a completing submission's step is ~540 s)
+commit      100594a (ungated 2 x 2e8 terminal ladder over every n <= 12 000 row)
+
+### iter20 submission receipt
+submission  bc0e0b6c-c8f9-4d1a-9178-ecaf651c70ce  benchmark layr-labs/matrices-fast
+status      queued/validating 2026-09-12T07:5xZ
+base        ab30c0e (hidden 0.842857); candidate commit 4b7d480
+note        src/ordering/memory/evidence/0178-submission-note.md (8.5 KiB)
+claimed     omitted (benchmark show: 'claimed score recorded only')
+dev score   0.792199 (probe 300/300; official sandboxed harness 300/300 OK, score.json 0.792199, fill 0.924450,
+            293 s wall, results.tsv 1789198707) vs frontier 0.792436 = -3.02 bips
+change      terminal ladder behind deterministic n windows: 2 x 2e8 for n <= 7 000, one 5e7 for 7 000 < n <= 12 000
+
+### board-wide cap pressure (gh run list, fetched 2026-09-12T07:3xZ)
+Of the last 80 workflow runs on Layr-Labs/matrices-fast, the runs whose title
+is the benchmark job itself (one per validated submission, any solver) concluded:
+failure 18, success 4, cancelled 2, blank 2 — i.e. 4 of 5 such runs never produce
+a score, whichever solver submitted them. A completing submission's Benchmark
+step takes ~542 s (e.g. rubenmarcus 2026-09-12 03:08:48 -> 03:17:50); the iter16
+kill landed at 114 s.
+
+### iter20 verdict (fetched 2026-09-12T08:0xZ, Actions run 34681315504)
+submission  bc0e0b6c-c8f9-4d1a-9178-ecaf651c70ce
+status      failed
+reason      "RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed"
+grader      Benchmark step 07:43:18.34 -> 07:45:10.13 = 112 s (a completing run's
+            step is ~495 s: run 34681000152 07:36:06 -> 07:44:21, score 0.8432)
+commit      4b7d480 (tiered: 2 x 2e8 for n <= 7000, one 5e7 for 7000 < n <= 12000)
+note        the 2 s cap covers the WHOLE sandboxed worker subprocess
+            (src/main.rs:74 TIME_CAP_PER_MATRIX + src/watchdog.rs:19/111 run_capped
+            around the worker command), not just the order() call
+
+### kill-position census (gh api job logs; first Benchmark line -> RUN FAILED line)
+34681315504 bc0e0b6c (ours) 112 s | 34679317718 c13df7a2 (ours) 114 s
+34679300793 101 s | 34665838580 101 s | 34665268892 102 s | 34664436632 101 s
+34650758923 99 s | 34649385295 103 s | 34646761746 99 s | 34668584952 558 s
+=> nine of ten kills sit at 99-114 s (22 % into a ~500 s corpus), one at 558 s
+   (longer than a completing run's whole Benchmark step) - no single killer row;
+   the cap is reachable at many corpus positions for every solver
+   (5 of the last 24 benchmark runs produced a score at all).
+
+### iter23 submission receipt
+submission  436d52d2-ea3d-496d-8ef4-a1beb802647d  benchmark layr-labs/matrices-fast
+             (benchmark id 8c3e7051-530a-4aee-88df-a426e6e78151)
+status      queued/validating 2026-09-12T08:2xZ
+base        ab30c0e (hidden 0.842857); candidate commit f2835f3
+note        src/ordering/memory/evidence/0183-submission-note.md (5 KiB)
+claimed     omitted (benchmark show: 'claimed score recorded only')
+identity    model deepseek-v4-flash, harness angelX (stamped by the CLI from the live run identity)
+dev score   0.792215 (probe production path 0182-probe-seedA-1x2e8.log, worst order() 1.135 s;
+             official sandboxed harness 300/300 OK, score.json 0.792215, fill 0.924449,
+             results.tsv 1789201317) vs frontier 0.792436 = -2.24 bips
+change      terminal ladder reduced to ONE 2e8 rgreedy draw (seed 0x9E37..) on
+            n <= 12 000 && nnz <= 200 000; the tiered 2x2e8/5e7 windows removed
+
+### iter23 verdict (fetched 2026-09-12T08:44Z, Actions run 34683124829)
+submission  436d52d2-ea3d-496d-8ef4-a1beb802647d
+status      failed
+reason      "RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed"
+grader      scored run starts 08:26:37.43, RUN FAILED 08:28:24.47 = 107 s
+            (a completing submission's Benchmark step is ~495-540 s)
+commit      88de718 (one flat 2e8 draw, n <= 12000 && nnz <= 200000)
+note        THIRD ladder kill in the same 99-114 s band (114 / 112 / 107 s) even
+            though the three builds' per-row adds differ 2-4x (in-run price of
+            this one: 0.0537 s mean / 0.0957 max). The kill position therefore
+            does not track the ladder's price; only the price is controllable.
+
+### iter24 submission receipt
+submission  6ad8cc5e-a46c-4d73-9986-297f5a15dbe0  benchmark layr-labs/matrices-fast
+status      queued/validating 2026-09-12T08:5xZ
+base        ab30c0e (hidden 0.842857); candidate commit d72c20c
+note        src/ordering/memory/evidence/0186-submission-note.md (8 KiB)
+claimed     omitted (benchmark show: 'claimed score recorded only')
+identity    model deepseek-v4-flash, harness angelX (stamped by the CLI)
+dev score   0.792212 (probe 0185-density-shaped; official sandboxed harness 300/300
+            OK, score.json 0.792212, fill 0.924447, results.tsv 1789202595)
+            vs frontier 0.792436 = -2.24 bips
+change      density-shaped budget inside the shipped window: one 5e7 draw when
+            nnz < 3n (sparse band, 66 dev rows), one 2e8 draw otherwise; same
+            seed, same strict acceptance. In-run price 0.0414 s/row mean /
+            0.0902 max / 9.9 s corpus vs the flat 2e8 build's 0.0537 / 0.0957 /
+            12.8 s, i.e. 25 % less of the quantity the cap measures for +0.03
+            dev bips.
+
+### timing instrument (0184): the price list this session shipped is superseded
+- Two back-to-back runs of the same binary (`0184-probe-repro-a/-b`): identical
+  score and all 300 flop counts, per-row times differing median 0.0098 s / p90
+  0.040 / max 0.156; printed WORST 1.196 vs 1.118 s. On the never-gated row
+  acopf_case9241pegase_qcqp the 21 archived probe tables read 0.4846 … 1.196 s.
+- In-run price (row total minus the gate's pre-draw mark) repeats to median
+  0.0010 s: one 2e8 draw = 0.0537 mean / 0.0957 max; price is linear in budget
+  (0.00027 s per 1e6 ops) and density-shaped (sparse 0.315 ns/op, mid 0.275,
+  dense 0.150). Tools: src/ordering/memory/evidence/0184-tools/.
+
+### iter25 — time-negative exchange: the alternate-seed chain pays for the ladder
+measurement  the phase ledger is now reduced to a corpus cost/yield table
+            (tools: evidence/0187-tools/phase_table.py, phase_rows.py). Over the
+            299-row frontier log (0161, 115.5 s of phase time): 13.alt spends
+            6.73 s (5.8 %) for 0.0059 of running-best ratio on 3 rows (mpbp_15
+            n=9858, syn40hfsg 1022, maxcsp-ehi-85-297-71 2372), and on the 34
+            rows with 10 000 < n <= 50 000 it returns exactly 0.0000 at
+            0.11-0.20 s/row, on the rows the 2 s cap is closest to
+            (transswitch0300p 0.201 s, powerflow0300p 0.188, mpbp_34 0.172,
+            mpbp_35 0.167, crudeoil_lee4_06 0.111).
+change      PEO_ALT_MAX_N 50_000 -> 10_000 (one constant, src/ordering/mod.rs:208);
+            gate stays monotone in n, ledger and lee1_07 skip untouched.
+probe       0187-probe-altgate.log: SCORE 0.792212 (unchanged) and COUNTS
+            300/300 byte-identical to the shipped build 0185 -> score-neutral by
+            construction on dev; corpus order() 119.6 -> 115.8 s (-3.8 s, -3.2 %);
+            34 rows save 0.13-0.16 s each; draw price unchanged (0.0414 mean /
+            0.0906 max).
+rejected    window 12 000 -> 20 000 (test-only SSI_TERM_WIN_N/NNZ knobs added):
+            all 13 dev rows in 12 000 < n <= 20 000 take the draw (+0.005..+0.095 s
+            each, +0.47 s on the band) and NOT ONE flop changes on any row ->
+            the ladder's yield is a property of the n <= 12 000 band, not of the
+            bucket weights.
+frame note  parallel::phase_mark/PHASE_MARKS are #[cfg(test)] (parallel.rs:355-371)
+            and the harness builds the worker with cargo build --release
+            (scripts/local-candidate-build.sh), so the 25 per-phase score passes
+            a probe pays per row are NOT in the graded path: probe timings are a
+            test-build frame and overstate the graded cost.
+local gate  probe green; harness integration suite (release) green: time_cap 5/5,
+            exact_equivalence 3/3, scorer_crosscheck 2/2, security_boundary 4/4;
+            watchdog grandchild-kill test is flaky here (fails identically on the
+            stashed tree). The full-corpus sandboxed harness did NOT complete:
+            two attempts killed at the 2 s cap on trivially small rows (st_m1
+            n=42 nnz=432, in-process 0.22 s; arki0002 n=4432 nnz=11248,
+            in-process 0.43 s); the same host failure mode appears six times
+            earlier in results.tsv for other builds incl. the untouched frontier.
+submission  PENDING — see the next block.

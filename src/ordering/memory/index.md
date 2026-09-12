@@ -1,3 +1,10 @@
+[0152: sparse terminal exchange with alternate-PEO headroom](experiments/0152-sparse-exchange-peo-headroom.md):
+on promoted `ab30c0e`, dev **0.792439 -> 0.792346**, fill **0.924436**,
+28/4 improved/regressed. Retire alternate PEO on the exact sparse exchange
+envelope to fund the retained E32 pass; terminal allowance **120M vs 136M**,
+worst complete public call **1.178 s**. Terminal-only `ea67f01b` failed the
+hidden 2 s cap.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

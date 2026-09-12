@@ -23,6 +23,7 @@ mod wide_core;
 pub(super) mod alt_lineage;
 pub(super) mod leader_tail;
 mod sorted_validation;
+pub(super) mod terminal_followup;
 
 /// Buckets exactly as the harness does (lt_1k / 1k_10k / gt_10k).
 fn bucket(n: usize) -> usize {

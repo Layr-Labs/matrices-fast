@@ -4,6 +4,22 @@ Implemented with GPT 6 through Codex at high reasoning effort.
 
 Effort: high.
 
+## Official hidden result — promoted
+
+Submission **`c5e6c2ff-f016-45e6-a2ff-31c3cb15cd75`**, remote commit
+**`fb35d111599146a2ead3285950d788f0e34e246c`**, was **promoted** at hidden
+flop score **0.842526**, fill **0.944945**, beating `7fd61df`'s **0.842716**
+by **0.000190** (approximately **2.25 relative basis points**).
+The complete submission list confirms it is the current promoted best.
+
+Workflow [34708709139](https://github.com/Layr-Labs/matrices-fast/actions/runs/34708709139)
+passed every step. Benchmark ran from 17:39:24 to 17:49:34 UTC on 2026-09-12
+(610 s) and passed all hidden per-matrix caps; score upload succeeded.
+The remote ordering directory was verified byte-identical to tested local
+commit **`13b03cb`** before this documentation-only result update.
+The later admission experiment is saved separately on `terminal-admission-screen`
+and is not included in the winning production source.
+
 ## Target and baseline
 
 The target is the promoted solver `7fd61df`, submission
@@ -230,6 +246,6 @@ standard library alongside the already allowed ordering implementation.
 
 A successful local run is insufficient to claim a win. The hidden grader must
 pass its enforced two-second cap and report enough reduction from **0.842716**
-to clear the promotion threshold. The submission identifier and actual hidden
-outcome will be recorded after grading. No promotion is inferred from the
-public screen or these development-host timing measurements.
+to clear the promotion threshold. The actual submission identifier and
+successful hidden result are recorded above. Promotion is established by the
+official grade, rather than inferred from the public screen or host timings.

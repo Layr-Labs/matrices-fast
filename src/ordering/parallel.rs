@@ -163,9 +163,22 @@ pub(crate) fn run_candidates(
         nnz,
         incumbent,
         keep_all,
-        &|i: usize| match std::panic::catch_unwind(AssertUnwindSafe(|| (tasks[i])())) {
-            Ok(Ok(perm_i32)) => Some(perm_i32.into_iter().map(|x| x as usize).collect()),
-            _ => None,
+        &|i: usize| {
+            let t0 = std::time::Instant::now();
+            let r = match std::panic::catch_unwind(AssertUnwindSafe(|| (tasks[i])())) {
+                Ok(Ok(perm_i32)) => Some(perm_i32.into_iter().map(|x| x as usize).collect()),
+                _ => None,
+            };
+            #[cfg(test)]
+            if std::env::var_os("SSI_PAR_TRACE").is_some() {
+                eprintln!(
+                    "PARTASK\tbatch={}\tidx={i}\tproduce_s={:.4}\tgot={}",
+                    tasks.len(),
+                    t0.elapsed().as_secs_f64(),
+                    if r.is_some() { "perm" } else { "none" }
+                );
+            }
+            r
         },
     )
 }

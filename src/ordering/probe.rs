@@ -174,6 +174,127 @@ fn probe_timing_and_score() {
     }
     println!("SCORE = {:.6}", aggregate(&log_sums, &counts));
     println!("WORST order() = {:.3} s", rows[0].0);
+    // 0196: soundness audit of the stage-1b force-adoption (see `force_audit`).
+    println!("{}", super::force_audit::report());
+}
+
+/// SELF-INFLICTED-LOSS AUDIT.
+///
+/// Every full-pattern score the pipeline pays is routed through
+/// `alt_lineage::note_scored`, so a single armed `order()` call answers a
+/// question no stage-level probe asks: **did the pipeline ship the best
+/// permutation it evaluated?** Any row where it did not is a pure loss — the
+/// ordering was already in hand and priced by the pipeline's own exact scorer
+/// — so the gap is a lower bound on what a bookkeeping repair (not a new
+/// heuristic) can recover, and it generalises by construction: the invariant
+/// is about the pipeline, not about any dev row.
+///
+/// Env: `SSI_PROBE_ONLY=a,b` restricts the run to the named rows.
+#[test]
+#[ignore]
+fn probe_eval_audit() {
+    let corpus = crate::corpus::corpus();
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let mut counts = [0usize; 3];
+    let mut shipped_logs = [0.0f64; 3];
+    let mut min_logs = [0.0f64; 3];
+    let mut leaks: Vec<(f64, String, usize, usize, u64, u64, usize, usize)> = Vec::new();
+    let mut rows = 0usize;
+    let mut scored_total = 0usize;
+    println!("AUDIT\tname\tn\tnnz\tamd\tshipped\tmin\tgap_pct\tscored\tbijections");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        alt_lineage::audit_begin();
+        let shipped = order(pat);
+        let fin = flops_of(&sp, &shipped);
+        let universe = alt_lineage::audit_take();
+        let mut min = fin;
+        let mut nb = 0usize;
+        for (f, p) in universe.iter() {
+            if p.len() != n || !is_bijection(p, n) {
+                continue;
+            }
+            nb += 1;
+            if *f < min {
+                min = *f;
+            }
+        }
+        scored_total += universe.len();
+        rows += 1;
+        let b = bucket(n);
+        counts[b] += 1;
+        shipped_logs[b] += (fin as f64 / base as f64).ln();
+        min_logs[b] += (min as f64 / base as f64).ln();
+        if min < fin {
+            leaks.push((
+                min as f64 / fin as f64,
+                name.clone(),
+                n,
+                pat.nnz(),
+                fin,
+                min,
+                universe.len(),
+                nb,
+            ));
+        }
+        println!(
+            "AUDIT\t{name}\t{n}\t{}\t{base}\t{fin}\t{min}\t{:.4}\t{}\t{nb}",
+            pat.nnz(),
+            100.0 * (1.0 - min as f64 / fin as f64),
+            universe.len()
+        );
+    }
+    alt_lineage::audit_end();
+    leaks.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    println!("\n--- rows where the SHIPPED ordering is worse than one the pipeline scored ---");
+    for (gap, name, n, nnz, fin, min, scored, nb) in leaks.iter() {
+        println!(
+            "LEAK\t{name}\tn={n}\tnnz={nnz}\tshipped={fin}\tmin={min}\trecover={:.4}%\tscored={scored}\tbijections={nb}",
+            100.0 * (1.0 - gap)
+        );
+    }
+    println!(
+        "\nAUDIT-SUMMARY\trows={rows}\tleak_rows={}\tscored_candidates={scored_total}",
+        leaks.len()
+    );
+    for b in 0..3 {
+        if counts[b] > 0 {
+            println!(
+                "{:<8} count={:<5} shipped={:.4} min={:.4}",
+                BUCKET_NAMES[b],
+                counts[b],
+                (shipped_logs[b] / counts[b] as f64).exp(),
+                (min_logs[b] / counts[b] as f64).exp()
+            );
+        }
+    }
+    let s = aggregate(&shipped_logs, &counts);
+    let m = aggregate(&min_logs, &counts);
+    println!(
+        "SCORE_SHIPPED = {s:.6}  SCORE_MIN_EVALUATED = {m:.6}  recoverable_bips = {:.2}",
+        (s - m) * 10000.0
+    );
 }
 
 /// List the matrices where the current `order()` is still tied at (or above)
@@ -223,6 +344,233 @@ fn probe_ties() {
             "{:<8} tied {}/{}",
             BUCKET_NAMES[b], per_bucket[b], total[b]
         );
+    }
+}
+
+/// TIE FORENSICS (test-only): *why* is `ratio == 1.0000` on 77 corpus rows?
+///
+/// Splits every row by whether the AMD anchor itself is provably fill-free:
+/// `nnz(L)` equals the unconditional lower bound `n + edges` (upper-triangle
+/// entries), which no ordering can undercut — so a tie there is irreducible.
+/// Otherwise the anchor carries `fill = nnz(L) - lower` units of fill and the
+/// tie is a *search* failure, i.e. genuine headroom. One TSV row per matrix
+/// plus a per-bucket summary.
+#[test]
+#[ignore]
+fn probe_tie_forensics() {
+    let corpus = crate::corpus::corpus();
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    println!("TIE\tname\tn\tnnz\tedges\tamd_flops\tamd_nnzl\tlower_nnzl\tfill\tfillfree");
+    let mut total = [0usize; 3];
+    let mut ff = [0usize; 3];
+    let mut withfill = [0usize; 3];
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let mut ws = scoring_ws::ScoreWorkspace::new(n, pat.nnz());
+        let amd_flops = ws.flops(&sp, &amd);
+        let amd_nnzl = ws.nnz_l();
+        let edges: usize = (0..n)
+            .map(|j| {
+                pat.row_idx[pat.col_ptr[j]..pat.col_ptr[j + 1]]
+                    .iter()
+                    .filter(|&&i| i > j)
+                    .count()
+            })
+            .sum();
+        let lower = n as u64 + edges as u64;
+        let fillfree = amd_nnzl == lower;
+        let b = bucket(n);
+        total[b] += 1;
+        if fillfree {
+            ff[b] += 1;
+        } else {
+            withfill[b] += 1;
+        }
+        println!(
+            "TIE\t{name}\t{n}\t{}\t{edges}\t{amd_flops}\t{amd_nnzl}\t{lower}\t{}\t{}",
+            pat.nnz(),
+            amd_nnzl.saturating_sub(lower),
+            if fillfree { 1 } else { 0 }
+        );
+    }
+    for b in 0..3 {
+        println!(
+            "TIESUMMARY\t{}\ttotal={}\tfillfree={}\twithfill={}",
+            BUCKET_NAMES[b], total[b], ff[b], withfill[b]
+        );
+    }
+}
+
+/// TIE HEADROOM (test-only): is a tie at `ratio == 1.0000` recoverable?
+///
+/// For each named row (`SSI_PROBE_ONLY`), report (a) the AMD anchor's fill and
+/// its column-count concentration (what share of `Σ c_j²` the ten largest
+/// columns carry — a pinned cost is unfixable by any ordering), (b) 8-decimal
+/// ratios for identity / reversed / random permutations, which bound how much
+/// the score *can* move at all, and (c) the best ratio over a compact vendored
+/// battery so a "tie is a search failure" claim can be tested instead of
+/// assumed. Run on rows the pipeline already improves as controls: the battery
+/// must find `< 1.0` there, otherwise the instrument is not measuring what the
+/// pipeline measures.
+#[test]
+#[ignore]
+fn probe_tie_headroom() {
+    let corpus = crate::corpus::corpus();
+    let only: std::collections::HashSet<String> = std::env::var("SSI_PROBE_ONLY")
+        .expect("set SSI_PROBE_ONLY")
+        .split(',')
+        .map(|x| x.trim().to_string())
+        .collect();
+    let big_nnz: usize = std::env::var("SSI_TIE_CAND_MAX_NNZ")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(400_000);
+    for (name, pat) in &corpus {
+        if !only.contains(name) {
+            continue;
+        }
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let mut ws = scoring_ws::ScoreWorkspace::new(n, nnz);
+        let base = ws.flops(&sp, &amd);
+        let amd_nnzl = ws.nnz_l();
+        let mut counts: Vec<u64> = ws.probe_counts().iter().map(|&c| c as u64).collect();
+        let edges: usize = (0..n)
+            .map(|j| {
+                pat.row_idx[pat.col_ptr[j]..pat.col_ptr[j + 1]]
+                    .iter()
+                    .filter(|&&i| i > j)
+                    .count()
+            })
+            .sum();
+        let lower = n as u64 + edges as u64;
+        let total_flops: u64 = counts.iter().map(|&c| c * c).sum();
+        counts.sort_unstable_by(|a, b| b.cmp(a));
+        let top1: u64 = counts[0] * counts[0];
+        let top10: u64 = counts.iter().take(10).map(|&c| c * c).sum();
+        let mut deg = vec![0usize; n];
+        for j in 0..n {
+            deg[j] = pat.col_ptr[j + 1] - pat.col_ptr[j];
+        }
+        let max_deg = deg.iter().copied().max().unwrap_or(0);
+        let deg1 = deg.iter().filter(|&&d| d <= 1).count();
+        println!(
+            "TIEH\t{name}\tn={n}\tnnz={nnz}\tmax_deg={max_deg}\tdeg_le1={deg1}\tbase={base}\tamd_nnzl={amd_nnzl}\tlower={lower}\tfill={}\ttop1_share={:.4}\ttop10_share={:.4}",
+            amd_nnzl.saturating_sub(lower),
+            top1 as f64 / total_flops as f64,
+            top10 as f64 / total_flops as f64
+        );
+        let ratio = |perm: &[usize], ws: &mut scoring_ws::ScoreWorkspace| -> f64 {
+            ws.flops(&sp, perm) as f64 / base as f64
+        };
+        // (b) landscape bounds: permutations that ignore structure entirely.
+        println!("   {:.8}  identity", ratio(&(0..n).collect::<Vec<_>>(), &mut ws));
+        let rev: Vec<usize> = (0..n).rev().collect();
+        println!("   {:.8}  reversed", ratio(&rev, &mut ws));
+        let mut state = 0x9e3779b97f4a7c15u64;
+        for k in 0..3 {
+            let mut r: Vec<usize> = (0..n).collect();
+            for i in (1..n).rev() {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                r.swap(i, (state as usize) % (i + 1));
+            }
+            println!("   {:.8}  random{k}", ratio(&r, &mut ws));
+        }
+        // (c) compact vendored battery.
+        let mut results: Vec<(f64, String)> = Vec::new();
+        let mut run = |label: String,
+                       f: &dyn Fn() -> Option<Vec<i32>>,
+                       ws: &mut scoring_ws::ScoreWorkspace| {
+            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+            if let Ok(Some(p)) = r {
+                let perm: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                if is_bijection(&perm, n) {
+                    results.push((ws.flops(&sp, &perm) as f64 / base as f64, label));
+                }
+            }
+        };
+        for agg in [true, false] {
+            for a in [10.0f64, 2.5, 0.5] {
+                let o = feral_amd::AmdOptions { aggressive: agg, dense_alpha: a };
+                run(format!("amd agg={agg} a={a}"), &|| feral_amd::amd_order_opts(&core, &o).ok().map(|(p, ..)| p), &mut ws);
+            }
+        }
+        for a in [10.0f64, 2.5, 0.5] {
+            let o = feral_amf::AmfOptions { dense_alpha: a, ..Default::default() };
+            run(format!("amf a={a}"), &|| feral_amf::amf_order_opts(&core, &o).ok().map(|(p, ..)| p), &mut ws);
+        }
+        if nnz < big_nnz {
+            run("metis def".into(), &|| {
+                feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
+                    .ok()
+                    .map(|(p, _, _)| p)
+            }, &mut ws);
+            run("metis ni16".into(), &|| {
+                let o = feral_metis::MetisOptions { niparts: 16, fm_passes: 20, ..Default::default() };
+                feral_metis::metis_order_full(&core, &o).ok().map(|(p, _, _)| p)
+            }, &mut ws);
+        }
+        if nnz < 250_000 {
+            run("scotch".into(), &|| feral_scotch::scotch_order(&core).ok(), &mut ws);
+        }
+        if nnz < 400_000 {
+            run("rcm".into(), &|| Some(rcm_order(pat)), &mut ws);
+            run("sloan".into(), &|| Some(sloan_order(pat, 2, 1)), &mut ws);
+            run("nd".into(), &|| Some(nd_order(pat)), &mut ws);
+        }
+        if n < 4_000 && nnz < 12_000 {
+            run("minfill".into(), &|| Some(minfill_order(pat)), &mut ws);
+        }
+        for variant in [
+            custom_metrics::ScoreVariant::SqDiv,
+            custom_metrics::ScoreVariant::Ammf,
+            custom_metrics::ScoreVariant::DegDivNvSqrtWf,
+        ] {
+            for a in [10.0f64, 1.0] {
+                run(format!("cm {variant:?} a={a}"), &|| custom_metrics::order_variant(&core, a, true, variant).ok(), &mut ws);
+            }
+        }
+        results.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap_or(std::cmp::Ordering::Equal));
+        for (r, label) in results.iter().take(5) {
+            println!("   {r:.8}  BAT {label}");
+        }
+        match results.first() {
+            Some((best, label)) => {
+                println!("   best={best:.8} [{label}] ({} candidates)", results.len())
+            }
+            None => println!("   best=none (no candidate produced a bijection)"),
+        }
     }
 }
 
@@ -3122,5 +3470,859 @@ fn probe_indep_timing() {
         for l in lines {
             println!("    {l}");
         }
+    }
+}
+
+// ===========================================================================
+// 0153 — EXACT minimum-flops ordering for the smallest rows (test-only)
+// ===========================================================================
+//
+// Every other "exact" in this repo is exact *inside a window*: a fixed prefix,
+// a subtree, a k-pivot block. This is the exact optimum of the WHOLE matrix,
+// for `n` small enough to enumerate eliminated vertex *sets*.
+//
+// `c_v` (column v's count) is `1 + |N_{G_S}(v)|`, where `S` is the set of
+// vertices eliminated before `v` and `G_S` is the elimination closure of `G`
+// after removing `S`: two surviving vertices are adjacent in `G_S` iff some
+// path between them in `G` has all of its interior vertices in `S`. The
+// closure depends on the SET `S`, never on the order inside `S`, so
+//
+//     f(S) = min_{v ∉ S} [ (1 + |N_{G_S}(v)|)² + f(S ∪ {v}) ]
+//
+// is a well-defined recursion over the 2^n subsets, and `f(∅)` is the exact
+// minimum of the graded objective Σ cⱼ² over all n! orderings. Replaying the
+// argmin chain yields an optimal permutation. Blind spot: the recursion is
+// only affordable to n ≈ 24 (2^n states), so this measures the *ceiling* of
+// the small rows, not of the corpus.
+
+struct ExactSmall {
+    n: usize,
+    full: u64,
+    g: Vec<u64>,
+    start: Vec<u64>,
+    memo: Vec<u32>,
+    pick: Vec<u8>,
+    undo: Vec<(usize, u64)>,
+}
+
+impl ExactSmall {
+    fn new(adj: &[u64], n: usize) -> Self {
+        ExactSmall {
+            n,
+            full: (1u64 << n) - 1,
+            g: adj.to_vec(),
+            start: adj.to_vec(),
+            memo: vec![u32::MAX; 1usize << n],
+            pick: vec![u8::MAX; 1usize << n],
+            undo: Vec::new(),
+        }
+    }
+
+    fn dfs(&mut self, s: u64) -> u32 {
+        if s == self.full {
+            return 0;
+        }
+        let cached = self.memo[s as usize];
+        if cached != u32::MAX {
+            return cached;
+        }
+        let mut best = u32::MAX;
+        let mut best_v = u8::MAX;
+        for v in 0..self.n as u8 {
+            let bit = 1u64 << v;
+            if s & bit != 0 {
+                continue;
+            }
+            let nb = self.g[v as usize];
+            let c = 1 + nb.count_ones();
+            let mark = self.undo.len();
+            let mut touched = nb;
+            while touched != 0 {
+                let u = touched.trailing_zeros() as usize;
+                touched &= touched - 1;
+                self.undo.push((u, self.g[u]));
+            }
+            self.undo.push((v as usize, self.g[v as usize]));
+            self.g[v as usize] = 0;
+            let mut t2 = nb;
+            while t2 != 0 {
+                let u = t2.trailing_zeros() as usize;
+                t2 &= t2 - 1;
+                self.g[u] |= nb & !(1u64 << u);
+                self.g[u] &= !bit;
+            }
+            let child = self.dfs(s | bit);
+            while self.undo.len() > mark {
+                let (u, old) = self.undo.pop().unwrap();
+                self.g[u] = old;
+            }
+            let cost = c * c + child;
+            if cost < best {
+                best = cost;
+                best_v = v;
+            }
+        }
+        self.memo[s as usize] = best;
+        self.pick[s as usize] = best_v;
+        best
+    }
+
+    fn recover(&self) -> Vec<usize> {
+        let mut g = self.start.clone();
+        let mut s = 0u64;
+        let mut perm = Vec::with_capacity(self.n);
+        while s != self.full {
+            let v = self.pick[s as usize] as usize;
+            let nb = g[v];
+            perm.push(v);
+            g[v] = 0;
+            let mut t = nb;
+            while t != 0 {
+                let u = t.trailing_zeros() as usize;
+                t &= t - 1;
+                g[u] |= nb & !(1u64 << u);
+                g[u] &= !(1u64 << v);
+            }
+            s |= 1u64 << v;
+        }
+        perm
+    }
+}
+
+/// Exact optimum of Σcⱼ² and an ordering attaining it.
+fn exact_min_flops(adj: &[u64], n: usize) -> (u64, Vec<usize>) {
+    assert!(n >= 1 && n <= 40, "exact DP is only meaningful for tiny n");
+    let mut st = ExactSmall::new(adj, n);
+    let opt = st.dfs(0);
+    let perm = st.recover();
+    (opt as u64, perm)
+}
+
+/// Full symmetric adjacency bitmasks of `pattern` (diagonal is already absent).
+fn pattern_adjacency(pattern: &Pattern) -> Vec<u64> {
+    let n = pattern.n;
+    let mut adj = vec![0u64; n];
+    for j in 0..n {
+        for &i in &pattern.row_idx[pattern.col_ptr[j]..pattern.col_ptr[j + 1]] {
+            adj[j] |= 1u64 << i;
+            adj[i] |= 1u64 << j;
+        }
+    }
+    adj
+}
+
+/// Brute force over all n! orderings using the graded flop counter — the
+/// correctness cross-check for [`exact_min_flops`] at n <= 8.
+fn brute_min_flops(sp: &ScoringPattern, n: usize) -> u64 {
+    let mut perm: Vec<usize> = (0..n).collect();
+    let mut best = u64::MAX;
+    fn heap(k: usize, perm: &mut Vec<usize>, sp: &ScoringPattern, best: &mut u64) {
+        if k <= 1 {
+            let f = flops_of(sp, perm);
+            if f < *best {
+                *best = f;
+            }
+            return;
+        }
+        for i in 0..k {
+            heap(k - 1, perm, sp, best);
+            if k % 2 == 0 {
+                perm.swap(i, k - 1);
+            } else {
+                perm.swap(0, k - 1);
+            }
+        }
+    }
+    heap(n, &mut perm, sp, &mut best);
+    best
+}
+
+/// Exact ceiling of the smallest rows, and what the score would be if every
+/// row the DP can solve were replaced by its proven optimum.
+#[test]
+#[ignore]
+fn probe_exact_small() {
+    let max_n: usize = std::env::var("SSI_DP_MAX_N")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(22);
+    let brute_n: usize = std::env::var("SSI_DP_BRUTE_N")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8);
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+
+    let corpus = crate::corpus::corpus();
+    let mut log_sums = [0.0f64; 3];
+    let mut log_sums_dp = [0.0f64; 3];
+    let mut counts = [0usize; 3];
+    let mut covered = 0usize;
+    let mut wins: Vec<(String, u64, u64, f64)> = Vec::new();
+    let mut faults: Vec<String> = Vec::new();
+    println!("EXACT\tname\tn\tnnz\tamd\ttip\tratio\tdp\tdpratio\tdp_s\ttip_s\tbrute");
+
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 || n > 64 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let base = flops_of(&sp, &amd);
+
+        let t0 = Instant::now();
+        let tip = order(pat);
+        let tip_s = t0.elapsed().as_secs_f64();
+        let tip_flops = flops_of(&sp, &tip);
+
+        let (dp_flops, dp_ratio, dp_s, brute) = if n <= max_n {
+            let adj = pattern_adjacency(pat);
+            let t = Instant::now();
+            let (opt, perm) = exact_min_flops(&adj, n);
+            let secs = t.elapsed().as_secs_f64();
+            if !is_bijection(&perm, n) {
+                faults.push(format!("DP permutation is not a bijection on {name}"));
+            }
+            let realized = flops_of(&sp, &perm);
+            if opt != realized {
+                faults.push(format!(
+                    "DP cost {opt} != flops of its own permutation {realized} on {name}"
+                ));
+            }
+            let brute = if brute_n >= n && n <= 8 {
+                let b = brute_min_flops(&sp, n);
+                if b != opt {
+                    faults.push(format!("brute force {b} != DP {opt} on {name}"));
+                }
+                b
+            } else {
+                0
+            };
+            covered += 1;
+            (opt, opt as f64 / base as f64, secs, brute)
+        } else {
+            (0, f64::NAN, f64::NAN, 0)
+        };
+
+        let ratio = tip_flops as f64 / base as f64;
+        if dp_flops > 0 && dp_flops < tip_flops {
+            wins.push((name.clone(), tip_flops, dp_flops, tip_flops as f64 / dp_flops as f64));
+        }
+        let b = bucket(n);
+        counts[b] += 1;
+        log_sums[b] += ratio.ln();
+        log_sums_dp[b] += if dp_flops > 0 { dp_ratio.ln() } else { ratio.ln() };
+
+        println!(
+            "EXACT\t{name}\t{n}\t{nnz}\t{base}\t{tip_flops}\t{ratio:.6}\t{dp_flops}\t{dp_ratio:.6}\t{dp_s:.3}\t{tip_s:.3}\t{brute}"
+        );
+    }
+
+    println!("\n--- per-bucket (current tip) ---");
+    for b in 0..3 {
+        if counts[b] > 0 {
+            println!(
+                "{:<8} count={:<5} geomean={:.4}",
+                BUCKET_NAMES[b],
+                counts[b],
+                (log_sums[b] / counts[b] as f64).exp()
+            );
+        }
+    }
+    let cur = aggregate(&log_sums, &counts);
+    println!("CUR_SCORE = {cur:.6}");
+    println!("\n--- projection: exact optimum on the {covered} rows with n <= {max_n} ---");
+    for b in 0..3 {
+        if counts[b] > 0 {
+            println!(
+                "{:<8} count={:<5} geomean={:.4}",
+                BUCKET_NAMES[b],
+                counts[b],
+                (log_sums_dp[b] / counts[b] as f64).exp()
+            );
+        }
+    }
+    let dp = aggregate(&log_sums_dp, &counts);
+    println!("DP_SCORE  = {dp:.6}  (delta {:+.2} bips)", (dp - cur) * 10_000.0);
+    println!("DP rows covered = {covered}/{} of the scanned corpus", counts.iter().sum::<usize>());
+    wins.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal));
+    println!("\n--- rows where the exact optimum beats the shipped tip ({}) ---", wins.len());
+    for (name, tipf, dpf, x) in wins.iter().take(40) {
+        println!("WIN\t{name}\ttip={tipf}\tdp={dpf}\ttip/dp={x:.4}");
+    }
+    if faults.is_empty() {
+        println!("\nSELFCHECK\tok\t(DP cost == flops of its own permutation on every covered row; brute force == DP at n <= 8)");
+    } else {
+        for f in &faults {
+            println!("FAULT\t{f}");
+        }
+        panic!("exact-DP self-checks failed: {} fault(s)", faults.len());
+    }
+}
+
+// ===========================================================================
+// 0153b — what the EXACT randomized greedy engine buys OUTSIDE its gates
+// ===========================================================================
+//
+// `order()` runs the exact-objective randomized greedy / LNS engine
+// (`rgreedy::search`) only inside two size windows:
+//
+//   * `n <= 1_000 && nnz <= 30_000`                       (5-6 tickets)
+//   * `1_000 < n <= 6_000 && (nnz <= 30_000 || well_below && nnz <= 50_000)`
+//
+// Every matrix outside both windows gets no exact-objective search at all, and
+// 13 of the 77 AMD-tied dev rows live there (`qapw`, `polygon75`, the `squfl*`
+// / `emfl*` / `supplychainr1_*` / `kissing2` blocks), together with improvable
+// large rows (`powerflow0300p`, `faclay30/35`, `popdynm200`). This probe seeds
+// the engine exactly as production would — the incumbent `order()` returns —
+// and steps a budget ladder, reporting wall time, flops and ratio at each rung.
+#[test]
+#[ignore]
+fn probe_lns_beyond_gate() {
+    const ROWS: &[&str] = &[
+        // AMD ties that are outside both exact-search windows
+        "qapw",
+        "polygon75",
+        "watercontamination0303r",
+        "meanvar-orl400_05_e_8",
+        "knp5-43",
+        "knp5-44",
+        "squfl015-080persp",
+        "squfl020-150",
+        "squfl030-150",
+        "emfl050_5_5",
+        "emfl100_3_3",
+        "emfl100_5_5",
+        "supplychainr1_053050",
+        "kissing2",
+        // large improvable rows, also outside both windows
+        "powerflow0300p",
+        "faclay30",
+        "faclay35",
+        "popdynm200",
+        "nd_netgen-3000-1-1-b-b-ns_7",
+    ];
+    const LADDER: &[(i64, u64)] = &[
+        (4_000_000_000, 0x9E37_79B9_7F4A_7C15),
+        (20_000_000_000, 0x9E37_79B9_7F4A_7C15),
+        (100_000_000_000, 0x9E37_79B9_7F4A_7C15),
+    ];
+    let per_row_cap: f64 = std::env::var("SSI_LNS_ROW_CAP")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20.0);
+
+    let corpus = crate::corpus::corpus();
+    for (name, pat) in &corpus {
+        if !ROWS.contains(&name.as_str()) {
+            continue;
+        }
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let amd_flops = flops_of(&sp, &amd);
+        let t0 = Instant::now();
+        let tip = order(pat);
+        let tip_s = t0.elapsed().as_secs_f64();
+        let tip_flops = flops_of(&sp, &tip);
+
+        println!(
+            "LNS\t{name}\tn={n}\tnnz={nnz}\tamd={amd_flops}\ttip={tip_flops}\ttip_s={tip_s:.3}\ttip_ratio={:.4}",
+            tip_flops as f64 / amd_flops as f64
+        );
+        let mut best = tip_flops;
+        let mut acc = 0.0f64;
+        let mut last_rate: Option<f64> = None;
+        // Control: the SAME engine call, seeded with the identity permutation
+        // (far worse than the incumbent). If this cannot improve either, the
+        // engine is a no-op under this call path and every "no-candidate" below
+        // is meaningless.
+        {
+            let ident: Vec<usize> = (0..n).collect();
+            let ident_flops = flops_of(&sp, &ident);
+            let t = Instant::now();
+            let out = rgreedy::search(n, &pat.col_ptr, &pat.row_idx, &ident, ident_flops, 2_000_000_000, 0x2545_F491_4F6C_DD1D);
+            let secs = t.elapsed().as_secs_f64();
+            acc += secs;
+            match out {
+                Some((cand, _)) => {
+                    let perm: Vec<usize> = cand.into_iter().map(|x| x as usize).collect();
+                    if is_bijection(&perm, n) {
+                        let f = flops_of(&sp, &perm);
+                        println!("    CONTROL identity-seed: ident={ident_flops} -> f={f} ratio={:.4} secs={secs:.3}", f as f64 / amd_flops as f64);
+                    } else {
+                        println!("    CONTROL identity-seed: NOT-A-BIJECTION secs={secs:.3}");
+                    }
+                }
+                None => println!("    CONTROL identity-seed: no-candidate (ident={ident_flops}) secs={secs:.3}"),
+            }
+        }
+        for (budget, seed) in LADDER {
+            if acc > per_row_cap {
+                println!(
+                    "    budget={budget}\tSKIPPED\t(row budget {per_row_cap:.0}s exhausted)"
+                );
+                continue;
+            }
+            if let Some(rate) = last_rate {
+                let predicted = *budget as f64 * rate;
+                if acc + predicted > per_row_cap {
+                    println!(
+                        "    budget={budget}\tSKIPPED\t(predicted {predicted:.1}s on top of {acc:.1}s spent exceeds the {per_row_cap:.0}s row cap)"
+                    );
+                    continue;
+                }
+            }
+            let t = Instant::now();
+            let out = rgreedy::search(
+                n,
+                &pat.col_ptr,
+                &pat.row_idx,
+                &tip,
+                tip_flops,
+                *budget,
+                *seed,
+            );
+            let secs = t.elapsed().as_secs_f64();
+            acc += secs;
+            if *budget > 0 {
+                last_rate = Some(secs / *budget as f64);
+            }
+            println!("    throughput\t{} word-ops/s", if secs > 0.0 { (*budget as f64 / secs) as u64 } else { 0 });
+            match out {
+                Some((cand, claimed)) => {
+                    let perm: Vec<usize> = cand.into_iter().map(|x| x as usize).collect();
+                    if !is_bijection(&perm, n) {
+                        println!("    budget={budget}\tNOT-A-BIJECTION");
+                        continue;
+                    }
+                    let f = flops_of(&sp, &perm);
+                    if f < best {
+                        best = f;
+                    }
+                    println!(
+                        "    budget={budget}\tseed={seed:#x}\tf={f}\tclaimed={claimed}\tratio={:.6}\tbest={best}\tsecs={secs:.3}\tacc={acc:.2}",
+                        f as f64 / amd_flops as f64
+                    );
+                }
+                None => println!("    budget={budget}\tseed={seed:#x}\tno-candidate\tsecs={secs:.3}\tacc={acc:.2}"),
+            }
+        }
+        println!(
+            "    FINAL\t{name}\ttip={tip_flops}\tbest={best}\tbest_ratio={:.6}\twon={}",
+            best as f64 / amd_flops as f64,
+            best < tip_flops
+        );
+    }
+}
+
+/// 0153d — COMPLETE census of the "engine-affordable but ungated" class.
+///
+/// `order()` runs the exact-objective randomized greedy only for
+/// `n <= 1_000 && nnz <= 30_000` and `1_000 < n <= 6_000 && nnz <= 30_000`;
+/// the engine itself refuses `n > MAX_N = 12_000` (`rgreedy::MAX_N`). Everything
+/// in between is dev-corpus real estate the engine could legally search but
+/// never does. This probe walks that whole class — not a hand-picked list —
+/// seeds the engine with the incumbent `order()` returns, and reports every
+/// row where a production-affordable budget (2e9 and 5e9 word-ops) wins.
+#[test]
+#[ignore]
+fn probe_engine_census() {
+    let cap: f64 = std::env::var("SSI_LNS_ROW_CAP")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8.0);
+    // Class selector: `ungated` (default, the shipped 0154 gate), `gated`
+    // (the small/medium rows the pipeline already searches) or `all`.
+    let class: String = std::env::var("SSI_CENSUS_CLASS").unwrap_or_else(|_| "ungated".into());
+    let max_n: usize = std::env::var("SSI_CENSUS_MAX_N")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(12_000);
+    // Budget ladder, cheapest first; each level re-seeds the same walk from the
+    // TIP incumbent, and the reported value is the running minimum, so level k
+    // prices "run levels 1..=k".
+    let budgets: Vec<i64> = std::env::var("SSI_CENSUS_BUDGETS")
+        .ok()
+        .map(|v| v.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+        .filter(|v: &Vec<i64>| !v.is_empty())
+        .unwrap_or_else(|| vec![2_000_000_000, 5_000_000_000]);
+    let mut ladder: Vec<(String, u64, f64, Vec<(u64, f64)>)> = Vec::new();
+    let corpus = crate::corpus::corpus();
+    let mut total = 0usize;
+    let mut wins = 0usize;
+    let mut log_cur = [0.0f64; 3];
+    let mut log_win = [0.0f64; 3];
+    let mut counts = [0usize; 3];
+    println!("CENSUS\tname\tn\tnnz\tamd\ttip\ttip_s\tratio\tbest\tbest_ratio\tbest_s\tbudget\twon");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let gated = (n <= 1_000 && nnz <= 30_000) || (n > 1_000 && n <= 6_000 && nnz <= 30_000);
+        let keep = match class.as_str() {
+            "gated" => gated,
+            "all" => true,
+            _ => !gated,
+        };
+        if n == 0 || !keep || n > max_n {
+            continue;
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let amd_flops = flops_of(&sp, &amd);
+        let t0 = Instant::now();
+        let tip = order(pat);
+        let tip_s = t0.elapsed().as_secs_f64();
+        let tip_flops = flops_of(&sp, &tip);
+
+        let mut best = tip_flops;
+        let mut best_s = 0.0f64;
+        let mut best_budget = 0i64;
+        let mut acc = 0.0f64;
+        let mut levels: Vec<(u64, f64)> = Vec::new();
+        for (k, &budget) in budgets.iter().enumerate() {
+            if acc > cap {
+                levels.push((best, acc));
+                continue;
+            }
+            let seed = [
+                0x9E37_79B9_7F4A_7C15u64,
+                0xD1B5_4A32_D192_ED03,
+                0xA24B_AED4_963E_E407,
+                0x9FB2_1C65_1E5B_0B9C,
+            ][k % 4];
+            let t = Instant::now();
+            let out = rgreedy::search(
+                n,
+                &pat.col_ptr,
+                &pat.row_idx,
+                &tip,
+                tip_flops,
+                budget,
+                seed,
+            );
+            let secs = t.elapsed().as_secs_f64();
+            acc += secs;
+            if let Some((cand, _)) = out {
+                let perm: Vec<usize> = cand.into_iter().map(|x| x as usize).collect();
+                if is_bijection(&perm, n) {
+                    let f = flops_of(&sp, &perm);
+                    if f < best {
+                        best = f;
+                        best_s = secs;
+                        best_budget = budget;
+                    }
+                }
+            }
+            levels.push((best, acc));
+        }
+        ladder.push((name.clone(), tip_flops, tip_s, levels.clone()));
+        let mut cen2 = format!("CEN2\t{name}\t{tip_flops}\t{tip_s:.3}");
+        for (b, a) in levels.iter() {
+            cen2.push_str(&format!("\t{b}:{a:.3}"));
+        }
+        println!("{cen2}");
+        let b = bucket(n);
+        counts[b] += 1;
+        total += 1;
+        let cur_ratio = tip_flops as f64 / amd_flops as f64;
+        log_cur[b] += cur_ratio.ln();
+        log_win[b] += (best as f64 / amd_flops as f64).ln();
+        if best < tip_flops {
+            wins += 1;
+        }
+        println!(
+            "CENSUS\t{name}\t{n}\t{nnz}\t{amd_flops}\t{tip_flops}\t{tip_s:.3}\t{cur_ratio:.6}\t{best}\t{:.6}\t{best_s:.3}\t{best_budget}\t{}",
+            best as f64 / amd_flops as f64,
+            (best < tip_flops) as u8
+        );
+    }
+    println!("\nENGINE-CENSUS rows={total} wins={wins} of the engine-affordable ungated class");
+    for b in 0..3 {
+        if counts[b] > 0 {
+            println!(
+                "{:<8} count={:<4} geomean_now={:.4} geomean_with_engine={:.4}",
+                BUCKET_NAMES[b],
+                counts[b],
+                (log_cur[b] / counts[b] as f64).exp(),
+                (log_win[b] / counts[b] as f64).exp()
+            );
+        }
+    }
+    let cur = aggregate(&log_cur, &counts);
+    let win = aggregate(&log_win, &counts);
+    println!(
+        "CLASS_SCORE now={cur:.6} with-engine={win:.6} (delta {:+.2} bips on this class)",
+        (win - cur) * 10_000.0
+    );
+    for (k, &budget) in budgets.iter().enumerate() {
+        let mut wins = 0usize;
+        let mut added = 0.0f64;
+        let mut worst = 0.0f64;
+        for (_, tip_flops, tip_s, levels) in ladder.iter() {
+            if let Some((b, a)) = levels.get(k) {
+                if *b < *tip_flops {
+                    wins += 1;
+                }
+                added += *a;
+                worst = worst.max(*tip_s + *a);
+            }
+        }
+        println!(
+            "LEVEL\tk={k}\tbudget={budget}\twins={wins}/{}\tadded_total_s={added:.1}\tmean_added={:.3}\tworst_tip_plus_added={worst:.3}",
+            ladder.len(),
+            added / ladder.len().max(1) as f64
+        );
+    }
+}
+
+/// Headroom audit by *search* rather than by another arm.
+///
+/// The 0153 tie battery answered "which existing constructor beats AMD here"
+/// (answer on every sampled tie: none). This asks the strictly different
+/// question: **is there any permutation reachable from the shipped incumbent
+/// that scores strictly better** — the question a new mechanism must answer yes
+/// to before it is worth wiring into `order()`.
+///
+/// Mechanism: deterministic insertion-move hill climb directly on the
+/// permutation (`remove(i)` + `insert(j)`), scored with the exact
+/// `ScoreWorkspace::flops`, with equal-score ("plateau") moves accepted so the
+/// walk is not trapped on a one-move plateau, plus periodic resets to the best.
+/// No arm of the pipeline uses insertion moves; the n<=1000 SmallScore refine
+/// uses random paired *swaps* only.
+///
+/// Env: `SSI_PROBE_ONLY=a,b` (required), `SSI_INS_EVALS` (default 4000),
+/// `SSI_INS_RESET` (reset-to-best interval, default 512).
+#[test]
+#[ignore]
+fn probe_insertion_search() {
+    let corpus = crate::corpus::corpus();
+    let only: std::collections::HashSet<String> = match std::env::var("SSI_PROBE_ONLY") {
+        Ok(v) => v.split(',').map(|x| x.trim().to_string()).collect(),
+        Err(_) => {
+            println!("INS\t(no SSI_PROBE_ONLY set)");
+            return;
+        }
+    };
+    let budget: usize = std::env::var("SSI_INS_EVALS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(4_000);
+    let reset: usize = std::env::var("SSI_INS_RESET")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(512);
+    let mut next = |s: &mut u64| -> u64 {
+        *s = s.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = *s;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^ (z >> 31)
+    };
+    for (name, pat) in &corpus {
+        if !only.contains(name) || pat.n == 0 {
+            continue;
+        }
+        let n = pat.n;
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let mut ws = scoring_ws::ScoreWorkspace::new(n, nnz);
+        let base = ws.flops(&sp, &amd);
+        let t0 = Instant::now();
+        let inc = order(pat);
+        let t_order = t0.elapsed().as_secs_f64();
+        assert!(is_bijection(&inc, n), "INS {name}: order() is not a bijection");
+        let f_inc = ws.flops(&sp, &inc);
+        let mut cur = inc.clone();
+        let mut cur_f = f_inc;
+        let mut best = inc.clone();
+        let mut best_f = f_inc;
+        let mut state = 0x243f_6a88_85a3_08d3u64 ^ (n as u64).wrapping_mul(0x100_0000_01b3);
+        let t1 = Instant::now();
+        let mut evals = 0usize;
+        let mut strict = 0usize;
+        let mut plateau = 0usize;
+        let mut since = 0usize;
+        while evals < budget && n >= 2 {
+            let i = (next(&mut state) % (n as u64)) as usize;
+            let j = (next(&mut state) % (n as u64)) as usize;
+            if i == j {
+                continue;
+            }
+            let mut cand = cur.clone();
+            let v = cand.remove(i);
+            cand.insert(j.min(n - 1), v);
+            let f = ws.flops(&sp, &cand);
+            evals += 1;
+            since += 1;
+            if f < cur_f {
+                cur_f = f;
+                cur = cand;
+                strict += 1;
+                since = 0;
+                if f < best_f {
+                    best_f = f;
+                    best = cur.clone();
+                }
+            } else if f == cur_f {
+                cur = cand;
+                plateau += 1;
+                since = 0;
+            }
+            if since >= reset {
+                cur = best.clone();
+                cur_f = best_f;
+                since = 0;
+            }
+        }
+        let t_search = t1.elapsed().as_secs_f64();
+        let b = bucket(n);
+        println!(
+            "INS\t{name}\tbucket={b}\tn={n}\tnnz={nnz}\tbase={base}\tinc={f_inc}\tbest={best_f}\tinc_r={:.6}\tbest_r={:.6}\tgain_pct={:.4}\torder_s={t_order:.3}\tsearch_s={t_search:.3}\tevals={evals}\tstrict={strict}\tplateau={plateau}",
+            f_inc as f64 / base as f64,
+            best_f as f64 / base as f64,
+            (f_inc as f64 - best_f as f64) / f_inc as f64 * 100.0
+        );
+    }
+}
+
+/// FLOOR BATTERY (iter34): rows where `order()` returns the AMD floor
+/// (ratio ~= 1.0; dev has 81 of 300) and the DENSE small-n class RULES.md
+/// names ("DENSE KKT rows / hub nodes ... gate expensive paths by BOTH n AND
+/// nnz") but which dev does not contain (only 9 dev rows have nnz/n >= 50, all
+/// n <= 2372). For each row this prices the allowed engines (feral
+/// amd/amf/metis/kahip/scotch) against the same AMD baseline the other probes
+/// use, with their own wall clock — the two numbers a gate needs.
+///
+/// `SSI_CORPUS_FILE` selects the corpus, `SSI_PROBE_ONLY` a comma-separated
+/// row list. Instrument only; never shipped.
+#[test]
+#[ignore]
+fn probe_floor_battery() {
+    fn ratio_of(sp: &ScoringPattern, base: f64, n: usize, p: Option<Vec<i32>>) -> f64 {
+        match p {
+            Some(p) => {
+                let p: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                if is_bijection(&p, n) {
+                    flops_of(sp, &p) as f64 / base
+                } else {
+                    f64::NAN
+                }
+            }
+            None => f64::NAN,
+        }
+    }
+    let corpus = match std::env::var("SSI_CORPUS_FILE") {
+        Ok(path) if !path.trim().is_empty() => {
+            ssi_scoring::load_corpus_jsonl(std::path::Path::new(&path))
+                .unwrap_or_else(|_| crate::corpus::corpus())
+        }
+        _ => crate::corpus::corpus(),
+    };
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    const ENGINES: [&str; 6] = ["amf5", "amf_nd", "metis", "metis_dq", "kahip", "scotch"];
+    let mut header = String::from("FLOOR\tmatrix\tn\tnnz\tdens\tcur_s\tcur_r\tamd_s");
+    for e in ENGINES.iter() {
+        header.push_str(&format!("\t{e}_s\t{e}_r"));
+    }
+    println!("\n{header}");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let t = Instant::now();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let amd_s = t.elapsed().as_secs_f64();
+        let base = flops_of(&sp, &amd) as f64;
+        let t = Instant::now();
+        let cur = flops_of(&sp, &order(pat)) as f64 / base;
+        let cur_s = t.elapsed().as_secs_f64();
+        let mut line = format!(
+            "FLOOR\t{name}\t{n}\t{nnz}\t{:.2}\t{cur_s:.4}\t{cur:.4}\t{amd_s:.4}",
+            nnz as f64 / n as f64
+        );
+        for e in ENGINES.iter() {
+            let t = Instant::now();
+            let p: Option<Vec<i32>> = match *e {
+                "amf5" => {
+                    let o = feral_amf::AmfOptions { dense_alpha: 5.0, ..Default::default() };
+                    feral_amf::amf_order_opts(&core, &o).ok().map(|(p, ..)| p)
+                }
+                "amf_nd" => {
+                    let o = feral_amf::AmfOptions { dense_alpha: -1.0, ..Default::default() };
+                    feral_amf::amf_order_opts(&core, &o).ok().map(|(p, ..)| p)
+                }
+                "metis" => feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
+                    .ok()
+                    .map(|(p, ..)| p),
+                "metis_dq" => feral_metis::metis_order_full(
+                    &core,
+                    &feral_metis::MetisOptions { dense_quotient_enabled: true, ..Default::default() },
+                )
+                .ok()
+                .map(|(p, ..)| p),
+                "kahip" => feral_kahip::kahip_order_full(&core, &feral_kahip::KahipOptions::default())
+                    .ok()
+                    .map(|(p, ..)| p),
+                "scotch" => feral_scotch::scotch_order_full(&core, &feral_scotch::ScotchOptions::default())
+                    .ok()
+                    .map(|(p, ..)| p),
+                _ => None,
+            };
+            let s = t.elapsed().as_secs_f64();
+            let r = ratio_of(&sp, base, n, p);
+            line.push_str(&format!("\t{s:.4}\t{r:.4}"));
+        }
+        println!("{line}");
     }
 }

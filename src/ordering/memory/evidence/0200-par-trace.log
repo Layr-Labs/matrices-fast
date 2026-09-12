@@ -1,0 +1,530 @@
+   Compiling ssi-candidate-worker v0.1.0 (/home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/candidate-worker)
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1099:1
+     |
+1099 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1100 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1101 | | /// budget disables the stream, which is what production compiles to — the
+1102 | | /// switch can never change a submitted ordering. Configured through
+1103 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1104 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1367:1
+     |
+1367 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1368 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:334:1
+    |
+334 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+335 | | /// can run the SAME `order()` both ways in one process and compare the
+336 | | /// returned permutations element by element. Production builds compile
+337 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:368:1
+    |
+368 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+369 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+370 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+371 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:4993:5
+     |
+4993 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+4994 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+4995 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+4996 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5002 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5003 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5004 |       #[cfg(test)]
+5005 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5006 | |         .ok()
+5007 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5008 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5140:9
+     |
+5140 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5141 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5142 | /         let shipped_ladder = || {
+5143 | |             if nnz < 3 * n {
+5144 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5145 | |             } else {
+...    |
+5148 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4142:9
+     |
+4142 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:396:29
+    |
+396 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:731:7
+    |
+731 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:188:15
+    |
+188 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:313:15
+    |
+313 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:136:4
+    |
+136 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:232:4
+    |
+232 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:600:4
+    |
+600 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:478:19
+    |
+478 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 17 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 14.38s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+test ordering::probe::probe_timing_and_score ... PARTASK	batch=15	idx=0	produce_s=0.0229	got=perm
+PARTASK	batch=15	idx=1	produce_s=0.0230	got=perm
+PARTASK	batch=15	idx=2	produce_s=0.0230	got=perm
+PARTASK	batch=15	idx=3	produce_s=0.0230	got=perm
+PARTASK	batch=15	idx=4	produce_s=0.0000	got=perm
+PARTASK	batch=15	idx=5	produce_s=0.0000	got=perm
+PARTASK	batch=15	idx=6	produce_s=0.0181	got=perm
+PARTASK	batch=15	idx=7	produce_s=0.0208	got=perm
+PARTASK	batch=15	idx=9	produce_s=0.0208	got=perm
+PARTASK	batch=15	idx=10	produce_s=0.0011	got=perm
+PARTASK	batch=15	idx=8	produce_s=0.0209	got=perm
+PARTASK	batch=15	idx=11	produce_s=0.0197	got=perm
+PARTASK	batch=15	idx=12	produce_s=0.0197	got=perm
+PARTASK	batch=15	idx=13	produce_s=0.0250	got=perm
+PARTASK	batch=15	idx=14	produce_s=0.0250	got=perm
+PARTASK	batch=1	idx=0	produce_s=0.1475	got=perm
+PARTASK	batch=1	idx=0	produce_s=0.0296	got=perm
+PARTASK	batch=111	idx=0	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=1	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=2	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=3	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=4	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=6	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=5	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=7	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=8	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=10	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=9	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=11	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=12	produce_s=0.0213	got=perm
+PARTASK	batch=111	idx=15	produce_s=0.0214	got=perm
+PARTASK	batch=111	idx=14	produce_s=0.0214	got=perm
+PARTASK	batch=111	idx=13	produce_s=0.0214	got=perm
+PARTASK	batch=111	idx=16	produce_s=0.0314	got=perm
+PARTASK	batch=111	idx=19	produce_s=0.0314	got=perm
+PARTASK	batch=111	idx=18	produce_s=0.0314	got=perm
+PARTASK	batch=111	idx=17	produce_s=0.0314	got=perm
+PARTASK	batch=111	idx=20	produce_s=0.0248	got=perm
+PARTASK	batch=111	idx=23	produce_s=0.0248	got=perm
+PARTASK	batch=111	idx=21	produce_s=0.0248	got=perm
+PARTASK	batch=111	idx=22	produce_s=0.0248	got=perm
+PARTASK	batch=111	idx=24	produce_s=0.0233	got=perm
+PARTASK	batch=111	idx=25	produce_s=0.0233	got=perm
+PARTASK	batch=111	idx=27	produce_s=0.0233	got=perm
+PARTASK	batch=111	idx=26	produce_s=0.0233	got=perm
+PARTASK	batch=111	idx=28	produce_s=0.0205	got=perm
+PARTASK	batch=111	idx=30	produce_s=0.0203	got=perm
+PARTASK	batch=111	idx=29	produce_s=0.0205	got=perm
+PARTASK	batch=111	idx=31	produce_s=0.0203	got=perm
+PARTASK	batch=111	idx=32	produce_s=0.0208	got=perm
+PARTASK	batch=111	idx=33	produce_s=0.0208	got=perm
+PARTASK	batch=111	idx=34	produce_s=0.0208	got=perm
+PARTASK	batch=111	idx=35	produce_s=0.0208	got=perm
+PARTASK	batch=111	idx=36	produce_s=0.0326	got=perm
+PARTASK	batch=111	idx=37	produce_s=0.0326	got=perm
+PARTASK	batch=111	idx=39	produce_s=0.0326	got=perm
+PARTASK	batch=111	idx=38	produce_s=0.0326	got=perm
+PARTASK	batch=111	idx=41	produce_s=0.0222	got=perm
+PARTASK	batch=111	idx=42	produce_s=0.0222	got=perm
+PARTASK	batch=111	idx=43	produce_s=0.0222	got=perm
+PARTASK	batch=111	idx=40	produce_s=0.0257	got=perm
+PARTASK	batch=111	idx=44	produce_s=0.0223	got=perm
+PARTASK	batch=111	idx=46	produce_s=0.0223	got=perm
+PARTASK	batch=111	idx=45	produce_s=0.0223	got=perm
+PARTASK	batch=111	idx=47	produce_s=0.0334	got=perm
+PARTASK	batch=111	idx=48	produce_s=0.0244	got=perm
+PARTASK	batch=111	idx=49	produce_s=0.0260	got=perm
+PARTASK	batch=111	idx=50	produce_s=0.0300	got=perm
+PARTASK	batch=111	idx=54	produce_s=0.0218	got=perm
+PARTASK	batch=111	idx=52	produce_s=0.0344	got=perm
+PARTASK	batch=111	idx=53	produce_s=0.0342	got=perm
+PARTASK	batch=111	idx=51	produce_s=0.0509	got=perm
+PARTASK	batch=111	idx=55	produce_s=0.0235	got=perm
+PARTASK	batch=111	idx=56	produce_s=0.0198	got=perm
+PARTASK	batch=111	idx=57	produce_s=0.0207	got=perm
+PARTASK	batch=111	idx=58	produce_s=0.0199	got=perm
+PARTASK	batch=111	idx=59	produce_s=0.0210	got=perm
+PARTASK	batch=111	idx=63	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=60	produce_s=0.0237	got=perm
+PARTASK	batch=111	idx=64	produce_s=0.0042	got=perm
+PARTASK	batch=111	idx=61	produce_s=0.0217	got=perm
+PARTASK	batch=111	idx=62	produce_s=0.0204	got=perm
+PARTASK	batch=111	idx=66	produce_s=0.0214	got=perm
+PARTASK	batch=111	idx=65	produce_s=0.0237	got=perm
+PARTASK	batch=111	idx=67	produce_s=0.0241	got=perm
+PARTASK	batch=111	idx=68	produce_s=0.0398	got=perm
+PARTASK	batch=111	idx=69	produce_s=0.0214	got=perm
+PARTASK	batch=111	idx=71	produce_s=0.0201	got=perm
+PARTASK	batch=111	idx=70	produce_s=0.0246	got=perm
+PARTASK	batch=111	idx=75	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=72	produce_s=0.0208	got=perm
+PARTASK	batch=111	idx=73	produce_s=0.0206	got=perm
+PARTASK	batch=111	idx=74	produce_s=0.0212	got=perm
+PARTASK	batch=111	idx=78	produce_s=0.0004	got=perm
+PARTASK	batch=111	idx=76	produce_s=0.0206	got=perm
+PARTASK	batch=111	idx=77	produce_s=0.0201	got=perm
+PARTASK	batch=111	idx=79	produce_s=0.0210	got=perm
+PARTASK	batch=111	idx=80	produce_s=0.0212	got=perm
+PARTASK	batch=111	idx=81	produce_s=0.0244	got=perm
+PARTASK	batch=111	idx=85	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=86	produce_s=0.0000	got=perm
+PARTASK	batch=111	idx=82	produce_s=0.0243	got=perm
+PARTASK	batch=111	idx=87	produce_s=0.0185	got=perm
+PARTASK	batch=111	idx=83	produce_s=0.0321	got=perm
+PARTASK	batch=111	idx=84	produce_s=0.0330	got=perm
+PARTASK	batch=111	idx=88	produce_s=0.0182	got=perm
+PARTASK	batch=111	idx=89	produce_s=0.0184	got=perm
+PARTASK	batch=111	idx=90	produce_s=0.0193	got=perm
+PARTASK	batch=111	idx=91	produce_s=0.0183	got=perm
+PARTASK	batch=111	idx=92	produce_s=0.0190	got=perm
+PARTASK	batch=111	idx=93	produce_s=0.0182	got=perm
+PARTASK	batch=111	idx=95	produce_s=0.0182	got=perm
+PARTASK	batch=111	idx=94	produce_s=0.0186	got=perm
+PARTASK	batch=111	idx=96	produce_s=0.0186	got=perm
+PARTASK	batch=111	idx=97	produce_s=0.0187	got=perm
+PARTASK	batch=111	idx=98	produce_s=0.0187	got=perm
+PARTASK	batch=111	idx=99	produce_s=0.0231	got=perm
+PARTASK	batch=111	idx=100	produce_s=0.0226	got=perm
+PARTASK	batch=111	idx=101	produce_s=0.0259	got=perm
+PARTASK	batch=111	idx=102	produce_s=0.0239	got=perm
+PARTASK	batch=111	idx=103	produce_s=0.0255	got=perm
+PARTASK	batch=111	idx=104	produce_s=0.0251	got=perm
+PARTASK	batch=111	idx=105	produce_s=0.0270	got=perm
+PARTASK	batch=111	idx=106	produce_s=0.0237	got=perm
+PARTASK	batch=111	idx=107	produce_s=0.0219	got=perm
+PARTASK	batch=111	idx=108	produce_s=0.0217	got=perm
+PARTASK	batch=111	idx=110	produce_s=0.0242	got=perm
+PARTASK	batch=111	idx=109	produce_s=0.0278	got=perm
+LADGATE	8000	0	1.412	0
+COUNTS	cl2_n8000_d8	8000	127842	47308244658	46766978869
+PARTASK	batch=7	idx=0	produce_s=0.0050	got=perm
+PARTASK	batch=7	idx=3	produce_s=0.0049	got=perm
+PARTASK	batch=7	idx=2	produce_s=0.0050	got=perm
+PARTASK	batch=7	idx=1	produce_s=0.0050	got=perm
+PARTASK	batch=7	idx=4	produce_s=0.0000	got=perm
+PARTASK	batch=7	idx=5	produce_s=0.0000	got=perm
+PARTASK	batch=7	idx=6	produce_s=0.0039	got=perm
+PARTASK	batch=1	idx=0	produce_s=0.0178	got=perm
+PARTASK	batch=1	idx=0	produce_s=0.0224	got=perm
+PARTASK	batch=199	idx=0	produce_s=0.0032	got=perm
+PARTASK	batch=199	idx=2	produce_s=0.0033	got=perm
+PARTASK	batch=199	idx=1	produce_s=0.0033	got=perm
+PARTASK	batch=199	idx=3	produce_s=0.0033	got=perm
+PARTASK	batch=199	idx=4	produce_s=0.0033	got=perm
+PARTASK	batch=199	idx=5	produce_s=0.0033	got=perm
+PARTASK	batch=199	idx=7	produce_s=0.0033	got=perm
+PARTASK	batch=199	idx=6	produce_s=0.0033	got=perm
+PARTASK	batch=199	idx=8	produce_s=0.0025	got=perm
+PARTASK	batch=199	idx=9	produce_s=0.0025	got=perm
+PARTASK	batch=199	idx=10	produce_s=0.0025	got=perm
+PARTASK	batch=199	idx=11	produce_s=0.0025	got=perm
+PARTASK	batch=199	idx=12	produce_s=0.0028	got=perm
+PARTASK	batch=199	idx=15	produce_s=0.0028	got=perm
+PARTASK	batch=199	idx=13	produce_s=0.0028	got=perm
+PARTASK	batch=199	idx=14	produce_s=0.0028	got=perm
+PARTASK	batch=199	idx=16	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=17	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=18	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=19	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=20	produce_s=0.0031	got=perm
+PARTASK	batch=199	idx=21	produce_s=0.0031	got=perm
+PARTASK	batch=199	idx=22	produce_s=0.0031	got=perm
+PARTASK	batch=199	idx=23	produce_s=0.0031	got=perm
+PARTASK	batch=199	idx=24	produce_s=0.0035	got=perm
+PARTASK	batch=199	idx=26	produce_s=0.0035	got=perm
+PARTASK	batch=199	idx=25	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=27	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=28	produce_s=0.0029	got=perm
+PARTASK	batch=199	idx=29	produce_s=0.0029	got=perm
+PARTASK	batch=199	idx=30	produce_s=0.0030	got=perm
+PARTASK	batch=199	idx=31	produce_s=0.0030	got=perm
+PARTASK	batch=199	idx=32	produce_s=0.0024	got=perm
+PARTASK	batch=199	idx=33	produce_s=0.0024	got=perm
+PARTASK	batch=199	idx=34	produce_s=0.0025	got=perm
+PARTASK	batch=199	idx=35	produce_s=0.0024	got=perm
+PARTASK	batch=199	idx=36	produce_s=0.0026	got=perm
+PARTASK	batch=199	idx=37	produce_s=0.0026	got=perm
+PARTASK	batch=199	idx=38	produce_s=0.0026	got=perm
+PARTASK	batch=199	idx=39	produce_s=0.0026	got=perm
+PARTASK	batch=199	idx=41	produce_s=0.0035	got=perm
+PARTASK	batch=199	idx=42	produce_s=0.0035	got=perm
+PARTASK	batch=199	idx=43	produce_s=0.0035	got=perm
+PARTASK	batch=199	idx=40	produce_s=0.0056	got=perm
+PARTASK	batch=199	idx=44	produce_s=0.0031	got=perm
+PARTASK	batch=199	idx=45	produce_s=0.0031	got=perm
+PARTASK	batch=199	idx=46	produce_s=0.0031	got=perm
+PARTASK	batch=199	idx=47	produce_s=0.0038	got=perm
+PARTASK	batch=199	idx=49	produce_s=0.0037	got=perm
+PARTASK	batch=199	idx=48	produce_s=0.0037	got=perm
+PARTASK	batch=199	idx=51	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=50	produce_s=0.0070	got=perm
+PARTASK	batch=199	idx=52	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=53	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=54	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=55	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=56	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=57	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=58	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=59	produce_s=0.0049	got=perm
+PARTASK	batch=199	idx=60	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=61	produce_s=0.0047	got=perm
+PARTASK	batch=199	idx=62	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=63	produce_s=0.0037	got=perm
+PARTASK	batch=199	idx=64	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=65	produce_s=0.0037	got=perm
+PARTASK	batch=199	idx=66	produce_s=0.0037	got=perm
+PARTASK	batch=199	idx=67	produce_s=0.0037	got=perm
+PARTASK	batch=199	idx=68	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=69	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=70	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=71	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=72	produce_s=0.0044	got=perm
+PARTASK	batch=199	idx=73	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=74	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=75	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=76	produce_s=0.0037	got=perm
+PARTASK	batch=199	idx=77	produce_s=0.0039	got=perm
+PARTASK	batch=199	idx=78	produce_s=0.0038	got=perm
+PARTASK	batch=199	idx=79	produce_s=0.0039	got=perm
+PARTASK	batch=199	idx=80	produce_s=0.0034	got=perm
+PARTASK	batch=199	idx=81	produce_s=0.0035	got=perm
+PARTASK	batch=199	idx=82	produce_s=0.0035	got=perm
+PARTASK	batch=199	idx=83	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=84	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=85	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=86	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=87	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=88	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=89	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=90	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=91	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=92	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=95	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=96	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=97	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=98	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=99	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=100	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=93	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=94	produce_s=0.0038	got=perm
+PARTASK	batch=199	idx=101	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=102	produce_s=0.0044	got=perm
+PARTASK	batch=199	idx=103	produce_s=0.0044	got=perm
+PARTASK	batch=199	idx=104	produce_s=0.0039	got=perm
+PARTASK	batch=199	idx=105	produce_s=0.0040	got=perm
+PARTASK	batch=199	idx=106	produce_s=0.0039	got=perm
+PARTASK	batch=199	idx=107	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=108	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=109	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=110	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=111	produce_s=0.0047	got=perm
+PARTASK	batch=199	idx=112	produce_s=0.0049	got=perm
+PARTASK	batch=199	idx=113	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=114	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=115	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=116	produce_s=0.0040	got=perm
+PARTASK	batch=199	idx=117	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=118	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=119	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=120	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=121	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=122	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=123	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=124	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=125	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=126	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=127	produce_s=0.0043	got=perm
+PARTASK	batch=199	idx=131	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=132	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=133	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=128	produce_s=0.0039	got=perm
+PARTASK	batch=199	idx=129	produce_s=0.0040	got=perm
+PARTASK	batch=199	idx=130	produce_s=0.0040	got=perm
+PARTASK	batch=199	idx=134	produce_s=0.0038	got=perm
+PARTASK	batch=199	idx=135	produce_s=0.0037	got=perm
+PARTASK	batch=199	idx=136	produce_s=0.0036	got=perm
+PARTASK	batch=199	idx=140	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=141	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=142	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=137	produce_s=0.0040	got=perm
+PARTASK	batch=199	idx=138	produce_s=0.0040	got=perm
+PARTASK	batch=199	idx=139	produce_s=0.0040	got=perm
+PARTASK	batch=199	idx=143	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=144	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=145	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=146	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=147	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=148	produce_s=0.0040	got=perm
+PARTASK	batch=199	idx=149	produce_s=0.0040	got=perm
+PARTASK	batch=199	idx=150	produce_s=0.0041	got=perm
+PARTASK	batch=199	idx=151	produce_s=0.0042	got=perm
+PARTASK	batch=199	idx=152	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=153	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=154	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=155	produce_s=0.0047	got=perm
+PARTASK	batch=199	idx=156	produce_s=0.0048	got=perm
+PARTASK	batch=199	idx=157	produce_s=0.0047	got=perm
+PARTASK	batch=199	idx=161	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=158	produce_s=0.0048	got=perm
+PARTASK	batch=199	idx=162	produce_s=0.0000	got=perm
+PARTASK	batch=199	idx=159	produce_s=0.0047	got=perm
+PARTASK	batch=199	idx=160	produce_s=0.0047	got=perm
+PARTASK	batch=199	idx=163	produce_s=0.0032	got=perm
+PARTASK	batch=199	idx=164	produce_s=0.0049	got=perm
+PARTASK	batch=199	idx=165	produce_s=0.0032	got=perm
+PARTASK	batch=199	idx=167	produce_s=0.0032	got=perm
+PARTASK	batch=199	idx=166	produce_s=0.0050	got=perm
+PARTASK	batch=199	idx=169	produce_s=0.0032	got=perm
+PARTASK	batch=199	idx=168	produce_s=0.0050	got=perm
+PARTASK	batch=199	idx=171	produce_s=0.0033	got=perm
+PARTASK	batch=199	idx=170	produce_s=0.0050	got=perm
+PARTASK	batch=199	idx=172	produce_s=0.0049	got=perm
+PARTASK	batch=199	idx=173	produce_s=0.0032	got=perm
+PARTASK	batch=199	idx=174	produce_s=0.0049	got=perm
+PARTASK	batch=199	idx=175	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=176	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=177	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=178	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=179	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=180	produce_s=0.0047	got=perm
+PARTASK	batch=199	idx=181	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=182	produce_s=0.0047	got=perm
+PARTASK	batch=199	idx=183	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=184	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=185	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=187	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=186	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=188	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=189	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=190	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=191	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=192	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=193	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=194	produce_s=0.0046	got=perm
+PARTASK	batch=199	idx=195	produce_s=0.0047	got=perm
+PARTASK	batch=199	idx=196	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=197	produce_s=0.0045	got=perm
+PARTASK	batch=199	idx=198	produce_s=0.0047	got=perm
+LADGATE	6418	0	0.777	0
+COUNTS	crudeoil_lee2_06	6418	34646	23299675	17666549
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.4129	cl2_n8000_d8	8000	127842	0.9886
+0.7777	crudeoil_lee2_06	6418	34646	0.7582
+matrices under 0.010s: 0/2
+matrices under 0.050s: 0/2
+matrices under 0.100s: 0/2
+matrices under 0.200s: 0/2
+matrices under 0.400s: 0/2
+
+--- per-bucket ---
+1k_10k   count=2     geomean=0.8658
+SCORE = 0.865769
+WORST order() = 1.413 s
+FORCEAUDIT	stage1b_sites=2	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=0	tie_pass_run=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 164 filtered out; finished in 2.27s
+

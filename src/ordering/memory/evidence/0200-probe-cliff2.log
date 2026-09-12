@@ -1,0 +1,218 @@
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1099:1
+     |
+1099 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1100 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1101 | | /// budget disables the stream, which is what production compiles to — the
+1102 | | /// switch can never change a submitted ordering. Configured through
+1103 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1104 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1367:1
+     |
+1367 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1368 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:321:1
+    |
+321 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+322 | | /// can run the SAME `order()` both ways in one process and compare the
+323 | | /// returned permutations element by element. Production builds compile
+324 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:355:1
+    |
+355 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+356 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+357 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+358 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:4993:5
+     |
+4993 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+4994 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+4995 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+4996 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5002 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5003 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5004 |       #[cfg(test)]
+5005 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5006 | |         .ok()
+5007 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5008 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5140:9
+     |
+5140 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5141 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5142 | /         let shipped_ladder = || {
+5143 | |             if nnz < 3 * n {
+5144 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5145 | |             } else {
+...    |
+5148 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4142:9
+     |
+4142 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:396:29
+    |
+396 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:731:7
+    |
+731 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:175:15
+    |
+175 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:300:15
+    |
+300 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:136:4
+    |
+136 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:232:4
+    |
+232 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:600:4
+    |
+600 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:478:19
+    |
+478 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 17 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 0.01s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+test ordering::probe::probe_timing_and_score ... LADGATE	4000	0	0.728	0
+PHASES	cl2_n4000_d8	0.7282	1.portfolio=0.4148/0.9811	1b.indep=0.1185/0.9811	2.descent=0.0115/0.9811	3.search=0.0000/0.9811	4.subtree=0.0615/0.9810	4b.indep-accept=0.0000/0.9810	5.terminal=0.0067/0.9810	6.extra=0.0043/0.9810	7.telos=0.0000/0.9810	8.cleanup=0.0107/0.9810	9.reduce=0.0015/0.9810	10.completion=0.0012/0.9810	11.corecand=0.0000/0.9810	12.peo=0.0012/0.9810	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.9810	14.transplant=0.0104/0.9810	15.minl=0.0124/0.9810	15.peel=0.0000/0.9810	16.late=0.0000/0.9810	17.final=0.0156/0.9810	18.simp=0.0106/0.9810	19.five=0.0137/0.9808	20.lt1k=0.0000/0.9808	21.comp=0.0000/0.9808	22.win=0.0208/0.9808	final=0.9806
+COUNTS	cl2_n4000_d8	4000	63816	5964079395	5848440756
+LADGATE	6000	0	0.920	0
+PHASES	cl2_n6000_d8	0.9209	1.portfolio=0.5417/0.9883	1b.indep=0.1712/0.9883	2.descent=0.0193/0.9883	3.search=0.0000/0.9883	4.subtree=0.0530/0.9882	4b.indep-accept=0.0000/0.9882	5.terminal=0.0048/0.9882	6.extra=0.0036/0.9882	7.telos=0.0000/0.9882	8.cleanup=0.0184/0.9882	9.reduce=0.0023/0.9882	10.completion=0.0019/0.9882	11.corecand=0.0000/0.9882	12.peo=0.0019/0.9882	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.9882	14.transplant=0.0129/0.9882	15.minl=0.0159/0.9882	15.peel=0.0000/0.9882	16.late=0.0000/0.9882	17.final=0.0133/0.9882	18.simp=0.0159/0.9882	19.five=0.0000/0.9882	20.lt1k=0.0000/0.9882	21.comp=0.0000/0.9882	22.win=0.0234/0.9882	final=0.9882
+COUNTS	cl2_n6000_d8	6000	95870	20004605983	19768703657
+LADGATE	8000	0	1.422	0
+PHASES	cl2_n8000_d8	1.4226	1.portfolio=0.8743/0.9896	1b.indep=0.3321/0.9896	2.descent=0.0000/0.9896	3.search=0.0000/0.9896	4.subtree=0.0729/0.9895	4b.indep-accept=0.0000/0.9886	5.terminal=0.0064/0.9886	6.extra=0.0000/0.9886	7.telos=0.0000/0.9886	8.cleanup=0.0000/0.9886	9.reduce=0.0035/0.9886	10.completion=0.0026/0.9886	11.corecand=0.0000/0.9886	12.peo=0.0026/0.9886	13p.prep=0.0202/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0218/0.9886	14.transplant=0.0110/0.9886	15.minl=0.0150/0.9886	15.peel=0.0000/0.9886	16.late=0.0000/0.9886	17.final=0.0181/0.9886	18.simp=0.0000/0.9886	19.five=0.0000/0.9886	20.lt1k=0.0000/0.9886	21.comp=0.0000/0.9886	22.win=0.0318/0.9886	final=0.9886
+COUNTS	cl2_n8000_d8	8000	127842	47308244658	46766978869
+LADGATE	9500	0	0.841	0
+PHASES	cl2_n9500_d8	0.8440	1.portfolio=0.4031/0.9904	1b.indep=0.2062/0.9904	2.descent=0.0000/0.9904	3.search=0.0000/0.9904	4.subtree=0.0751/0.9904	4b.indep-accept=0.0000/0.9881	5.terminal=0.0071/0.9881	6.extra=0.0000/0.9881	7.telos=0.0000/0.9881	8.cleanup=0.0000/0.9881	9.reduce=0.0038/0.9881	10.completion=0.0028/0.9881	11.corecand=0.0000/0.9881	12.peo=0.0028/0.9881	13p.prep=0.0238/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0257/0.9881	14.transplant=0.0112/0.9881	15.minl=0.0158/0.9881	15.peel=0.0000/0.9881	16.late=0.0000/0.9881	17.final=0.0179/0.9881	18.simp=0.0000/0.9881	19.five=0.0000/0.9881	20.lt1k=0.0000/0.9881	21.comp=0.0000/0.9881	22.win=0.0337/0.9881	final=0.9881
+COUNTS	cl2_n9500_d8	9500	151858	79452931872	78510062445
+LADGATE	9950	0	0.841	0
+PHASES	cl2_n9950_d7	0.8421	1.portfolio=0.3624/0.9889	1b.indep=0.2936/0.9889	2.descent=0.0000/0.9889	3.search=0.0000/0.9889	4.subtree=0.0244/0.9889	4b.indep-accept=0.0000/0.9889	5.terminal=0.0074/0.9889	6.extra=0.0000/0.9889	7.telos=0.0000/0.9889	8.cleanup=0.0000/0.9889	9.reduce=0.0036/0.9889	10.completion=0.0030/0.9889	11.corecand=0.0000/0.9889	12.peo=0.0029/0.9889	13p.prep=0.0235/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0253/0.9889	14.transplant=0.0110/0.9889	15.minl=0.0158/0.9889	15.peel=0.0000/0.9889	16.late=0.0000/0.9889	17.final=0.0186/0.9889	18.simp=0.0000/0.9889	19.five=0.0000/0.9889	20.lt1k=0.0000/0.9889	21.comp=0.0000/0.9889	22.win=0.0380/0.9889	final=0.9889
+COUNTS	cl2_n9950_d7	9950	139178	78809008294	77933415015
+LADGATE	9950	0	0.794	0
+PHASES	cl2_n9950_d8	0.7969	1.portfolio=0.4118/0.9900	1b.indep=0.1430/0.9900	2.descent=0.0000/0.9900	3.search=0.0000/0.9900	4.subtree=0.0744/0.9900	4b.indep-accept=0.0000/0.9900	5.terminal=0.0080/0.9900	6.extra=0.0000/0.9900	7.telos=0.0000/0.9900	8.cleanup=0.0000/0.9900	9.reduce=0.0038/0.9900	10.completion=0.0032/0.9900	11.corecand=0.0000/0.9900	12.peo=0.0032/0.9900	13p.prep=0.0253/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0273/0.9900	14.transplant=0.0099/0.9900	15.minl=0.0150/0.9900	15.peel=0.0000/0.9900	16.late=0.0000/0.9900	17.final=0.0247/0.9900	18.simp=0.0000/0.9900	19.five=0.0000/0.9900	20.lt1k=0.0000/0.9900	21.comp=0.0000/0.9900	22.win=0.0307/0.9900	final=0.9900
+COUNTS	cl2_n9950_d8	9950	159078	91018167321	90107044678
+LADGATE	9950	0	0.982	0
+PHASES	cl2_n9950_d9	0.9848	1.portfolio=0.4432/0.9982	1b.indep=0.3537/0.9982	2.descent=0.0000/0.9982	3.search=0.0000/0.9982	4.subtree=0.0073/0.9982	4b.indep-accept=0.0000/0.9944	5.terminal=0.0086/0.9944	6.extra=0.0000/0.9944	7.telos=0.0000/0.9944	8.cleanup=0.0000/0.9944	9.reduce=0.0051/0.9944	10.completion=0.0035/0.9944	11.corecand=0.0000/0.9944	12.peo=0.0035/0.9944	13p.prep=0.0279/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0301/0.9944	14.transplant=0.0110/0.9944	15.minl=0.0168/0.9944	15.peel=0.0000/0.9944	16.late=0.0000/0.9944	17.final=0.0209/0.9944	18.simp=0.0000/0.9944	19.five=0.0000/0.9944	20.lt1k=0.0000/0.9944	21.comp=0.0000/0.9944	22.win=0.0368/0.9944	final=0.9944
+COUNTS	cl2_n9950_d9	9950	178942	102092133882	101521670677
+PHASES	cl2_n9950_d11	0.9281	1.portfolio=0.6021/0.9940	1b.indep=0.2109/0.9940	2.descent=0.0000/0.9940	3.search=0.0000/0.9940	4.subtree=0.0073/0.9940	4b.indep-accept=0.0000/0.9940	5.terminal=0.0095/0.9940	6.extra=0.0000/0.9940	7.telos=0.0000/0.9940	8.cleanup=0.0000/0.9940	9.reduce=0.0080/0.9940	10.completion=0.0000/0.9940	11.corecand=0.0000/0.9940	12.peo=0.0035/0.9940	13p.prep=0.0284/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0308/0.9940	14.transplant=0.0098/0.9940	15.minl=0.0158/0.9940	15.peel=0.0000/0.9940	16.late=0.0000/0.9940	17.final=0.0073/0.9940	18.simp=0.0000/0.9940	19.five=0.0000/0.9940	20.lt1k=0.0000/0.9940	21.comp=0.0000/0.9940	22.win=0.0000/0.9940	final=0.9940
+COUNTS	cl2_n9950_d11	9950	218610	121254287710	120522318837
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.4226	cl2_n8000_d8	8000	127842	0.9886
+0.9848	cl2_n9950_d9	9950	178942	0.9944
+0.9281	cl2_n9950_d11	9950	218610	0.9940
+0.9209	cl2_n6000_d8	6000	95870	0.9882
+0.8440	cl2_n9500_d8	9500	151858	0.9881
+0.8421	cl2_n9950_d7	9950	139178	0.9889
+0.7969	cl2_n9950_d8	9950	159078	0.9900
+0.7282	cl2_n4000_d8	4000	63816	0.9806
+matrices under 0.010s: 0/8
+matrices under 0.050s: 0/8
+matrices under 0.100s: 0/8
+matrices under 0.200s: 0/8
+matrices under 0.400s: 0/8
+
+--- per-bucket ---
+1k_10k   count=8     geomean=0.9891
+SCORE = 0.989088
+WORST order() = 1.423 s
+FORCEAUDIT	stage1b_sites=3	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=0	tie_pass_run=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 164 filtered out; finished in 7.73s
+

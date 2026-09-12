@@ -1,0 +1,30 @@
+# 0199 — raw receipts: the 0195/0198 pair, the arm A/B, the promotion bar
+
+## A. The graded pair (same tree except one production constant)
+$ gh run view 34697974629 -R Layr-Labs/matrices-fast --log   # 11093702 = 0198, FAILED
+  benchmark  Fetch eval corpus  2026-09-12T14:03:19.886Z ... 14:03:28.540Z  corpus downloaded and verified
+  benchmark  Benchmark          2026-09-12T14:03:28.545Z ##[group]Run set -euo pipefail
+  benchmark  Benchmark          2026-09-12T14:05:13.067Z RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed
+  benchmark  Benchmark          2026-09-12T14:05:13.094Z ##[error]Process completed with exit code 1.
+  (104.5 s of Benchmark step; job created 13:59:56Z, updated 14:05:15Z = 319 s)
+  (0195 = 2d067ddb, same tree minus the draw window: run 34694051100, 2026-09-12T12:34:45Z -> 12:46:26Z, conclusion success, score 0.842857 / fill 0.945102, 0 (0.00%) vs the frontier; Benchmark step 12:37:36 -> 12:46:22 = 525.6 s)
+
+$ git diff refs/remotes/yk/0195 refs/remotes/yk/0198 -- src/ordering | grep -c '^[+-]'   # behaviour-carrying lines:
+  +                let force = !indep_force_off() && n >= INDEP_FORCE_MIN_N;
+  -        const SHIPPED_FULL_N: usize = 0;
+  +        const SHIPPED_FULL_N: usize = 10_000;
+  (every other production delta between the two trees is a #[cfg(test)] seam: force_audit, indep_force_off, sparse_large_tie_on)
+
+## B. Stage-1b force arm A/B on the dev corpus (probe, one binary, test-only seam)
+$ cargo test --release -p ssi-candidate-worker --offline --locked -- --ignored --nocapture --test-threads=1 probe_timing_and_score
+  arm OFF (= production 0199): SCORE 0.792658  WORST 1.176 s  sum order() = 114.69 s / 301 rows  FORCEAUDIT force_fires=0 of 39 sites
+$ SSI_INDEP_FORCE=1 cargo test ... probe_timing_and_score
+  arm ON  (= 0195 profile):    SCORE 0.792442  WORST 1.168 s  sum order() = 112.40 s / 301 rows  FORCEAUDIT force_fires=10, unsound=0
+  -> retiring the arm costs +2.16e-4 dev flops AND +2.29 s of corpus order() (the forced early install makes the later stages cheaper on the 10 rows it fires on)
+
+## C. The promotion bar, calibrated on the public submission table
+  (brackets the 1-bip bar between 0.45 and 1.5 bips on one solver's own lineage)
+  7c25e77     newjordan  [32mpromoted[39m    0.881683  {"geomean_fill_ratio":0.960741,"geomean_flop_ratio":0.881683}  [32m-0.000133 (-0.01%)[39m  216fd62  9/2/26, 4:55 PM 
+  336efcd     newjordan  [31mrejected[39m    0.880427  {"geomean_fill_ratio":0.960392,"geomean_flop_ratio":0.880427}  [32m-0.00004 (-0.00%)[39m   8d3a0d1  9/2/26, 9:43 PM 
+  2d067dd     newjordan  [31mrejected[39m    0.842857  {"geomean_fill_ratio":0.945102,"geomean_flop_ratio":0.842857}  0 (0.00%)           e4fb859  9/12/26, 7:34 AM
+  1109370     newjordan  [31mfailed[39m      n/a       n/a                                                            n/a                 f558570  9/12/26, 8:59 AM

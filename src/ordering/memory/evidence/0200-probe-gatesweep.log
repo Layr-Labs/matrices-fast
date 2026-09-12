@@ -1,0 +1,244 @@
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1099:1
+     |
+1099 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1100 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1101 | | /// budget disables the stream, which is what production compiles to — the
+1102 | | /// switch can never change a submitted ordering. Configured through
+1103 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1104 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1367:1
+     |
+1367 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1368 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:321:1
+    |
+321 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+322 | | /// can run the SAME `order()` both ways in one process and compare the
+323 | | /// returned permutations element by element. Production builds compile
+324 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:355:1
+    |
+355 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+356 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+357 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+358 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:4993:5
+     |
+4993 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+4994 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+4995 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+4996 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5002 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5003 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5004 |       #[cfg(test)]
+5005 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5006 | |         .ok()
+5007 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5008 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5140:9
+     |
+5140 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5141 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5142 | /         let shipped_ladder = || {
+5143 | |             if nnz < 3 * n {
+5144 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5145 | |             } else {
+...    |
+5148 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4142:9
+     |
+4142 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:396:29
+    |
+396 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:731:7
+    |
+731 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:175:15
+    |
+175 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:300:15
+    |
+300 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:136:4
+    |
+136 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:232:4
+    |
+232 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:600:4
+    |
+600 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:478:19
+    |
+478 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 17 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 0.03s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+test ordering::probe::probe_timing_and_score ... LADGATE	8000	0	1.100	0
+PHASES	gb_n8000_d3	1.1007	1.portfolio=0.5586/0.9802	1b.indep=0.1339/0.9802	2.descent=0.0153/0.9802	3.search=0.0000/0.9802	4.subtree=0.0818/0.9801	4b.indep-accept=0.0000/0.9801	5.terminal=0.0043/0.9801	6.extra=0.0035/0.9801	7.telos=0.0000/0.9801	8.cleanup=0.0485/0.9801	9.reduce=0.1246/0.9801	10.completion=0.0016/0.9801	11.corecand=0.0000/0.9801	12.peo=0.0016/0.9801	13p.prep=0.0125/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0135/0.9801	14.transplant=0.0163/0.9801	15.minl=0.0188/0.9801	15.peel=0.0000/0.9801	16.late=0.0000/0.9801	17.final=0.0260/0.9801	18.simp=0.0000/0.9801	19.five=0.0223/0.9801	20.lt1k=0.0000/0.9801	21.comp=0.0000/0.9801	22.win=0.0202/0.9801	final=0.9801
+COUNTS	gb_n8000_d3	8000	47978	9285720201	9100476540
+LADGATE	8000	0	1.063	0
+PHASES	gb_n8000_d5	1.0641	1.portfolio=0.6689/0.9708	1b.indep=0.2015/0.9708	2.descent=0.0000/0.9708	3.search=0.0000/0.9708	4.subtree=0.0333/0.9708	4b.indep-accept=0.0000/0.9708	5.terminal=0.0053/0.9708	6.extra=0.0037/0.9708	7.telos=0.0000/0.9708	8.cleanup=0.0000/0.9708	9.reduce=0.0024/0.9708	10.completion=0.0021/0.9708	11.corecand=0.0000/0.9708	12.peo=0.0021/0.9708	13p.prep=0.0166/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0179/0.9708	14.transplant=0.0133/0.9708	15.minl=0.0165/0.9708	15.peel=0.0000/0.9708	16.late=0.0000/0.9708	17.final=0.0224/0.9708	18.simp=0.0000/0.9708	19.five=0.0325/0.9706	20.lt1k=0.0000/0.9706	21.comp=0.0000/0.9706	22.win=0.0224/0.9706	final=0.9706
+COUNTS	gb_n8000_d5	8000	79958	26121107412	25353766097
+LADGATE	8000	0	1.044	0
+PHASES	gb_n8000_d6	1.0453	1.portfolio=0.6649/0.9843	1b.indep=0.1588/0.9843	2.descent=0.0000/0.9843	3.search=0.0000/0.9843	4.subtree=0.0874/0.9842	4b.indep-accept=0.0000/0.9842	5.terminal=0.0069/0.9842	6.extra=0.0042/0.9842	7.telos=0.0000/0.9842	8.cleanup=0.0000/0.9842	9.reduce=0.0026/0.9842	10.completion=0.0021/0.9842	11.corecand=0.0000/0.9842	12.peo=0.0021/0.9842	13p.prep=0.0172/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0185/0.9842	14.transplant=0.0120/0.9842	15.minl=0.0154/0.9842	15.peel=0.0000/0.9842	16.late=0.0000/0.9842	17.final=0.0223/0.9842	18.simp=0.0000/0.9842	19.five=0.0000/0.9842	20.lt1k=0.0000/0.9842	21.comp=0.0000/0.9842	22.win=0.0244/0.9842	final=0.9842
+COUNTS	gb_n8000_d6	8000	95944	33661077288	33130471778
+LADGATE	8000	0	1.320	0
+PHASES	gb_n8000_d8	1.3208	1.portfolio=0.9116/0.9872	1b.indep=0.2407/0.9872	2.descent=0.0000/0.9872	3.search=0.0000/0.9872	4.subtree=0.0226/0.9872	4b.indep-accept=0.0000/0.9872	5.terminal=0.0067/0.9872	6.extra=0.0000/0.9872	7.telos=0.0000/0.9872	8.cleanup=0.0000/0.9872	9.reduce=0.0035/0.9872	10.completion=0.0027/0.9872	11.corecand=0.0000/0.9872	12.peo=0.0027/0.9872	13p.prep=0.0218/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0234/0.9872	14.transplant=0.0146/0.9872	15.minl=0.0190/0.9872	15.peel=0.0000/0.9872	16.late=0.0000/0.9872	17.final=0.0175/0.9872	18.simp=0.0000/0.9872	19.five=0.0000/0.9872	20.lt1k=0.0000/0.9872	21.comp=0.0000/0.9872	22.win=0.0296/0.9872	final=0.9872
+COUNTS	gb_n8000_d8	8000	127876	47383148305	46774315475
+LADGATE	8000	0	0.541	0
+PHASES	gb_n8000_d10	0.5423	1.portfolio=0.2259/0.9897	1b.indep=0.1377/0.9897	2.descent=0.0000/0.9897	3.search=0.0000/0.9897	4.subtree=0.0281/0.9897	4b.indep-accept=0.0000/0.9897	5.terminal=0.0072/0.9897	6.extra=0.0000/0.9897	7.telos=0.0000/0.9897	8.cleanup=0.0000/0.9897	9.reduce=0.0036/0.9897	10.completion=0.0029/0.9897	11.corecand=0.0000/0.9897	12.peo=0.0028/0.9897	13p.prep=0.0220/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0238/0.9897	14.transplant=0.0127/0.9897	15.minl=0.0174/0.9897	15.peel=0.0000/0.9897	16.late=0.0000/0.9897	17.final=0.0198/0.9897	18.simp=0.0000/0.9897	19.five=0.0000/0.9897	20.lt1k=0.0000/0.9897	21.comp=0.0000/0.9897	22.win=0.0292/0.9897	final=0.9897
+COUNTS	gb_n8000_d10	8000	159822	58915010787	58307702117
+LADGATE	8000	0	0.621	0
+PHASES	gb_n8000_d12	0.6226	1.portfolio=0.3211/0.9937	1b.indep=0.1353/0.9937	2.descent=0.0000/0.9937	3.search=0.0000/0.9937	4.subtree=0.0234/0.9937	4b.indep-accept=0.0000/0.9937	5.terminal=0.0076/0.9937	6.extra=0.0000/0.9937	7.telos=0.0000/0.9937	8.cleanup=0.0000/0.9937	9.reduce=0.0039/0.9937	10.completion=0.0000/0.9937	11.corecand=0.0000/0.9937	12.peo=0.0030/0.9937	13p.prep=0.0233/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=8.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0254/0.9937	14.transplant=0.0105/0.9937	15.minl=0.0156/0.9937	15.peel=0.0000/0.9937	16.late=0.0000/0.9937	17.final=0.0059/0.9937	18.simp=0.0000/0.9937	19.five=0.0000/0.9937	20.lt1k=0.0000/0.9937	21.comp=0.0000/0.9937	22.win=0.0313/0.9937	final=0.9937
+COUNTS	gb_n8000_d12	8000	191678	67798349999	67370081925
+PHASES	gb_n8000_d17	0.7589	1.portfolio=0.3634/0.9953	1b.indep=0.2494/0.9953	2.descent=0.0000/0.9953	3.search=0.0000/0.9953	4.subtree=0.0596/0.9953	4b.indep-accept=0.0000/0.9928	5.terminal=0.0000/0.9928	6.extra=0.0000/0.9928	7.telos=0.0000/0.9928	8.cleanup=0.0000/0.9928	9.reduce=0.0062/0.9928	10.completion=0.0000/0.9928	11.corecand=0.0000/0.9928	12.peo=0.0036/0.9928	13p.prep=0.0225/0.0000	13p.seeds=6.0000/0.0000	13p.rounds=6.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0248/0.9928	14.transplant=0.0077/0.9928	15.minl=0.0147/0.9928	15.peel=0.0000/0.9928	16.late=0.0000/0.9928	17.final=0.0073/0.9928	18.simp=0.0000/0.9928	19.five=0.0000/0.9928	20.lt1k=0.0000/0.9928	21.comp=0.0000/0.9928	22.win=0.0000/0.9928	final=0.9928
+COUNTS	gb_n8000_d17	8000	271408	85647223535	85034664532
+PHASES	gb_n8000_d19	0.4908	1.portfolio=0.3169/0.9913	1b.indep=0.0863/0.9913	2.descent=0.0000/0.9913	3.search=0.0000/0.9913	4.subtree=0.0084/0.9913	4b.indep-accept=0.0000/0.9908	5.terminal=0.0000/0.9908	6.extra=0.0000/0.9908	7.telos=0.0000/0.9908	8.cleanup=0.0000/0.9908	9.reduce=0.0067/0.9908	10.completion=0.0000/0.9908	11.corecand=0.0000/0.9908	12.peo=0.0042/0.9908	13p.prep=0.0126/0.0000	13p.seeds=3.0000/0.0000	13p.rounds=3.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0152/0.9908	14.transplant=0.0079/0.9908	15.minl=0.0145/0.9908	15.peel=0.0000/0.9908	16.late=0.0000/0.9908	17.final=0.0078/0.9908	18.simp=0.0000/0.9908	19.five=0.0000/0.9908	20.lt1k=0.0000/0.9908	21.comp=0.0000/0.9908	22.win=0.0000/0.9908	final=0.9908
+COUNTS	gb_n8000_d19	8000	303252	91411414526	90572462356
+PHASES	gb_n8000_d25	0.2780	1.portfolio=0.0785/0.9935	1b.indep=0.1129/0.9935	2.descent=0.0000/0.9935	3.search=0.0000/0.9935	4.subtree=0.0098/0.9935	4b.indep-accept=0.0000/0.9930	5.terminal=0.0000/0.9930	6.extra=0.0000/0.9930	7.telos=0.0000/0.9930	8.cleanup=0.0000/0.9930	9.reduce=0.0070/0.9930	10.completion=0.0000/0.9930	11.corecand=0.0000/0.9930	12.peo=0.0049/0.9930	13p.prep=0.0198/0.0000	13p.seeds=4.0000/0.0000	13p.rounds=4.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0228/0.9930	14.transplant=0.0000/0.9930	15.minl=0.0079/0.9930	15.peel=0.0000/0.9930	16.late=0.0000/0.9930	17.final=0.0000/0.9930	18.simp=0.0000/0.9930	19.five=0.0000/0.9930	20.lt1k=0.0000/0.9930	21.comp=0.0000/0.9930	22.win=0.0000/0.9930	final=0.9930
+COUNTS	gb_n8000_d25	8000	398754	103686958163	102960457311
+PHASES	gb_n8000_d40	0.4109	1.portfolio=0.1617/0.9926	1b.indep=0.1210/0.9926	2.descent=0.0000/0.9926	3.search=0.0000/0.9926	4.subtree=0.0145/0.9926	4b.indep-accept=0.0000/0.9926	5.terminal=0.0000/0.9926	6.extra=0.0000/0.9926	7.telos=0.0000/0.9926	8.cleanup=0.0000/0.9926	9.reduce=0.0061/0.9926	10.completion=0.0000/0.9926	11.corecand=0.0000/0.9926	12.peo=0.0077/0.9926	13p.prep=0.0369/0.0000	13p.seeds=5.0000/0.0000	13p.rounds=5.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0422/0.9926	14.transplant=0.0000/0.9926	15.minl=0.0129/0.9926	15.peel=0.0000/0.9926	16.late=0.0000/0.9926	17.final=0.0000/0.9926	18.simp=0.0000/0.9926	19.five=0.0000/0.9926	20.lt1k=0.0000/0.9926	21.comp=0.0000/0.9926	22.win=0.0000/0.9926	final=0.9926
+COUNTS	gb_n8000_d40	8000	636794	122105025543	121204872381
+PHASES	gb_n8000_d48	0.4016	1.portfolio=0.1237/1.0000	1b.indep=0.1213/1.0000	2.descent=0.0000/1.0000	3.search=0.0000/1.0000	4.subtree=0.0161/1.0000	4b.indep-accept=0.0000/1.0000	5.terminal=0.0000/1.0000	6.extra=0.0000/1.0000	7.telos=0.0000/1.0000	8.cleanup=0.0000/1.0000	9.reduce=0.0069/1.0000	10.completion=0.0000/1.0000	11.corecand=0.0000/1.0000	12.peo=0.0084/1.0000	13p.prep=0.0265/0.0000	13p.seeds=3.0000/0.0000	13p.rounds=3.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0311/1.0000	14.transplant=0.0000/1.0000	15.minl=0.0000/1.0000	15.peel=0.0438/1.0000	16.late=0.0000/1.0000	17.final=0.0000/1.0000	18.simp=0.0000/1.0000	19.five=0.0000/1.0000	20.lt1k=0.0000/1.0000	21.comp=0.0000/1.0000	22.win=0.0000/1.0000	final=1.0000
+COUNTS	gb_n8000_d48	8000	763332	127556293210	127555989235
+PHASES	gb_n8000_d52	0.4276	1.portfolio=0.1306/1.0000	1b.indep=0.1305/1.0000	2.descent=0.0000/1.0000	3.search=0.0000/1.0000	4.subtree=0.0173/1.0000	4b.indep-accept=0.0000/1.0000	5.terminal=0.0000/1.0000	6.extra=0.0000/1.0000	7.telos=0.0000/1.0000	8.cleanup=0.0000/1.0000	9.reduce=0.0079/1.0000	10.completion=0.0000/1.0000	11.corecand=0.0000/1.0000	12.peo=0.0088/1.0000	13p.prep=0.0283/0.0000	13p.seeds=3.0000/0.0000	13p.rounds=3.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0332/1.0000	14.transplant=0.0000/1.0000	15.minl=0.0000/1.0000	15.peel=0.0472/1.0000	16.late=0.0000/1.0000	17.final=0.0000/1.0000	18.simp=0.0000/1.0000	19.five=0.0000/1.0000	20.lt1k=0.0000/1.0000	21.comp=0.0000/1.0000	22.win=0.0000/1.0000	final=1.0000
+COUNTS	gb_n8000_d52	8000	826678	130011868966	130005920109
+PHASES	gb_n8000_d80	0.4924	1.portfolio=0.1499/1.0000	1b.indep=0.1161/1.0000	2.descent=0.0000/1.0000	3.search=0.0000/1.0000	4.subtree=0.0286/1.0000	4b.indep-accept=0.0000/1.0000	5.terminal=0.0000/1.0000	6.extra=0.0000/1.0000	7.telos=0.0000/1.0000	8.cleanup=0.0000/1.0000	9.reduce=0.0170/1.0000	10.completion=0.0000/1.0000	11.corecand=0.0000/1.0000	12.peo=0.0000/1.0000	13p.prep=0.0302/0.0000	13p.seeds=2.0000/0.0000	13p.rounds=2.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0375/1.0000	14.transplant=0.0000/1.0000	15.minl=0.0000/1.0000	15.peel=0.0707/1.0000	16.late=0.0000/1.0000	17.final=0.0000/1.0000	18.simp=0.0000/1.0000	19.five=0.0000/1.0000	20.lt1k=0.0000/1.0000	21.comp=0.0000/1.0000	22.win=0.0000/1.0000	final=1.0000
+COUNTS	gb_n8000_d80	8000	1267272	141548531792	141548486771
+PHASES	gb_n8000_d150	0.2103	1.portfolio=0.0011/1.0000	1b.indep=0.0000/1.0000	2.descent=0.0000/1.0000	3.search=0.0000/1.0000	4.subtree=0.0000/1.0000	4b.indep-accept=0.0000/1.0000	5.terminal=0.0000/1.0000	6.extra=0.0000/1.0000	7.telos=0.0000/1.0000	8.cleanup=0.0000/1.0000	9.reduce=0.0000/1.0000	10.completion=0.0000/1.0000	11.corecand=0.0000/1.0000	12.peo=0.0000/1.0000	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/1.0000	14.transplant=0.0000/1.0000	15.minl=0.0000/1.0000	15.peel=0.1174/1.0000	16.late=0.0000/1.0000	17.final=0.0000/1.0000	18.simp=0.0000/1.0000	19.five=0.0000/1.0000	20.lt1k=0.0000/1.0000	21.comp=0.0000/1.0000	22.win=0.0000/1.0000	final=1.0000
+COUNTS	gb_n8000_d150	8000	2355904	153710062708	153709923937
+PHASES	gb_n8000_d180	0.2417	1.portfolio=0.0014/1.0000	1b.indep=0.0000/1.0000	2.descent=0.0000/1.0000	3.search=0.0000/1.0000	4.subtree=0.0000/1.0000	4b.indep-accept=0.0000/1.0000	5.terminal=0.0000/1.0000	6.extra=0.0000/1.0000	7.telos=0.0000/1.0000	8.cleanup=0.0000/1.0000	9.reduce=0.0000/1.0000	10.completion=0.0000/1.0000	11.corecand=0.0000/1.0000	12.peo=0.0000/1.0000	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/1.0000	14.transplant=0.0000/1.0000	15.minl=0.0000/1.0000	15.peel=0.1352/1.0000	16.late=0.0000/1.0000	17.final=0.0000/1.0000	18.simp=0.0000/1.0000	19.five=0.0000/1.0000	20.lt1k=0.0000/1.0000	21.comp=0.0000/1.0000	22.win=0.0000/1.0000	final=1.0000
+COUNTS	gb_n8000_d180	8000	2816284	155710935874	155710812002
+PHASES	gb_n8000_d188	0.2485	1.portfolio=0.0014/1.0000	1b.indep=0.0000/1.0000	2.descent=0.0000/1.0000	3.search=0.0000/1.0000	4.subtree=0.0000/1.0000	4b.indep-accept=0.0000/1.0000	5.terminal=0.0000/1.0000	6.extra=0.0000/1.0000	7.telos=0.0000/1.0000	8.cleanup=0.0000/1.0000	9.reduce=0.0000/1.0000	10.completion=0.0000/1.0000	11.corecand=0.0000/1.0000	12.peo=0.0000/1.0000	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/1.0000	14.transplant=0.0000/1.0000	15.minl=0.0000/1.0000	15.peel=0.1398/1.0000	16.late=0.0000/1.0000	17.final=0.0000/1.0000	18.simp=0.0000/1.0000	19.five=0.0000/1.0000	20.lt1k=0.0000/1.0000	21.comp=0.0000/1.0000	22.win=0.0000/1.0000	final=1.0000
+COUNTS	gb_n8000_d188	8000	2938482	156391022018	156391022018
+PHASES	gb_n8000_d192	0.2517	1.portfolio=0.0014/1.0000	1b.indep=0.0000/1.0000	2.descent=0.0000/1.0000	3.search=0.0000/1.0000	4.subtree=0.0000/1.0000	4b.indep-accept=0.0000/1.0000	5.terminal=0.0000/1.0000	6.extra=0.0000/1.0000	7.telos=0.0000/1.0000	8.cleanup=0.0000/1.0000	9.reduce=0.0000/1.0000	10.completion=0.0000/1.0000	11.corecand=0.0000/1.0000	12.peo=0.0000/1.0000	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/1.0000	14.transplant=0.0000/1.0000	15.minl=0.0000/1.0000	15.peel=0.1426/1.0000	16.late=0.0000/1.0000	17.final=0.0000/1.0000	18.simp=0.0000/1.0000	19.five=0.0000/1.0000	20.lt1k=0.0000/1.0000	21.comp=0.0000/1.0000	22.win=0.0000/1.0000	final=1.0000
+COUNTS	gb_n8000_d192	8000	2999416	156861455924	156861300724
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.3208	gb_n8000_d8	8000	127876	0.9872
+1.1007	gb_n8000_d3	8000	47978	0.9801
+1.0641	gb_n8000_d5	8000	79958	0.9706
+1.0453	gb_n8000_d6	8000	95944	0.9842
+0.7589	gb_n8000_d17	8000	271408	0.9928
+0.6226	gb_n8000_d12	8000	191678	0.9937
+0.5423	gb_n8000_d10	8000	159822	0.9897
+0.4924	gb_n8000_d80	8000	1267272	1.0000
+0.4908	gb_n8000_d19	8000	303252	0.9908
+0.4276	gb_n8000_d52	8000	826678	1.0000
+0.4109	gb_n8000_d40	8000	636794	0.9926
+0.4016	gb_n8000_d48	8000	763332	1.0000
+0.2780	gb_n8000_d25	8000	398754	0.9930
+0.2517	gb_n8000_d192	8000	2999416	1.0000
+0.2485	gb_n8000_d188	8000	2938482	1.0000
+0.2417	gb_n8000_d180	8000	2816284	1.0000
+0.2103	gb_n8000_d150	8000	2355904	1.0000
+matrices under 0.010s: 0/17
+matrices under 0.050s: 0/17
+matrices under 0.100s: 0/17
+matrices under 0.200s: 0/17
+matrices under 0.400s: 5/17
+
+--- per-bucket ---
+1k_10k   count=17    geomean=0.9926
+SCORE = 0.992594
+WORST order() = 1.321 s
+FORCEAUDIT	stage1b_sites=4	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=0	tie_pass_run=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 164 filtered out; finished in 11.64s
+

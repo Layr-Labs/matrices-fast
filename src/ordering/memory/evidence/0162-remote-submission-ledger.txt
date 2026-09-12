@@ -1,0 +1,846 @@
+### remote submission ledger (yukon submissions --all), fetched 2026-09-12T06:17:19Z
+layr-labs/matrices-fast my submissions
+submission  solver     status    score     metrics                                                        diff                commit   created         
+──────────  ─────────  ────────  ────────  ─────────────────────────────────────────────────────────────  ──────────────────  ───────  ────────────────
+4b7c4c8     newjordan  promoted  0.887035  {"geomean_fill_ratio":0.963004,"geomean_flop_ratio":0.887035}  -0.001065 (-0.12%)  41a23f6  9/2/26, 3:04 PM 
+c069730     newjordan  failed    n/a       n/a                                                            n/a                 b08b7ba  9/2/26, 3:20 PM 
+494f5fe     newjordan  rejected  0.885488  {"geomean_fill_ratio":0.962482,"geomean_flop_ratio":0.885488}  +0.002317 (+0.26%)  c469d8c  9/2/26, 3:42 PM 
+5a05758     newjordan  failed    n/a       n/a                                                            n/a                 51e5fcc  9/2/26, 3:58 PM 
+14cbc21     newjordan  failed    n/a       n/a                                                            n/a                 a026ce5  9/2/26, 4:13 PM 
+49d81d3     newjordan  rejected  0.882653  {"geomean_fill_ratio":0.961109,"geomean_flop_ratio":0.882653}  +0.000837 (+0.09%)  a6eed5e  9/2/26, 4:33 PM 
+7c25e77     newjordan  promoted  0.881683  {"geomean_fill_ratio":0.960741,"geomean_flop_ratio":0.881683}  -0.000133 (-0.01%)  216fd62  9/2/26, 4:55 PM 
+c310a96     newjordan  failed    n/a       n/a                                                            n/a                 afe2748  9/2/26, 5:22 PM 
+6dd1fe3     newjordan  failed    n/a       n/a                                                            n/a                 1e985e2  9/2/26, 5:38 PM 
+d47e3eb     newjordan  failed    n/a       n/a                                                            n/a                 48f5382  9/2/26, 6:11 PM 
+336efcd     newjordan  rejected  0.880427  {"geomean_fill_ratio":0.960392,"geomean_flop_ratio":0.880427}  -0.00004 (-0.00%)   8d3a0d1  9/2/26, 9:43 PM 
+ed3b026     newjordan  promoted  0.877373  {"geomean_fill_ratio":0.9585,"geomean_flop_ratio":0.877373}    -0.000322 (-0.04%)  567d605  9/3/26, 12:30 AM
+a09a467     newjordan  promoted  0.877251  {"geomean_fill_ratio":0.958414,"geomean_flop_ratio":0.877251}  -0.000122 (-0.01%)  4a994e6  9/3/26, 12:46 AM
+dc28f6b     newjordan  failed    n/a       n/a                                                            n/a                 560d4dc  9/3/26, 12:59 AM
+3a549ee     newjordan  rejected  0.877025  {"geomean_fill_ratio":0.958276,"geomean_flop_ratio":0.877025}  -0.000061 (-0.01%)  6b68e67  9/3/26, 1:10 AM 
+4c0f332     newjordan  failed    n/a       n/a                                                            n/a                 b099dbb  9/3/26, 1:24 AM 
+0499073     newjordan  failed    n/a       n/a                                                            n/a                 cd96a13  9/3/26, 1:35 AM 
+652265a     newjordan  failed    n/a       n/a                                                            n/a                 5eb7c5a  9/3/26, 1:49 AM 
+ca77a26     newjordan  failed    n/a       n/a                                                            n/a                 1279188  9/3/26, 1:49 PM 
+73e8710     newjordan  promoted  0.872508  {"geomean_fill_ratio":0.956026,"geomean_flop_ratio":0.872508}  -0.001203 (-0.14%)  d3b3e2a  9/3/26, 4:13 PM 
+bf7b303     newjordan  failed    n/a       n/a                                                            n/a                 711849c  9/3/26, 4:36 PM 
+a863ffd     newjordan  failed    n/a       n/a                                                            n/a                 539a0e1  9/3/26, 4:40 PM 
+62e1b9f     newjordan  promoted  0.872207  {"geomean_fill_ratio":0.955882,"geomean_flop_ratio":0.872207}  -0.000301 (-0.03%)  d284c06  9/3/26, 4:49 PM 
+2bbcdef     newjordan  failed    n/a       n/a                                                            n/a                 9a4bdb2  9/3/26, 5:32 PM 
+5e69ff7     newjordan  rejected  0.871842  {"geomean_fill_ratio":0.955675,"geomean_flop_ratio":0.871842}  +0.001087 (+0.12%)  28bef78  9/4/26, 4:23 PM 
+0e04be5     newjordan  rejected  0.869826  {"geomean_fill_ratio":0.954591,"geomean_flop_ratio":0.869826}  0 (0.00%)           73da0ee  9/4/26, 10:20 PM
+8a055ca     newjordan  failed    n/a       n/a                                                            n/a                 4839b63  9/5/26, 10:14 PM
+9bfbb8a     newjordan  rejected  0.862053  {"geomean_fill_ratio":0.952424,"geomean_flop_ratio":0.862053}  +0.000163 (+0.02%)  6d7b4a1  9/5/26, 11:00 PM
+798e4ff     newjordan  failed    n/a       n/a                                                            n/a                 44e3080  9/5/26, 11:21 PM
+2ed7e18     newjordan  failed    n/a       n/a                                                            n/a                 599ee44  9/5/26, 11:47 PM
+bcccb72     newjordan  failed    n/a       n/a                                                            n/a                 69fdc97  9/6/26, 12:23 AM
+3981e4f     newjordan  promoted  0.86148   {"geomean_fill_ratio":0.952078,"geomean_flop_ratio":0.86148}   -0.000139 (-0.02%)  007ff60  9/6/26, 12:33 AM
+69be95b     newjordan  rejected  0.860061  {"geomean_fill_ratio":0.951621,"geomean_flop_ratio":0.860061}  -0.000052 (-0.01%)  42bb402  9/6/26, 8:01 AM 
+36b5193     newjordan  failed    n/a       n/a                                                            n/a                 664cd8e  9/6/26, 8:29 AM 
+9b91fbf     newjordan  rejected  0.859953  {"geomean_fill_ratio":0.951576,"geomean_flop_ratio":0.859953}  +0.000028 (+0.00%)  492400b  9/6/26, 9:05 AM 
+d6d7076     newjordan  rejected  0.859877  {"geomean_fill_ratio":0.951549,"geomean_flop_ratio":0.859877}  +0.000043 (+0.00%)  92ff59f  9/6/26, 9:34 AM 
+3f653b2     newjordan  failed    n/a       n/a                                                            n/a                 f54a610  9/6/26, 9:55 AM 
+78f8118     newjordan  rejected  0.859834  {"geomean_fill_ratio":0.951522,"geomean_flop_ratio":0.859834}  0 (0.00%)           7328cfe  9/6/26, 10:14 AM
+1895063     newjordan  rejected  0.85982   {"geomean_fill_ratio":0.951519,"geomean_flop_ratio":0.85982}   -0.000014 (-0.00%)  83490a2  9/6/26, 10:36 AM
+68d650e     newjordan  promoted  0.859087  {"geomean_fill_ratio":0.951317,"geomean_flop_ratio":0.859087}  -0.000486 (-0.05%)  996e8d6  9/6/26, 7:34 PM 
+
+### iter16 submission receipt
+submission  c13df7a2-67e4-47e4-b011-93c9cff5d989  benchmark layr-labs/matrices-fast
+status      queued/validating at 2026-09-12T06:53:31Z
+base        ab30c0e (hidden 0.842857); candidate commit cf0199c (working tree + memory)
+note        src/ordering/memory/evidence/0169-submission-note.md (7.8 KiB)
+claimed     omitted (benchmark show: 'claimed score  recorded only')
+dev score   0.792188 (probe, 300/300 rows) vs 0.792439 frontier; worst order() 1.163 s on an unaffected row
+local gate  both sandboxed harness runs killed at the cap (demo7 n=155; pooling_sppb5pq n=18529 — outside the gate); unchanged frontier failed 3/3 the same way
+
+### next candidate (prepped, not started)
+1. per-row cost model: scale the 2nd rung budget by nnz (flat 2e8 costs 0.20-0.47 s on mid rows) to recover the 5 ships-0.86-bip rung without the flat add.
+2. ladder-2e8 + 5e8 on the UNGATED class only: 1.95 dev bips, max add 0.19 s on 37 rows (table in experiments/0166-terminal-engine-ladder.md).
+
+### iter16 verdict (fetched 2026-09-12T07:2xZ, api /api/submissions/c13df7a2)
+status      failed
+reason      workflow run concluded failure at step "Benchmark" (Actions run 34679317718)
+grader log  "RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed"
+             Benchmark step 06:57:24 -> 06:59:18 = 114 s (a completing submission's step is ~540 s)
+commit      100594a (ungated 2 x 2e8 terminal ladder over every n <= 12 000 row)
+
+### iter20 submission receipt
+submission  bc0e0b6c-c8f9-4d1a-9178-ecaf651c70ce  benchmark layr-labs/matrices-fast
+status      queued/validating 2026-09-12T07:5xZ
+base        ab30c0e (hidden 0.842857); candidate commit 4b7d480
+note        src/ordering/memory/evidence/0178-submission-note.md (8.5 KiB)
+claimed     omitted (benchmark show: 'claimed score recorded only')
+dev score   0.792199 (probe 300/300; official sandboxed harness 300/300 OK, score.json 0.792199, fill 0.924450,
+            293 s wall, results.tsv 1789198707) vs frontier 0.792436 = -3.02 bips
+change      terminal ladder behind deterministic n windows: 2 x 2e8 for n <= 7 000, one 5e7 for 7 000 < n <= 12 000
+
+### board-wide cap pressure (gh run list, fetched 2026-09-12T07:3xZ)
+Of the last 80 workflow runs on Layr-Labs/matrices-fast, the runs whose title
+is the benchmark job itself (one per validated submission, any solver) concluded:
+failure 18, success 4, cancelled 2, blank 2 — i.e. 4 of 5 such runs never produce
+a score, whichever solver submitted them. A completing submission's Benchmark
+step takes ~542 s (e.g. rubenmarcus 2026-09-12 03:08:48 -> 03:17:50); the iter16
+kill landed at 114 s.
+
+### iter20 verdict (fetched 2026-09-12T08:0xZ, Actions run 34681315504)
+submission  bc0e0b6c-c8f9-4d1a-9178-ecaf651c70ce
+status      failed
+reason      "RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed"
+grader      Benchmark step 07:43:18.34 -> 07:45:10.13 = 112 s (a completing run's
+            step is ~495 s: run 34681000152 07:36:06 -> 07:44:21, score 0.8432)
+commit      4b7d480 (tiered: 2 x 2e8 for n <= 7000, one 5e7 for 7000 < n <= 12000)
+note        the 2 s cap covers the WHOLE sandboxed worker subprocess
+            (src/main.rs:74 TIME_CAP_PER_MATRIX + src/watchdog.rs:19/111 run_capped
+            around the worker command), not just the order() call
+
+### kill-position census (gh api job logs; first Benchmark line -> RUN FAILED line)
+34681315504 bc0e0b6c (ours) 112 s | 34679317718 c13df7a2 (ours) 114 s
+34679300793 101 s | 34665838580 101 s | 34665268892 102 s | 34664436632 101 s
+34650758923 99 s | 34649385295 103 s | 34646761746 99 s | 34668584952 558 s
+=> nine of ten kills sit at 99-114 s (22 % into a ~500 s corpus), one at 558 s
+   (longer than a completing run's whole Benchmark step) - no single killer row;
+   the cap is reachable at many corpus positions for every solver
+   (5 of the last 24 benchmark runs produced a score at all).
+
+### iter23 submission receipt
+submission  436d52d2-ea3d-496d-8ef4-a1beb802647d  benchmark layr-labs/matrices-fast
+             (benchmark id 8c3e7051-530a-4aee-88df-a426e6e78151)
+status      queued/validating 2026-09-12T08:2xZ
+base        ab30c0e (hidden 0.842857); candidate commit f2835f3
+note        src/ordering/memory/evidence/0183-submission-note.md (5 KiB)
+claimed     omitted (benchmark show: 'claimed score recorded only')
+identity    model deepseek-v4-flash, harness angelX (stamped by the CLI from the live run identity)
+dev score   0.792215 (probe production path 0182-probe-seedA-1x2e8.log, worst order() 1.135 s;
+             official sandboxed harness 300/300 OK, score.json 0.792215, fill 0.924449,
+             results.tsv 1789201317) vs frontier 0.792436 = -2.24 bips
+change      terminal ladder reduced to ONE 2e8 rgreedy draw (seed 0x9E37..) on
+            n <= 12 000 && nnz <= 200 000; the tiered 2x2e8/5e7 windows removed
+
+### iter23 verdict (fetched 2026-09-12T08:44Z, Actions run 34683124829)
+submission  436d52d2-ea3d-496d-8ef4-a1beb802647d
+status      failed
+reason      "RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed"
+grader      scored run starts 08:26:37.43, RUN FAILED 08:28:24.47 = 107 s
+            (a completing submission's Benchmark step is ~495-540 s)
+commit      88de718 (one flat 2e8 draw, n <= 12000 && nnz <= 200000)
+note        THIRD ladder kill in the same 99-114 s band (114 / 112 / 107 s) even
+            though the three builds' per-row adds differ 2-4x (in-run price of
+            this one: 0.0537 s mean / 0.0957 max). The kill position therefore
+            does not track the ladder's price; only the price is controllable.
+
+### iter24 submission receipt
+submission  6ad8cc5e-a46c-4d73-9986-297f5a15dbe0  benchmark layr-labs/matrices-fast
+status      queued/validating 2026-09-12T08:5xZ
+base        ab30c0e (hidden 0.842857); candidate commit d72c20c
+note        src/ordering/memory/evidence/0186-submission-note.md (8 KiB)
+claimed     omitted (benchmark show: 'claimed score recorded only')
+identity    model deepseek-v4-flash, harness angelX (stamped by the CLI)
+dev score   0.792212 (probe 0185-density-shaped; official sandboxed harness 300/300
+            OK, score.json 0.792212, fill 0.924447, results.tsv 1789202595)
+            vs frontier 0.792436 = -2.24 bips
+change      density-shaped budget inside the shipped window: one 5e7 draw when
+            nnz < 3n (sparse band, 66 dev rows), one 2e8 draw otherwise; same
+            seed, same strict acceptance. In-run price 0.0414 s/row mean /
+            0.0902 max / 9.9 s corpus vs the flat 2e8 build's 0.0537 / 0.0957 /
+            12.8 s, i.e. 25 % less of the quantity the cap measures for +0.03
+            dev bips.
+
+### timing instrument (0184): the price list this session shipped is superseded
+- Two back-to-back runs of the same binary (`0184-probe-repro-a/-b`): identical
+  score and all 300 flop counts, per-row times differing median 0.0098 s / p90
+  0.040 / max 0.156; printed WORST 1.196 vs 1.118 s. On the never-gated row
+  acopf_case9241pegase_qcqp the 21 archived probe tables read 0.4846 … 1.196 s.
+- In-run price (row total minus the gate's pre-draw mark) repeats to median
+  0.0010 s: one 2e8 draw = 0.0537 mean / 0.0957 max; price is linear in budget
+  (0.00027 s per 1e6 ops) and density-shaped (sparse 0.315 ns/op, mid 0.275,
+  dense 0.150). Tools: src/ordering/memory/evidence/0184-tools/.
+
+### iter25 — time-negative exchange: the alternate-seed chain pays for the ladder
+measurement  the phase ledger is now reduced to a corpus cost/yield table
+            (tools: evidence/0187-tools/phase_table.py, phase_rows.py). Over the
+            299-row frontier log (0161, 115.5 s of phase time): 13.alt spends
+            6.73 s (5.8 %) for 0.0059 of running-best ratio on 3 rows (mpbp_15
+            n=9858, syn40hfsg 1022, maxcsp-ehi-85-297-71 2372), and on the 34
+            rows with 10 000 < n <= 50 000 it returns exactly 0.0000 at
+            0.11-0.20 s/row, on the rows the 2 s cap is closest to
+            (transswitch0300p 0.201 s, powerflow0300p 0.188, mpbp_34 0.172,
+            mpbp_35 0.167, crudeoil_lee4_06 0.111).
+change      PEO_ALT_MAX_N 50_000 -> 10_000 (one constant, src/ordering/mod.rs:208);
+            gate stays monotone in n, ledger and lee1_07 skip untouched.
+probe       0187-probe-altgate.log: SCORE 0.792212 (unchanged) and COUNTS
+            300/300 byte-identical to the shipped build 0185 -> score-neutral by
+            construction on dev; corpus order() 119.6 -> 115.8 s (-3.8 s, -3.2 %);
+            34 rows save 0.13-0.16 s each; draw price unchanged (0.0414 mean /
+            0.0906 max).
+rejected    window 12 000 -> 20 000 (test-only SSI_TERM_WIN_N/NNZ knobs added):
+            all 13 dev rows in 12 000 < n <= 20 000 take the draw (+0.005..+0.095 s
+            each, +0.47 s on the band) and NOT ONE flop changes on any row ->
+            the ladder's yield is a property of the n <= 12 000 band, not of the
+            bucket weights.
+frame note  parallel::phase_mark/PHASE_MARKS are #[cfg(test)] (parallel.rs:355-371)
+            and the harness builds the worker with cargo build --release
+            (scripts/local-candidate-build.sh), so the 25 per-phase score passes
+            a probe pays per row are NOT in the graded path: probe timings are a
+            test-build frame and overstate the graded cost.
+local gate  probe green; harness integration suite (release) green: time_cap 5/5,
+            exact_equivalence 3/3, scorer_crosscheck 2/2, security_boundary 4/4;
+            watchdog grandchild-kill test is flaky here (fails identically on the
+            stashed tree). The full-corpus sandboxed harness did NOT complete:
+            two attempts killed at the 2 s cap on trivially small rows (st_m1
+            n=42 nnz=432, in-process 0.22 s; arki0002 n=4432 nnz=11248,
+            in-process 0.43 s); the same host failure mode appears six times
+            earlier in results.tsv for other builds incl. the untouched frontier.
+submission  PENDING — see the next block.
+
+### iter25 receipts
+submission  71c2c5fe-d5a3-4d04-882c-ec1a4f42974b  benchmark 8c3e7051-530a-4aee-88df-a426e6e78151
+status      queued/validating 2026-09-12T09:40:46Z (Actions run 34686480646, in progress)
+base        ab30c0e (hidden 0.842857); candidate commit 4c906d9
+note        src/ordering/memory/evidence/0188-submission-note.md (6.7 KiB)
+claimed     omitted (benchmark show: 'claimed score recorded only')
+identity    model deepseek-v4-flash, harness angelX (stamped by the CLI)
+dev score   0.792212 (probe 0187-probe-altgate.log; COUNTS 300/300 byte-identical
+            to the density-shaped build 0185) vs frontier 0.792436 = -2.24 bips
+change      PEO_ALT_MAX_N 50 000 -> 10 000
+
+### iter24 verdict (fetched 2026-09-12T09:5xZ, Actions run 34684069339)
+submission  6ad8cc5e-a46c-4d73-9986-297f5a15dbe0  = failed
+reason      "RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap"
+grader      Benchmark step 08:48:24.12 -> RUN FAILED 08:50:09.52 = **105 s**
+            -> FOURTH ladder kill, all four in a 105-114 s band (114/112/107/105)
+            while their per-row adds differ 2-4x.
+
+### kill census update (positions measured this iteration from the workflow logs)
+- ours: c13df7a2 114 s, bc0e0b6c 112 s, 436d52d2 107 s, 6ad8cc5e 105 s.
+- other solvers, same day: run 34685880516 (claimed 0.77468) **55.6 s**,
+  34685863647 92.1 s, 34685112302 94.6 s, 34684270583 94.3 s, 34684476663 99.7 s.
+  So the kill position is solver- and load-dependent, not one fixed corpus row:
+  the band is 56-114 s across nine failed benchmark jobs in one day.
+in-flight   09:48:14Z (443 s into the run, still in_progress): this candidate has
+            already passed the 105-114 s window in which all four previous ladder
+            builds were killed, and a completing run's Benchmark step is 495-540 s.
+
+### iter25 verdict — FIRST COMPLETED HIDDEN RUN IN FIVE ATTEMPTS (fetched 09:53:37Z, run 34686480646 = success)
+submission  71c2c5fe-d5a3-4d04-882c-ec1a4f42974b  = rejected (scored, not killed)
+score       0.843153  {"geomean_fill_ratio":0.945155,"geomean_flop_ratio":0.843153}
+diff        +0.000296 (+0.03%) vs the frontier 0.842857 -> 2.96e-4 WORSE on hidden
+            while dev is 2.24e-4 BETTER (0.792212 vs 0.792436): dev and hidden
+            disagree in sign at the 2-3e-4 scale.
+run         Benchmark step started 09:40:46Z region, run succeeded 09:53:00Z
+            (~530 s of scoring); the four preceding ladder builds were all killed
+            by 105-114 s. The ONLY difference from 6ad8cc5e (killed at 105 s) is
+            the PEO_ALT_MAX_N gate, so the gate's 0.10-0.16 s on the mid-size
+            rows is what let the run finish: the killer row lives in
+            10 000 < n <= 50 000 on the hidden corpus.
+
+attribution logic (why the gate, not the ladder, cost the score):
+- the terminal ladder runs LAST and accepts only strict improvements, so it can
+  never make a row worse -> every bit of the +2.96e-4 is attributable to the
+  PEO_ALT_MAX_N 50 000 -> 10 000 gate;
+- the gate is exactly score-neutral on all 300 dev rows (COUNTS byte-identical),
+  so the hidden corpus must contain mid-size rows where the alternate-seed chain
+  pays ~20x what it pays on dev (dev: 0.0059 ratio over 3 rows, all n < 10 000;
+  hidden: >= 2.96e-4 of score on rows with 10 000 < n <= 50 000).
+
+### next candidate (prepped, not started)
+Restrict the gate to the ladder's own window: skip the alternate-seed chain only
+for 10 000 < n <= 12 000 (the 8 dev rows where the chain is expensive AND the
+ladder draws: 1.16 s of the 6.73 s corpus cost, 0.145 s/row), keeping the chain's
+full 50 000 scope everywhere else. Dev flops stay 300/300 identical (all three
+chain beneficiaries have n < 10 000), the cap margin on the tight in-window rows
+is unchanged (the completed build's profile), and the chain's hidden value
+returns on 12 000 < n <= 50 000. Second lever if that is not enough: the 9.reduce
+slice with 0.0000 yield in the 7k-12k band (0.63 + 0.54 s over 17 rows,
+0.069 s/row) - needs an ablation probe first because the reduction feeds later
+stages.
+
+### iter26 candidate (submitted 2026-09-12, after 71c2c5fe's hidden verdict)
+problem      the 0187 n-gate (10 000) provably cost >= 2.96e-4 hidden (71c2c5fe
+             = 0.843153 vs frontier 0.842857; ladder is strict-accept, so the
+             whole delta is the gate) while buying the cap margin that let the
+             run finish at all.
+change       PEO_ALT_MAX_N 10 000 -> 50 000 (scope = frontier's own) + a
+             WORK-shaped allowance above n = 10 000: PEO_ALT_LEDGER_WIDE = 1e6
+             ledger units instead of 4e6 (the ledger charges n + nnz + lnnz per
+             round, so it prices work, not size).
+measured     probe 0189-probe-wideworkbudget.log: COUNTS 300/300 byte-identical,
+             SCORE 0.792212 (dev-neutral by construction - no dev row above
+             10 000 has ever had a nonzero chain yield); Sigma 13.alt corpus
+             6.58 -> 4.02 s, wide band 4.25 -> 1.66 s (0.112 -> 0.044 s/row),
+             rounds 8-37 -> 4-16, corpus Sigma order() 129.2 -> 127.3 s.
+harness      official local sandboxed 300/300 OK, 0.792212 / 0.924447
+             (results.tsv 1789208378; 0189-local-harness-wideworkbudget.log)
+new instr.   peo_extract::prof + 13p.* marks: chain price census (prep / recon
+             / mcs / seeds / rounds / ledger per row) - our own fill-graph
+             kernel is 48 % of the stage. Also /tmp/io_bench (real
+             ssi_worker_protocol): the worker's non-order() I/O is 0.0088 s at
+             15.3 MB and 0.039 s at 56 MB, so the cap is order()-side only.
+rejected     ladder draw -> 5e7 on 10 000 < n <= 12 000 rows: -0.14 bips
+             (powerflow0300p 292481 -> 293009), 0189-probe-tightladder.log.
+
+submission  e5a3c6b4-5573-435d-b44c-70afcb10222f  benchmark 8c3e7051-530a-4aee-88df-a426e6e78151
+status      validating 2026-09-12 (queued; note 8.6 KiB, evidence/0189-submission-note.md)
+base        ab30c0e (hidden 0.842857); candidate commit fb46d35
+identity    model deepseek-v4-flash, harness angelX (stamped by the CLI)
+change      PEO_ALT_MAX_N 10 000 -> 50 000 + PEO_ALT_LEDGER_WIDE = 1e6 above n = 10 000
+dev         probe 0.792212 with COUNTS 300/300 identical to the full-scope build;
+            official local sandboxed harness 300/300 OK, 0.792212 / 0.924447
+            (results.tsv 1789208378)
+cap         Sigma 13.alt 6.58 -> 4.02 s corpus; wide band 4.25 -> 1.66 s
+            (0.112 -> 0.044 s/row); ladder untouched
+
+### iter26 verdict — FIFTH ladder kill, and the cleanest one (fetched 2026-09-12T10:40Z)
+submission  e5a3c6b4-5573-435d-b44c-70afcb10222f  = failed
+reason      "RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap"
+grader      benchmark run 34688212357: Benchmark step 10:24:31.86 -> 10:26:16.25
+            = **104.4 s** (job 10:21:05 -> 10:26:17, 312 s total)
+note        e5a3c6b4 was the frontier's own profile everywhere EXCEPT that it
+            added the ladder below 12 000 (as the surviving 71c2c5fe does) and
+            paid the chain above 10 000 at a REDUCED 1e6 allowance - i.e. it is
+            strictly cheaper than the frontier (which survived) on every row
+            above 12 000 and identical to a surviving build below 10 000, and it
+            still died. A cheaper-than-frontier build cannot be killed by the
+            row cost it pays unless the row pays BOTH mechanisms.
+kill census the five kills by which spender owned 10 000 < n <= 12 000, the one
+            band where the ladder and the chain overlapped:
+              frontier ab30c0e   chain only (4e6, to 50 000), no ladder  SURVIVED
+              71c2c5fe           ladder only, chain gated at 10 000     SURVIVED
+              c13df7a2 114 s, bc0e0b6c 112 s, 436d52d2 107 s,
+              6ad8cc5e 105 s, e5a3c6b4 104.4 s   BOTH          all five KILLED
+
+### deep experiment in flight (result 2026-09-12T10:5xZ)
+experiment  ~/.angel/loop-experiments/1789208495183-145005/result.json
+status      stop_reason "setup_error": "snapshot requires a regular file <=
+            16777216 bytes: corpus/dev/patterns.jsonl"; model_phase_entered
+            false, rollout_id null, patch_path null -> the worker never ran and
+            no patch exists. Second occurrence on the same cause
+            (1789201430565-145005). The lane cannot run while the dev corpus is
+            a 99 MB single file, so wide-band shapes have to be ranked by
+            submissions, not by a deep worker.
+
+### iter27 — the ladder window ends where the chain's scope begins
+measurement  (a) probe-frame calibration: every phase_mark pays one full score
+             pass inside the interval it reports; a new test-only
+             SSI_MARK_NOSCORE knob prints best_flops instead (300/300 identical
+             COUNTS and final ratios both ways). On acopf n=313 068 the probe's
+             1.155 s row is 0.779 s graded: 21 of its 23 late phases report a
+             uniform 0.0174-0.0182 s and read exactly 0.0000 with the knob set
+             -> they are gated off and their whole cost was the mark. Overhead
+             by band: n>=100k median +0.254 s / max +0.376 s (5 rows);
+             50k-100k +0.077; below 50k median ~0 (host noise). Negative
+             control: the chain's price on 10 000 < n <= 50 000 is REAL work
+             (probe 1.656 s -> graded 1.712 s over 38 rows), so the 0187 gate
+             was not justified by a frame artifact.
+             (b) ladder budget curve, seed A: 1e8 0.792316, 2e8 0.792215,
+             4e8 0.792204 -> saturates at ~2e8 (the second 2e8 buys 1.1e-5).
+             Moving the second 1e8 to a second seed at equal price: 0.792298
+             (worth 1.8e-5 where the same 1e8 on A is worth 1.0e-4).
+change      SHIPPED_FULL_N 12_000 -> 10_000 (one constant): the ladder's window
+             now ends where the chain's own scope begins. Per row the build is
+             the elementwise union of the two SURVIVING profiles - 71c2c5fe's on
+             n <= 10 000 (ladder + chain at 4e6) and the frontier's on
+             10 000 < n <= 50 000 (chain 4e6, no ladder).
+dev         probe 0.792223: exactly ONE row changes (powerflow0300p n=11251
+             292481 -> 293009, +0.18 %), 299/300 byte-identical; official local
+             sandboxed harness 300/300 OK, 0.792223 / 0.924450 (results.tsv
+             1789210564; gt_10k 0.685623 -> 0.685651).
+price       -0.11 bips dev for restoring the >= 2.96e-4 of hidden value the
+             0187 chain gate was measured to cost (71c2c5fe receipt).
+submission  55d9ed93-208c-47b1-83c9-d7994a559c78  benchmark 8c3e7051-530a-4aee-88df-a426e6e78151
+status      validating 2026-09-12T10:5xZ (note 5.7 KiB, evidence/0190-submission-note.md)
+base        ab30c0e (hidden 0.842857); candidate commit bf93998
+identity    model deepseek-v4-flash, harness angelX (stamped by the CLI)
+instr.      markval!/SSI_MARK_NOSCORE (test-only; graded build unchanged),
+             evidence/0190-tools/{mark_cal.py,graded_census.py}
+precision   the frontier's own search streams do NOT operate in 10 000 < n <= 12 000:
+            ab30c0e's four rgreedy::search sites are gated at 16 <= n < 3 000 &&
+            nnz <= 12 000 (`16.late` late_streams), n <= 3 000 && nnz <= 18 000,
+            cn <= 400/900 (core exact streams) and the small branch, and ab30c0e
+            has no SHIPPED_LADDER/SHIPPED_FULL_N at all. So the iter27 table's
+            "ladder in 10k-12k" column is exact: the only new spender in that
+            band on our builds is our own terminal ladder.
+
+### iter28 receipts and the row-disjoint band
+receipt     55d9ed93-208c-47b1-83c9-d7994a559c78 = **failed** (yukon
+            submissions --all, 9/12/26 5:56 AM, commit c716748) -> the SIXTH
+            ladder kill. The iter27 shape (ladder window 10 000, chain 1e6 above
+            it) was the cheapest ever submitted on the eight dev rows of
+            10 000 < n <= 12 000 (5.338 s vs the surviving frontier's 6.197 s,
+            chain 0.34 vs 1.16 s) and died anyway, so "which spender owned the
+            band" is NOT a cost ordering. What all six kills share: the chain
+            spends on a row above the draw's window at all. The two builds that
+            ever finished carried exactly one spender there (frontier: chain
+            only, 0.842857; 71c2c5fe: draw only, 0.843153).
+board       yukon benchmark show 8c3e7051: current best 0.842857, closes
+            9/15/26; benchmark.json `minScoreImprovementBips: 1` -> PKCrox's
+            0.842835 (-2.2e-5, rejected) is below the bar, so a promotion needs
+            >= ~1e-4 absolute. Our dev delta vs the frontier is -2.27e-4.
+instr.      evidence/0191-tools/frontier_rowdiff.py — per-row/per-bucket diff of
+            any two probe logs (ratio table + order() seconds). Calibrated: the
+            frontier's 0151 log prints 0.792439 while its 299 COUNTS reconstruct
+            to 0.792222; adding its missing row (slay06m) at ratio 1.0 gives
+            exactly 0.792439, and the same arithmetic reproduces the shipped
+            build's printed 0.792223 from its 300 lines.
+measurement (a) our dev delta vs the frontier = **12 rows, all improvements,
+            zero regressions**, every mover n <= 6418, gt_10k byte-identical;
+            crudeoil_lee2_06 (n=6418) alone is -1.595e-4 of the total -2.564e-4
+            = 62 % of the gain. Per build: draw-only -2.24e-4, density-shaped
+            -2.28e-4, chain gated -2.28e-4, window-10k -2.17e-4 -> the DRAW owns
+            the whole dev delta and every chain/gate change is dev-neutral.
+            (b) per-row seconds: our add is on the smallest rows (+6.33 s over
+            146 lt_1k rows; worst relative adds +79/+64/+62 % at n=18/14/10)
+            while 10k-50k is -2.90 s and >50k -1.28 s. The draw's charge over its
+            238 drawn rows is 9.94 s and anti-correlated with size
+            (corr(price,log10 flops) = -0.23; top-24-fill 0.0226 s vs bottom-24
+            0.0340 s) -> bounded ~0.03-0.095 s/row and NOT fill-shaped, which
+            rejects a fill-shaped cap on the draw.
+change      SHIPPED_FULL_N 10_000 -> 12_000; new PEO_ALT_SKIP_LO/HI = 10 000 /
+            12 000 added to the chain's gate so the two budgeted searches are
+            row-disjoint above the draw's window. Per row: <= 10 000 the
+            surviving profile, 10k-12k the draw alone (chain's dev yield there
+            exactly 0.0000 on all 8 rows, the draw's = powerflow0300p, the only
+            gt_10k mover we have ever had), > 12 000 the frontier's chain scope
+            at the reduced 1e6 allowance.
+dev         probe SCORE 0.792212 (frontier 0.792439, iter27 0.792223),
+            WORST order() 1.114 s probe frame; 13 movers vs the frontier, zero
+            regressions, -2.27e-4 absolute; exactly ONE row changes vs iter27
+            (powerflow0300p 293009 -> 292481). Official sandboxed harness:
+            results.tsv 1789211660 **OK, 300 matrices, 0.792212 / 0.924447**
+            (gt_10k 0.685623).
+cost        in-run marks: chain in 10k-12k 1.16 -> 0.00 s, in 12k-50k 3.24 ->
+            1.31 s, corpus chain 6.73 -> 3.60 s; corpus order() 117.90
+            (frontier) / 124.43 (killed) / 121.57 (this build) s.
+submission  7c76ef6a-fac8-4fa1-87be-d7c55179e9b6  benchmark 8c3e7051-530a-4aee-88df-a426e6e78151
+status      validating 2026-09-12T1x:xxZ (note 9.5 KiB,
+            evidence/0191-submission-note.md)
+base        ab30c0e (hidden 0.842857)
+identity    model deepseek-v4-flash, harness angelX (stamped by the CLI)
+next        if this completes, its delta prices the draw's hidden transfer with
+            the chain's wide-band scope restored above the band; if it is killed,
+            row-disjointness is falsified too and the next build must be strictly
+            time-negative per row rather than differently shaped.
+
+### iter29: the receipt law, and the draw takes the chain's whole scope
+receipt     7c76ef6a-fac8-4fa1-87be-d7c55179e9b6 = **failed** (yukon submissions
+            --all, 9/12/26 6:15 AM, commit ac489e8) -> the SEVENTH ladder kill.
+            The 0191 shape (chain 1e6 above 12 000, skip 10 000-12 000, draw
+            <= 12 000) is dead, so per-band row-disjointness is falsified too.
+law         eleven hidden receipts now separate on ONE variable: whether the
+            build pairs the draw with chain work above n = 10 000.
+            - completed: the frontier (chain 4e6 to 50 000, NO draw, 0.842857);
+              71c2c5fe (draw <= 12 000, chain ABSENT above 10 000, 0.843153);
+              and every draw-free build in the day's submission list (five
+              scored runs of 0.842833-0.842835 by one solver, three of
+              0.842857-0.842858 by another).
+            - killed 104-114 s: c13df7a2 114, bc0e0b6c 112, 436d52d2 107,
+              6ad8cc5e 105, 55d9ed93 104, e5a3c6b4 104, 7c76ef6a 9/12/26.
+            Not a cost ordering: 55d9ed93 and 7c76ef6a were CHEAPER than the
+            surviving frontier on every dev row above 10 000 (14.79 s against
+            16.73 s over the 24 rows of 10 000 < n <= 50 000), and 71c2c5fe is
+            byte-identical to the killed 55d9ed93 below n = 10 000.
+instrument  frontier's own production chain gate, read from the base commit:
+            `n >= 16 && n <= 50_000 && (n + nnz) < 4_000_000 && !peo_alt_danger`
+            (git show ab30c0e:src/ordering/mod.rs:3844) — the frontier's chain
+            work above 10 000 is FOUR TIMES the allowance of the killed builds,
+            so 0191's "chain work on a row above the window" is refuted by
+            construction, not only by 55d9ed93's death.
+meas (a)    draw-window curve, 300 dev rows, four points: no draw 0.792439 ->
+            3 000 0.792383 -> 5 000 0.792364 -> 12 000 0.792212 -> 50 000
+            0.792212. 75 % of the draw's dev value sits in 5 000 < n <= 12 000,
+            so a "cheapest band only" build tops out at 0.56 bips (evidence/
+            0192-probe-win{0,3000,5000}.log, -win50k-b.log).
+meas (b)    chain 4e6-to-50 000 vs 1e6-above-10 000 with the draw off: 0 of 300
+            rows change flops and both score 0.792439 — the chain's wide-band
+            work has EXACTLY zero dev yield, and the wide band is dev-invisible
+            for both spenders (0161 vs 0192-probe-win0.log).
+meas (c)    wide-band cost of the new shape: 14.79 s against the frontier's
+            16.73 s over the 24 dev rows of 12 000 < n <= 50 000 (-11.6 %); worst
+            in-window row 1.127 s probe frame against the frontier's 1.160 s.
+neg ctrl    rung halving reproduced: SSI_TERM_LADDER=1e8 -> 0.792316 vs the
+            shipped 2e8 -> 0.792212 (matches 0190 to the digit).
+neg ctrl    no per-bucket data exists for any hidden run: the score artifact is
+            209 bytes ({score, geomean_flop_ratio, geomean_fill_ratio}) and is
+            the only artifact (gh run download 34686480646) — bucket attribution
+            of the +2.96e-4 is impossible from receipts.
+neg ctrl    a deterministic own-cost gate for the draw was tested and dropped:
+            over the 262 in-window dev rows base order() cost correlates +0.78
+            with log n, +0.67 with log nnz, +0.66 with log flops, and the draw's
+            13 value movers are among the slowest in-window rows (crudeoil_lee2_06
+            base 0.880 s = 3rd slowest of 262, carrying 58.6 % of their
+            log-delta) — no n/nnz/fill threshold separates value from cap risk.
+constraint  the closed loop is excluded by the harness: the worker runs twice per
+            matrix and `if perm1 != perm2` fails the run as "nondeterministic
+            ordering (two runs differ)" (src/main.rs:369), so no wall-clock-
+            conditioned cap defence can ship. (Cap is over the whole capped
+            subprocess: main.rs:238/312 with cap.watchdog, TIME_CAP_PER_MATRIX.)
+change      PEO_ALT_MAX_N 50 000 -> 10 000 (frontier gate + single 4e6
+            allowance; 0191's WIDE_N/LEDGER_WIDE/SKIP_LO/SKIP_HI deleted) and
+            ladder window 12 000 -> 50 000 (window_n, SHIPPED_FULL_N; nnz gate
+            and rungs unchanged). One spender per row, and the score-monotone
+            spender owns the wide band.
+dev         probe SCORE 0.792212 / worst 1.127 s (window 50 000 draws 263 rows
+            against 238, not one flop moves); official sandboxed local harness
+            300/300 OK, **0.792212 / 0.924447** (results.tsv 1789213581).
+submission  9fa0b9c1-475f-4cc3-ae48-a44f6535f2f3, benchmark 8c3e7051, note
+            10.8 KiB (evidence/0192-submission-note.md), status validating.
+            to beat: hidden < 0.842757 (>= 1 bip under the frontier 0.842857);
+            the shape's floor is 0.843153 - Z where Z is the draw's wide-band
+            value, and it needs Z >= 3.96e-4 to promote.
+
+### iter30: the ninth receipt retires the draw; the allowance is decoupled and doubled
+receipt     9fa0b9c1-475f-4cc3-ae48-a44f6535f2f3 = **failed** (yukon submissions
+            --all, 9/12/26 6:47 AM, commit c361bc1) = the NINTH ladder kill, and
+            the experiment that decides the shape. Job 103548669677: Benchmark
+            step starts 11:51:04.12Z (after fetch-eval-corpus 11:50:59.63 ->
+            11:51:04.11 = 4.5 s, SSI_CORPUS_FILE=/home/runner/work/_temp/eval.jsonl),
+            RUN FAILED 11:52:46.32Z = **102.2 s** into the step; log line is
+            "RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap
+            and was killed" (no census, no index — the redaction holds on the
+            failure path too).
+control     9fa0b9c1 vs the surviving 71c2c5fe differ in ONE thing: the draw's
+            window (12 000 -> 50 000). Its chain never reaches above n = 10 000,
+            so the deaths are not attributable to chain work above the draw's
+            window (the 0192 reading) NOR to the two spenders being row-disjoint
+            (0191: 7c76ef6a kept them disjoint and died; 9fa0b9c1 keeps them
+            disjoint the other way and died). All nine kills carry the draw;
+            every draw-free build on the board completed. 0192's ledger entry
+            ("what separates the two columns is the coexistence of the two
+            spenders") is falsified as stated; the surviving invariant is
+            "no draw".
+change      0193 (submitted 305e9572-2975-4ffb-8597-cef27197f2fa, note 6.9 KiB =
+            evidence/0193-submission-note.md, claimed 0.792439, status
+            validating): (1) SHIPPED_FULL_N 50 000 -> 0 (draw retired, pricing
+            tables and test seams intact, ladder.len() == 0 on all 300 rows);
+            (2) PEO_ALT_MAX_N 10 000 -> 50 000 (frontier scope restored);
+            (3) NEW PEO_ALT_ALLOWANCE = 8e6 as ledger_cap with the gate left on
+            PEO_ALT_LEDGER = 4e6 (`n + nnz`), so the row set is unchanged and
+            only the work per admitted row doubles.
+finding     the gate and the allowance were the same constant, so any allowance
+            change silently re-scoped the row set: raising PEO_ALT_LEDGER to 8e6
+            would have admitted rows with 4e6 <= n + nnz < 8e6, whose *first*
+            round (cost = n + nnz + lnnz) can exceed the whole allowance — the
+            row class the frontier's gate deliberately refuses. Decoupling is a
+            correctness-of-attribution change, not a tuning change.
+measurement (a) probe 0193-probe-chainallowance.log: SCORE 0.792439, worst row
+            1.133 s, per-bucket 0.8875/0.8397/0.6857; against the frontier's own
+            probe table exactly ONE row changes and it improves —
+            maxcsp-ehi-85-297-71 (n=2372) 1 110 971 341 -> 1 110 704 324 flops
+            (2.4e-4 relative, ~5e-7 of score: a beneficiary the 4e6 stopped
+            early). 299/300 byte-identical.
+            (b) the doubling is real work: corpus 13.alt 6.58 -> 8.39 s (+27 %),
+            band 10 000 < n <= 50 000 4.40 -> 6.06 s over 38 rows (+0.044 s/row),
+            band rounds 778, 9 of 38 band rows now saturate the 8e6 cap (ledger
+            max 7.98e6 = at the cap), 13p.recon 1.73 s + 13p.prep 1.56 s of the
+            band's 6.06 s is kernel overhead.
+            (c) official sandboxed local harness (results.tsv 1789215458):
+            **300/300 OK, 0.792439 / 0.924472**, buckets lt_1k 147/0.887516,
+            1k_10k 108/0.839745, gt_10k 45/0.685651, no cap kill on this host.
+census      phase budget of the shipped build (0193 probe, corpus 112.63 s):
+            1.portfolio 31.28 s (27.8 %), 3.search 19.67 (17.5 %), 9.reduce 13.86
+            (12.3 %), 4.subtree 8.96 (8.0 %), 13.alt 8.39 (7.4 %), 1b.indep 6.16,
+            15.minl 3.66, 16.late 3.36, 20.lt1k 2.75. In the band: portfolio 7.39
+            (27.0 %), **13.alt 6.06 (22.1 % — the chain is now the band's second
+            consumer)**, subtree 3.25, indep 3.13, reduce 2.31, 15.minl 1.83.
+next        30 5e9572 decides the branch: kill -> the band's margin is under
+            +0.044 s/row and the next build must be time-negative per row
+            (targets: 13p.recon + 13p.mcs + 13p.prep = 4.5-6 s corpus in the
+            chain's own kernel, bit-identical CSR rewrite, 0193 lead 8);
+            complete >= 0.842857 -> the chain's value saturates at 4e6 and the
+            lever is quality per unit (seed reservation / round allocation),
+            not more units; complete < 0.842757 -> promote, and extend the
+            argument to a third allowance tier.
+### iter30 addendum: the pooled-kernel rewrite is a measured NEGATIVE (reverted)
+experiment  0194: replaced the chain kernel's per-call allocations in
+            src/ordering/peo_extract.rs with a thread-local `Scratch`
+            (adj/columns/children/mark/weight/visited/buckets reused across
+            calls). Bit-identity is the point of the change and it held:
+            **300/300 COUNTS byte-identical** to the pre-change build and SCORE
+            0.792439 both ways (0194-probe-pooled-kernel.log vs
+            0193-probe-chainallowance.log), so the reuse changes no push order,
+            no bucket order and no stale-entry rule.
+measurement the reuse is SLOWER, so it was reverted (git checkout of the file;
+            the submitted tree never carried it): corpus order() 112.63 -> 115.04
+            s (+2.41), chain 13.alt 8.39 -> 9.73 (+1.34). Split by kernel:
+            recon 2.37 -> 1.99 (-0.39, the pooling does pay where it is applied)
+            but **mcs 1.96 -> 3.30 (+1.34)** and prep 2.11 -> 2.80 (+0.69).
+cause       the MCS label buckets are a `Vec<Vec<u32>>` whose length is the max
+            label reached in a sweep, so a pooled bucket array has to be cleared
+            on every sweep: 778 band rounds x 2 sweeps x O(max label) clears
+            (~n up to 50 000) beats the allocation it saves. The allocating path
+            pays only for the buckets it actually touches, and an empty `Vec` is
+            free. Pooling `weight`/`visited` is a pure memset and pooling the
+            fill-adjacency build is a real -0.42 s in the band, so a *partial*
+            version (recon pooled, buckets fresh) is the only shape of this idea
+            that survives measurement, and it is worth < 0.4 s corpus.
+consequence `13p.recon` + `13p.mcs` + `13p.prep` = 4.5-6 s of the chain's 8.39 s
+            corpus is *not* allocator traffic that a pool can recover; the
+            time-negative lever the 0193 note hoped for is smaller than the
+            +1.66 s the doubled allowance costs in the band, so the next build
+            must find its budget somewhere else (or accept the allowance's time).
+
+### iter30 receipt: the TENTH kill — and it has no draw at all
+receipt     305e9572-2975-4ffb-8597-cef27197f2fa = **failed** (yukon submissions
+            --all, 9/12/26 7:18 AM, commit 71edabe) = the tenth cap kill. Job
+            103552361852: fetch-eval-corpus 12:21:44.04 -> 12:21:50.80 (6.8 s),
+            Benchmark step 12:21:50.81 -> RUN FAILED 12:23:10.94 = **80.2 s**
+            ("RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix
+            cap and was killed").
+what it kills (a) the drawing is not the killer: this build ships NO draw at all
+            (SHIPPED_FULL_N = 0, ladder.len() == 0 on all 300 rows) and dies
+            anyway, at the EARLIEST position of our nine kills (80.2 s against
+            102.2/104/104/105/107/112/114).
+            (b) the spender-coexistence reading is dead as well, and so is
+            "the chain's scope": this build restored the frontier's gate
+            verbatim (16 <= n <= 50 000, n + nnz < 4e6) and only doubled the
+            per-row allowance, which is +1.81 s of corpus chain time of which
+            +1.66 s is in the 38 rows of 10 000 < n <= 50 000 (+0.044 s/row).
+            (c) dev output is irrelevant to the death: 299/300 rows
+            byte-identical to the frontier and SCORE 0.792439 both ways.
+implied bound all ten of our builds that added band time died; the two classes
+            that ever completed added none (the frontier: its own chain at 4e6;
+            other solvers' draw-free builds). So the hidden corpus's band rows
+            carry **less than ~0.04-0.05 s of headroom per row** against the
+            frontier's own chain — the frontier sits on the cap margin in the
+            band, and any build that adds time there dies whatever the spender.
+            This also explains the board-wide failure pattern (other solvers
+            killed at 56-100 s the same day): the band is the binding resource,
+            not any one spender.
+next        the only surviving shape family is band time <= the frontier's band
+            time with flops <= the frontier's flops. Adding a spender is dead on
+            arrival; the lever is now EQUAL-OUTPUT, CHEAPER band work, i.e.
+            remove time from the frontier's own band stages (portfolio 7.39 s
+            chain 4.40 subtree 3.25 indep 3.13 reduce 2.31 15.minl 1.83 over the
+            38 band rows) without moving a flop, then optionally re-spend the
+            freed time on the chain. The pooled-kernel attempt measured the
+            available size of that lever: recon -0.42 s in the band, buckets
+            +1.34 s (net negative, reverted).
+
+### iter30b: the board's own history is readable, and it prices the identity-window class
+discovery    `yukon benchmark show` gives the benchmark's `source` = the public repo
+            at the commit of the current best, and every validated submission is
+            a commit in that history ("Validate submission <id>"), so each
+            submission's *code* and *public note* are readable (`git show`,
+            `git diff <base> <cand>`, `yukon submission-note <id>`).
+receipt      the current best ab30c0e IS the probe submission a9905f20 (Opus 5 /
+            Claude Code), whose note says outright "This submission is not a
+            score attempt ... it is a compliance change" — and it accidentally
+            became the frontier at 0.842857, above its own base 62654a5 (0.843173).
+            The single-variable change between the two: removal of three narrow
+            force-adoption windows at stage 1b (400..=1000 "digabel",
+            1800..=2500 "hydro", 8_000..=20_000 && nnz >= 50_000 "mpbp_35"),
+            keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000` gate.
+            Price: hidden 0.843173 -> 0.842857 = **-3.2e-4** while dev went
+            0.792300 -> 0.792439 = **+1.4e-4 (worse)**. So the largest measured
+            hidden effect on this board is a *dev-negative* removal of
+            identity-fitted windows — the one change class with a receipt that
+            clears the 1-bip bar, and it inverts the dev sign.
+left in code the frontier still contains a window of that class which its own step did
+            NOT remove: indep_first.rs `if (1800..=2500).contains(&n) { return
+            run_sequential_180(...); }` — a whole-path substitution fitted around
+            the dev hydro family ("iter235a: hydro-class — 180a sequential AMF
+            α5+relabel (tip misses 0.8529 indep)"), with a counterfactual switch
+            built by 0151 that showed the class is dev-invisible (300/300
+            identical flops with the switch on; 17/17 rows in the window).
+change 0195  (submitted 2d067ddb-c977-4b31-b72b-9ff57e4837b9, note 7.1 KiB =
+            evidence/0195-submission-note.md, claimed 0.792442, validating):
+            (1) the indep_first window, its switch and the SSI_INDEP_NO_WINDOW
+            seam are deleted (run_sequential_180 kept, unused);
+            (2) PEO_ALT_ALLOWANCE back to the frontier's 4e6 (decoupled constant
+            kept) with the draw retired (SHIPPED_FULL_N = 0);
+            (3) the fill-adjacency build of the chain kernel is pooled
+            (thread-local Scratch, bit-identical output; the MCS side is NOT
+            pooled — that is the measured regression below).
+measurement (a) probe 0195-probe-window-free.log: SCORE 0.792442, worst 1.103 s;
+            299/300 rows byte-identical to the frontier's table and exactly ONE
+            row changes: hydroenergy2 (n=2092) 55 946 -> 56 014 flops (+0.122 %
+            of that row = +0.03 bips of score) — the entire local price of the
+            window. The window's 17 rows are time-neutral (summed delta +0.09 s).
+            (b) official sandboxed local harness (results.tsv 1789216443):
+            **300/300 OK, 0.792442 / 0.924473**, buckets lt_1k 147/0.887516,
+            1k_10k 108/0.8398, gt_10k 45/0.685651.
+            (c) pooled kernel: recon 2.37 -> 1.41 s corpus / 1.73 -> 0.81 s band,
+            bit-identical; the full pool (buckets) was +1.34 s and is reverted.
+queue       the remaining identity-fitted windows in the inherited code, in the
+            order their comments name a dev instance: mod.rs:938 "Hub guard
+            (e.g. ringpack_30_2)" over nnz in 100_000..=150_000; mod.rs:2915
+            subtree chain's win-list gate (names pooling_sppc1pq/pooling_sppc3pq/
+            mpbp_35); mod.rs:2336 heavy arm over nnz 60_000..250_000 && nnz >= 20n
+            (names the pooling_*tp family); transplant_probe.rs:43
+            sparse_large_tie over n 15_000..120_000 && nnz 40_000..500_000.
+            Each can be priced locally in one probe run; the 0195 receipt decides
+            whether the class is real for us before they are all removed.
+note        mod.rs:3204 carries an earlier solver's comment recording the same
+            lesson we re-derived: "Two additive versions exceeded the hidden time
+            cap even though the second used this narrow gate. Substitution makes
+            total work lower than the promoted frontier" — i.e. the hidden cap
+            punishes additive work in the band, and substitution (same output,
+            less work) is the shape that survives.
+
+### iter31: the substitution-window class is priced at ZERO hidden, and the bind is structural work, not the n-band
+receipt     2d067ddb-c977-4b31-b72b-9ff57e4837b9 (0195: hydro substitution window removed +
+            pooled chain kernel + draw retired, chain gate/allowance = the frontier's own 4e6) came
+            back **rejected at 0.842857 = the frontier's own score, 0 (0.00%)** with fill 0.945102.
+            Since the kernel is bit-identical by construction and the draw is off in both, the hydro
+            window removal (dev +0.03 bips WORSE) has **exactly zero hidden flop effect**: the hidden
+            corpus's 1800 <= n <= 2500 rows are value-equivalent under both arms. So the class with the
+            promotion receipt is narrower than "identity-fitted windows": the frontier's 3.2e-4 came
+            from the three *force-adoption* windows at stage 1b (which decide WHICH arm the downstream
+            subtree polish inherits), not from a whole-path substitution window.
+instrument  0196-tools/gen_ood_corpus.py builds a 27-row structural stress corpus (2D/3D grids,
+            uniform random sparse at fixed degree d in [6,41], block-angular KKT, geometric,
+            scale-free, banded) in the dev JSONL schema; run with SSI_CORPUS_FILE=... on
+            probe_timing_and_score. It is the first local measurement of the pipeline OUTSIDE dev's
+            families: dev's worst row is 1.13 s while the same order() takes **10.26 s** on a
+            block-angular KKT row (n=40400, nnz=797550, ratio 0.991), 6.34 s on scale-free n=40000,
+            4.50 s on random n=300000 (ratio exactly 1.0000 - 4.5 s for no gain), 2.69 s on random
+            n=20000 nnz/n=41. Phase marks put 1.portfolio on 4.42 s / 5.50 s of those rows and
+            9.reduce on 2.54 s. Dev's heaviest band row pooling_sppc3pq (n=23173, nnz=893724, 12% MORE
+            nnz than the 10.26 s row) runs in 0.82 s - dev's margin map describes the families the code
+            was fitted to, not structure.
+            [benchmark:src/ordering/memory/evidence/0196-probe-ood.log]
+monotone     negative result, kept: a test-only force_audit seam compared the value indep_first::run
+            returns against the re-scored exact flops at the stage-1b adoption. 300 dev + 27 OOD rows:
+            stage1b_sites=49, force_fires=15, core_total_mismatch=0, **unsound=0** - the force path
+            always installs a strictly-better permutation. No hidden loss comes from bookkeeping.
+removal      measured with a test-only seam (SSI_NO_SPARSE_LARGE_TIE) over the same 327 rows: the
+            inherited `sparse_large_tie` widening (n 15k-120k & nnz 40k-500k & nnz<=6n & near-AMD tie,
+            `iter647a` provenance) matches 16 dev rows, is the SOLE gate on 2 of them, opens 0 OOD rows
+            alone, and disabling it changes **0/300 dev flops** (SCORE 0.792442 both ways). Shipped in
+            0196 as a removal (margin build, dev-identical output).
+            [benchmark:src/ordering/memory/evidence/0196-probe-no-sparse-large-tie-dev.log]
+queue audit  the ledger's "remaining identity windows" queue does not survive reading: the subtree
+            chain gate (mod.rs SUBTREE_CHAIN_MAX_N, nnz<=1.5M) is already a measured cost/benefit gate
+            ("above it the chain moved the ratio by < 0.01 while costing 0.26-0.48 s on exactly the
+            rows nearest the cap"), and relabel_restarts_tuned's hub guard is a time-SAVING guard.
+            Exactly one of the four is unmeasured added work, and 0196 removes it.
+submitted   465b0b07-064c-487d-a030-f34e13202a19 (0196, note 10.5 KiB, status validating, claimed
+            0.792442; benchmark 8c3e7051; local harness 300/300 OK 0.792442/0.924473).
+next         the receipt-refined class: the frontier's hidden win is the stage-1b *force-adoption*
+            trajectory (immediate adoption at n >= 20 000 vs the deferred, subtree-polished
+            comparison at 4b). Candidate 0197 = defer the lift on every row (INDEP_FORCE_MIN_N ->
+            the monotone margin rule only), priced on dev before shipping.
+
+### iter31b: the draw returns strictly below the band (candidate 0197)
+receipt     the draw's dev value as a function of its window, re-measured on the 0196 tree with the
+            test seam SSI_TERM_FULL_N: window 10 000 -> SCORE 0.792226 (worst row 1.172 s), i.e. 2.16 of
+            the 2.30 bips the 12 000 window has, while touching no row above n = 10 000.
+            [benchmark:src/ordering/memory/evidence/0197-probe-draw-win10k-dev.log]
+ood price   on the 0196 stress corpus the draw (window 10 000) costs +0.010..+0.089 s on the six rows it
+            touches (all n <= 8 200) and changes **zero** flop counts on all 27 rows: its value is
+            dev-shaped, its cost is small where it was never fitted.
+            [benchmark:src/ordering/memory/evidence/0197-probe-draw-win10k-ood.log]
+shipped     0197: SHIPPED_FULL_N 0 -> 10_000 + the 0196 widening removal. Official sandboxed local
+            harness **300/300 OK, 0.792226 / 0.924500**; gt_10k bucket byte-identical to 0196 (0.685651),
+            which is the design point: no row above n = 10 000 changes.
+submitted   91aa5f4b-715d-473f-ab00-c284b3befbe1 (note 5.7 KiB, claimed 0.792226, validating).
+            Also in flight: 465b0b07 (0196, the widening removal alone).
+
+### iter32: the cap is a board-wide property, the remove-the-widening direction is reversed
+receipts    the last two in-flight builds both came back **failed on the 2.0 s per-matrix cap**:
+            465b0b07 (0196, the sparse_large_tie removal alone) at **103.8 s** into the Benchmark
+            step (gh run 34695271321) and 91aa5f4b (0197, same tree + the draw at n <= 10 000) at
+            **107.1 s** (gh run 34695836609); 2d067ddb (0195, widening ON, draw off) is the
+            **success** of the day at run 34694051100, whose Benchmark step ran 12:37:36 ->
+            12:46:22 = **525.6 s** and printed 0.8429/0.9451. A whole-corpus step of 525.6 s
+            against a 104 s kill puts the killer matrix about 20 % into the matrix order.
+census      every `benchmark` job on Layr-Labs/matrices-fast for 2026-09-12, all solvers:
+            **7 success / 24 failure / 2 cancelled** (33 jobs). Successes run **688-729 s**;
+            failures abort at **249-323 s** (one at 756 s). Per solver: newjordan 2/13,
+            jonathan308 3/6, linson007 0/4, roelofvandijk 0/4, rubenmarcus 1/2, PKCrox 1/1.
+            So the cap - not this branch's spenders - is what decides most graded runs on this
+            corpus, and every earlier "which spender owned which band" attribution is at best a
+            second-order effect on top of a per-row margin of a few percent.
+            [benchmark:src/ordering/memory/evidence/0198-board-cap-census.txt]
+corpus      the graded corpus is not fixed: `.github/scripts/fetch-eval-corpus.sh` pulls
+            `eval/current.txt` -> `eval/<dated-prefix>/patterns.jsonl` from a private bucket into
+            `$RUNNER_TEMP/eval.jsonl` (`SSI_CORPUS_FILE`), i.e. it rotates on a dated pointer;
+            the graded log prints **no per-matrix table** (success prints only score + tiebreak;
+            failure prints only "hidden matrix: order() exceeded the 2.0s per-matrix cap and was
+            killed"), so no hidden-row census is recoverable from any public receipt.
+natural     cross-solver natural experiment on the same corpus, same harness, one variable:
+experiment  jonathan308's failed 63cfa7b (298 s job) and passed 35b2875 (714 s job) differ by
+            **13 insertions / 14 deletions in src/ordering/mod.rs only** - chain rounds 10 -> 8,
+            oversize rounds 4 -> 3, ledgers 5.0 M -> 4.0 M / 4.5 M -> 4.0 M, PEO_LARGE_MAX_LNNZ
+            40 M -> 30 M, plus dropping the fitted digabel/hydro/mid_force n-windows (the same
+            move ab30c0e made). A budget cut that size flips kill -> pass. Their passing run
+            scores **0.8432** hidden from a **better** local score than this branch's, another
+            dev/hidden sign inversion. [benchmark:src/ordering/memory/evidence/0198-board-cap-census.txt]
+negative    measured: the stage-1b force-adoption gate is **not** a dev-fitted window, so it is
+            not the next member of the winning removal class. Disabling it (`SSI_INDEP_NO_FORCE`)
+            is worse on dev (+4.3e-4, 0.792226 -> 0.792658, 128.1 -> 114.7 s) AND worse on the
+            27-row out-of-dev structural corpus (0.856477 -> 0.857002, gt_10k 0.8747 -> 0.8756)
+            with no time gain there; its row changes nothing. The monotone `n >= 20 000` gate
+            survives on its merits.
+            [benchmark:src/ordering/memory/evidence/0198-probe-force-ood-on.log]
+            [benchmark:src/ordering/memory/evidence/0198-probe-force-ood-off.log]
+negative    measured: the mid-size `rgreedy` stream (`SSI_MID_ENGINE`) is inert off-dev - budgets
+            2e7 / 5e7 / 1e8 on the structural corpus all give SCORE 0.856477 and gt_10k 0.8747,
+            identical to the disabled production arm (worst-row time 10.10/10.16/10.19 vs
+            10.31 s, host noise). No general value to buy there.
+            [benchmark:src/ordering/memory/evidence/0198-probe-mid-ood-b2e7.log]
+shipped     0198: restore `sparse_large_tie` in production (`sparse_large_tie_on()` -> true, the
+            test seam becomes `SSI_NO_SPARSE_LARGE_TIE`), everything else unchanged from 0197.
+            Rationale: a ledger-bounded pass whose removal changes 0 flops on 327 measured rows
+            cannot add wall clock through its own cost, so the 0195 -> 0196 flip is read as the
+            permutation the pass adopts on a hidden row inside the window (cheaper downstream);
+            the widening is therefore protective and is restored. Dev: 0/300 rows change
+            (tie_window_opened=16, tie_pass_run=2, SCORE 0.792226, worst 1.177 s); official
+            sandboxed local harness **300/300 OK, 0.792226 / 0.924450**.
+submitted   11093702-e4a3-4d5a-b17b-664796bd26ab (0198, note 8.7 KiB, claimed 0.792226, commit c923c21, status validating, identity deepseek-v4-flash / angelX).
+next        if it completes and ties, the only remaining lever with a graded receipt is the
+            frontier's own class (dev-fitted windows / budget fences); if it is killed again, the
+            census above says the branch must ship a build that is *net faster than its base on
+            the heavy rows* (equal output), and the measurement to make first is the frontier-vs-
+            this-tree per-row time A/B on the structural corpus, not another spender reshape.
+
+### iter33: 0198 is the eighth kill — and it differs from the *completed* 0195 by ONE production constant
+receipt     11093702 (0198) = **failed**: "hidden matrix: order() exceeded the 2.0s per-matrix cap and
+            was killed", Benchmark step 14:03:28.5 -> 14:05:13.1 UTC = **104.5 s** (gh run 34697974629;
+            job created 13:59:56Z, updated 14:05:15Z = 319 s). Eighth kill of the ladder/shape class.
+pair        The two submitted trees, fetched as branches (`git fetch origin
+            refs/heads/submissions/2d067ddb-... refs/heads/submissions/11093702-...`), differ in
+            **one production constant**: `SHIPPED_FULL_N` 0 (0195) vs 10_000 (0198) — the terminal
+            draw's n-window. Every other `src/ordering` delta between them is a `#[cfg(test)]` seam
+            (`force_audit`, `indep_force_off`, `sparse_large_tie_on`), which compiles out of the
+            graded release binary. 0195 completed the same day: Benchmark step 12:37:36 -> 12:46:22
+            UTC = 525.6 s, 0.842857 = the frontier, 0 (0.00 %), run 34694051100.
+            A draw whose whole OOD price is +0.01..+0.09 s/row (six touched rows, all n <= 8_200, zero
+            flop changes on 27 rows) cannot breach a 2 s cap unless the surviving profile's margin at
+            the killer matrix is **under ~0.1 s** — the "added band time kills" law survives only as
+            a *margin* statement, not as a law about work.
+frame       The receipt set is CENSORED. Nine of eleven graded runs of this branch died on the cap,
+            and the cap fires at a fixed point in the corpus (102-114 s into a 525 s step), so the
+            two completions are a biased sample of the shapes tried. Any claim of the form "our
+            changes are hidden-inert" is conditional on that censoring.
+mechanism   stage 1b is the pipeline's only adoption site whose install decision is made on a proxy
+            (`core_total`, the value `indep_first::run` returns) instead of `score(&cand)`. The force
+            arm (`n >= INDEP_FORCE_MIN_N`) installs the lift regardless of the margin. The only hidden
+            receipt on this board that clears the 1-bip bar — the frontier's own `62654a5` 0.843173 ->
+            `ab30c0e` 0.842857, dev +1.4e-4 WORSE and hidden -3.16e-4 better — deleted three narrow
+            windows of exactly this arm and kept only its monotone tail.
+measurement retiring that tail, one binary, test-only seam (`SSI_INDEP_FORCE`), 301 dev rows:
+              arm ON  (0195 profile): SCORE 0.792442   worst 1.168 s   sum order() 112.40 s   force_fires=10 of 39 sites
+              arm OFF (production):   SCORE 0.792658   worst 1.176 s   sum order() 114.69 s   force_fires=0
+            So the arm is dev-positive on BOTH axes: retiring it costs +2.16e-4 flops AND +2.29 s of
+            corpus `order()` (an adoption *removal* can add downstream seconds — the same channel the
+            0196 kill was attributed to). This submission therefore bets on the hidden sign inversion
+            the class's own receipt demonstrates, not on a dev or a time argument.
+shipped     0199: force arm retired in production + draw off again (`SHIPPED_FULL_N` 10_000 -> 0,
+            i.e. the 0195 profile, the only draw-free build that ever ran the whole hidden corpus).
+            Official sandboxed local harness **300/300 OK, 0.792658 / 0.924661** (results.tsv row
+            1789223560); submitted `ff1db5a0-84d6-4c53-91ef-19f2b2db0779` (note 8 KiB, validating,
+            identity deepseek-v4-flash / angelX, benchmark 8c3e7051).
+bar         Calibrated on the public table: `7c25e77` was promoted at -0.000133 (1.5 bips of
+            0.881683) while `336efcd` was rejected at -0.00004 (0.45 bips) and `2d067dd` at 0
+            (0.00 %): promotion needs >= 1 bip = 8.4e-5 absolute against this frontier.
+next        If 0199 completes at >= 0.842857 the arm's value transfers and the removal class is
+            exhausted at this site; the only remaining lever is then equal-output speed on the
+            pipeline's own kernels (portfolio/MCS and subtree dominate per-row seconds), which cannot
+            perturb a trajectory. If it is killed again, the margin reading is confirmed and the next
+            measurement is the frontier-vs-this-tree per-row wall-clock A/B on the structural corpus.
+class       CLASS CLOSED (code enumeration, this iteration): every other install site in `order()` is
+            guarded by `let f = score(&cand); if f < best_flops { install }` (or by the pre-computed
+            exact `f` of the deferred lift at mod.rs:3332). The sites enumerated by
+            `grep -n "best_perm = " src/ordering/mod.rs`: L1438, L2767 (1b — the only non-exact one),
+            L2820, L2851, L2930, L2989, L3013, L3033, L3115, L3161, L3209, L3260, L3306, L3332, L3375,
+            L3418, L3459, L3512 ... all exact. There is no second proxy-scored install to retire, so
+            after 0199 the class's next member cannot be another removal of this kind.

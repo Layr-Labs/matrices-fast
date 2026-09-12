@@ -31,13 +31,51 @@ pub(super) fn candidates_bounded(
     max_nnz: usize,
     max_lnnz: usize,
 ) -> Option<[Vec<usize>; 2]> {
+    #[cfg(test)]
+    let _tr = std::time::Instant::now();
     let adj = reconstruct(n, cp, ri, parent, counts, incumbent, max_n, max_nnz, max_lnnz)?;
+    #[cfg(test)]
+    prof::add_recon(_tr.elapsed().as_secs_f64());
+    #[cfg(test)]
+    let _tm = std::time::Instant::now();
     let forward = mcs_peo(&adj, incumbent, false);
     let reverse = mcs_peo(&adj, incumbent, true);
+    #[cfg(test)]
+    prof::add_mcs(_tm.elapsed().as_secs_f64());
     if !super::is_bijection(&forward, n) || !super::is_bijection(&reverse, n) {
         return None;
     }
     Some([forward, reverse])
+}
+
+/// TEST-ONLY kernel price of `candidates_bounded`: seconds spent rebuilding the
+/// filled-graph adjacency (with its `Vec<Vec<u32>>` shape) versus seconds spent
+/// in the two MCS sweeps over it. Accumulated per `order()` call and pushed as
+/// phase marks by the caller, so a PHASES log carries the split next to the
+/// stage that pays it. Never compiled into the shipped worker.
+#[cfg(test)]
+pub(super) mod prof {
+    use std::cell::Cell;
+    thread_local! {
+        static RECON: Cell<f64> = const { Cell::new(0.0) };
+        static MCS: Cell<f64> = const { Cell::new(0.0) };
+        static RECON_CALLS: Cell<u64> = const { Cell::new(0) };
+    }
+    pub(crate) fn add_recon(secs: f64) {
+        RECON.with(|c| c.set(c.get() + secs));
+        RECON_CALLS.with(|c| c.set(c.get() + 1));
+    }
+    pub(crate) fn add_mcs(secs: f64) {
+        MCS.with(|c| c.set(c.get() + secs));
+    }
+    /// (recon secs, mcs secs, recon calls) since the last drain.
+    pub(crate) fn take() -> (f64, f64, u64) {
+        (
+            RECON.with(|c| c.replace(0.0)),
+            MCS.with(|c| c.replace(0.0)),
+            RECON_CALLS.with(|c| c.replace(0)),
+        )
+    }
 }
 
 fn reconstruct(

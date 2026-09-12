@@ -1,0 +1,15 @@
+probe binary: /home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/target/probe/release/deps/ssi_candidate_worker-9bc17c144118ca64
+
+running 1 test
+test ordering::probe::probe_insertion_search ... INS	faclay30	bucket=2	n=16678	nnz=82242	base=13452923	inc=12850431	best=12850431	inc_r=0.955215	best_r=0.955215	gain_pct=0.0000	order_s=0.512	search_s=2.576	evals=4000	strict=0	plateau=2034
+INS	gasprod_sarawak81	bucket=2	n=22536	nnz=75636	base=1030380	inc=941231	best=941221	inc_r=0.913479	best_r=0.913470	gain_pct=0.0011	order_s=0.799	search_s=3.194	evals=4000	strict=5	plateau=896
+INS	nd_netgen-2000-3-4-b-a-ns_7	bucket=2	n=22074	nnz=60000	base=289420	inc=273394	best=273394	inc_r=0.944627	best_r=0.944627	gain_pct=0.0000	order_s=0.488	search_s=2.693	evals=4000	strict=0	plateau=1068
+INS	nd_netgen-3000-1-1-b-b-ns_7	bucket=2	n=33155	nnz=90000	base=922197	inc=885186	best=885186	inc_r=0.959866	best_r=0.959866	gain_pct=0.0000	order_s=0.615	search_s=4.226	evals=4000	strict=0	plateau=1102
+INS	gabriel09	bucket=2	n=21688	nnz=89702	base=29373994	inc=26366112	best=26360074	inc_r=0.897601	best_r=0.897395	gain_pct=0.0229	order_s=0.871	search_s=3.304	evals=4000	strict=26	plateau=2522
+INS	faclay35	bucket=2	n=26778	nnz=132380	base=33630126	inc=32021838	best=32021838	inc_r=0.952177	best_r=0.952177	gain_pct=0.0000	order_s=0.679	search_s=4.314	evals=4000	strict=0	plateau=2916
+INS	transswitch2383wpr	bucket=2	n=59853	nnz=277562	base=3946309	inc=3861509	best=3861427	inc_r=0.978512	best_r=0.978491	gain_pct=0.0021	order_s=0.697	search_s=12.601	evals=4000	strict=7	plateau=547
+INS	popdynm200	bucket=2	n=22407	nnz=105584	base=2567878	inc=2436690	best=2435617	inc_r=0.948912	best_r=0.948494	gain_pct=0.0440	order_s=0.958	search_s=3.768	evals=4000	strict=78	plateau=655
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 162 filtered out; finished in 42.92s
+

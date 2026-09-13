@@ -1,0 +1,30 @@
+iter78 — THE RETIRED PRE-CLASS EXCHANGE PAIR CANNOT BE GATED AWAY FROM THE CAP'S HOT CLASS
+=========================================================================================
+
+Why this exists: the pair is the largest unshipped value device this tree has (iter61 probe
+frame: -3.1e-5 dev at +0.055 s on the binding row; iter75 production-identical frame:
+-2.2e-5 dev). Lead 18 asks for its worker-frame price; before spending a run on it, price its
+*exposure* — which rows its own key admits.
+
+Sources (both in-tree, no new run): the harness's own per-row table with contract (n, nnz)
+(evidence/0278-official-run-killed-tree.log) and the per-row wall of the same tree in the
+production-identical probe frame (SSI_XCH_BIGK_PCT=100 pass, .scratch/iter78/probe-bigk100-a.log).
+"hot" = probe wall >= 1.0 s (36 of 300 rows; >= 1.10 s is 23 rows holding 17.9 % of the wall).
+
+  gate clause                                   rows   wall share   hot rows inside
+  n>=6 && n<=45000 && nnz<=200_000 (shipped)     286       95 %        36 / 36
+  + nnz <= 20 000                                221       64 %        17 / 36
+  + nnz <= 10 000                                191       47 %         2 / 36
+  + n <= 5 000 && nnz <= 20 000                  213       59 %        11 / 36
+  + nnz <= 4 000                                 140       28 %         0 / 36
+
+Reading:
+  * As shipped (`nnz <= 200 000`), the pair's key admits **95 % of the corpus wall and every
+    single row the cap kills**, so re-enabling it is a whole-corpus wall bet, which is what
+    iter61 measured (+0.055 s on the binding row) and why it was retired.
+  * Half-measures do not help: `nnz <= 20 000` still admits 17 of the 36 hot rows.
+  * One clause does separate cleanly: **`nnz <= 4 000` admits 140 rows (28 % of the wall) and
+    ZERO hot rows** — every row it admits runs at <= ~0.8 s in the probe frame, i.e. 0.5 s of
+    slack, so a pair spend there cannot move the cap. Whether the pair still earns its
+    -3.1e-5 on that sub-class is untested and is the next measurement (needs a test-only
+    seam for the pair's own nnz key; the shipped key is a hardcoded `200_000`).

@@ -2234,8 +2234,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         });
     }
     flush!();
-    let part_extra =
-        part_extra_on && (n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part);
+    // ── iter77 TEST-ONLY seam: the AT-FLOOR clause (`SSI_PART_FLOOR=1`) ─────
+    // The extra-partitioner family below is gated on "a base separator already
+    // beat the pre-partition incumbent" (or on the row being tiny). A row whose
+    // incumbent is still exactly the AMD anchor at this point — the at-floor
+    // class, 75 of 300 dev rows in the worker frame — is therefore *never* shown
+    // the tuned / hi-trial / shape-variant separators, even though those are the
+    // candidates a min-degree escape is supposed to lose to on sparse
+    // separator-friendly structures. The seam widens the gate to
+    // `best_flops == amd_flops` so what that omission is worth becomes one
+    // measurement in one binary. Every adoption is a strict decrease and the
+    // anchor is the floor, so the arm can only lower ratios, never raise them.
+    #[cfg(test)]
+    let part_floor: bool = std::env::var("SSI_PART_FLOOR")
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false)
+        && best_flops == amd_flops;
+    #[cfg(not(test))]
+    let part_floor: bool = false;
+    let part_extra = part_extra_on
+        && (n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part || part_floor);
 
     // A second, TUNED METIS (more initial partitionings + FM refinement). The
     // gate reaches sparse gt_10k ties (wide n) while the tight nnz cap keeps it
@@ -2293,8 +2311,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         consider!(move || feral_kahip::kahip_order(&core));
     }
     flush!();
-    let part_extra2 =
-        part_extra_on && (n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part);
+    let part_extra2 = part_extra_on
+        && (n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part || part_floor);
 
     // METIS PARAMETER variants. Every METIS candidate above varies only the
     // amount of WORK (initial partitionings, FM passes); these vary the SHAPE of
@@ -5046,19 +5064,38 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // exceeded the 2.0s per-matrix cap and was killed" — so a value-free spend
     // here is not score-neutral book-keeping, it is *cap margin* on the rows
     // that decide the run. Both arms are graded-closest (`SSI_MARK_NOSCORE=1`).
+    // iter75 CORRECTION: the test arm's unset default now equals the production
+    // value (see `memory/evidence/0275-probe-code-frame.txt`) — it used to
+    // default to `true` while production compiles `false`, so every probe run
+    // that did not set this seam measured a tree with the retired pre-class
+    // pair LIVE. Set `SSI_PRECLASS_WIN=1` / `SSI_PRECLASS_STEP=1` to price the
+    // pre-class pair; unset or `0` is production.
     #[cfg(test)]
     let preclass_win: bool = std::env::var("SSI_PRECLASS_WIN")
-        .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_win: bool = false;
     #[cfg(test)]
     let preclass_step: bool = std::env::var("SSI_PRECLASS_STEP")
-        .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_step: bool = false;
-    if preclass_win && n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
+    // iter78 seam (test-only): the pair's own `nnz` key. Its shipped value is
+    // 200_000, which admits 286 of the 300 dev rows — 95 % of the corpus wall and
+    // every one of the 36 rows >= 1.0 s (`memory/evidence/0278-prexch-gate-census.txt`).
+    // A tighter clause is the only way to spend this pair's work where the cap has
+    // slack, so one binary must be able to price that: `nnz <= 4 000` admits 140
+    // rows (28 % of the wall) and zero hot rows. Unset is production.
+    #[cfg(test)]
+    let preclass_nnz: usize = std::env::var("SSI_PRECLASS_NNZ")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(200_000);
+    #[cfg(not(test))]
+    let preclass_nnz: usize = 200_000;
+    if preclass_win && n >= 6 && n <= rgreedy::MAX_N && nnz <= preclass_nnz {
         for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
             if let Some(candidate) = rgreedy::subset_window_descent(
                 n, &pattern.col_ptr, &pattern.row_idx, &best_perm, width, 2, budget,
@@ -5075,7 +5112,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     parallel::phase_mark("22.win", _tph, markval!(best_perm, best_flops));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
-    if preclass_step && n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
+    if preclass_step && n >= 6 && n <= rgreedy::MAX_N && nnz <= preclass_nnz {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
@@ -5307,15 +5344,40 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         /// the measured-best 2e8 budget. Both axes improve, so ship it.
         const SHIPPED_SPARSE_LADDER: [(i64, u64); 1] =
             [(50_000_000i64, 0x9E37_79B9_7F4A_7C15u64)];
+        /// ── iter77: the DENSE-BAND second rung ─────────────────────────────
+        /// Priced on the 29-row class the ladder already searches (every dev row
+        /// with n <= 10 000), by re-seeding the exact-objective engine from the
+        /// shipped incumbent at a bigger budget: a second draw at 5e8 pays on the
+        /// **dense** rows only — `pooling_sppa9tp` (nnz/n = 24.1, 0.1613 ->
+        /// 0.1602 = -0.68 %, -1.9e-5 dev on its own, +0.033 s) and
+        /// `qspp_0_14_0_1_10_1` (214x dense, -0.11 %, +0.010 s). Every non-dense
+        /// winner the same census finds (`mpbp_15`, `mpbp_07`, `crudeoil_lee2_06`)
+        /// costs +0.06..+0.10 s on rows already running 1.06-1.18 s, i.e. it
+        /// lands on exactly the rows the hidden cap has killed nine builds for
+        /// touching. So the rung is gated by density (`nnz >= 10n`, the same
+        /// structural band the crown already uses), never by matrix identity.
+        /// [.scratch/iter77/engine-census-10k.log, ab-ladder-dense-*.tsv]
+        const SHIPPED_DENSE_LADDER: [(i64, u64); 2] = [
+            (200_000_000i64, 0x9E37_79B9_7F4A_7C15u64),
+            (500_000_000i64, 0xD1B5_4A32_D192_ED03u64),
+        ];
         /// Above the window: no draw at all. The 7 000 < n <= 12 000 rows are
         /// the pipeline's slowest in-window rows (frontier max there 1.017 s),
         /// and the rung that used to live here was worth 0.14 bips.
         const SHIPPED_WIDE_LADDER: [(i64, u64); 0] = [];
+        #[cfg(test)]
+        let dense_rung_on: bool = std::env::var("SSI_TERM_DENSE_RUNG")
+            .map(|v| v.trim() != "0")
+            .unwrap_or(true);
+        #[cfg(not(test))]
+        let dense_rung_on: bool = true;
         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
         /// rows, all of them in-window). Structural, never per-matrix.
         let shipped_ladder = || {
             if nnz < 3 * n {
                 SHIPPED_SPARSE_LADDER.to_vec()
+            } else if dense_rung_on && nnz >= 10 * n {
+                SHIPPED_DENSE_LADDER.to_vec()
             } else {
                 SHIPPED_LADDER.to_vec()
             }
@@ -5514,11 +5576,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // 4G+6), so this ships the 4G allowance with five sweeps: the failed tree's
         // value minus its one dead sweep. [0239-sweeps{3,4,5}-noscore-4cpu.log,
         // 0238-noscore-4cpu.log, 0239-board-receipt.txt]
+        // iter75 CORRECTION: the unset default now equals the production value
+        // (12, one full cycle of the walk's block offsets with
+        // `gcd(step=5, width=12) = 1`). It used to default to the iter57-era 6,
+        // so probe runs that did not set this seam measured a *shallower*
+        // schedule than the shipped worker — which is exactly how the charge
+        // shape was mis-priced at −1.75e-5 instead of its true −5.1e-5 dev
+        // (`memory/evidence/0275-probe-code-frame.txt`).
         #[cfg(test)]
         let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
             .ok()
             .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(6);
+            .unwrap_or(12);
+        // iter74: the second sweep cycle (20) was built and run; it is cap-dead
+        // rather than value-dead — see `memory/evidence/0274-true-frame*`. The
+        // shipped count stays at 12 (one full cycle of the walk's block offsets,
+        // `gcd(exchange_step=5, exchange_width=12) = 1`).
         #[cfg(not(test))]
         let exchange_sweeps: usize = 12;
         #[cfg(test)]

@@ -1200,3 +1200,215 @@ round, so note the round if you know it.
   faults — buy the *value* back at the 2 GiB allowance instead: the descent ceiling above 45 000 is the one
   axis the record measures only to 45 000 (25 k→36 k→45 k = 0.790389/0.790309/0.790266) and its cost lands on
   the n>45 000 rows, which the census shows are cheap (0.15–0.5 s) and outside the cap's binding band.
+
+## iter70 — the Actions-log latency instrument; sweeps 12 at the 2 GiB rung shipped; the component-admission device measured; the 70 k ceiling killed
+
+- **NEW INSTRUMENT: the grader's public Actions log indexes the hidden frame.** The promoted 2 GiB
+  tree printed its score **634.1 s** after the grader launched; the four killed bats of the same day
+  aborted after **85.8 / 87.7 / 101.9 / 114.3 s**, i.e. **the hidden cap-killer is reached inside the
+  first sixth of the pass**, and different trees die at different points in it (±14 %) — so several
+  hidden rows sit near the 2.0 s line and the first one in corpus order kills the bat. Our own pass
+  over the 300 dev rows costs **281.0 s**, so the hidden pass is **2.26×** ours end to end — the first
+  whole-corpus calibration of the hidden frame, consistent with (and slightly above) the (1.82, 1.98]
+  per-row bracket derived earlier from cap arithmetic. [0270-log-latency-instrument.txt]
+- **SHIPPED bat `bbf58495-127f-49c2-aa08-a93feec901f4` (validating):** 2 GiB ledger + class-block
+  **sweeps 6 → 12** + the inherited pool and clamp. Official local sandboxed harness **300/300 OK,
+  0.790288 / 0.923150** (buckets 0.8873/0.8373/0.6823), corpus 281.0 s — **−3.7e-5 dev** against the
+  recorded 2 GiB+45 000 point (0.790325) and **−1.24e-4 dev** against the frontier's own dev point.
+  Row-by-row the device moves **9 of 300** rows: eight mid-size rows improve by 0.001–0.004 and
+  `transswitch0300p` (n = 11 659) *regresses* by 0.004 — a small-win/small-loss exchange, not a free
+  lunch. [0270-sweeps12-alloc-2frames.txt, 0270-official-run-s12-2G.log]
+- **The in-flight component-admission rewrite is MEASURED and it is tiny:** alloc 0 → 2 in the official
+  frame moves **exactly one** dev row (`crudeoil_lee1_07` 0.746 → 0.744) for **−6e-6 dev**, wall-neutral
+  (crown census identical). So the ledger's "dead zone" (unfunded components) is a real but negligible
+  device; it is kept in the tree, and the hypothesis that it could carry a bat is **killed**.
+  [0270-official-run-alloc2.log, results.tsv:1789315062]
+- **KILL: the ceiling above 45 000 is inert.** Only two dev rows have n in (45 000, 70 000]
+  (`transswitch2383wpr` 59 853/nnz 337 415, `transswitch2736spr` 69 651/nnz 400 661) and both return
+  **bit-identical permutations and identical walls** at MAX_N 45 000 and 70 000 — every MAX_N-gated
+  caller additionally requires `nnz <= 200 000`, which both rows fail. The lane's own "next action"
+  (buy the 3 GiB value above 45 k) is therefore impossible by gate, not by measurement.
+  [0270-ceiling70k-inert.txt]
+- **The two cap frames disagree about which row binds.** 4-coremax = `chimera_selby-c16-02` 1.04 s
+  (n = 2 031) → the 4-core line is ≈1.05 s (2 GiB passers read 1.01 s, 3 GiB kills 1.09–1.10 s).
+  1-core max = `crudeoil_lee4_09` **1.55–1.60 s** (n = 15 904) against iter67's 1-core line of
+  ≈1.64–1.67 s (passer 1.55, killed 1.72). On one core wall ≈ user time, so the row that sets the
+  hidden reading is the row with the largest **CPU** cost; the twelve-sweep device spends ~0.05 s of
+  that margin on exactly the row it improves. [0270-crown-4core-s12.tsv, 0270-crown-1core-s12.tsv]
+- **Next action:** the bat's margin is thin by construction (1-core 1.55–1.60 s vs a 1.64–1.67 s line),
+  so the next candidate should *buy margin* rather than another 1e-5: the only lever left on the
+  binding row is making the funded work cheaper at identical output (`crudeoil_lee4_09` is 2.07 s of
+  pure user time at 3 GiB with only 0.04 s sys and 47 k faults — it is algorithmic, not allocator),
+  or re-pricing the sweeps row-by-row so the schedule does not spend on the rows it cannot improve.
+
+## iter72 — where the cap's margin is not: the restore axis, the charge shape, the width ceiling
+
+- **NEW INSTRUMENT: the buffer-restore census** (`copy_stats`, cfg(test)-only, rgreedy.rs:363)
+  counting and timing every bulk touch of the mutable fill-graph bitset — the `assemble` copy
+  (rgreedy.rs:563), the `reset` copy (rgreedy.rs:602), the full-width row clear in
+  `Game::eliminate` (rgreedy.rs:790) and the reset's non-copy tail. It **prices open lead 18**:
+  on a cap row the copies are **1.7-4.0 %** of `order()` and the whole axis 2-5 %
+  (`crudeoil_lee4_09` 21.9 ms of 1.278 s; `procurement1large` 57.4 ms of 1.178 s;
+  `chimera_selby-c16-01` 8.4 ms of 0.994 s). It is **not** the >=0.09 s an allowance rung needs.
+  [0272-copy-phase-xch-crown.txt, 0272-summary.txt]
+- **KILL: the allocator axis is exhausted.** The knob A/B that moved `nd_netgen` 0.99 -> 0.73 s
+  *before* the iter69 pool is now flat on all nine cap rows (production frame, ABBA x2, both
+  signs, +-0.12 s under load; faults fall only 1-3 %). [0272-alloc-knob-ab.txt]
+- **MEASURED WASH, not shipped: the nonzero-only row clear.** The clear writes `w` words per
+  pivot although the scan above proved only `nonzero_words` of them are non-zero (5.2x fewer
+  writes: 29.05 M -> 5.62 M words on lee4_09). Two production binaries differing by that loop
+  alone, ABBA x4: `chimera-01` -0.008, `chimera-02` **+0.075**, `lee4_09` -0.098, `mpbp_48`
+  -0.093, `procurement` -0.018, `nuclear10a` **+0.122** s — mixed sign on the binding row, so
+  gone. [0272-sparseclear-ab.txt]
+- **NEW PRICE: the component-width ceiling** (`SSI_XCH_MAX_K`, window_dp.rs:479 / const :6).
+  `K=12` leaves every crown ratio **identical** (the k=13-14 bucket is never adopted) and the
+  wall unmoved; `K=10` cuts 0.07-0.26 s but costs **+415 u-dev** on nine rows (methanol400
+  +173, lee4_09 +79), `K=8` +507 u-dev — so the cap cannot fund the allowance ladder
+  (150 u-dev). [0272-kceiling-*.log, 0272-price-table.txt]
+- **KILL: the ledger's charge *shape* is the allowance in disguise** (`SSI_XCH_BIGK_MIN/PCT`,
+  window_dp.rs:117/:348). Discounting wide components by 25 % buys -17.5 u-dev at +0.02..+0.07 s;
+  the 50 % arm -22.2 u-dev; `k>=12` is identical to `k>=11` (the value is k=11); `k>=13` is inert.
+  A matching ledger cut (-10 % alone: **+16.4 u-dev**, at *lower* wall on every row) cancels the
+  gain exactly (charge-75 % + ledger-90 % = +0.9 u-dev). [0272-bigk-discount.log,
+  0272-price-table.txt]
+- **Where the cap rows spend** (probe frame): 1-core `lee4_09` 2.072 s = `1.portfolio` 0.787 +
+  `1b.indep` 0.330 + `4.subtree` 0.329 + `9.reduce` 0.112 + `15.minl` 0.099; 4-core
+  `chimera-01` 1.007 s = `1.portfolio` 0.331 (+ `9.reduce` 0.066); `mpbp_48` 1.156 s =
+  `1.portfolio` 0.292 + `4.subtree` 0.224 + `15.minl` 0.095. The **base separator family is
+  inert** there (`SSI_NO_PART=0` and `SSI_NO_PART_EX=0` leave ratios *and* phase times
+  unchanged on ten rows), and so are `SSI_NO_CUSTOM`, `SSI_NO_MINFILL`, `SSI_PEO_ROUNDS=0`,
+  `SSI_XCH_ALLOC=0` — every seam-addressable block is value-free *and* wall-free on the cap
+  rows. The exchange's `win` contains `dp` (3-6 ms apart): `chimera-01` dp 0.288 of 0.978 s
+  for 8 526 components, with k>=9 = 8-12 % of calls but ~88 % of the `2^k·k` steps.
+  [0272-copy-phase-xch-crown.txt]
+- **The tree is unchanged and re-verified**: 126 passed / 0 failed, and the official local
+  sandboxed harness reproduces the shipped table **0 of 300 rows differ**, 0.790282 / 0.923147.
+  [0272-official-run-instruments.log, results.tsv:1789317324]
+- **Next action:** the exchange axis is a single monotone dial whose measured slope is
+  ~9e-4 dev/s (the 10 %-ledger cut buys ~0.02-0.04 s for 16 u-dev) and the cap's remaining
+  margin is ~0.01-0.04 s, so **at most ~3e-5 dev can ever come from re-spending the exchange's
+  2 GiB**. The next candidate must either buy wall outside the exchange (the 1-core
+  `1.portfolio` 0.787 s is the target, and no seam reaches it) or be a *band* device — the
+  record's own iter26 datum is the warning: an `n`-gate on the 13p chain was worth **2.96e-4
+  hidden while yielding 0.0000 on dev**.
+
+## iter74 — the graded frame was wrong (diagonal), and the frontier moved
+
+- **Board reconciliation (primary artifact).** `bbf5849` was **promoted 0.840623**
+  (fill 0.944028, −1.59e-4, −0.02 %) at 10:52 — the frontier IS this lane's 12-sweep bat;
+  "frontier unchanged at 0.840782" was stale by one iteration. Diffing the two fetched board
+  trees shows `657b5db8` (FAILED) vs `bbf58495` (PROMOTED) differ in exactly three places:
+  ledger 3221225472 → 2147483648, sweeps 6 → 12, and the inert `PRODUCTION_XCH_ALLOC` seam —
+  so the `ADJ_POOL` recycle is in the promoted tree, and the cap kill was the **3 GiB
+  allowance**, not the pool. Sweep transfer: dev −3.7e-5 → hidden −1.59e-4 = **4.3×**, the
+  lane's highest-transfer device. Bar = 1 bip = 8.4e-5 hidden → next bat must read ≤ 0.840539.
+- **Frame bug (the headline).** Every `.scratch/widthcensus/pats/*.pat` run since iter65 fed the
+  worker a pattern with `n` self-loops: `extract.py` copies the raw corpus arrays, while the
+  harness stages `pattern_from_jsonl_line`'s output, which drops the diagonal
+  (`ssi-scoring/src/loader.rs:46`, test at :140) via `src/main.rs:269`. Harness nnz = raw − n
+  (arki0013 205081→160172 ✔ the cap-kill message; lee4_09 117696→101792 ✔ the harness table).
+  Same binary, same row: arki0013 0.65 s (md5 20cf0a38…) vs 1.22 s (md5 61e9069b…) — different
+  wall, different permutation. Row error both signs: gams05 +85 %, arki0013 +86 %,
+  lee4_10 +61 %, methanol400 −18 %. [0274-true-frame-diagonal.txt]
+- **True-frame crown census** (contract patterns, production worker, 4-core): the shipped tree's
+  max is **1.20–1.23 s** on `crudeoil_lee4_09` / `crudeoil_lee4_10` / `arki0013`, not the
+  recorded `procurement1large` 1.010 s. `12 → 20` sweeps costs **0.00 s** on every row with
+  n ≥ 10 000 and **+0.18 s** on `chimera_selby-c16-01/02` (1.12/1.18 → 1.30/1.30), because the
+  plateau stop is gated at `PRODUCTION_XCH_PLATEAU_MIN_N = 10_000` (window_dp.rs:16).
+  [0274-true-frame-diagonal.txt]
+- **Corrected cap bracket.** 2 GiB arm max 1.24 (promoted 02:16) vs 3 GiB arm max 1.31 (the
+  raised-allowance kills) ⇒ **f ∈ (1.53, 1.61]** and the survival line is a local 4-core max of
+  **1.24–1.31 s** — not the recorded 1.01 s. The shipped tree has ≤ 0.09 s of slack; the
+  20-sweep arm's 1.30–1.33 is in the killed zone. [0274-true-frame-diagonal.txt]
+- **iter73's experiment disposed of.** The 20-sweep arm's official local run failed on
+  `arki0013` ("≥ 3.2 s") but reads 1.21 s standalone at 20 sweeps: a loaded-host artifact, not
+  a sweep cliff. Cap-dead anyway via chimera-01/02 (above). Tree reverted to sweeps 12.
+  [0273-official-run-s20.log, 0274-true-frame-diagonal.txt]
+- **True-frame phase split** (probe frame = contract pattern, ratios match the harness table
+  0.615/0.617/0.399): the exchange (`win`+`dp`+`elim`) is 0.32/0.36/0.37 s = **28–31 %** of each
+  true max row — the largest addressable block there. iter72's sparse-clear device is a wash in
+  the true frame too (ABBA×3, four rows). [0274-true-frame-diagonal.txt]
+- **The sweep axis is closed by value, not just by the cap.** Probe frame, 300 rows, 12 vs 20
+  sweeps: SCORE 0.790232 → **0.790231** (−1e-6) with exactly **3 movers**, all n < 10 000
+  (`mpbp_15` −0.0005, `crudeoil_lee2_06` −0.0001, `rsyn0840m04m` +0.0002). The first cycle
+  (6 → 12) was −3.7e-5 dev / −1.59e-4 hidden; the second is empty.
+- **The coprime-stride axis is closed too** (`SSI_EXCHANGE_STEP`, width 12, sweeps 12, same
+  probe frame): step 1 **0.790683**, step 5 (shipped) **0.790232**, step 7 **0.790233** (tie),
+  step 11 **0.790540** — every stride with gcd(step,12)=1 visits the same twelve offsets for
+  the same work, so this was a free re-ordering lottery and the shipped stride is the best arm.
+- **Next action:** every schedule-depth rung must now be *funded* by a wall cut on
+  `crudeoil_lee4_09`/`crudeoil_lee4_10`/`arki0013` (three of the "re-spend the exchange" rungs
+  — sweep count, stride, and the plateau gate — are now closed), and the iter72 price table
+  (K ceiling, charge shape, restore traffic) must be re-priced with the corrected
+  `trueframe-*.sh` frame before it is traded against the corrected 1.24 s line.
+
+2026-09-13 iter75 | dev **0.790277 / 0.923142** (300/300 OK, no FAIL) | bat = the exchange ledger's **charge shape** (75 % of the modelled price for width `k >= 11`) + a probe **code-frame** correction. **The code frame, not the input frame, was still wrong:** `exchange_sweeps`' test arm defaulted to 6 while production compiles 12, and the pre-class pair defaulted to *on* while production compiles it *off* — so any probe run that did not set both seams measured a different program (iter74's "production-identical, 12 sweeps" 0.790232 was the pre-class-ON tree; the shipped tree is 0.790254 in the same frame). The charge multiplier was `#[cfg(test)]`-only, so the whole rung was unreachable by a submitted tree; ungated + pinned to the measured point it is **−5.1e-5 dev in the probe's production-identical frame** (0.790254 → 0.790203, 7 movers) but only **−5.0e-6 dev in the official harness** (0.790282 → 0.790277) — the first direct **probe→worker transfer measurement**: of the 13 rows the probe moves, only 2 (`ndcc12`, `chimera_selby-c16-01`) change permutation in the worker frame, and the probe's 6 other movers are md5-identical there. The two frames are each internally deterministic (worker md5 identical under `ulimit -v 4G`, 1/4/24 cores; probe identical across affinities) yet differ on 4/300 rows — `gabriel09` 0.897 vs 0.8695, `crudeoil_pooling_dt3` 0.691 vs 0.7056, `popdynm200`, `gasprod_sarawak81`, all `gt_10k` — whose log-differences sum to exactly the −2.8e-5 probe/official score offset. **True-frame max row correction:** `arki0016` (n = 7 993) reads 1.27/1.28/1.29 s, above `arki0013` 1.23 (and the probe's own slowest row), so the hidden bracket tightens to **f ∈ (1.53, 1.5625]** and the survival line is **≈1.28 s 4-core**, with the shipped lineage holding only 0.02-0.03 s of margin; the 17-row true-frame census shows the charge shape is wall-neutral (12/17 rows equal-or-faster, max unmoved, worst delta +0.020 s `chimera_selby-c16-01`). [0275-probe-code-frame.txt, 0275-submission-note.md, .scratch/iter75/{census-bigk75.tsv,probe-prod.log,probe-bigk75.log,official-run-bigk75.log}]
+
+2026-09-13 iter77 | dev **0.790253 / 0.923133** (300/300 OK, no FAIL; 126 tests pass) | bat = the **dense-band second ladder rung**. **New frame — the at-floor class, measured for the first time as a class:** 75 of 300 rows end at ratio *exactly* 1.0000 (54/147 lt_1k, 16/108 1k_10k, 5/45 gt_10k), and a new `probe_floor_certificate` shows **16 of them are certified zero-fill** (`nnz_l == n + edges`, the early return at mod.rs:1765) — provably the global flop optimum, unreachable by any submission. The other 59 were closed by two probes run this iteration: `probe_lns_beyond_gate` gives **`won=false` on all 13 hand-picked at-floor rows** at 4e9/2e10 (and 1e11 where affordable) word-ops, and a new `SSI_PART_FLOOR=1` seam that widens the `part_extra`/`part_extra2` gate (structurally OFF on the 13 rows with n >= 1000 && nnz > 8000) moves **no ratio at all**. `probe_eval_audit` re-run: **0 leak rows / 3122 scored candidates** (first re-run since the instrument was written). **The value frame that was left unpriced:** `probe_engine_census` walks every row the ladder already searches (n <= 10 000) and steps the budget — the shipped **2e8 rung wins 0 of 29**, 5e8 wins 4, 1e9 wins 2 more, and the +1e9 arm's only other movers are **regressions** (rsyn0840m04m 0.8040→0.8056) from the *shared charge ledger* being spent on draws instead of the exchange. Every non-dense winner pays +0.06..+0.10 s on rows already at 1.06-1.18 s (the profile that killed nine builds today), so the rung ships gated to `nnz >= 10n`: worker-frame value **−2.4e-5 dev** (movers pooling_digabel19 0.8433→0.8405, pooling_sppa9tp 0.16134→0.16021, qspp_0_14, qspp_0_13), wall **+1.92 s over 33 rows, worst 0.582→0.796 s** (min of 2 reps/arm), and no crown row is in the band at all. Side measurement: the cap-critical rows are **serial** (RAYON_NUM_THREADS 1 vs 4 within 2 %). [0277-dense-rung.txt, 0277-*.log, 0277-wall-dense-*.tsv, results.tsv:1789326467]
+
+2026-09-13 iter78 | dev **0.790258 / 0.923142** (300/300 OK, no FAIL; 126 tests pass) | bat = **retire the exchange ledger's charge shape** (charge 100 % at every width) on top of the dense-band rung; the wall-first candidate for a frontier that is now demonstrably cap-limited
+
+- **The grader's own wall ledger, fetched this iteration (primary artifacts, first time for the
+  whole day).** 26 benchmark validations on 2026-09-13; **20 of them are per-matrix TIME-cap
+  kills** (`RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed`),
+  each after **83-117 s** of a run whose completion takes **584-638 s** — and one more
+  (34778448493) after **5.5 s**, i.e. killed on the first hidden row(s). Both competitors die in
+  the same band. The day's cheapest full-corpus pass is a *rival's* 269 s tree (score 0.925818,
+  rejected) against our 633 s at 0.840623: **a tree 10 % worse in score walks the hidden corpus
+  2.35x faster**, so the hidden wall is a property of how much search the tree does.
+  [0278-grader-wall-ledger.txt, 0278-remote-log-628b5341-killed.log, 0278-remote-log-bbf58495-promoted.log]
+- **Why this profile is killed (the arithmetic).** The killed tree's own probe-frame per-row wall:
+  23 of 300 rows are >= 1.10 s and hold 17.9 % of the corpus wall; a row that reaches the hidden
+  2.0 s cap is a dev row >= 1.28-1.31 s (f in (1.53,1.5625]) or >= 1.10 s if the hidden rows are
+  ~1.45x heavier per unit (corpus-level ratio 634/281 = 2.26 vs max-row ratio ~1.55). The first
+  such row lands at 14-19 % of the wall in a shuffled corpus — exactly the observed kill window.
+  The kills are the expected outcome of the profile, not per-bat accidents. [0278-grader-wall-ledger.txt §3]
+- **The three production deltas over the promoted tree, verified from the promoted ref's own
+  sources**: it has **no `xch_charge_scale` at all** (0 occurrences), `PRODUCTION_XCH_ALLOC = 0`
+  (this tree: 2) and no dense ladder (`SHIPPED_LADDER` is the single 2e8 rung). Everything else
+  that differs is `#[cfg(test)]`-gated. [0278-grader-wall-ledger.txt §2]
+- **The killed tree's own local receipt: 0.790253 / 0.923133, 300/300, 301 s of wall** (proc-log
+  birth -> mtime) against the 281.0 s this box recorded for the promoted tree in iter70 (+7.1 %;
+  host load between the two sessions is not controlled). [0278-official-run-killed-tree.log]
+- **NEW: the charge shape's wall price lands on the hot class.** Production-identical probe frame,
+  ABBA (75, 100, 100, 75) over 300 rows: value 0.790179 (75) vs 0.790230 (100) = **-5.1e-5 dev**,
+  reproducing iter75; corpus-wide wall a wash (157.0/157.7 vs 157.0/155.0 s). Per-row (min-of-2):
+  the eight largest *savings* from retiring the discount are all hot rows (catmix400 -0.187,
+  hydroenergy2 -0.110, crudeoil_lee4_06 -0.078, procurement1large -0.061, chp_partload -0.054,
+  powerflow0118p -0.054), the eight largest *losses* are all rows with slack (all <= 1.0 s), and
+  the frame's own worst row falls **1.573/1.417 -> 1.519/1.386 s**. Its worker-frame value is
+  ~5e-6 dev (two rows change permutation). [0278-bigk-retired.txt, .scratch/iter78/probe-bigk*.log]
+- **The dense-band gate is verified from the tree's own `LADGATE` trace**: 263 records, 263
+  consistent / 0 mismatches with `len = 0 if n > 10000; 2 if contract nnz >= 10n; 1 otherwise`;
+  it fires on 16 dev rows (contract nnz/n 10.3-171.6). The gate reads the *contract* nnz, not the
+  raw corpus nnz (st_rv9 raw 10.33, contract 9.33, correctly not fired). [.scratch/iter78/probe-bigk100-a.log]
+- **NEW: the retired pre-class exchange pair cannot be gated away from the hot class.**
+  Its shipped key (`n >= 6 && n <= 45 000 && nnz <= 200 000`) admits 286/300 rows = 95 % of the
+  corpus wall and **all 36 rows >= 1.0 s**; `nnz <= 20 000` still admits 17 of them; only
+  `nnz <= 4 000` separates cleanly (140 rows, 28 % of the wall, 0 hot rows). [0278-prexch-gate-census.txt]
+- **Next action.** The pair's value on the clean sub-class is the only untested value device left
+  with a defensible wall story: add a test-only seam for the pair's own nnz key, price
+  `nnz <= 4 000` in the probe frame, then confirm in the worker frame before shipping. Anything
+  that adds wall to the >= 1.10 s class (23 rows, 17.9 % of the wall) is unshippable while the
+  frontier sits at the cap.
+- **Bat A submitted: `5e7259a4-a250-4f17-b703-4b3871de9bd8`** (validating) = the charge shape retired
+  (`PRODUCTION_XCH_BIGK_PCT` 75 -> 100) on top of the dense-band rung, official sandboxed local
+  receipt **0.790258 / 0.923138, 300/300, no FAIL, 126 tests pass**, wall 295 s. The 5e-6 dev it
+  costs is exactly the worker-frame value iter75 assigned the discount. [0278-submission.txt,
+  0278-official-run-batA.log]
+- **Lead 18 is CLOSED by measurement: the pre-class pair's value is valued ON the rows its wall
+  costs.** With the new test-only seam `SSI_PRECLASS_NNZ` (mod.rs:5092) one binary prices the pair
+  at its shipped key and at the only clean (slack-only) key: shipped `nnz <= 200 000` ->
+  **0.790208**, slack-only `nnz <= 4 000` -> **0.790230 == the pair-OFF control to six digits**,
+  i.e. **-2.2e-5 dev becomes 0.0e-5**. Mover census: 7 movers at the shipped key, every one with
+  nnz in [6 400, 120 730] (crudeoil_lee1_07 -0.710 %, pooling_sppa9pq -0.448 %, ... and TWO
+  regressions, chimera_lga-01 +0.471 %), **0 movers** at the clean key. The pair is therefore
+  unshippable while the frontier sits at the cap: value and wall are the same rows, and no
+  structural clause separates them (n <= 5 000 keeps 6 of the 7 movers, all of them in the
+  >= 1.0 s class). [0278-prexch-gate-ab.txt, 0278-prexch-gate-census.txt]
+- **The state of the lane in one line**: every device with a measured worker-frame value is now
+  either shipped (dense rung, `ALLOC`) or unshippable (charge shape retired; 3 GiB allowance,
+  20-sweep cycle, `K=10` ceiling, pre-class pair all cap-dead), so the next promotion needs a NEW
+  wall device on the 23 rows >= 1.10 s (17.9 % of the corpus wall) — the `9.reduce` core ladder
+  (`arki0016` 0.23 s = 18 % of that row, 2x its share on `lee4_09`/`arki0013`) is the largest
+  unattributed block left there.

@@ -1,0 +1,250 @@
+iter74 — THE GRADED FRAME WAS WRONG: every `.scratch/widthcensus/pats/*.pat` run fed the
+worker a graph with `n` extra self-loops. Frame correction, true-frame crown census, the
+corrected hidden-cap bracket, and the disposition of the iter73 sweep experiment.
+================================================================================================
+
+Why this exists
+---------------
+Two claims in this lane's record contradicted each other and neither matched a primary
+artifact: (a) the board said "frontier unchanged at 0.840782" while iter73's own source
+comment said bat `bbf5849` was promoted at 0.840623; (b) the local harness killed the
+20-sweep tree on `arki0013` with "took >= 3.2s", while a direct run of that same binary on
+`.scratch/widthcensus/pats/arki0013.pat` finished in 0.66 s. Chasing (b) found the bug.
+
+1. The defect (source-level, verified)
+--------------------------------------
+The per-row "graded frame" that this lane has used since iter65 — `.scratch/widthcensus/`
+`extract.py` -> `pats/<row>.pat` -> production `ssi-candidate-worker <pat> <out>` under
+`taskset` — is **not** the frame the graded harness charges the 2 s cap in.
+
+    extract.py writes the RAW corpus arrays: n | len(indptr) | indptr | len(indices) | indices
+    ssi-scoring/src/loader.rs:46   pattern_from_jsonl_line() DROPS THE DIAGONAL (i == j) and
+                                   rebuilds through Pattern::from_adjacency; its own unit test
+                                   pins it (`jsonl_line_parses_and_drops_diagonal`, :140-155:
+                                   "12 raw entries - 4 diagonal = 8 off-diagonal").
+    src/main.rs:269                the parent stages EXACTLY that loaded Pattern for the worker
+                                   (`ssi_worker_protocol::write_pattern(pat_file.path(), pat)`).
+    ssi-worker-protocol/src/lib.rs:29  read_pattern() is a round-trip reader; it strips nothing.
+
+So the harness's worker input = raw corpus MINUS the diagonal; the lane's `.pat` files = raw
+corpus INCLUDING it. The defect is exactly `n` entries per row, and it is visible in the
+grader-facing numbers themselves:
+
+    arki0013        raw 205081 -> harness nnz 160172  (= 205081 - 44909); the cap-kill message
+                    prints "n=44909, nnz=160172, nnz/n~3"
+    crudeoil_lee4_09 raw 117696 -> harness nnz 101792 (= 117696 - 15904); the harness table
+                    prints "crudeoil_lee4_09 15904 101792"
+    strip_diag.py (new, .scratch/iter73/) reproduces both exactly: 160172 / 101792.
+
+It is a BEHAVIOURAL difference, not a relabelling: same binary (`worker-s12-ctl`), same row:
+
+    arki0013         .pat(with diagonal) 0.65 s  perm md5 20cf0a38a1f34b0f
+                     contract(no diagonal) 1.22 s perm md5 61e9069becff9439
+    crudeoil_lee4_09  .pat 1.01 s perm md5 afb48d7350b2bb47
+                     contract 1.20 s perm md5 d4a9b6c49a4c82e9
+
+Different wall, different output permutation. Every `.pat`-frame wall in iter65-iter73
+(the ranked-list census, the crown rows, the 1-core frame, the ledger ladder, the
+sys/fault census, the iter72 A/B sweep) measured a different graph than the graded one.
+
+Row-level size of the error (old .pat frame -> true frame, production worker, 4-core):
+`gams05` 0.48 -> 0.89 (+85 %), `arki0013` 0.65 -> 1.21 (+86 %), `crudeoil_lee4_10`
+0.75 -> 1.21 (+61 %), `chimera_selby-c16-01` 0.96 -> 1.10, `mpbp_48` 0.96 -> 1.07,
+`procurement1large` 1.01 -> 1.04, `faclay35` 0.51 -> 0.62, `pooling_sppc1pq` 0.40 -> 0.43,
+`nd_netgen` 0.76 -> 0.80, but `methanol400` 0.93 -> **0.76** (-18 %). The error has both
+signs, so no constant rescaling repairs the old censuses.
+
+2. The corrected frame's crown census (+ the iter73 arm)
+--------------------------------------------------------
+`.scratch/iter73/true/<row>.pat` = diagonal-stripped (contract) pattern; production workers;
+`taskset -c 0-3`; 3 reps each. `worker-s12-ctl` = shipped 12-sweep tree (2 GiB + pool +
+XCH_ALLOC=2); `worker-s20` = the iter73 arm (same tree, sweeps 20).
+
+    row                         n      s12 (3 reps)          s20 (3 reps)
+    methanol400                 23999  0.76/0.77/0.76        0.77/0.76/0.76
+    crudeoil_lee4_09            15904  1.21/1.21/1.20        1.20/1.19/1.20
+    procurement1large           14416  1.05/1.03/1.04        1.04/1.04/1.04
+    crudeoil_pooling_dt3        30660  0.99/1.00/1.00        1.00/1.01/1.01
+    mpbp_48                     28368  1.07/1.08/1.07        1.08/1.07/1.07
+    nd_netgen-3000-1-1-b-b-ns_7  33155  0.80/0.81/0.80        0.80/0.80/0.80
+    crudeoil_lee4_10            17809  1.20/1.23/1.21        1.20/1.20/1.22
+    chimera_selby-c16-01         2031  1.11/1.13/1.11        1.33/1.29/1.28
+    chimera_selby-c16-02         2031  1.17/1.19/1.19        1.32/1.29/1.29
+    gams05                      17364  0.89/0.90/0.91        0.88/0.90/0.89
+    arki0013                    44909  1.20/1.21/1.22        1.22/1.21/1.21
+    faclay35 (artifact claim)    -     0.62/0.62/0.62        0.62/0.62/0.62
+    pooling_sppc1pq (artifact)   -     0.43/0.43/0.44        0.43/0.44/0.42
+    st_bsj2 (artifact)           -     0.17/0.17/0.17        0.17/0.17/0.17
+
+Readings:
+  * The true 4-core max of the *shipped* tree is `crudeoil_lee4_09` / `crudeoil_lee4_10` /
+    `arki0013` at **1.20-1.23 s**, not the recorded `procurement1large` 1.010 s. The old
+    frame's ranking (chimera-02 1.04 top) is wrong twice over: chimera-02 is 1.19 true, and
+    three rows above it were invisible.
+  * `12 -> 20` sweeps costs **+0.18 s on `chimera_selby-c16-01/02`** (1.12 -> 1.30, 1.18 -> 1.30)
+    and **~0.00 s on every row with n >= 10 000**, because the sweep loop's plateau stop is
+    gated at `PRODUCTION_XCH_PLATEAU_MIN_N = 10_000` (`rgreedy/window_dp.rs:16`): rows at or
+    above that stop at the first change-free sweep, rows below it run every sweep. `arki0013`
+    (n = 44909) reads 1.21 at 20 sweeps — the local harness's "took >= 3.2s" kill of the same
+    binary on the same row is a loaded-host artifact, not a sweep cliff.
+
+3. The corrected hidden-cap bracket
+-----------------------------------
+Same-day pass/kill pair, now in the true frame (`trueframe-multi.sh`, crown rows, 1 rep,
+4-core). `bin67-2G` / `bin67-3G` are the iter67 ledger-rung arms (`.scratch/widthcensus/`,
+used by `width67.sh`), the 3 GiB arm matching the allowance of the cap-killed bat.
+
+    row                         shipped(s12)   bin67-2G (2 GiB)   bin67-3G (3 GiB)
+    crudeoil_lee4_09            1.20           1.24                1.31
+    crudeoil_lee4_10            1.21           1.21                1.30
+    chimera_selby-c16-01/02     1.10 / 1.16    0.97 / 0.97         0.92 / 0.97
+    mpbp_48                     1.09           1.08                1.09
+    procurement1large           1.04           1.02                1.03
+    nd_netgen                   0.80           1.06                1.04
+    gams05 / methanol400        0.89 / 0.77    0.88 / 0.77         0.89 / 0.77
+
+    local max: shipped 12-sweep tree 1.22 (PASSED: promoted 10:52)
+               2 GiB rung arm       1.24 (2 GiB trees COMPLETED the hidden corpus: `039c8e2d`
+                                         was rejected on value -5.7e-5, `bbf58495` promoted)
+               3 GiB rung arm       1.31 (3 GiB trees were cap-killed: `65cb40ec` 8:49,
+                                         `49f65842` 9:38, `657b5db8` 10:25)
+
+With hidden_wall ~ f * local_wall and the 2.0 s line:  f <= 2.0/1.22 = 1.64 (current tree
+passed; 2 GiB rung f <= 1.61) and f > 2.0/1.31 = 1.53 (3 GiB arm killed)
+=>  **f in (1.53, 1.61]** and the calibrated survival line is **local true-frame 4-core max
+<= 1.24-1.31 s**. The record's standing rule ("the graded-frame corpus max <= 1.01 s is the
+survival line", f in (1.6, 2.0]) is a wrong-frame artifact and was 20-30 % optimistic; the
+shipped tree sits 0.02-0.09 s under the corrected line, and the 20-sweep arm's 1.30-1.33 lands
+exactly in the killed trees' zone. (Provenance caveat: `bin67-2G`/`bin67-3G` are the iter67
+ledger-rung arms; their bat identity is inferred from the rung's ledger constant, not
+independently re-derived, so the two brackets are quoted as a range.)
+(The bracket inherits the lane's cross-corpus assumption: the hidden binding row scales with
+our local max. The corpus rotates daily; both halves of the pair are 2026-09-13.)
+
+4. Where the true max rows spend (probe frame = contract pattern, sweeps 12)
+---------------------------------------------------------------------------
+`SSI_PROBE_ONLY=crudeoil_lee4_09,crudeoil_lee4_10,arki0013 SSI_PROBE_PHASES=1
+SSI_EXCHANGE_SWEEPS=12 SSI_XCH_TIME=1 cargo test --release -p ssi-candidate-worker --
+--ignored --nocapture probe_timing_and_score`:
+
+    crudeoil_lee4_10 1.1476 s: 1.portfolio 0.405 | 4.subtree 0.147 | 1b.indep 0.117 |
+        9.reduce 0.089 | 22.win 0.032 | 17.final 0.034;   exchange win 0.146+dp 0.141+
+        elim 0.034 = 0.321 (28 %); ratio 0.6147 (harness table: 0.615)
+    crudeoil_lee4_09 1.1548 s: 1.portfolio 0.335 | 4.subtree 0.163 | 15.minl 0.101 |
+        9.reduce 0.078 | 12.peo 0.021;  exchange 0.359 (31 %); ratio 0.6171 (0.617)
+    arki0013         1.1831 s: 1.portfolio 0.207 | 4.subtree 0.172 | 1b.indep 0.118 |
+        9.reduce 0.088 | 13.alt 0.087;  exchange 0.367 (31 %); ratio 0.3993 (0.399)
+
+The probe-frame ratios reproduce the harness's own table (0.615/0.617/0.399), which is the
+independent confirmation that the probe frame IS the graded graph and the `.pat` frame is not.
+The exchange is ~30 % of each true max row — the single largest addressable block there.
+
+5. Re-priced in the true frame: iter72's nonzero-only row clear (ABBA x3 per row)
+---------------------------------------------------------------------------------
+`worker-fullclear` vs `worker-sparseclear`, contract patterns, 4-core:
+
+    crudeoil_lee4_09  A 1.19/1.22/1.21  B 1.30/1.25/1.21  B2 1.20/1.21/1.20  A2 1.21/1.24/1.21
+    crudeoil_lee4_10  A 1.21/1.20/1.20  B 1.20/1.21/1.20  B2 1.20/1.20/1.20  A2 1.20/1.21/1.21
+    arki0013          A 1.23/1.21/1.23  B 1.21/1.24/1.21  B2 1.21/1.26/1.22  A2 1.21/1.22/1.23
+    chimera_selby-c16-01 A 1.13/1.10/1.10 B 1.11/1.13/1.10 B2 1.14/1.14/1.13 A2 1.12/1.11/1.13
+
+Still a wash in the correct frame (§7 of the iter72 record stands, now on the right graph).
+
+6. Board reconciliation (primary artifact: `yukon submissions --all`, 2026-09-13 17:05 UTC)
+--------------------------------------------------------------------------------------------
+    bbf5849  newjordan  PROMOTED  0.840623  {"geomean_fill_ratio":0.944028,
+                                            "geomean_flop_ratio":0.840623}
+                                            -0.000159 (-0.02%)   commit 99de589   10:52 AM
+    (previous tip 43c1ca7d 0.840782; 657b5db  failed 10:25; 49f6584 failed 9:38;
+     65cb40e failed 8:49; 039c8e2 rejected 0.840725 -0.000057 (-0.01%) 8:08)
+
+  * The frontier IS this lane's 12-sweep bat: 0.840782 -> **0.840623** (-1.59e-4 hidden).
+    The record's "frontier unchanged at 0.840782 / every raised-allowance bat killed" is
+    stale by one iteration.
+  * Fetched both board trees and diffed them (`git fetch origin refs/heads/submissions/...`):
+    9cb3f6d (`657b5db8`, FAILED) vs 99de589 (`bbf58495`, PROMOTED) differ in exactly two
+    production constants plus one seam —
+        PRODUCTION_EXCHANGE_LEDGER  3221225472 (3 GiB) -> 2147483648 (2 GiB)
+        exchange_sweeps             6 -> 12
+        PRODUCTION_XCH_ALLOC        added, = 0 (the iter72 admission device, inert)
+    The ADJ_POOL device is present in BOTH trees (`grep ADJ_POOL` at rgreedy.rs:304-347), so
+    the fault-wall recycle IS in the promoted frontier; the earlier single-device attribution
+    of `657b5db8` was wrong — it carried the 3 GiB ledger, which is the cap kill.
+  * Sweep-device transfer: dev -3.7e-5 (`results.tsv:104`, 0.790325 -> 0.790288) delivered
+    hidden -1.59e-4 => **transfer 4.3**, vs 0.65-1.02 for the ledger/band devices. Schedule
+    depth is this lane's highest-transfer axis; the cap, not the value, is what stops it.
+  * Literal target delta: `minScoreImprovementBips = 1` = 1e-4 relative at 0.8406 = **8.4e-5
+    absolute hidden**; the next bat must score <= 0.840539, i.e. ~1.6e-4 relative.
+    (Evidence for the bar: 039c8e2 rejected at -5.7e-5, bbf5849 promoted at -1.59e-4.)
+
+7. Disposition of the iter73 experiment (in flight at the start of this iteration)
+----------------------------------------------------------------------------------
+The 20-sweep arm was built and run through the official local harness
+(`0273-official-run-s20.log`): 299 rows OK, then
+`RUN FAILED: arki0013: order() exceeded the 2.0s per-matrix cap and was killed (took >= 3.2s)`,
+RUNWALL 277.48 s (the 12-sweep tree: 281.0 s, `0270-official-run-s12-2G.log`).
+
+  * The kill is NOT a sweep cliff: `arki0013` reads 1.20-1.22 s at 20 sweeps in the true frame
+    (0.65 s in the .pat frame that the lane kept seeing), i.e. 12 -> 20 sweeps costs nothing
+    there and the harness kill reproduces the iter69 "loaded-host artifact" pattern.
+  * The arm is nevertheless cap-dead, for a different reason: `chimera_selby-c16-01/02`
+    (n = 2031, below the plateau gate) pay the full second cycle and rise to 1.28-1.33 s,
+    which is the killed 3 GiB arm's zone (1.30-1.31) under the corrected bracket of §3.
+  * Tree reverted to the shipped configuration (sweeps 12). The only remaining difference
+    from the promoted board tree `99de589` in `src/ordering/mod.rs` is this comment block.
+
+8. The second sweep cycle is dead by VALUE, not just by the cap
+----------------------------------------------------------------
+Probe frame (`probe_timing_and_score`, `SSI_EXCHANGE_SWEEPS` seam, width 12, step 5,
+full 300-row dev corpus, ~2 min per run), 12 sweeps vs 20 sweeps:
+
+    SCORE  0.790232 (12 sweeps)  vs  0.790231 (20 sweeps)   (-1e-6)
+    buckets: lt_1k 0.8873 / 1k_10k 0.8373 -> 0.8372 / gt_10k 0.6822
+    ratio movers: exactly 3 rows, all with n < 10 000 (the plateau gate):
+        mpbp_15        n= 9858  0.7772 -> 0.7767 (-0.0005)   wall 1.167 -> 1.239 (probe)
+        crudeoil_lee2_06 n= 6418  0.6818 -> 0.6817 (-0.0001)   wall 1.137 -> 1.222
+        rsyn0840m04m   n= 8508  0.8040 -> 0.8042 (+0.0002)   wall 1.337 -> 1.376
+
+So the entire value of sweeps 13-20 is one −1e-6 score step, bought with +0.18 s on
+`chimera_selby-c16-01/02` in the true frame. The sweep axis's first cycle (6 -> 12) was
+−3.7e-5 dev / −1.59e-4 hidden; the second is empty. **Axis closed.**
+(The probe's own frame reproduces the official dev score to 5.6e-5: 0.790232 probe vs
+0.790288 official, and its per-row ratios match the harness table on the checked rows.)
+
+9. The coprime stride axis (free, wall-neutral) is also closed
+--------------------------------------------------------------
+`SSI_EXCHANGE_STEP` alone, width 12, sweeps 12, production-identical shape, same probe frame:
+
+    step  1 : SCORE 0.790683  worst order() 1.449 s
+    step  5 : SCORE 0.790232  worst order() 1.359 s   <- shipped
+    step  7 : SCORE 0.790233  worst order() 1.338 s   (+1e-6, tie within a step)
+    step 11 : SCORE 0.790540  worst order() 1.374 s
+
+With `width = 12` and `sweeps = 12` every stride with `gcd(step, 12) = 1` visits the same
+twelve block offsets and does the same work, so this was a free re-ordering lottery; the
+shipped stride 5 is the best of the four and no arm beats it. The axis is live (steps 1 and
+11 cost +4.5e-4 / +3.1e-4) but the optimum is already shipped.
+
+10. Instrument caution (re-confirmed the hard way)
+--------------------------------------------------
+`SSI_CORPUS_FILE=.scratch/iter73/sub10k.jsonl` (a repo-root-relative path) was silently
+ignored: `cargo test` runs with the *package* root as cwd, the load fails, and the probe
+falls back to the full dev corpus — the first "sub-10k" A/B actually ran 300 rows. Use an
+absolute path (or accept the full corpus, which is only ~2 min per arm anyway).
+
+Next action
+-----------
+`f in (1.53, 1.61]` and a 1.22 s local max means the frontier has <= 0.02-0.09 s of slack, so
+every further schedule-depth rung (sweeps 13-20, wider spans, k >= 9 charge) must be *funded*
+by a wall cut on `crudeoil_lee4_09`/`crudeoil_lee4_10`/`arki0013`. §4 says the exchange is the
+largest addressable block there (~30 %, `win`+`dp`), and §5 says the cheap clear-side device is
+a wash. Everything the iter72 price table measured (K ceiling, charge shape, restore traffic)
+was measured in the wrong frame and must be re-priced with `trueframe-*.sh` before it is
+traded against the corrected line.
+
+Two of the lane's three "re-spend the exchange" rungs are now closed outright: the sweep
+double-cycle (empty, §8) and the coprime stride (§9). The surviving candidate families are
+(a) the charge *shape* (`SSI_XCH_BIGK_MIN/PCT`: charge 75 % for k >= 11 was worth −17.5 u-dev
+at +0.02…+0.07 s of *wrong-frame* wall — the wall half is the part that must be re-measured),
+and (b) any device that cuts the exchange's `win`/`dp` cost at identical adopted candidates,
+now priceable against the corrected 1.24 s line instead of the 1.01 s one.

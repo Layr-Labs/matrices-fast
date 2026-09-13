@@ -1,0 +1,64 @@
+iter78 — RETIRING THE SHIPPED CHARGE SHAPE: its wall price lands ON the cap's hot class,
+its value is 5e-6 dev in the worker frame
+=========================================================================================
+
+Frame: production-identical probe frame, ONE binary, contract corpus (SSI_CORPUS_FILE=
+corpus/dev/patterns.jsonl), SSI_MARK_NOSCORE=1, SSI_EXCHANGE_SWEEPS=12,
+SSI_PRECLASS_WIN=0, SSI_PRECLASS_STEP=0, taskset -c 0-3, ABBA (75, 100, 100, 75) on all
+300 rows, then the same A/B restricted to the 36 hot + dense-band rows with
+SSI_PROBE_REPEAT=3 (min-of-3). The patched tree's production constant is 100 (no discount);
+both arms are driven by the test-only `SSI_XCH_BIGK_PCT` seam.
+
+1. VALUE (the discount's own worth)
+-----------------------------------
+  300 rows, ABBA:  pct=75 -> SCORE 0.790179  (both passes, identical to 6 dp)
+                   pct=100 -> SCORE 0.790230  (both passes, identical)
+  => the discount is worth -5.1e-5 dev in this frame, reproducing iter75's number exactly.
+  Its WORKER-frame worth was measured in iter75 as -5.0e-6 dev (two rows change permutation:
+  ndcc12, chimera_selby-c16-01). So retiring it costs ~5e-6 dev of the graded score.
+
+  36 hot rows, min-of-3: 75 -> 0.759659 (both passes)  100 -> 0.759846 (both passes)
+  => on the hot subset alone the discount is worth -1.9e-4 (consistent in both pairs).
+
+2. WALL (where the discount's price is actually paid) — the new measurement
+--------------------------------------------------------------------------
+  corpus total, 300 rows:   75: 157.0 / 157.7 s      100: 157.0 / 155.0 s
+  => corpus-wide the discount is a wash within drift (-0.1 s, -2.7 s; host load was 3.4
+     during the A/B, so only the sign of the pair aggregate is trusted, not its size).
+
+  The per-row split is where the signal is (min-of-2 per arm; negative = retiring the
+  discount is faster). 170 of 300 rows are faster with it retired, and the largest eight
+  savings are all rows the cap kills:
+
+      catmix400           0.968 -> 0.781   -0.187
+      hydroenergy2        1.213 -> 1.103   -0.110
+      crudeoil_lee4_06    1.312 -> 1.234   -0.078
+      procurement1large   1.161 -> 1.100   -0.061
+      chp_partload        1.312 -> 1.258   -0.054
+      powerflow0118p      1.223 -> 1.169   -0.054
+      (and 164 further rows, all smaller)
+
+  and the largest eight LOSSES are all rows with slack, every one <= 1.0 s:
+
+      pooling_sppc3pq     0.652 -> 0.675   +0.023
+      popdynm25           0.979 -> 1.000   +0.021
+      transswitch0300p    1.262 -> 1.281   +0.019
+      rsyn0805m03m        1.024 -> 1.039   +0.015
+      oil                 0.731 -> 0.743   +0.012
+      acopf_case9241pegase_qcqp 0.623 -> 0.635 +0.012
+      gabriel10           0.694 -> 0.705   +0.011
+      sssd25-08           0.281 -> 0.292   +0.011
+
+  And the frame's own worst row, which is the quantity the cap charges:
+
+      WORST order()  75: 1.573 / 1.417 s     100: 1.519 / 1.386 s   => -0.054 / -0.031 s
+
+3. READING
+----------
+The discount converts the ledger's charge into *more wide-component work*, and that work is
+worth 5.1e-5 dev on the probe's cheap rows while its cost lands on the six-to-eight rows that
+already sit within 0.1 s of the hidden cap. Retiring it is therefore the cheapest wall device
+this tree has: ~5e-6 dev of graded value for 0.03-0.05 s off the worst row and up to 0.19 s
+off individual members of the killable class. It is also the only one of the three production
+deltas over the promoted tree (charge discount, `XCH_ALLOC` 0->2, dense ladder rung) that is
+*net-negative* to keep.

@@ -211,6 +211,119 @@ struct GameCpuStats {
     clique_deficiencies: usize,
 }
 
+/// Immutable per-pattern image of the fill graph: the pristine bitset plus the
+/// degree vector derived from it. Both are pure functions of the CSR arrays,
+/// so every exchange call a row makes may share one image instead of
+/// rebuilding it: one zeroed `n*w` bitset plus one scattered write per
+/// off-diagonal nonzero is the single largest wall item of the block on large
+/// `n`, and the block is entered ~13 times per row there.
+pub(crate) struct Pristine {
+    pub(crate) n: usize,
+    w: usize,
+    adj0: std::rc::Rc<Vec<u64>>,
+    deg0: std::rc::Rc<Vec<u32>>,
+}
+
+impl Pristine {
+    pub(crate) fn build(n: usize, col_ptr: &[usize], row_idx: &[usize]) -> Option<Pristine> {
+        let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+        let w = n.div_ceil(64);
+        let mut deg0 = vec![0u32; n];
+        for (v, d) in deg0.iter_mut().enumerate() {
+            *d = adj0[v * w..v * w + w]
+                .iter()
+                .map(|word| word.count_ones())
+                .sum();
+        }
+        Some(Pristine {
+            n,
+            w,
+            adj0: std::rc::Rc::new(adj0),
+            deg0: std::rc::Rc::new(deg0),
+        })
+    }
+
+    /// Bytes this image keeps alive (bitset + degree vector).
+    pub(crate) fn bytes(&self) -> usize {
+        self.n * self.w * 8 + self.n * 4
+    }
+
+    pub(crate) fn game(&self) -> Option<Game<'_>> {
+        Game::new_with_degrees(self.n, &self.adj0[..], self.deg0.as_ref().clone())
+    }
+}
+
+struct PristineMemo {
+    col_ptr: Vec<usize>,
+    row_idx: Vec<usize>,
+    pristine: std::rc::Rc<Pristine>,
+}
+
+thread_local! {
+    static PRISTINE_MEMO: std::cell::RefCell<Vec<PristineMemo>> =
+        std::cell::RefCell::new(Vec::new());
+}
+
+/// Test-only seam: `SSI_NO_PRISTINE_MEMO=1` prices the rebuild arm inside the
+/// same binary. Production always takes the memoized path.
+#[inline(always)]
+fn pristine_memo_enabled() -> bool {
+    #[cfg(test)]
+    {
+        std::env::var_os("SSI_NO_PRISTINE_MEMO").is_none()
+    }
+    #[cfg(not(test))]
+    {
+        true
+    }
+}
+
+/// Exact-content memo of [`Pristine::build`]. The key is the full CSR content
+/// (compared element-wise), so a hit is bit-identical to a rebuild — the same
+/// bitset, the same degree vector, therefore the same `Game` and the same
+/// ordering. At most two images are kept per thread (peak `2 * n*w * 8`
+/// bytes), LRU-ordered.
+pub(crate) fn pristine_memo(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+) -> Option<std::rc::Rc<Pristine>> {
+    if !pristine_memo_enabled() {
+        return Some(std::rc::Rc::new(Pristine::build(n, col_ptr, row_idx)?));
+    }
+    let hit = PRISTINE_MEMO.with(|cell| {
+        let mut memo = cell.borrow_mut();
+        let found = memo
+            .iter()
+            .position(|m| m.pristine.n == n && m.col_ptr == col_ptr && m.row_idx == row_idx);
+        match found {
+            Some(i) => {
+                let entry = memo.remove(i);
+                let rc = std::rc::Rc::clone(&entry.pristine);
+                memo.push(entry);
+                Some(rc)
+            }
+            None => None,
+        }
+    });
+    if let Some(p) = hit {
+        return Some(p);
+    }
+    let built = std::rc::Rc::new(Pristine::build(n, col_ptr, row_idx)?);
+    PRISTINE_MEMO.with(|cell| {
+        let mut memo = cell.borrow_mut();
+        while memo.len() >= 2 {
+            memo.remove(0);
+        }
+        memo.push(PristineMemo {
+            col_ptr: col_ptr.to_vec(),
+            row_idx: row_idx.to_vec(),
+            pristine: std::rc::Rc::clone(&built),
+        });
+    });
+    Some(built)
+}
+
 impl<'a> Game<'a> {
     /// Build the pristine bitset adjacency ONCE. Shared immutably by every
     /// stream of the fan-out: it is a pure function of the pattern, it is the
@@ -279,6 +392,28 @@ impl<'a> Game<'a> {
                 .map(|word| word.count_ones())
                 .sum();
         }
+        Game::assemble(n, adj0, deg0)
+    }
+
+    /// Same game as [`Game::new`] when `deg0` is the degree vector of `adj0`,
+    /// which [`Pristine`] guarantees by construction: the popcount pass over
+    /// the whole `n*w` bitset is skipped instead of repeated.
+    pub(crate) fn new_with_degrees(
+        n: usize,
+        adj0: &'a [u64],
+        deg0: Vec<u32>,
+    ) -> Option<Game<'a>> {
+        if n == 0 || n > max_n_limit() || deg0.len() != n {
+            return None;
+        }
+        if adj0.len() < n * n.div_ceil(64) {
+            return None;
+        }
+        Game::assemble(n, adj0, deg0)
+    }
+
+    fn assemble(n: usize, adj0: &'a [u64], deg0: Vec<u32>) -> Option<Game<'a>> {
+        let w = n.div_ceil(64);
         Some(Game {
             n,
             w,

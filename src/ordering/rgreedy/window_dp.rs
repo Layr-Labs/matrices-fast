@@ -4,6 +4,46 @@ use super::window_signatures::{ChargeModel, SignatureEngine};
 use super::{Game, TripleWork};
 
 const MAX_WIDTH: usize = 14;
+/// Stop the sweep loop once a sweep accepts **no** change, for rows at or above
+/// [`PRODUCTION_XCH_PLATEAU_MIN_N`]. Measured (`0260-plateau-*`): on `n >= 10 000`
+/// this is wall-free value-wise — 45 rows move, 44 keep their ratio exactly and
+/// one (`glider400`) pays +1e-4 — while it returns 0.09-0.20 s per large row and
+/// 0.095 s on the binding row `crudeoil_lee4_10`, whose ratio is untouched. Below
+/// the gate the schedule is worth real value (27 rows lose up to +0.0108 if it is
+/// applied to the whole corpus, score +1.9e-4), so the gate is structural: `n`,
+/// never matrix identity.
+const PRODUCTION_XCH_PLATEAU: usize = 1;
+const PRODUCTION_XCH_PLATEAU_MIN_N: usize = 10_000;
+
+#[inline]
+fn xch_plateau() -> usize {
+    #[cfg(test)]
+    {
+        std::env::var("SSI_XCH_PLATEAU")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(PRODUCTION_XCH_PLATEAU)
+    }
+    #[cfg(not(test))]
+    {
+        PRODUCTION_XCH_PLATEAU
+    }
+}
+
+#[inline]
+fn xch_plateau_min_n() -> usize {
+    #[cfg(test)]
+    {
+        std::env::var("SSI_XCH_PLATEAU_N")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(PRODUCTION_XCH_PLATEAU_MIN_N)
+    }
+    #[cfg(not(test))]
+    {
+        PRODUCTION_XCH_PLATEAU_MIN_N
+    }
+}
 /// The dimension ceiling this DP obeys. It *is* `rgreedy::MAX_N` in
 /// production; in test builds it follows the same `SSI_MAX_N` seam, so one
 /// binary can price a ceiling curve (the DP refuses any `n` above it, which is
@@ -28,9 +68,28 @@ thread_local! {
 }
 
 #[cfg(test)]
+#[derive(Default)]
 struct WorkReport {
     width: usize,
     completed: bool,
+    // iter60 phase attribution (env `SSI_XCH_TIME`): the exchange's own wall
+    // split. `build` = Game::build_adj + Game::new, `reset` = every
+    // `Game::reset()` (full bitset memcpy + bucket rebuild), `prefix` = the
+    // per-sweep prefix eliminations, `refine` = the window refines + their
+    // interleaved eliminations.
+    n: usize,
+    adj_ns: u128,
+    new_ns: u128,
+    reset_ns: u128,
+    prefix_ns: u128,
+    refine_ns: u128,
+    resets: u32,
+    prefixes: u32,
+    // Call key: `build_adj` is a pure function of the CSR, so identical
+    // (n, col_ptr ptr, row_idx ptr, nnz) inside one row means identical bytes.
+    cptr: usize,
+    rptr: usize,
+    nnz: usize,
 }
 
 #[cfg(test)]
@@ -41,6 +100,25 @@ impl Drop for WorkReport {
             stats.calls[self.width] += 1;
             stats.completed[self.width] += usize::from(self.completed);
         });
+        if std::env::var_os("SSI_XCH_TIME").is_some() {
+            let total =
+                self.adj_ns + self.new_ns + self.reset_ns + self.prefix_ns + self.refine_ns;
+            eprintln!(
+                "XCHTIME\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                self.n,
+                self.resets,
+                self.prefixes,
+                total,
+                self.adj_ns,
+                self.new_ns,
+                self.reset_ns,
+                self.prefix_ns,
+                self.refine_ns,
+                self.cptr,
+                self.rptr,
+                self.nnz,
+            );
+        }
     }
 }
 
@@ -302,9 +380,16 @@ fn subset_window_descent_config(
     #[cfg(test)]
     let mut report = WorkReport {
         width: width.min(16),
-        completed: false,
+        n,
+        ..WorkReport::default()
     };
     let mut work = TripleWork { remaining: budget };
+    #[cfg(test)]
+    {
+        report.cptr = col_ptr.as_ptr() as usize;
+        report.rptr = row_idx.as_ptr() as usize;
+        report.nnz = row_idx.len();
+    }
     if !work.charge(n + 1 + row_idx.len() + 2 * n)
         || col_ptr.first().copied() != Some(0)
         || col_ptr.last().copied() != Some(row_idx.len())
@@ -325,43 +410,96 @@ fn subset_window_descent_config(
     if !work.charge(setup) {
         return None;
     }
-    let pristine = Game::build_adj(n, col_ptr, row_idx)?;
-    let mut game = Game::new(n, &pristine)?;
+    #[cfg(test)]
+    let t_adj = std::time::Instant::now();
+    let pristine = super::pristine_memo(n, col_ptr, row_idx)?;
+    #[cfg(test)]
+    {
+        report.adj_ns += t_adj.elapsed().as_nanos();
+    }
+    #[cfg(test)]
+    let t_new = std::time::Instant::now();
+    let mut game = pristine.game()?;
+    #[cfg(test)]
+    {
+        report.new_ns += t_new.elapsed().as_nanos();
+    }
     let mut engine = None;
     let mut current = seed.to_vec();
     let mut changed = false;
+    let plateau = if n >= xch_plateau_min_n() { xch_plateau() } else { 0 };
+    let mut idle_sweeps = 0usize;
     for sweep in 0..sweeps {
         if !work.charge(2 * n * words + 8 * n) {
             return changed.then_some(current);
         }
+        #[cfg(test)]
+        let t_reset = std::time::Instant::now();
         game.reset();
+        #[cfg(test)]
+        {
+            report.reset_ns += t_reset.elapsed().as_nanos();
+            report.resets += 1;
+        }
         let offset = (sweep * offset_step) % width;
         for &v in current.iter().take(offset.min(n)) {
+            #[cfg(test)]
+            let t_prefix = std::time::Instant::now();
             if !work.eliminate(&mut game, v) {
                 return changed.then_some(current);
             }
+            #[cfg(test)]
+            {
+                report.prefix_ns += t_prefix.elapsed().as_nanos();
+                report.prefixes += 1;
+            }
         }
         let mut start = offset;
+        let mut sweep_changed = false;
         while start + 1 < n {
             let end = (start + width).min(n);
-            match refine_window(
+            #[cfg(test)]
+            let t_refine = std::time::Instant::now();
+            let outcome = refine_window(
                 &game,
                 &mut current[start..end],
                 &mut work,
                 &mut engine,
                 charge_model,
-            ) {
-                Some(improved) => changed |= improved,
+            );
+            #[cfg(test)]
+            {
+                report.refine_ns += t_refine.elapsed().as_nanos();
+            }
+            match outcome {
+                Some(improved) => {
+                    changed |= improved;
+                    sweep_changed |= improved;
+                }
                 None => return changed.then_some(current),
             }
             if end < n {
                 for &v in &current[start..end] {
+                    #[cfg(test)]
+                    let t_elim = std::time::Instant::now();
                     if !work.eliminate(&mut game, v) {
                         return changed.then_some(current);
+                    }
+                    #[cfg(test)]
+                    {
+                        report.refine_ns += t_elim.elapsed().as_nanos();
                     }
                 }
             }
             start = end;
+        }
+        if sweep_changed {
+            idle_sweeps = 0;
+        } else {
+            idle_sweeps += 1;
+        }
+        if plateau > 0 && idle_sweeps >= plateau {
+            break;
         }
     }
     #[cfg(test)]

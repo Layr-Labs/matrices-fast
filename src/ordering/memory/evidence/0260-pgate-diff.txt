@@ -1,0 +1,32 @@
+pair3 (gated plateau n>=10000 vs off), one binary/session, adjacent runs
+corpus wall: OFF 144.1 s  ON 143.9 s (-0.2 s)
+ratio rows differing by >1e-12: 1
+rows n>=10000: 45 ; total wall delta -0.40 s ; value-losing 1
+
+dt_pair3 dt_pair-conv    t_off      t_on  name (n)
+  -0.099   -0.108    0.755     0.656  faclay30 (n=16678)
+  -0.084   -0.091    0.770     0.686  emfl100_5_5 (n=21925)
+  -0.083   -0.094    1.031     0.948  mpbp_35 (n=11120)
+  -0.056   -0.121    1.197     1.141  ringpack_30_2 (n=17999)
+  -0.055   -0.102    0.676     0.621  supplychainr1_053050 (n=16640)
+  -0.046   -0.090    0.794     0.748  nd_netgen-2000-3-4-b-a-ns_7 (n=22074)
+  -0.046   -0.072    0.746     0.701  mpbp_21 (n=11716)
+  -0.040   -0.153    1.000     0.960  gasprod_sarawak81 (n=22536)
+  -0.033   -0.042    0.364     0.331  emfl050_5_5 (n=13175)
+  -0.024   -0.052    0.453     0.428  glider400 (n=10017)
+  -0.019   -0.024    0.763     0.744  mpbp_34 (n=11556)
+  -0.017   -0.004    0.579     0.561  pooling_sppb5pq (n=18529)
+  -0.012    0.074    0.631     0.619  acopf_case9241pegase_qcqp (n=313068)
+  -0.009   -0.039    0.492     0.483  squfl030-150 (n=13680)
+  -0.006    0.002    0.540     0.534  transswitch2383wpr (n=59853)
+  -0.005    0.028    0.421     0.416  unitcommit_200_100_1_mod_8 (n=146830)
+  -0.004   -0.010    0.782     0.778  methanol400 (n=23999)
+  -0.004   -0.075    1.009     1.005  chp_shorttermplan2d (n=16364)
+
+rows n>=10000 with dt>0 (slower): 20
+  +0.064  methanol200 (n=11999)
+  +0.062  popdynm200 (n=22407)
+  +0.040  crudeoil_lee4_09 (n=15904)
+  +0.024  nuclear10a (n=17493)
+  +0.023  gams05 (n=17364)
+  +0.019  pooling_sppc1pq (n=14100)

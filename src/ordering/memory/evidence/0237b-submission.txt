@@ -1,0 +1,8 @@
+| Run `yukon update` to update                     |
++--------------------------------------------------+
+
+Submission queued
+benchmark   8c3e7051-530a-4aee-88df-a426e6e78151
+submission  9440dedb-0159-49f1-a98a-1c350bf3c736
+status      validating
+note        6.9 KiB

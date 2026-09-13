@@ -1,0 +1,31 @@
+iter60 plateau-stop A/B: SSI_XCH_PLATEAU=1 (stop after a sweep that accepts nothing) vs 0
+corpus order() wall: control 152.2 s  plateau1 135.5 s (-16.7 s)
+ratio became worse: 27 ; better: 0 ; unchanged: 273
+
+worst ratio regressions (dratio, dtime):
+  +0.0108 -0.040  edgecross10-030              (n=1053 nnz=4654)
+  +0.0074 -0.054  pooling_digabel19            (n=514 nnz=5340)
+  +0.0070 -0.155  pooling_sppa0pq              (n=1649 nnz=24192)
+  +0.0059 -0.109  syn15m04m                    (n=1908 nnz=5288)
+  +0.0048 -0.220  chimera_selby-c16-01         (n=2031 nnz=10964)
+  +0.0045 -0.067  chimera_mgw-c8-439-onc8-002  (n=440 nnz=3038)
+  +0.0033 -0.082  chimera_lga-01               (n=1120 nnz=6400)
+  +0.0029 -0.022  wastewater05m1               (n=98 nnz=536)
+  +0.0025 -0.163  netmod_kar1                  (n=1746 nnz=4928)
+  +0.0018 -0.071  rsyn0810m02hfsg              (n=2670 nnz=6964)
+
+biggest time savings:
+  -0.318 +0.0000  catmix400                    (n=2001)  0.770 -> 0.452 s
+  -0.220 +0.0000  sfacloc2_3_80                (n=4799)  1.069 -> 0.849 s
+  -0.220 +0.0048  chimera_selby-c16-01         (n=2031)  1.446 -> 1.226 s
+  -0.196 +0.0000  crudeoil_lee4_06             (n=10429)  1.318 -> 1.122 s
+  -0.195 +0.0000  powerflow0118p               (n=5065)  1.054 -> 0.859 s
+  -0.189 +0.0000  powerflow0030p               (n=1121)  0.611 -> 0.422 s
+  -0.176 +0.0000  waste                        (n=4825)  0.916 -> 0.740 s
+  -0.163 +0.0025  netmod_kar1                  (n=1746)  0.772 -> 0.609 s
+  -0.158 +0.0000  arki0002                     (n=4432)  0.667 -> 0.509 s
+  -0.155 +0.0070  pooling_sppa0pq              (n=1649)  0.667 -> 0.513 s
+  -0.153 +0.0000  gasprod_sarawak81            (n=22536)  1.085 -> 0.933 s
+  -0.150 +0.0000  sfacloc2_4_80                (n=5067)  0.957 -> 0.807 s
+
+sum of time deltas -16.7 s ; rows faster 264 ; slower 13

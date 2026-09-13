@@ -650,7 +650,7 @@ const LADDER_FILL_BOUND: u64 = 20_000_000_000;
 /// Each pass accepts only a strict exact decrease, so appending a width cannot
 /// worsen any row; the price is wall time on class rows only (~+0.05 s/row on
 /// the rows the class admits), and every pass carries its own work ledger.
-const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
+const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 22] = [
     (48, 4, 19, 32_000_000),
     (9, 4, 4, 32_000_000),
     (8, 4, 3, 64_000_000),
@@ -660,6 +660,30 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
     (11, 4, 4, 64_000_000),
     (14, 4, 5, 64_000_000),
     (6, 4, 3, 64_000_000),
+    // ── 0226 (session 0206): thirteen more measured widths ──────────────────
+    // Same class, same 64M budget. In-frame A/B on the 9-width tree (which
+    // reproduces at 0.791586 in the production frame): +8 widths -> 0.791551,
+    // +13 widths -> 0.791544, 22 rows better / 0 regressed, all three buckets.
+    // Every pass accepts only a strict exact decrease, so appending a width can
+    // never worsen a row. WIDTH is the cost knob and COUNT is the value knob:
+    // thirteen narrow widths cost about one wide (48+) width, while the wide
+    // 16/24/32 group priced in the same session cost 2-3x worst-row time for no
+    // extra gain. Rejected in the same frame: ledger 512M->1G (-1e-6), PEO 4->5
+    // (+4e-6 WORSE), dense-window nnz key 200k->400k (0 flops, +1.2 s worst row).
+    // [memory/experiments/0226-span-schedule-thirteen-widths.md]
+    (4, 4, 2, 64_000_000),
+    (5, 4, 2, 64_000_000),
+    (13, 4, 5, 64_000_000),
+    (15, 4, 6, 64_000_000),
+    (16, 4, 6, 64_000_000),
+    (17, 4, 7, 64_000_000),
+    (18, 4, 7, 64_000_000),
+    (20, 4, 8, 64_000_000),
+    (21, 4, 8, 64_000_000),
+    (22, 4, 9, 64_000_000),
+    (24, 4, 10, 64_000_000),
+    (26, 4, 10, 64_000_000),
+    (28, 4, 11, 64_000_000),
 ];
 const PRODUCTION_EXCHANGE_LEDGER: i64 = 536_870_912;
 const PRODUCTION_PEO_ROUNDS: usize = 4;

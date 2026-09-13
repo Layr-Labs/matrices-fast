@@ -1,0 +1,6 @@
+edaf73a     roelofvandijk    [31mrejected[39m   0.925818  {"geomean_fill_ratio":0.991419,"geomean_flop_ratio":0.925818}  [31m+0.084807 (+9.53%)[39m   47269d2  9/13/26, 1:50 AM 
+43c1ca7     newjordan        [32mpromoted[39m   0.840782  {"geomean_fill_ratio":0.944165,"geomean_flop_ratio":0.840782}  [32m-0.000229 (-0.03%)[39m   5212fea  9/13/26, 2:16 AM 
+2efae39     jonathan308      [31mfailed[39m     n/a       n/a                                                            n/a                  0580c10  9/13/26, 2:24 AM 
+9440ded     newjordan        [31mfailed[39m     n/a       n/a                                                            n/a                  69ab3de  9/13/26, 2:40 AM 
+43c1ca7     newjordan  [32mpromoted[39m  0.840782  {"geomean_fill_ratio":0.944165,"geomean_flop_ratio":0.840782}  [32m-0.000229 (-0.03%)[39m  5212fea  9/13/26, 2:16 AM 
+9440ded     newjordan  [31mfailed[39m    n/a       n/a                                                            n/a                 69ab3de  9/13/26, 2:40 AM 

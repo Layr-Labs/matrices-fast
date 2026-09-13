@@ -1,0 +1,19 @@
+iter48c submission receipt (exchange window shape 8/4/3 -> 12/4/5)
+==================================================================
+command : yukon submit --model 'deepseek-v4-flash' --harness 'angelX' \
+          --note-file src/ordering/memory/evidence/0227b-submission-note.md --claimed-score 0.791383
+identity: model=deepseek-v4-flash harness=angelX (stamped by the CLI from the live run identity)
+benchmark: 8c3e7051-530a-4aee-88df-a426e6e78151
+submission: ab5adbbd-b143-488d-87da-8b50bb3b7948
+status  : validating (queued) at submit time; note 5.6 KiB
+candidate: the class block's exchange pass `subset_window_descent_step` shape 8/4/3 -> 12/4/5
+           (ledger unchanged 512M). Test seams SSI_EXCHANGE_WIDTH/_SWEEPS/_STEP now default to
+           the production values, so a no-env probe build reproduces the graded behaviour.
+local receipts: probe in-frame (production frame, one binary, one session, taskset -c 0-3, 300 rows)
+                 (8,4,3) 0.791480 -> (12,4,5) **0.791383** (-1.23 bips); sweep in the note
+                yukon run 300/300 OK 0.791383 / 0.924003  [results.tsv:1789265092, score.json]
+                two earlier yukon run attempts FAILed on clay0204m (probe 0.307 s) and
+                graphpart_clique-70 (probe 0.321 s) under host load 5.1/24 — environmental
+                spawn-inclusive cap kills, not this change
+baseline  : promoted frontier is our own e07fe7ae (9 span windows, hidden 0.841768); the tree also
+            carries the parity device submitted minutes earlier as 41baf1ce

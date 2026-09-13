@@ -1,0 +1,12 @@
+### single row wastewater05m1: parity trace (production frame)
+COUNTS	wastewater05m1	98	536	11690	8033
+
+### same row, phase dumps parity=0 then parity=1 (only 20.*. and terminal marks shown)
+-- parity=0
+4.subtree=0.1300/0.7552 4b.indep-accept=0.0000/0.7503 5.terminal=0.0046/0.6930 22.win=0.0025/0.6874 final=0.6845
+-- parity=1
+4.subtree=0.1298/0.7552 4b.indep-accept=0.1497/0.6938 5.terminal=0.0015/0.6938 22.win=0.0017/0.6872 final=0.6872
+
+### parity trace, single row (appended, identical command)
+test ordering::probe::probe_timing_and_score ... PARITY	n=98	raw=8771	inc=8828	plift=8111	margin_ppm=81218
+COUNTS	wastewater05m1	98	536	11690	8033

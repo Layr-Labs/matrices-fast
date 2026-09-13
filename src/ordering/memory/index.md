@@ -1,7 +1,3 @@
-[0207: second-level lift of the winning Schur core + flat exact symbolic kernel + terminal bank](experiments/0207-second-level-lift-flat-kernel-terminal-bank.md):
-package on `475be33`; dev 0.791802 -> **0.791782**, held-out (591 disjoint MINLPLib KKT) 0.791105 -> **0.790596** (14/0);
-crudeoil_lee4_05 -12.0 %, lee2_08 -9.2 %, lee3_06 -6.9 %; kernel bit-identical 891/891.
-
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->
@@ -289,3 +285,7 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0219: the stage-1b seed choice is a lottery](experiments/0219-early-arbitration.md) — moving the held lift's comparison from after the subtree cascade to before it (zero added work) is measured at +1.17e-3: 8 gains worth -1.43e-4 against two losses worth +1.31e-3, because the post-4b stages invert the cascade's own ranking, and no cheap observable (raw lead, arbitration margin, portfolio headroom, residual-core shape) separates the 13 force-wins from the 6 defer-wins.
 
 - [0219h: the harness cap is wall clock from spawn](evidence/0219h-harness-cap-mechanism.txt) — two full local-harness runs on the current tree died `FAIL (capped)` on rows the pinned probe measures at < 0.400 s and 0.826 s (slowest corpus row 1.2496 s); the trusted watchdog charges spawn + sandbox setup + host stalls to the row's 2 s, so local cap receipts must be read against the row's probe time.
+
+- [0230: span schedule 9 → 13 widths + exchange-site ledger 512M → 1G](experiments/0230-span13-ledger1g.md) — four-arm in-frame sweep: shipped **0.791498** → **0.791437** (−0.61 bip, 17 rows better / 0 worse); the ledger's knee is 1G (2G buys 5e-6 more), `SSI_PEO_ROUNDS=5` is rejected; official local 300/300 at 0.791437 / 0.924075, submitted `6279dc68`.
+
+- [0231: the order-equivalence frame (schedule axis of determinism)](experiments/0231-order-equivalence-frame.md) — new test-only probe compares parallel / forced-sequential / parallel runs of the same row element-wise: **0 divergences on 300 dev + 14 peak + 33 structural rows**, which kills parallel-order nondeterminism as the explanation of the two parity FAILs; also records the silent dev-corpus fallback trap for `SSI_CORPUS_FILE=/tmp/...` inside the probe sandbox (fixed by `probe-sandbox-corpora.sh`).

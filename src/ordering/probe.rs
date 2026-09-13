@@ -187,6 +187,95 @@ fn probe_timing_and_score() {
     println!("{}", super::force_audit::report());
 }
 
+/// ORDER-EQUIVALENCE frame (test-only): the *schedule* axis of determinism.
+///
+/// The harness's determinism gate runs `order()` twice through the SAME code
+/// path (two forked workers, same thread count, same machine), so it can only
+/// observe run-to-run instability — never a result that depends on the *shape*
+/// of the internal parallel schedule. `parallel::run_candidates` drains each
+/// candidate batch with up to `PAR_MAX_THREADS` threads; `FORCE_SEQUENTIAL`
+/// forces the same batch to be drained in index order. Both paths are
+/// documented output-neutral, but nothing in the record has ever *checked*
+/// that, and the two remote FAILs of the parity-carrying submissions are
+/// unexplained.
+///
+/// This probe runs the SAME row three times in one process —
+/// parallel, forced-sequential, parallel again — and compares the returned
+/// permutations element by element (PAR1 vs PAR2 is the harness's own gate;
+/// PAR1 vs SEQ is the schedule axis). Any row with `ps:DIFF` or `pp:DIFF` is a
+/// row whose result is schedule-dependent by construction.
+///
+/// Env: `SSI_CORPUS_FILE`, `SSI_PROBE_ONLY=a,b`.
+#[test]
+#[ignore]
+fn probe_order_equivalence() {
+    let corpus = match std::env::var("SSI_CORPUS_FILE") {
+        Ok(path) if !path.trim().is_empty() => {
+            ssi_scoring::load_corpus_jsonl(std::path::Path::new(&path))
+                .unwrap_or_else(|_| crate::corpus::corpus())
+        }
+        _ => crate::corpus::corpus(),
+    };
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let mut rows = 0usize;
+    let mut diff_pp = 0usize;
+    let mut diff_ps = 0usize;
+    let mut diff_flops = 0usize;
+    for (name, pat) in &corpus {
+        if pat.n == 0 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let sp = scoring_pattern(pat);
+        parallel::FORCE_SEQUENTIAL.with(|c| c.set(false));
+        let t0 = Instant::now();
+        let par1 = order(pat);
+        let s_par1 = t0.elapsed().as_secs_f64();
+        parallel::FORCE_SEQUENTIAL.with(|c| c.set(true));
+        let t1 = Instant::now();
+        let seq = order(pat);
+        let s_seq = t1.elapsed().as_secs_f64();
+        parallel::FORCE_SEQUENTIAL.with(|c| c.set(false));
+        let t2 = Instant::now();
+        let par2 = order(pat);
+        let s_par2 = t2.elapsed().as_secs_f64();
+        let f1 = flops_of(&sp, &par1);
+        let f2 = flops_of(&sp, &seq);
+        let f3 = flops_of(&sp, &par2);
+        let eq_pp = par1 == par2;
+        let eq_ps = par1 == seq;
+        if !eq_pp {
+            diff_pp += 1;
+        }
+        if !eq_ps {
+            diff_ps += 1;
+        }
+        if f1 != f2 || f1 != f3 {
+            diff_flops += 1;
+        }
+        println!(
+            "ORDEREQ\t{name}\t{}\t{}\t{:.4}\t{:.4}\t{:.4}\t{}\t{}\t{f1}\t{f2}\t{f3}",
+            pat.n,
+            pat.nnz(),
+            s_par1,
+            s_seq,
+            s_par2,
+            if eq_pp { "pp:eq" } else { "pp:DIFF" },
+            if eq_ps { "ps:eq" } else { "ps:DIFF" },
+        );
+        rows += 1;
+    }
+    println!(
+        "ORDEREQ-SUMMARY\trows={rows}\tpar_vs_par_diff={diff_pp}\tpar_vs_seq_diff={diff_ps}\tflops_diff={diff_flops}"
+    );
+}
+
 /// SELF-INFLICTED-LOSS AUDIT.
 ///
 /// Every full-pattern score the pipeline pays is routed through

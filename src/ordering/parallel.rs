@@ -56,6 +56,128 @@ use std::sync::{Arc, Mutex, OnceLock};
 use super::scoring_ws::ScoreWorkspace;
 use super::{is_bijection, ScoringPattern};
 
+/// ── 0229: TEST-ONLY batch-work attribution for the candidate portfolio ──────
+/// The portfolio is the largest spender on the rows where the 2 s cap binds
+/// (`1.portfolio` owns 0.48/1.23 s of `crudeoil_lee4_10` and 0.76/1.38 s of
+/// `chimera_selby-c16-02`), and until now nothing separated *producer* work
+/// from *exact scoring* work or counted how many scores were thrown at
+/// orderings that could not win. `leader_order` resets these once per row and
+/// prints them twice (after the FLOOR, after the portfolio) when
+/// `SSI_PORTSTATS` is set. Pure counters: never compiled into the shipped
+/// worker (`#[cfg(test)]`), read by nothing but the probe.
+#[cfg(test)]
+pub(crate) mod stats {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
+    /// Wall time inside candidate PRODUCERS (the feral orderings themselves).
+    pub(crate) static GEN_NS: AtomicU64 = AtomicU64::new(0);
+    /// Wall time inside the exact symbolic SCORER (workspace + memo wait).
+    pub(crate) static SCORE_NS: AtomicU64 = AtomicU64::new(0);
+    /// Producers that returned a permutation (before the bijection check).
+    pub(crate) static PRODUCED: AtomicU64 = AtomicU64::new(0);
+    /// Candidates whose bijection check passed and that entered the scorer.
+    pub(crate) static SCORED: AtomicU64 = AtomicU64::new(0);
+    /// Scores served by the batch memo instead of a fresh symbolic pass.
+    pub(crate) static MEMO_HITS: AtomicU64 = AtomicU64::new(0);
+    /// Producer wall time whose output was a content DUPLICATE of a candidate
+    /// already scored in the same batch (the batch memo hit): that generation
+    /// work bought nothing, because the score and the permutation were already
+    /// known. `iter52` census: measured, not removed.
+    pub(crate) static DUP_GEN_NS: AtomicU64 = AtomicU64::new(0);
+    /// How many producers returned an already-scored permutation.
+    pub(crate) static DUP_HITS: AtomicU64 = AtomicU64::new(0);
+    /// Scoring time on candidates that did NOT lower the running minimum.
+    pub(crate) static STALE_NS: AtomicU64 = AtomicU64::new(0);
+    /// Scoring time on candidates that DID lower the running minimum.
+    pub(crate) static WIN_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static STALE: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static WINS: AtomicU64 = AtomicU64::new(0);
+    /// Tasks pushed into batches, and the number of batches flushed.
+    pub(crate) static BATCH_TASKS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static BATCHES: AtomicU64 = AtomicU64::new(0);
+
+    pub(crate) fn reset() {
+        for a in [
+            &GEN_NS, &SCORE_NS, &PRODUCED, &SCORED, &MEMO_HITS, &STALE_NS, &WIN_NS,
+            &STALE, &WINS, &BATCH_TASKS, &BATCHES, &DUP_GEN_NS, &DUP_HITS,
+        ] {
+            a.store(0, Relaxed);
+        }
+    }
+
+    /// `[gen_s, score_s, produced, scored, memo_hits, stale_s, win_s, stale, wins, tasks, batches, dup_gen_s, dup_hits]`
+    pub(crate) fn snap() -> [f64; 13] {
+        let load = |a: &AtomicU64| a.load(Relaxed);
+        [
+            load(&GEN_NS) as f64 / 1e9,
+            load(&SCORE_NS) as f64 / 1e9,
+            load(&PRODUCED) as f64,
+            load(&SCORED) as f64,
+            load(&MEMO_HITS) as f64,
+            load(&STALE_NS) as f64 / 1e9,
+            load(&WIN_NS) as f64 / 1e9,
+            load(&STALE) as f64,
+            load(&WINS) as f64,
+            load(&BATCH_TASKS) as f64,
+            load(&BATCHES) as f64,
+            load(&DUP_GEN_NS) as f64 / 1e9,
+            load(&DUP_HITS) as f64,
+        ]
+    }
+}
+
+/// Test-only: set by [`ScoreMemo::flops_with_key`] to say whether the call
+/// just made was served by an existing entry. Same thread as `eval`, so a
+/// thread-local is enough to attribute the duplicate producer's time.
+#[cfg(test)]
+thread_local! {
+    static MEMO_HIT_FLAG: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Test-only: per-REGISTRATION-SITE producer census. `consider!` /
+/// `consider_cached!` time their own closure and report `(line, ns)` here, so
+/// one probe run says which of the ~60 registration sites in `leader_order`
+/// owns a row's generation time — a finer partition than the flush-boundary
+/// `PORTSTATS` blocks, which lump a whole region into one bucket.
+///
+/// Never compiled into the shipped worker; read by nothing but the probe.
+#[cfg(test)]
+pub(crate) mod sites {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+
+    fn table() -> &'static Mutex<HashMap<u32, (f64, u32)>> {
+        static T: OnceLock<Mutex<HashMap<u32, (f64, u32)>>> = OnceLock::new();
+        T.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    pub(crate) fn record(line: u32, ns: u64) {
+        if let Ok(mut t) = table().lock() {
+            let e = t.entry(line).or_insert((0.0, 0));
+            e.0 += ns as f64 / 1e9;
+            e.1 += 1;
+        }
+    }
+
+    pub(crate) fn reset() {
+        if let Ok(mut t) = table().lock() {
+            t.clear();
+        }
+    }
+
+    pub(crate) fn dump(tag: &str) {
+        let Ok(t) = table().lock() else { return };
+        let mut v: Vec<(u32, f64, u32)> = t.iter().map(|(k, (s, c))| (*k, *s, *c)).collect();
+        v.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let total: f64 = v.iter().map(|x| x.1).sum();
+        println!("SITES\t{tag}\ttotal_s={total:.4}\tsites={}", v.len());
+        for (line, s, c) in v {
+            println!("SITE\t{tag}\tmod.rs:{line}\tgen_s={s:.4}\tcalls={c}");
+        }
+    }
+}
+
 /// Hard cap on worker threads. The grader is a 4-vCPU runner, so more threads
 /// than this can only add scheduling and memory cost.
 pub(crate) const PAR_MAX_THREADS: usize = 4;
@@ -138,6 +260,14 @@ impl ScoreMemo {
         };
         // Reserve before scoring, but do not hold the map lock during scoring.
         // Exact key comparison makes reuse independent of hash collisions.
+        #[cfg(test)]
+        {
+            let served = memo.get().is_some();
+            MEMO_HIT_FLAG.with(|c| c.set(served));
+            if served {
+                stats::MEMO_HITS.fetch_add(1, AtomicOrdering::Relaxed);
+            }
+        }
         *memo.get_or_init(compute)
     }
 }
@@ -236,17 +366,51 @@ fn run_generic(
     let dedup = ScoreMemo::default();
 
     let eval = |i: usize, ws: &mut Option<ScoreWorkspace>| -> CandOut {
+        #[cfg(test)]
+        let t_gen = std::time::Instant::now();
         let Some(perm) = produce(i) else {
+            #[cfg(test)]
+            stats::GEN_NS
+                .fetch_add(t_gen.elapsed().as_nanos() as u64, AtomicOrdering::Relaxed);
             return CandOut::default();
+        };
+        #[cfg(test)]
+        let gen_ns = {
+            let ns = t_gen.elapsed().as_nanos() as u64;
+            stats::GEN_NS.fetch_add(ns, AtomicOrdering::Relaxed);
+            stats::PRODUCED.fetch_add(1, AtomicOrdering::Relaxed);
+            ns
         };
         if !is_bijection(&perm, n) {
             return CandOut::default();
         }
+        #[cfg(test)]
+        let t_score = std::time::Instant::now();
         let f = dedup.flops(&perm, || {
             let w = ws.get_or_insert_with(|| ScoreWorkspace::new(n, nnz));
             w.flops(sp, &perm)
         });
+        // The memo just answered from an entry that already existed: this
+        // producer's whole generation window was redundant.
+        #[cfg(test)]
+        if MEMO_HIT_FLAG.with(|c| c.get()) {
+            stats::DUP_HITS.fetch_add(1, AtomicOrdering::Relaxed);
+            stats::DUP_GEN_NS.fetch_add(gen_ns, AtomicOrdering::Relaxed);
+        }
         let prev = gmin.fetch_min(f, AtomicOrdering::Relaxed);
+        #[cfg(test)]
+        {
+            let dt = t_score.elapsed().as_nanos() as u64;
+            stats::SCORE_NS.fetch_add(dt, AtomicOrdering::Relaxed);
+            stats::SCORED.fetch_add(1, AtomicOrdering::Relaxed);
+            if f < prev {
+                stats::WIN_NS.fetch_add(dt, AtomicOrdering::Relaxed);
+                stats::WINS.fetch_add(1, AtomicOrdering::Relaxed);
+            } else {
+                stats::STALE_NS.fetch_add(dt, AtomicOrdering::Relaxed);
+                stats::STALE.fetch_add(1, AtomicOrdering::Relaxed);
+            }
+        }
         CandOut {
             flops: Some(f),
             // Retain only while this candidate can still be the argmin.

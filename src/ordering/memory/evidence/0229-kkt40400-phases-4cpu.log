@@ -1,0 +1,24 @@
+
+running 1 test
+test ordering::probe::probe_timing_and_score ... PHASES	ood_kkt_b200x200+400	11.2087	1.portfolio=4.4555/0.9913	1b.indep=1.9372/0.9913	2.descent=0.0000/0.9913	3.search=0.0000/0.9913	4.subtree=0.0222/0.9913	4b.indep-accept=0.0000/0.9913	5.terminal=0.0000/0.9913	6.extra=0.0000/0.9913	7.telos=0.0000/0.9913	8.cleanup=0.0000/0.9913	9.reduce=3.4321/0.9913	10.completion=0.0000/0.9913	11.corecand=0.0000/0.9913	12.peo=0.0109/0.9913	13p.prep=0.0432/0.0000	13p.seeds=4.0000/0.0000	13p.rounds=4.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0509/0.9913	14.transplant=0.0000/0.9913	15.minl=0.0000/0.9913	15.peel=0.0000/0.9913	16.late=0.0000/0.9913	17.final=0.0000/0.9913	18.simp=0.0000/0.9913	19.five=0.0000/0.9913	20.lt1k=0.0000/0.9913	21.comp=0.0000/0.9913	22.win=0.0000/0.9913	final=0.9913
+LIFT	ood_kkt_b200x200+400	40400	36605	940108	36605
+COUNTS	ood_kkt_b200x200+400	40400	797550	3149459475	3122064589
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+11.2087	ood_kkt_b200x200+400	40400	797550	0.9913
+matrices under 0.010s: 0/1
+matrices under 0.050s: 0/1
+matrices under 0.100s: 0/1
+matrices under 0.200s: 0/1
+matrices under 0.400s: 0/1
+
+--- per-bucket ---
+gt_10k   count=1     geomean=0.9913
+SCORE = 0.991302
+WORST order() = 11.209 s
+FORCEAUDIT	stage1b_sites=0	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=0	tie_pass_run=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 177 filtered out; finished in 13.07s
+

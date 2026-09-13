@@ -307,3 +307,78 @@ round, so note the round if you know it.
   environment artifact, not a candidate defect; it cannot be used as the local gate while the host
   is in this state. [0219h-harness-cap-mechanism.txt, 0219h-harness-run.log, results.tsv:1789256564,
   results.tsv:1789256667]
+
+2026-09-12 | iter47 | **the sparse-span schedule is not a fixpoint — four more widths pay 0.49 bip in-frame, and the class's n-band is inert by construction**
+- Shipped and submitted: `PRODUCTION_SPAN_WINDOWS` 5 -> 9 (append 10/4/4, 11/4/4, 14/4/5,
+  6/4/3 at 64M each). In-frame A/B, one binary, one session, 4-vCPU, production frame
+  (`SSI_INDEP_FORCE=1`), 300 rows: 0.791635 (worst 1.221 s) -> **0.791586** (worst 1.266 s),
+  **14 rows better / 0 worse / 286 identical**, corpus wall +5.0 %. Suite 123/0/55; official
+  local harness 300/300 at 0.791586 / 0.924134; submission **e07fe7ae** validating,
+  claimed 0.791586, identity deepseek-v4-flash / angelX (stamped).
+  [0222-span-widths-extra-4cpu.log, 0223-shipped-9windows-verification.log,
+  0224-yukon-run-9windows.log, results.tsv:1789259342, 0225-submission.txt]
+- Two arms measured and REJECTED, both for structural reasons: `SSI_TERM_CLASS_N` 12000 ->
+  16000/22000 = **-3e-6** (worst row +0.11..0.15 s) because the window/span family is gated
+  inside `rgreedy` (`MAX_N=12000` in `Game::build_adj`/`Game::new`): on the ten newly admitted
+  rows CLASSTRACE shows `xchg candidate=0` everywhere and the followup's spans leave the value
+  unchanged on all five rows that pass the 150k factor key; the band's rows that *have*
+  structure carry factor-nonzero 365k-690k. `SSI_FOLLOWUP_FACTOR` 150k -> 1M = **-1.0e-5**
+  (worst row +0.106 s) — not worth re-opening the admission bound the frontier credits for
+  surviving the 2 s cap. [0220-classn-coverage-4cpu.log, 0221-factor-key-ceiling-4cpu.log,
+  src/ordering/rgreedy.rs:88, src/ordering/rgreedy/window_dp.rs:285]
+- New instruments recorded: (a) cross-build per-row diff vs the public leader's probe — 280 of
+  300 dev rows identical, total recoverable 8.6e-6, cross-build porting exhausted; (b) the
+  class block's own dev value = the `22.win` -> `final` delta = **4.71e-4 weighted over 41
+  rows, all n <= 12 000**; (c) the per-stage cost/yield table over `0204-full-phases.log`
+  (`1b.indep` 3.43 nats/6.2 s best, `4.subtree` 2.32/9.4, `13.alt`+`13p.*` **13.9 s for
+  0.005 nats on 2 rows** = the largest measured dead weight in the build).
+- Next bats: (a) a fifth width pair at reduced ledger (value/second is the class's only
+  remaining cost axis); (b) delete/curtail `13.alt`+`13p.*` (time-negative) and spend the
+  freed time inside the class schedule; (c) `rgreedy::MAX_N` for the window-DP family alone
+  is the only way to reach the n-band, and the factor key still bounds it.
+- iter47b (prepped, not submitted): the NEXT width group is priced — 9 + `13/4/6, 16/4/6,
+  5/4/3, 24/4/11` = **-1.4e-5** in-frame (8 rows better / 0 worse, corpus +2.9 %), kept in
+  the test seam `SSI_SPAN_WINDOWS_EXTRA`. Diminishing (4 widths = -4.9e-5, next 4 = -1.4e-5),
+  so it is the payload for a candidate that first deletes the measured dead weight
+  (`13.alt` + `13p.*` = 13.9 s of corpus time for 0.005 nats). [0226-next-width-group-4cpu.log]
+
+2026-09-12 | iter48 | **the 4b comparison was asymmetric (raw lift vs polished incumbent) — parity is 1.34 bips in-frame and resolves the frame question**
+- Shipped and submitted: the pre-terminal polish (2.descent + 3.search + 4.subtree chain) is one unit
+  (`macro_rules! pre_terminal_polish`); when the held stage-1b lift wins the 4b comparison it now gets
+  the identical polish and the better of the two *polished* candidates is kept. In-frame A/B (one
+  binary, one session, production frame, 4 vCPU, 300 rows): 0.791586 -> **0.791480** (-1.06e-4 =
+  -1.34 bips), exact `COUNTS` diff **6 rows better / 1 worse / 293 identical**; official local harness
+  300/300 at **0.791480 / 0.924039** (`results.tsv:1789261328`); suite 123/0/55; submitted
+  **41baf1ce** (validating) — a strict superset of the pending `e07fe7ae` (9 windows).
+  [0227-parity-off-4cpu.log, 0227-parity-on-4cpu.log, 0227-yukon-run-parity.log, 0227-submission.txt]
+- **The force gate is now a COST gate, not a value gate**: with parity on, removing the `n >= 20 000`
+  gate is **0 rows different** (probe-diff: 0 improved / 0 regressed, score identical to 4 decimals)
+  while the worst rows go 1.33 s -> **2.162 s** (crudeoil_lee4_09), 1.859 s (gabriel10), 1.822 s
+  (arki0016), 1.760 s (acopf_case9241pegase_qcqp) — two past the 2 s cap. Keep the gate.
+  [0227-parity-everywhere-4cpu.log]
+- The single loss is a *path-dependence* receipt: `wastewater05m1` (n=98) — trace
+  `PARITY n=98 raw=8771 inc=8828 plift=8111 margin_ppm=81218`, row ends 8033 vs 8002 flops because the
+  terminal window-descent ladder found -0.42 % from the raw rule's perm and 0.00 % from the parity
+  winner. So "run the terminal tail from both candidates" would recover ~7e-6 (one row): the open lead
+  that pointed there is CLOSED, not worth its cost. New test-only instrument `SSI_PARITY_TRACE=1`.
+  [0227-parity-on-4cpu.log PHASES, experiments/0227-deferred-lift-parity.md]
+
+2026-09-12 | iter48b | **remote receipt: e07fe7ae PROMOTED at 0.841768 — first dev->hidden transfer calibration for the width class**
+- `e07fe7ae` (sparse-span schedule 5 -> 9 windows, dev 0.791586) promoted at hidden **0.841768**,
+  diff `-0.00009 (-0.01%)` against our own `fe4f40c` (0.841858). Dev relative gain 6.2e-5 (0.62 bip),
+  hidden relative gain 1.07 bip => **hidden relative gain ~1.7x the dev relative gain** for a device
+  that adds search passes touching 14 rows across the corpus. This is the first numeric transfer
+  ratio on this board (the earlier 0199 receipt gave 0.05x for a *removal*, and the fe4f40c step
+  gave >30x, so the ratio is device-class dependent — but for "append a measured search pass" the
+  sign and rough magnitude now transfer at O(1-2x), which is what the parity device (1.34 bips dev)
+  needs). [yukon submissions ledger, 9/12/26 7:30 PM, commit 475be33]
+- Also on the board: our `41baf1ce` (deferred-lift parity, dev -1.06e-4) is validating.
+- Next bats, in the order the receipts now justify: (a) the next width group 13/4/6, 16/4/6, 5/4/3,
+  24/4/11 is priced at -1.4e-5 in-frame (0.18 bip dev, 0226) — sub-bar alone, but with a 1.7x
+  transfer and a second sub-bip device it can clear 1 bip; (b) the 1b adoption rules are now
+  *cost-only* (parity made the gate value-neutral, 0/300 rows differ), so the next value device has
+  to come from a search engine or from the class schedule, not from an adoption rule; (c) the
+  terminal ladder's entry-dependence is real (wastewater05m1: same ladder, -0.42 % from one entry and
+  0.00 % from another) but the second-entry payoff is ~7e-6 unless a *cheap* second entry exists —
+  the ladder itself is the expensive part, so measure the entry-dependence *distribution* before
+  building it.

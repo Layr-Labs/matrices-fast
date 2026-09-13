@@ -1,3 +1,7 @@
+[0207: second-level lift of the winning Schur core + flat exact symbolic kernel + terminal bank](experiments/0207-second-level-lift-flat-kernel-terminal-bank.md):
+package on `475be33`; dev 0.791802 -> **0.791782**, held-out (591 disjoint MINLPLib KKT) 0.791105 -> **0.790596** (14/0);
+crudeoil_lee4_05 -12.0 %, lee2_08 -9.2 %, lee3_06 -6.9 %; kernel bit-identical 891/891.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

@@ -35,6 +35,17 @@ const GIANT_CORE_NNZ: usize = 600_000;
 /// METIS-on-core envelope in core NODES first (see `run`): ~0.2 s worst.
 const METIS_CORE_MAX_N: usize = 30_000;
 const METIS_CORE_MAX_NNZ: usize = 1_000_000;
+/// Second-level lift: its own work ledger in the same edge-touch units and
+/// under the same admission formula as the first level (`INDEP_WORK_LEDGER / 20`).
+const INDEP_L2_LEDGER: u64 = 400_000;
+/// The second lift needs a core an order of magnitude above `INDEP_MIN_N`;
+/// below it the terminal small-graph chain polishes past anything the lift
+/// family finds.
+const INDEP_L2_MIN_CORE_N: usize = 1_000;
+/// The L2 result replaces the stage candidate only when it is lower by this
+/// margin, `(num, den)`: `f2 * den <= f * num` (a decisive win), so
+/// near-equal permutations never re-roll a row.
+const INDEP_L2_MARGIN: (u64, u64) = (49, 50);
 
 #[inline]
 fn key(a: u32, b: u32) -> u64 {
@@ -401,15 +412,17 @@ struct LiftedCore {
 /// Then, only on cores whose AMD total is within `COMPETITIVE_MARGIN` of the
 /// best — dense whole-side cores lose by 2-100x and never recover under any
 /// orderer — AMF (sparse non-giant cores), METIS (`METIS_CORE_*` envelope) and
-/// two quotient-graph metrics (`METRIC_CORE_*` envelope: DegDivNvSqrtWf,
-/// DegPlusDegme — the ones that win on lifted cores; they beat
-/// minimum degree on the lee cores by 10-15 %). All passes are one flat task
+/// five quotient-graph metrics (`METRIC_CORE_*` envelope: DegDivNvSqrtWf,
+/// DegPlusDegme, DegSqrt, SqDiv, DegP075 — the ones that win on lifted cores;
+/// they beat minimum degree on the lee cores by 10-15 %; DegDivNvDegme was
+/// never the ADOPTED winner on either corpus and is retired to fund the
+/// second-level lift). All passes are one flat task
 /// list on `PAR_MAX_THREADS` threads, ranked exactly on the core; the cheapest
 /// spliced ordering is returned with its exact total. Admission is charged to
 /// `ledger` in edge-touch units, so the added time is bounded by structure
 /// alone: a set whose predicted pairs or core would exceed the allowance is
 /// skipped, never started.
-pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+pub(crate) fn run(sp: &ScoringPattern, ledger: u64, incumbent: u64) -> Option<(u64, Vec<usize>)> {
     use super::custom_metrics::ScoreVariant as V;
     let n = sp.n;
     let nnz = sp.row_idx.len();
@@ -562,7 +575,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
         }
         if metric_ok[i] && cn <= METRIC_CORE_MAX_N && cnnz <= METRIC_CORE_MAX_NNZ {
             // iter265a RC: broader quotient-metric family (0145 census winners)
-            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegDivNvDegme, V::DegP075] {
+            for v in [V::DegDivNvSqrtWf, V::DegPlusDegme, V::DegSqrt, V::SqDiv, V::DegP075] {
                 tasks.push((i, Pass::Metric(v)));
             }
         }
@@ -596,7 +609,87 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)>
     let (f, i, cp) = best?;
     #[cfg(test)]
     last_lift::note(n, cores[i].0.il.core_n(), cores[i].0.il.core_nnz(), cp.len());
+    // SECOND-LEVEL LIFT: only when the first-level lift is live (it already
+    // beats the raw portfolio incumbent) and the winning core is large enough;
+    // its own ledger is charged before any work, and the result replaces the
+    // stage candidate only on a decisive win.
+    if f < incumbent && cores[i].0.il.core_n() >= INDEP_L2_MIN_CORE_N {
+        if let Some((f2, core1_perm)) = second_level(&cores[i].0, INDEP_L2_LEDGER) {
+            if f2.saturating_mul(INDEP_L2_MARGIN.1) <= f.saturating_mul(INDEP_L2_MARGIN.0) {
+                return Some((f2, splice(&cores[i].0.il, &core1_perm)));
+            }
+        }
+    }
     Some((f, splice(&cores[i].0.il, &cp)))
+}
+
+/// Second-level lift of a winning core: the cap-3 greedy independent set `X2`
+/// of `core1` is eliminated first (order-free by the same identity, since `X2`
+/// is independent in the exact elimination graph after `X1`), and the residual
+/// `core2 = core1 \ X2 + cliques` is ordered by AMD / AMF / one quotient
+/// metric under the existing envelopes. Admission is charged to `ledger` in
+/// edge-touch units BEFORE the lift runs (`5·cnnz1 + 9·pairs2 <= ledger`).
+/// Returns the exact total and the permutation `X2 ++ core2` in core1 ids.
+fn second_level(lc: &LiftedCore, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    use super::custom_metrics::ScoreVariant as V;
+    let core_pat = &lc.core_pat;
+    let cn1 = core_pat.n;
+    let cnnz1 = lc.il.core_nnz();
+    let max_pairs2 = ledger.saturating_sub(5 * cnnz1 as u64) / 9;
+    if max_pairs2 == 0 {
+        return None;
+    }
+    let mut in_x2 = greedy_independent_set(core_pat, 3);
+    budget_trim(core_pat, &mut in_x2, max_pairs2);
+    let xs2 = in_x2.iter().filter(|&&b| b).count();
+    if xs2 == 0 || xs2 == cn1 {
+        return None;
+    }
+    let pairs2 = predicted_pairs(core_pat, &in_x2);
+    let lift_cost = cnnz1 as u64 + pairs2;
+    let core_bound = cnnz1 as u64 + 2 * pairs2;
+    if lift_cost.saturating_add(4 * core_bound) > ledger {
+        return None;
+    }
+    let il2 = lift(core_pat, &in_x2, (ledger / 4) as usize)?;
+    let cn2 = il2.core_n();
+    let cnnz2 = il2.core_nnz();
+    if cn2 < 2 {
+        return None;
+    }
+    let core2_pat = ScoringPattern { n: cn2, col_ptr: il2.core_col_ptr.clone(), row_idx: il2.core_row_idx.clone() };
+    let ccp2: Vec<i32> = il2.core_col_ptr.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>()?;
+    let cri2: Vec<i32> = il2.core_row_idx.iter().map(|&x| i32::try_from(x).ok()).collect::<Option<_>>()?;
+    let mut tasks: Vec<Pass> = vec![Pass::Amd];
+    if cnnz2 <= GIANT_CORE_NNZ && cnnz2 < 20 * cn2 {
+        tasks.push(Pass::Amf);
+    }
+    if cn2 <= METRIC_CORE_MAX_N && cnnz2 <= METRIC_CORE_MAX_NNZ {
+        tasks.push(Pass::Metric(V::DegDivNvSqrtWf));
+    }
+    let results = par_map(tasks.len(), |t| -> Option<(u64, Vec<usize>)> {
+        let pass = tasks[t];
+        let ccore2 = feral_ordering_core::CscPattern::new(cn2, &ccp2, &cri2)?;
+        let p = run_pass(&ccore2, pass)?;
+        let cp2: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+        if !super::is_bijection(&cp2, cn2) {
+            return None;
+        }
+        let total = lc
+            .il
+            .prefix_flops
+            .saturating_add(il2.prefix_flops)
+            .saturating_add(super::flops_of(&core2_pat, &cp2));
+        Some((total, cp2))
+    });
+    let mut best: Option<(u64, Vec<usize>)> = None;
+    for (total, cp2) in results.into_iter().flatten().flatten() {
+        if best.as_ref().map_or(true, |(bf, _)| total < *bf) {
+            best = Some((total, cp2));
+        }
+    }
+    let (total, cp2) = best?;
+    Some((total, splice(&il2, &cp2)))
 }
 
 /// TEST-ONLY: the shape of the lift `run` returns — core nodes/edges plus the

@@ -106,6 +106,24 @@ pub(super) fn candidates_bounded(
     Some([forward, reverse])
 }
 
+/// Only the reverse-adjacency MCS extraction of `candidates_bounded` (the forward one is
+/// never built). Same structural limits, same fail-closed `None`.
+pub(super) fn reverse_candidate_bounded(
+    n: usize,
+    cp: &[usize],
+    ri: &[usize],
+    parent: &[Option<usize>],
+    counts: &[usize],
+    incumbent: &[usize],
+    max_n: usize,
+    max_nnz: usize,
+    max_lnnz: usize,
+) -> Option<Vec<usize>> {
+    let adj = reconstruct(n, cp, ri, parent, counts, incumbent, max_n, max_nnz, max_lnnz)?;
+    let reverse = mcs_peo(&adj, incumbent, true);
+    super::is_bijection(&reverse, n).then_some(reverse)
+}
+
 fn reconstruct(
     n: usize,
     cp: &[usize],
@@ -576,5 +594,39 @@ mod tests {
         assert!(candidates(3, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &[1, 1, 2]).is_none());
         assert!(candidates(3, &pp.col_ptr, &pp.row_idx, &[], &counts, &incumbent).is_none());
         assert!(candidates(MAX_N + 1, &[], &[], &[], &[], &[]).is_none());
+    }
+}
+
+#[cfg(test)]
+mod tests_reverse_candidate {
+    use super::*;
+    use feral::ordering::elimination_tree::EliminationTree;
+    use feral::symbolic::column_counts_gnp;
+
+    fn pattern(graph: &[Vec<bool>]) -> crate::ordering::ScoringPattern {
+        let n = graph.len();
+        let mut col_ptr = vec![0usize; n + 1];
+        let mut row_idx = Vec::new();
+        for j in 0..n {
+            for i in 0..n {
+                if i != j && graph[i][j] { row_idx.push(i); }
+            }
+            col_ptr[j + 1] = row_idx.len();
+        }
+        crate::ordering::ScoringPattern { n, col_ptr, row_idx }
+    }
+
+    #[test]
+    fn reverse_only_extraction_matches_pair() {
+        let graph = vec![vec![false, true, false], vec![true, false, true], vec![false, true, false]];
+        let pat = pattern(&graph);
+        let incumbent = vec![1, 0, 2];
+        let pp = crate::ordering::permute_pattern(&pat, &incumbent);
+        let et = EliminationTree::from_pattern(&pp);
+        let counts = column_counts_gnp(&pp, &et);
+        let pair = candidates(3, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &incumbent).unwrap();
+        let rev = reverse_candidate_bounded(3, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &incumbent, MAX_N, MAX_INPUT_NNZ, MAX_LNNZ).unwrap();
+        assert_eq!(rev, pair[1]);
+        assert!(reverse_candidate_bounded(3, &pp.col_ptr, &pp.row_idx, &et.parent, &[1, 1, 1], &incumbent, MAX_N, MAX_INPUT_NNZ, MAX_LNNZ).is_none());
     }
 }

@@ -637,7 +637,19 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
     (14, 4, 5, 64_000_000),
     (6, 4, 3, 64_000_000),
 ];
-const PRODUCTION_EXCHANGE_LEDGER: i64 = 536_870_912;
+/// iter54: the class-block exchange ledger 512M -> 1G and its sweep count
+/// 4 -> 5. Both halves were priced in one binary/one session on the merged
+/// frontier tree (`0235-arm{P,L1G,L2G,L55}-4cpu.log`, 300 dev rows,
+/// `taskset -c 0-3`): P **0.791694** / 1G 0.791647 (-4.7e-5) / 2G 0.791641 /
+/// 1G + 5 sweeps **0.791616** (-7.8e-5). The ledger step moves 5 rows with 0
+/// worse; the fifth sweep adds 8 more movers (2 rows pay back a little:
+/// `rsyn0810m02hfsg` +0.053 %, `glider400` +0.034 %). The 6-sweep/8-sweep arms
+/// measured identical on the same base (0234 family curve), so 5 is the
+/// saturation point. Worst `order()` 1.358 -> 1.398 s, and the added time is
+/// spent on the rows that move (`chimera_selby-c16-02` +0.040 s,
+/// `crudeoil_lee4_06` +0.069 s), not on the dense rows this ledger is shared
+/// with (`graphpart_clique-70` +0.001 s, `qapw` -0.004 s).
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 1_073_741_824;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
@@ -5270,9 +5282,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
             .ok()
             .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(4);
+            .unwrap_or(5);
         #[cfg(not(test))]
-        let exchange_sweeps: usize = 4;
+        let exchange_sweeps: usize = 5;
         #[cfg(test)]
         let exchange_step: usize = std::env::var("SSI_EXCHANGE_STEP")
             .ok()
@@ -5347,9 +5359,31 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
                 #[cfg(not(test))]
                 let dense_window_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
+                // iter54 seam (test-only): the dense/hub site is the *other*
+                // half of the class — it fires exactly on the rows the class
+                // block's gate excludes (`nnz > 16n || max_deg > n/2`) and it
+                // still calls the 8/4/3 shape the class block outgrew. The
+                // family curve (0234) prices 12/* on the class block only.
+                #[cfg(test)]
+                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (
+                    std::env::var("SSI_DENSE_W")
+                        .ok()
+                        .and_then(|v| v.trim().parse().ok())
+                        .unwrap_or(8),
+                    std::env::var("SSI_DENSE_S")
+                        .ok()
+                        .and_then(|v| v.trim().parse().ok())
+                        .unwrap_or(4),
+                    std::env::var("SSI_DENSE_T")
+                        .ok()
+                        .and_then(|v| v.trim().parse().ok())
+                        .unwrap_or(3),
+                );
+                #[cfg(not(test))]
+                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (8, 4, 3);
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
-                    8, 4, 3, dense_window_ledger,
+                    dense_w, dense_s, dense_t, dense_window_ledger,
                 ) {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
@@ -5517,6 +5551,129 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // without updating it), so the incumbent is scored afresh.
         if cur_f < incumbent_small && is_bijection(&cur, n) && score(&cur) < score(&best_perm) {
             best_perm = cur;
+        }
+    }
+    // ── iter54 seam (test-only): THE EXCHANGE IS A MOVE, NOT A FIXPOINT ─────
+    // `22.win`'s exact window descent runs ONCE, before the terminal engine
+    // ladder, the follow-up PEO rounds, the fanout engine and the two banked
+    // walks — every one of which can hand a different incumbent to the tail.
+    // 0234 priced the move's *shape*; the question here is different and never
+    // asked: does the same exact move still pay on whatever the tail left, and
+    // on the displaced orderings the pipeline retains but no stage ever
+    // re-optimizes (`runner_up`)? Both arms are monotone by construction —
+    // install only on a strict decrease of the exact score.
+    #[cfg(test)]
+    let xchg_tail: usize = std::env::var("SSI_XCHG_TAIL")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(0);
+    #[cfg(not(test))]
+    let xchg_tail: usize = 0;
+    #[cfg(test)]
+    let xchg_pool: usize = std::env::var("SSI_XCHG_POOL")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(0);
+    #[cfg(not(test))]
+    let xchg_pool: usize = 0;
+    if (xchg_tail > 0 || xchg_pool > 0)
+        && n >= 6
+        && n <= class_n
+        && nnz <= 200_000
+        && nnz <= n.saturating_mul(16)
+        && max_deg <= n / 2
+    {
+        #[cfg(test)]
+        let (tw, ts, tt): (usize, usize, usize) = (
+            std::env::var("SSI_XCHG_TW")
+                .ok()
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(12),
+            std::env::var("SSI_XCHG_TS")
+                .ok()
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(4),
+            std::env::var("SSI_XCHG_TT")
+                .ok()
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(5),
+        );
+        #[cfg(not(test))]
+        let (tw, ts, tt): (usize, usize, usize) = (12, 4, 5);
+        #[cfg(test)]
+        let tail_ledger: i64 = std::env::var("SSI_XCHG_LEDGER")
+            .ok()
+            .and_then(|v| v.trim().parse::<i64>().ok())
+            .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
+        #[cfg(not(test))]
+        let tail_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
+        let step = |seed: &[usize]| {
+            rgreedy::subset_window_descent_step(
+                n,
+                &pattern.col_ptr,
+                &pattern.row_idx,
+                seed,
+                tw,
+                ts,
+                tt,
+                tail_ledger,
+            )
+        };
+        let mut best_now = score(&best_perm);
+        #[cfg(test)]
+        let xchg_trace = std::env::var_os("SSI_XCHG_TRACE").is_some();
+        for _ in 0..xchg_tail {
+            let Some(candidate) = step(&best_perm) else { break };
+            if !is_bijection(&candidate, n) {
+                break;
+            }
+            let f = score(&candidate);
+            #[cfg(test)]
+            if xchg_trace {
+                eprintln!("XCHGTRACE\ttail\t{n}\t{best_now}\t{f}");
+            }
+            if f < best_now {
+                best_perm = candidate;
+                best_now = f;
+            } else {
+                break;
+            }
+        }
+        if xchg_pool > 0 {
+            let seeds: Vec<Vec<usize>> = runner_up
+                .borrow()
+                .iter()
+                .take(xchg_pool)
+                .map(|(_, p)| p.clone())
+                .collect();
+            for seed in seeds {
+                if seed.len() != n || !is_bijection(&seed, n) {
+                    continue;
+                }
+                let mut cur = seed;
+                let mut cur_f = score(&cur);
+                for _ in 0..xchg_tail.max(1) {
+                    let Some(candidate) = step(&cur) else { break };
+                    if !is_bijection(&candidate, n) {
+                        break;
+                    }
+                    let f = score(&candidate);
+                    if f < cur_f {
+                        cur = candidate;
+                        cur_f = f;
+                    } else {
+                        break;
+                    }
+                }
+                #[cfg(test)]
+                if xchg_trace {
+                    eprintln!("XCHGTRACE\tpool\t{n}\t{best_now}\t{cur_f}");
+                }
+                if cur_f < best_now {
+                    best_perm = cur;
+                    best_now = cur_f;
+                }
+            }
         }
     }
     best_perm

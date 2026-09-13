@@ -1,0 +1,127 @@
+5171 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+CENSUS knp5-44 n=2157 nnz=32604 max_deg=946 hub=true
+   1.0000  0.001s  amd agg=true a=10
+   1.0000  0.001s  amd agg=true a=5
+   1.0000  0.001s  amd agg=true a=2.5
+   1.0000  0.001s  amd agg=true a=2
+   1.0000  0.001s  amd agg=true a=16
+   1.0000  0.002s  amd agg=true a=-1
+   1.0000  0.001s  amd agg=false a=10
+   1.0000  0.001s  amd agg=false a=5
+   1.0000  0.001s  amd agg=false a=2.5
+   1.0000  0.001s  amd agg=false a=2
+   1.0000  0.001s  amd agg=false a=16
+   1.0000  0.002s  amd agg=false a=-1
+   ... 110 candidates; worst 137.9670
+CENSUS squfl020-150 n=9170 nnz=24000 max_deg=150 hub=false
+   1.0000  0.002s  amd agg=true a=10
+   1.0000  0.002s  amd agg=true a=5
+   1.0000  0.002s  amd agg=true a=2.5
+   1.0000  0.002s  amd agg=true a=2
+   1.0000  0.002s  amd agg=true a=16
+   1.0000  0.002s  amd agg=true a=-1
+   1.0000  0.002s  amd agg=false a=10
+   1.0000  0.002s  amd agg=false a=5
+   1.0000  0.002s  amd agg=false a=2.5
+   1.0000  0.002s  amd agg=false a=2
+   1.0000  0.002s  amd agg=false a=16
+   1.0000  0.002s  amd agg=false a=-1
+   ... 110 candidates; worst 56471.5621
+CENSUS meanvar-orl400_05_e_7 n=5205 nnz=174804 max_deg=404 hub=true
+   0.9999  0.001s  relabel-amd seed=6
+   0.9999  0.001s  relabel-amd seed=3
+   0.9999  0.001s  relabel-amd seed=1
+   0.9999  0.001s  relabel-amd seed=5
+   0.9999  0.001s  relabel-amd seed=4
+   0.9999  0.001s  relabel-amd seed=2
+   1.0000  0.001s  cm SqDiv a=10
+   1.0000  0.001s  cm SqPure a=10
+   1.0000  0.001s  cm DegP125 a=10
+   1.0000  0.001s  cm DegPlusDegme a=10
+   1.0000  0.001s  ms extra_deg3_div_nv a=10
+   1.0000  0.001s  ms extra_deg2_div_nv_wf002 a=10
+   ... 108 candidates; worst 644.9345
+CENSUS supplychainr1_053050 n=16640 nnz=57800 max_deg=62 hub=false
+   1.0000  0.002s  amd agg=true a=10
+   1.0000  0.002s  amd agg=true a=5
+   1.0000  0.002s  amd agg=true a=2.5
+   1.0000  0.002s  amd agg=true a=2
+   1.0000  0.002s  amd agg=true a=1
+   1.0000  0.002s  amd agg=true a=0.5
+   1.0000  0.002s  amd agg=true a=16
+   1.0000  0.002s  amd agg=true a=-1
+   1.0000  0.003s  amd agg=false a=10
+   1.0000  0.003s  amd agg=false a=5
+   1.0000  0.003s  amd agg=false a=2.5
+   1.0000  0.003s  amd agg=false a=2
+   ... 110 candidates; worst 39726.5417
+CENSUS emfl100_3_3 n=6885 nnz=15948 max_deg=116 hub=false
+   1.0000  0.001s  amd agg=true a=10
+   1.0000  0.001s  amd agg=true a=5
+   1.0000  0.001s  amd agg=true a=2.5
+   1.0000  0.001s  amd agg=true a=2
+   1.0000  0.001s  amd agg=true a=16
+   1.0000  0.001s  amd agg=true a=-1
+   1.0000  0.001s  amd agg=false a=10
+   1.0000  0.001s  amd agg=false a=5
+   1.0000  0.001s  amd agg=false a=2.5
+   1.0000  0.001s  amd agg=false a=2
+   1.0000  0.001s  amd agg=false a=16
+   1.0000  0.001s  amd agg=false a=-1
+   ... 110 candidates; worst 44482.3319
+CENSUS polygon75 n=5846 nnz=49652 max_deg=223 hub=true
+   1.0000  0.002s  amd agg=true a=10
+   1.0000  0.002s  amd agg=true a=5
+   1.0000  0.002s  amd agg=true a=16
+   1.0000  0.002s  amd agg=true a=-1
+   1.0000  0.003s  amd agg=false a=10
+   1.0000  0.003s  amd agg=false a=5
+   1.0000  0.003s  amd agg=false a=16
+   1.0000  0.003s  amd agg=false a=-1
+   1.0000  0.002s  amf a=10
+   1.0000  0.002s  amf a=5
+   1.0000  0.002s  amf a=16
+   1.0000  0.002s  amf a=-1
+   ... 110 candidates; worst 7373.8685
+CENSUS emfl100_5_5 n=21925 nnz=52300 max_deg=148 hub=false
+   1.0000  0.002s  amd agg=true a=10
+   1.0000  0.002s  amd agg=true a=5
+   1.0000  0.002s  amd agg=true a=2.5
+   1.0000  0.002s  amd agg=true a=2
+   1.0000  0.002s  amd agg=true a=1
+   1.0000  0.002s  amd agg=true a=16
+   1.0000  0.002s  amd agg=true a=-1
+   1.0000  0.003s  amd agg=false a=10
+   1.0000  0.004s  amd agg=false a=5
+   1.0000  0.004s  amd agg=false a=2.5
+   1.0000  0.004s  amd agg=false a=2
+   1.0000  0.004s  amd agg=false a=1
+   ... 110 candidates; worst 361342.4170
+CENSUS emfl050_5_5 n=13175 nnz=32300 max_deg=98 hub=false
+   1.0000  0.001s  amd agg=true a=10
+   1.0000  0.001s  amd agg=true a=5
+   1.0000  0.001s  amd agg=true a=2.5
+   1.0000  0.001s  amd agg=true a=2
+   1.0000  0.001s  amd agg=true a=1
+   1.0000  0.001s  amd agg=true a=16
+   1.0000  0.001s  amd agg=true a=-1
+   1.0000  0.002s  amd agg=false a=10
+   1.0000  0.002s  amd agg=false a=5
+   1.0000  0.002s  amd agg=false a=2.5
+   1.0000  0.002s  amd agg=false a=2
+   1.0000  0.002s  amd agg=false a=1
+   ... 110 candidates; worst 110211.9184
+CENSUS squfl030-150 n=13680 nnz=36000 max_deg=150 hub=false
+   1.0000  0.003s  amd agg=true a=10
+   1.0000  0.003s  amd agg=true a=5
+   1.0000  0.003s  amd agg=true a=2.5
+   1.0000  0.003s  amd agg=true a=2
+   1.0000  0.003s  amd agg=true a=16
+   1.0000  0.003s  amd agg=true a=-1
+   1.0000  0.004s  amd agg=false a=10
+   1.0000  0.004s  amd agg=false a=5
+   1.0000  0.003s  amd agg=false a=2.5
+   1.0000  0.004s  amd agg=false a=2
+   1.0000  0.003s  amd agg=false a=16
+   1.0000  0.004s  amd agg=false a=-1
+   ... 110 candidates; worst 107025.3395

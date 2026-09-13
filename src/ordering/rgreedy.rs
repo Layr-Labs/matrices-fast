@@ -39,6 +39,9 @@
 #![allow(dead_code)]
 
 mod window_dp;
+/// iter68 test-only re-export of the intra-`refine` split instrument.
+#[cfg(test)]
+pub(crate) use window_dp::split as xch_split;
 mod window_signatures;
 pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step,
     sparse_span_window_descent};
@@ -98,7 +101,23 @@ pub(crate) fn rank_alpha_three_quarters_cmp(
 /// receipt this lane has produced since `83a8f4f`; the ceiling is therefore the
 /// live value axis, and `max_n_limit()` below exists to price the next step of
 /// it in one binary/session instead of one build per point.**
-pub(crate) const MAX_N: usize = 25_000;
+/// iter64: `25_000` -> `45_000`. The extension was priced against the *2 GiB*
+/// allowance (the setting the remote record selects) in one binary/session on
+/// the full dev corpus, graded-closest frame, `taskset -c 0-3`:
+///
+///     25 000 -> 0.790389 / worst `order()` 1.254 s
+///     36 000 -> 0.790309 / 1.251 s      (3 movers: dt3 -0.0044, mpbp_48 -0.0026,
+///                                        nd_netgen-3000 -0.0015; +0.28..+0.53 s
+///                                        on those rows, all ending at ~1.02-1.05 s)
+///     45 000 -> 0.790266 / 1.269 s      (one more mover: arki0013 0.4021 -> 0.3993
+///                                        at +0.36 s, ending at 1.18 s)
+///
+/// i.e. −1.23e-4 of dev score for +0.015 s on the corpus *peak*: the rows the
+/// ceiling admits are not the rows that sit at the cap. Memory at the new top is
+/// ~`n²/4` bytes per `Game` (2 · n · ⌈n/64⌉ · 8 = 506 MB at 45 000, versus 156 MB
+/// at 25 000) — the graded 4 GiB `RLIMIT_AS` is enforced by the local runner too,
+/// so the sandboxed 300-row run is the memory check. [0264-ceil{25000,36000,45000}-2G-4cpu.log]
+pub(crate) const MAX_N: usize = 45_000;
 
 /// The ceiling every `n`-gate in this module reads. Production: the constant,
 /// so the shipped `order()` is unchanged. Test builds: `SSI_MAX_N` re-points it
@@ -211,6 +230,184 @@ struct GameCpuStats {
     clique_deficiencies: usize,
 }
 
+/// Immutable per-pattern image of the fill graph: the pristine bitset plus the
+/// degree vector derived from it. Both are pure functions of the CSR arrays,
+/// so every exchange call a row makes may share one image instead of
+/// rebuilding it: one zeroed `n*w` bitset plus one scattered write per
+/// off-diagonal nonzero is the single largest wall item of the block on large
+/// `n`, and the block is entered ~13 times per row there.
+pub(crate) struct Pristine {
+    pub(crate) n: usize,
+    w: usize,
+    adj0: std::rc::Rc<Vec<u64>>,
+    deg0: std::rc::Rc<Vec<u32>>,
+}
+
+impl Pristine {
+    pub(crate) fn build(n: usize, col_ptr: &[usize], row_idx: &[usize]) -> Option<Pristine> {
+        let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+        let w = n.div_ceil(64);
+        let mut deg0 = vec![0u32; n];
+        for (v, d) in deg0.iter_mut().enumerate() {
+            *d = adj0[v * w..v * w + w]
+                .iter()
+                .map(|word| word.count_ones())
+                .sum();
+        }
+        Some(Pristine {
+            n,
+            w,
+            adj0: std::rc::Rc::new(adj0),
+            deg0: std::rc::Rc::new(deg0),
+        })
+    }
+
+    /// Bytes this image keeps alive (bitset + degree vector).
+    pub(crate) fn bytes(&self) -> usize {
+        self.n * self.w * 8 + self.n * 4
+    }
+
+    pub(crate) fn game(&self) -> Option<Game<'_>> {
+        Game::new_with_degrees(self.n, &self.adj0[..], self.deg0.as_ref().clone())
+    }
+}
+
+struct PristineMemo {
+    col_ptr: Vec<usize>,
+    row_idx: Vec<usize>,
+    pristine: std::rc::Rc<Pristine>,
+}
+
+thread_local! {
+    static PRISTINE_MEMO: std::cell::RefCell<Vec<PristineMemo>> =
+        std::cell::RefCell::new(Vec::new());
+    /// ── iter69 (0269-graded-frame-sys-census): the mutable fill-graph bitset ─
+    ///
+    /// `assemble` copies the pristine bitset into a FRESH `n·⌈n/64⌉`-word buffer
+    /// for every game, and a row enters the class block many times. Measured in
+    /// the graded frame (one worker process per matrix, `taskset -c 0-3`,
+    /// `/usr/bin/time -f "%e %U %S %R %M"`) that buffer is charged as *system*
+    /// time and minor faults, not as work: `nd_netgen-3000-1-1-b-b-ns_7`
+    /// (n = 33 155, n·w = 137 MB) pays **346 910 minor faults and 0.35 s of
+    /// system time** (1.24 s user) for 0.99 s of wall, and suppressing the
+    /// allocator's munmap/trim path (`MALLOC_MMAP_THRESHOLD_=1e9
+    /// MALLOC_TRIM_THRESHOLD_=-1`) drops it to 86 981 faults / 0.10 s system /
+    /// **0.73 s wall** — 3 repeats each, same binary, same patterns.
+    ///
+    /// Retaining ONE buffer per thread removes the churn outright. This changes
+    /// no value the game ever reads: every word of `adj` is written by
+    /// `copy_from_slice` before the game touches it (`reset` and the pristine
+    /// image are the only other writers, and both are full-width writes), so
+    /// the ordering is bit-identical — verified by hashing the worker's output
+    /// permutation before/after.
+    ///
+    /// Bounded on purpose: a buffer larger than `ADJ_POOL_MAX_WORDS` is
+    /// released as before, so the retained address space stays small next to
+    /// the graded 4 GiB RLIMIT_AS.
+    static ADJ_POOL: std::cell::RefCell<Vec<Vec<u64>>> = const {
+        std::cell::RefCell::new(Vec::new())
+    };
+}
+
+const ADJ_POOL_MAX_WORDS: usize = 20_000_000; // 160 MB — above that, free as before
+
+fn adj_pool_take(len: usize) -> Vec<u64> {
+    ADJ_POOL.with(|cell| {
+        let mut pool = cell.borrow_mut();
+        let mut best: Option<usize> = None;
+        for (i, buf) in pool.iter().enumerate() {
+            if buf.capacity() >= len && best.is_none_or(|j: usize| buf.len() < pool[j].len()) {
+                best = Some(i);
+            }
+        }
+        match best {
+            Some(i) => pool.swap_remove(i),
+            None => Vec::new(),
+        }
+    })
+}
+
+fn adj_pool_give(buf: Vec<u64>) {
+    if buf.capacity() == 0 || buf.capacity() > ADJ_POOL_MAX_WORDS {
+        return;
+    }
+    ADJ_POOL.with(|cell| {
+        let mut pool = cell.borrow_mut();
+        // One recycled buffer per thread is enough: games do not nest.
+        if pool.is_empty() {
+            pool.push(buf);
+        } else if buf.capacity() > pool[0].capacity() {
+            pool[0] = buf;
+        }
+    });
+}
+
+impl Drop for Game<'_> {
+    fn drop(&mut self) {
+        adj_pool_give(std::mem::take(&mut self.adj));
+    }
+}
+
+/// Test-only seam: `SSI_NO_PRISTINE_MEMO=1` prices the rebuild arm inside the
+/// same binary. Production always takes the memoized path.
+#[inline(always)]
+fn pristine_memo_enabled() -> bool {
+    #[cfg(test)]
+    {
+        std::env::var_os("SSI_NO_PRISTINE_MEMO").is_none()
+    }
+    #[cfg(not(test))]
+    {
+        true
+    }
+}
+
+/// Exact-content memo of [`Pristine::build`]. The key is the full CSR content
+/// (compared element-wise), so a hit is bit-identical to a rebuild — the same
+/// bitset, the same degree vector, therefore the same `Game` and the same
+/// ordering. At most two images are kept per thread (peak `2 * n*w * 8`
+/// bytes), LRU-ordered.
+pub(crate) fn pristine_memo(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+) -> Option<std::rc::Rc<Pristine>> {
+    if !pristine_memo_enabled() {
+        return Some(std::rc::Rc::new(Pristine::build(n, col_ptr, row_idx)?));
+    }
+    let hit = PRISTINE_MEMO.with(|cell| {
+        let mut memo = cell.borrow_mut();
+        let found = memo
+            .iter()
+            .position(|m| m.pristine.n == n && m.col_ptr == col_ptr && m.row_idx == row_idx);
+        match found {
+            Some(i) => {
+                let entry = memo.remove(i);
+                let rc = std::rc::Rc::clone(&entry.pristine);
+                memo.push(entry);
+                Some(rc)
+            }
+            None => None,
+        }
+    });
+    if let Some(p) = hit {
+        return Some(p);
+    }
+    let built = std::rc::Rc::new(Pristine::build(n, col_ptr, row_idx)?);
+    PRISTINE_MEMO.with(|cell| {
+        let mut memo = cell.borrow_mut();
+        while memo.len() >= 2 {
+            memo.remove(0);
+        }
+        memo.push(PristineMemo {
+            col_ptr: col_ptr.to_vec(),
+            row_idx: row_idx.to_vec(),
+            pristine: std::rc::Rc::clone(&built),
+        });
+    });
+    Some(built)
+}
+
 impl<'a> Game<'a> {
     /// Build the pristine bitset adjacency ONCE. Shared immutably by every
     /// stream of the fan-out: it is a pure function of the pattern, it is the
@@ -279,10 +476,38 @@ impl<'a> Game<'a> {
                 .map(|word| word.count_ones())
                 .sum();
         }
+        Game::assemble(n, adj0, deg0)
+    }
+
+    /// Same game as [`Game::new`] when `deg0` is the degree vector of `adj0`,
+    /// which [`Pristine`] guarantees by construction: the popcount pass over
+    /// the whole `n*w` bitset is skipped instead of repeated.
+    pub(crate) fn new_with_degrees(
+        n: usize,
+        adj0: &'a [u64],
+        deg0: Vec<u32>,
+    ) -> Option<Game<'a>> {
+        if n == 0 || n > max_n_limit() || deg0.len() != n {
+            return None;
+        }
+        if adj0.len() < n * n.div_ceil(64) {
+            return None;
+        }
+        Game::assemble(n, adj0, deg0)
+    }
+
+    fn assemble(n: usize, adj0: &'a [u64], deg0: Vec<u32>) -> Option<Game<'a>> {
+        let w = n.div_ceil(64);
+        // iter69: reuse a recycled bitset buffer instead of `adj0[..n*w].to_vec()`.
+        // `resize` + `copy_from_slice` leaves the buffer bit-identical to a fresh
+        // allocation; `Drop for Game` returns it to the thread-local pool.
+        let mut adj = adj_pool_take(n * w);
+        adj.resize(n * w, 0);
+        adj.copy_from_slice(&adj0[..n * w]);
         Some(Game {
             n,
             w,
-            adj: adj0[..n * w].to_vec(),
+            adj,
             adj0,
             deg0,
             deg: vec![0; n],

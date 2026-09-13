@@ -1,0 +1,77 @@
+rows=300  total_wall=151.31 s  post-convergence=54.15 s (35.8%)
+
+name                             total    final t_lastimp    post_s
+crudeoil_lee4_10                 1.562   0.6080     1.154     0.408
+chimera_selby-c16-02             1.463   0.5368     1.171     0.292
+crudeoil_lee4_09                 1.432   0.6122     1.036     0.396
+chimera_selby-c16-01             1.394   0.6669     1.116     0.278
+crudeoil_pooling_ct3             1.317   0.6262     1.139     0.178
+ringpack_30_2                    1.304   0.2311     0.833     0.471
+pinene200                        1.289   0.8336     0.694     0.596
+gasprod_sarawak81                1.274   0.9118     0.610     0.665
+arki0016                         1.220   0.9508     0.947     0.273
+crudeoil_lee4_06                 1.179   0.4952     0.968     0.210
+popdynm200                       1.125   0.9364     0.795     0.330
+transswitch0300p                 1.114   0.9224     0.564     0.550
+chp_shorttermplan2d              1.109   0.5025     0.726     0.383
+procurement1large                1.102   0.5275     0.696     0.406
+nd_netgen-2000-3-4-b-a-ns_7      1.091   0.9424     0.303     0.787
+nuclear10a                       1.085   0.6706     0.752     0.334
+crudeoil_pooling_dt2             1.072   0.6610     0.696     0.376
+acopf_case9241pegase_qcqp        1.065   0.9737     0.290     0.775
+chp_partload                     1.057   0.7328     0.766     0.291
+powerflow0300p                   1.057   0.9518     0.566     0.491
+
+rows total>=1.0s: 25  total=29.49 s  post-conv=10.18 s (35%)
+final==1.0: 76 rows total=21.16 s post-conv=9.57 s
+final>=0.90: 179 rows total=74.29 s post-conv=30.97 s
+final<0.90:  121 rows total=77.02 s post-conv=23.18 s
+
+monotonicity: rows with a non-monotone ratio sequence = 434 ; final>min(mark) rows = 277
+
+phase               total_s   post_s post(big rows)
+1.portfolio           40.39     0.00       0.00
+3.search              19.82     1.34       0.02
+9.reduce              12.42     1.52       0.09
+4.subtree              9.57     0.10       0.02
+1b.indep               5.55     0.93       0.18
+13.alt                 3.74     1.41       0.30
+15.minl                3.56     1.19       0.18
+16.late                3.37     3.26       0.02
+22.win                 2.99     2.66       0.78
+17.final               1.83     0.74       0.08
+20.lt1k                1.48     1.41       0.03
+8.cleanup              1.04     0.12       0.02
+13p.mcs                0.95     0.28       0.06
+10.completion          0.93     0.20       0.02
+14.transplant          0.93     0.31       0.07
+13p.prep               0.89     0.19       0.00
+11.corecand            0.75     0.14       0.02
+12.peo                 0.74     0.14       0.02
+19.five                0.71     0.40       0.07
+13p.recon              0.63     0.10       0.00
+5.terminal             0.52     0.10       0.02
+2.descent              0.48     0.07       0.02
+
+sum post = 17.23 s ; sum post on rows>=1.0s = 2.13 s
+
+MARKED-PHASE COVERAGE: marked-sum=111.90 s of total=151.31 s -> unmarked 39.40 s (26.0% of the wall)
+
+row                              total  marked unmarked  unmk%
+crudeoil_lee4_10                 1.562   1.165   0.398    25%
+chimera_selby-c16-02             1.463   1.133   0.330    23%
+crudeoil_lee4_09                 1.432   1.020   0.413    29%
+chimera_selby-c16-01             1.394   1.081   0.313    22%
+crudeoil_pooling_ct3             1.317   1.113   0.204    15%
+ringpack_30_2                    1.304   0.894   0.411    31%
+pinene200                        1.289   0.720   0.570    44%
+gasprod_sarawak81                1.274   0.600   0.675    53%
+arki0016                         1.220   0.960   0.259    21%
+crudeoil_lee4_06                 1.179   0.920   0.259    22%
+popdynm200                       1.125   0.796   0.329    29%
+transswitch0300p                 1.114   0.727   0.387    35%
+chp_shorttermplan2d              1.109   0.712   0.398    36%
+procurement1large                1.102   0.675   0.427    39%
+
+rows>=1.0s: n=25 total=29.49 marked=20.52 unmarked=8.97 (30%)
+rows<0.4s: n=136 total=30.99 unmarked=8.89 (29%)

@@ -708,3 +708,124 @@ round, so note the round if you know it.
   the two pre-class exchange sites (4904/4921) that the same ceiling re-enables; the dead band rows
   (`emfl100_5_5` +0.645 s, `supplychainr1_053050` +0.442 s, ratio stays 1.0000) are pure waste that a
   cheaper call shape could remove.
+
+## iter55 (2026-09-13) — the ceiling extension promoted; the remote FAIL is a lottery, not a device; the ledger is a *second-order* device and 1G→2G is the largest dev device left
+
+- **Promoted: `52c744da` at hidden 0.841011 (−3.55e-4)** — `rgreedy::MAX_N` 12 000 → 25 000, the
+  band extension of the class-block exchange. The frontier is this lane's again. Its dev probe arm was
+  −9.4e-4 (0.791616 → 0.790679), i.e. the band device transferred at **0.38**, the weakest transfer of
+  the recent promotions (1.16-1.55 for the shape/exchange devices). [0235-armMAXN25k-4cpu.log,
+  `yukon submissions` receipt]
+- **The "1G ledger is the killer" reading is REFUTED.** Fetched every recent submission tree
+  (`origin/submissions/*`: `git show <ref>:src/ordering/{mod,rgreedy}.rs`) and joined it to the board
+  status: `6279dc68` (spans 13 + 1G) FAILED, `e012d8cb` (spans 26/18/4/32 + 1G + min-fill cut)
+  FAILED, `74f19b95` (1G + 5 sweeps, neither other suspect) FAILED; `83a8f4fc`, `e07fe7ae`, `a34c109a`
+  (512M) promoted — a clean-looking 3-for-3 kill. But `52c744da` = the *same* 1G + 5 sweeps **plus**
+  MAX_N 12 000 → 25 000 (strictly more work at that site) **PROMOTED**. MAX_N can only change rows with
+  n > 12 000, so any hidden row with n ≤ 12 000 runs bit-identically in `74f19b95` and `52c744da` and
+  the verdicts still differ ⇒ the verdict is a per-row **cap lottery** on near-cap hidden rows
+  (probability rising with added work), not a device label. Consequence for policy: a single FAILED
+  receipt is not evidence a device is cap-unsafe; the iters 51-54 per-device blacklisting over-read two
+  receipts. [origin/submissions/* + `yukon submissions`, this iteration]
+- **The ledger is a *second-order* device: its marginal value is a function of the ceiling.** One
+  binary/one session/300 dev rows/`taskset -c 0-3`, on the shipped 25k tree
+  (`0237-led-{1073741824,2147483648,4294967296}-4cpu.log`): 1G **0.790679** / gt_10k 0.6833 →
+  **2G 0.790425 (−2.54e-4)** / 0.6826 → 4G 0.790322 (−3.57e-4) / 0.6824. The *same* 512M→1G step was
+  worth −4.7e-5 on the 12k tree (`0235-armL1G-4cpu.log`) ⇒ raising the ceiling multiplied the ledger's
+  marginal value by ~5× (a work allowance only binds on rows the ceiling admits). The 1G→2G step moves
+  **12/300 rows, all with 10 429 ≤ n ≤ 23 999** (`methanol400` −1.55 %, `crudeoil_lee4_10` −0.79 %,
+  `crudeoil_lee4_09` −0.64 %, `gabriel09` −0.50 %, …), costs 0.05-0.15 s on those movers (0.6-0.8 s
+  under the cap) and leaves the corpus-wide worst `order()` **unchanged** (1.396 → 1.397 s). 4G is not
+  free: 2 movers, +0.16 s, `crudeoil_lee4_10` → 1.506 s ⇒ NOT shipped.
+- **Shipped & submitted: 2G.** Official local harness **300/300 OK, 0.790412 / 0.923338**
+  (`results.tsv:1789283745`), buckets 0.8873/0.8373/**0.6826** vs the promoted tree's own official
+  0.790636 ⇒ **−2.24e-4 in the graded frame**. Submitted **`43c1ca7d-d57f-41fe-8b65-472b18dc53bb`**
+  (`validating`). [0237-official-run-led2G.log, 0237-submission-note.md]
+- **New instrument: a ceiling curve in one binary.** `rgreedy::max_n_limit()` (test-only `SSI_MAX_N`
+  seam; `#[cfg(not(test))]` returns the constant) is read by every `n`-gate in `rgreedy` and by
+  `WindowDp`'s dimension check, so a ceiling curve costs one build instead of one per point. The
+  control arm reproduces the shipped number exactly (0.790679), which is the seam's own verification.
+- **Killed, with numbers (do not re-open):**
+  - *The ceiling above 25 000 is spent.* `SSI_MAX_N` 25 000/30 000/45 000 → 0.790679 / 0.790657 /
+    0.790610; the 25k→45k step buys −6.9e-5 for **4 movers** and its cost is the DP's O(n²/64)
+    per-call setup: `nd_netgen-3000-1-1-b-b-ns_7` (n = 33 155) 0.51 → **1.34 s** (+0.83 s) for
+    −0.16 %. [0237-ceilcur-{25000,30000,45000}-4cpu.log]
+  - *The ladder draw above its gate buys nothing.* `SSI_TERM_FULL_N` 25 000 / 45 000 on the 45k tree:
+    0.790611 / 0.790611 — **zero** value while the worst row climbs 1.465 → 1.519 → 1.628 s. The band's
+    responsiveness is specific to the *exact window* exchange, not to added search in general.
+    [0237-ladd-{25000,45000}-ceil45k-4cpu.log]
+  - *The gated-out big-row families are worse, not better.* `probe_large` on the five largest rows:
+    AMF-5 / AMF-ND / METIS all land above the shipped ratio (`gabriel10` 0.9285 vs 1.0275/1.0275/4.4925;
+    `cont6-qq` 0.6962 vs 0.9145). The remaining large-row `n` caps are not value levers.
+    [0237-probe-large-ceilcur.log]
+  - *The class gate's `nnz <= 200_000` gap is empty.* Against the dense/hub rule (`nnz > 16n ||
+    max_deg > n/2`) it contains exactly two dev rows (`gams05`, `nuclear104`).
+- **The joint arms (measured, not shipped — the next bat's menu):** 2G + 6 sweeps **0.790368**
+  (−5.7e-5: the sweeps axis *re-opens* at 2G, it was dead at 1G), 2G + 45k ceiling **0.790295**
+  (−1.30e-4: the ceiling's value *doubles* at 2G — the interaction is mutual), triple
+  (45k + 2G + 6 sweeps) **0.790238 = −4.41e-4 vs shipped**, worst row 1.533 s.
+  [0237-{joint-ceil45k-led2G,led2G-sweeps6,triple-45k-2G-s6}-4cpu.log]
+- **Deep experiment:** `1789281592961-145005` ended in `setup_error` before any rollout
+  (`snapshot requires a regular file <= 16777216 bytes: corpus/dev/patterns.jsonl`) — no patch, no
+  candidate, the dead-band-row hypothesis remains untested. Harness-side limit, not a candidate
+  finding.
+
+## iter55b (2026-09-13) — the ledger step receipted; the whole-class device transfers ~1.0, the band device 0.38; 4G + 6th sweep shipped as `9440dedb`
+
+- **Receipt: `43c1ca7d` PROMOTED at hidden 0.840782 (−2.29e-4)** for a dev −2.24e-4 official
+  (0.790636 → 0.790412) ⇒ **transfer ≈ 1.02** for the ledger device, against **0.38** for the band
+  extension (`52c744da`: dev −9.4e-4 probe → hidden −3.55e-4) and 1.16/1.55 for the exchange-shape
+  merges. Device classes on this board are ordered by *transfer*, not by dev delta: value spread
+  across the whole admitted class transfers ~1:1; value confined to a newly admitted band does not.
+  **Choose the next device by transfer-weighted value, not by dev score.** [receipt in
+  `yukon submissions`; this iteration]
+- **The interaction surface priced:** 2G/5 sweeps 0.790425 (the receipted tree) → 2G/6 **0.790368**
+  (sweeps were dead at 1G, live at 2G) → 4G/5 0.790322 → **4G/6 0.790252** (this submission) →
+  triple (45k ceiling + 2G + 6 sweeps) 0.790238. The triple is refused at statistically the same
+  score: its margin is the 45k ceiling, the 0.38-transfer band device whose O(n²/64) setup loads
+  `nd_netgen-3000` 0.51 → 1.34 s for −0.16 %. [0237-led{s2,s6,4G,4Gs6}-4cpu.log,
+  0237-triple-45k-2G-s6-4cpu.log]
+- **Shipped & submitted: `9440dedb-0159-49f1-a98a-1c350bf3c736`** (2G → 4G + 5 → 6 sweeps). Official
+  local harness **300/300 OK, 0.790246 / 0.923232**, buckets 0.8873 / 0.8373 / **0.6822**
+  (`results.tsv:1789285172`) = **−1.66e-4 in the graded frame** against the frontier tree's own
+  official 0.790412; worst `order()` 1.397 → 1.550 s at 4 vCPU, carried entirely by
+  `crudeoil_lee4_10` (the row the ledger device already loads). [0237-official-run-led4G-s6.log,
+  0237b-submission-note.md]
+- Standing rule from the two receipts: **a FAILED receipt is not a device kill** (see iter55), and a
+  *rejected* receipt is a transfer-bar reading — the bar has been ~8e-5 hidden, so a candidate needs
+  ≳1e-4 transfer-weighted before it is worth a slot.
+
+## iter56 (2026-09-13) — frame audit of the instruments the cap reasoning runs on: the probe's phase map is not the graded frame, and the per-site census is gone from the tree
+
+- **The probe's per-phase rescan is a test-only frame that hits the biggest-`nnz(L)` rows hardest.**
+  `SSI_MARK_NOSCORE=1` (the seam the source itself calls "the closest local view of the graded frame") vs the
+  default PHASES run, same binary/session/4 vCPU, whole corpus, ratios bit-identical on 300/300:
+  corpus wall 151.31 → **151.13 s** (0.11 %) but the *per-row* deltas are up to **0.445 s**:
+  `acopf_case9241pegase_qcqp` (n=313 068, nnz=1 292 408) 1.065 → **0.620 s (−42 %)**,
+  `gabriel10` −0.248, `faclay75` −0.240, `unitcommit_200_100_1_mod_8` −0.180, `cont6-qq` −0.113; 111/300 rows
+  move > 10 ms and ranks shift by up to 81 places (acopf 17 → 98). The ≥1.0 s set changes membership at both
+  ends (`acopf`, `mpbp_07` leave; `gabriel09`, `rsyn0840m04m` enter). [0238-markframe-diff.txt, 0238-trueframe-tables.txt]
+- **True-frame exposure of the tree that is in flight (`9440dedb`), 4 vCPU**: worst `crudeoil_lee4_10` **1.536 s**
+  (77 % of the 2 s cap), 25 rows ≥ 1.0 s, 9 ≥ 1.2 s, 5 ≥ 1.35 s, corpus wall 151.13 s. [0238-trueframe-tables.txt]
+  New: the *whole-class exchange* (12/5/5 + 4G ledger + 6 sweeps) is the single largest cap consumer on the
+  binding rows — `SSI_EXCHANGE_WIDTH=16` (OFF, same frame) drops the worst row **1.536 → 1.239 s** and the wall
+  151.13 → 138.41 s (**−14.22 s, 9.4 %**) for 1.67e-3 dev score (0.790252 → 0.791922): −0.441 s on
+  `crudeoil_lee4_10`, −0.432 `crudeoil_lee4_09`, −0.378 `procurement1large`, −0.358 `catmix400`. [0238-exchange-off-noscore-4cpu.log]
+- **Instrument losses / tooling traps (record them, do not re-derive):**
+  - `SSI_SITESTATS` is **dead in this tree**: 0 `SITE` lines from a whitelisted run because the per-site producer
+    census (finding of iter52, `0233-sites-dev300.log`) is not in `src/ordering` (`grep -rn SITESTATS` → nothing;
+    `parallel::sites` gone; last commit carrying it: `883d272`/`a33fb71`). A follow-up that plans to re-run the
+    site census will silently produce nothing.
+  - **11 seams whitelisted by `target/probe-sandbox.sh` no longer exist in the source** (`SSI_ALT_MAX_N` :76,
+    `SSI_PORTSTATS` :81, `SSI_SITESTATS` :84, `SSI_ENGINE_FANOUT(_ALL)` :42-43, `SSI_SPAN_WINDOWS_EXTRA` :73,
+    `SSI_SPAN_WINDOWS_NEXT`, `SSI_INDEP_PARITY`, `SSI_PARITY_TRACE`, `SSI_LADDER_STRIDE`, `SSI_TIE_FORCE`):
+    an arm run through that runner with any of them silently measures the **base** configuration — the same
+    trap shape as the 0231 `SSI_CORPUS_FILE` incident. No post-rebase evidence file names a dead seam
+    (0222/0226/0230/0233 all predate), so the record is not corrupted by it.
+  - The **PHASES ratio column is not an incumbent trajectory**: the `13p.*` marks carry *counters* in the ratio
+    field (`13p.ledger 2499757.0000/0.0000`), 434 ratio *increases* occur across marks, and on 277/300 rows the
+    shipped `final` ratio is strictly better than the minimum printed at any phase mark. Any device that keys on
+    "when did the incumbent last improve" cannot be read from this instrument. [0238-postconv-summary.txt]
+  - The mark map also covers less wall than it looks: marked phases sum to 111.90 s of the 151.31 s probe wall
+    (**39.40 s outside every mark**, 30 % of it on the 25 rows ≥ 1.0 s, 53 % on `gasprod_sarawak81`), against the
+    40.39 s single largest phase `1.portfolio`. [0238-postconv-summary.txt]

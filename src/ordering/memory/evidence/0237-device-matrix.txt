@@ -1,0 +1,26 @@
+# iter55 device matrix — every recent submission's production constants joined to its board status
+# source: `yukon submissions` (status) x `git show origin/submissions/<uuid>:src/ordering/{mod,rgreedy}.rs`
+# command per row: ledger=$(git show $ref:src/ordering/mod.rs | grep -m1 'PRODUCTION_EXCHANGE_LEDGER: i64')
+#                 MAX_N =$(git show $ref:src/ordering/rgreedy.rs | grep -m1 'MAX_N: usize')
+#                 spans = length of PRODUCTION_SPAN_WINDOWS
+#
+# sub      status    score     frontier-delta  ledger   sweeps  width step  MAX_N   spans
+# ---------------------------------------------------------------------------------------------
+# e07fe7a  promoted  0.841768  -0.000090       536M     -       12    5     12000   9
+# 41baf1c  failed    n/a       n/a             536M     -       12    5     12000   9
+# ab5adbb  failed    n/a       n/a             536M     -       12    5     12000   9
+# 83a8f4f  promoted  0.841666  -0.000102       536M     4       12    5     12000   9
+# 6279dc6  failed    n/a       n/a             1024M    -       12    5     12000   13   (spans 13 + 1G)
+# e012d8c  failed    n/a       n/a             1024M    -       12    5     12000   13   (+ min-fill cut)
+# a34c109  promoted  0.841366  -0.000136       536M     4       12    5     12000   9
+# 74f19b9  failed    n/a       n/a             1024M    5       12    5     12000   9    (1G + 5 sweeps)
+# 52c744d  promoted  0.841011  -0.000355       1024M    5       12    5     25000   9    (1G + 5 sweeps + ceiling)
+# 43c1ca7d promoted  0.840782  -0.000229       2048M    5       12    5     25000   9    (ledger 2G)
+#
+# The row that decides it: 74f19b95 (ledger 1G, sweeps 5, MAX_N 12_000) FAILED while 52c744da -
+# the same ledger and sweeps with MAX_N 25_000, i.e. strictly MORE work at the same site - PROMOTED.
+# MAX_N can only change rows with n > 12_000 (Game::new refuses n > MAX_N; WindowDp::max_dimension
+# mirrors it), so every hidden row with n <= 12_000 runs bit-identically in both trees. Two trees that
+# agree on all n <= 12_000 rows cannot differ on a deterministic per-row cap verdict => the verdict is
+# a per-row cap LOTTERY on near-cap hidden rows, its probability rising with added work on those rows.
+# Consequence: a single FAILED receipt is not evidence that a device is cap-unsafe.

@@ -1,0 +1,24 @@
+TRUE-FRAME margin-vs-value menu (production tree, taskset -c 0-3, SSI_MARK_NOSCORE=1)
+row                                base     peo0    maxn0  xchgOFF   ratio
+crudeoil_lee4_10                  1.536    1.472    0.818    1.096   0.6080
+chimera_selby-c16-02              1.449    1.445    1.104    1.239   0.5368
+crudeoil_lee4_09                  1.437    1.432    0.780    1.005   0.6122
+chimera_selby-c16-01              1.409    1.617    0.938    1.210   0.6669
+ringpack_30_2                     1.366    1.340    0.817    1.234   0.2311
+crudeoil_pooling_ct3              1.311    1.367    0.889    1.223   0.6262
+arki0016                          1.284    1.256    0.700    1.102   0.9508
+pinene200                         1.261    1.267    0.373    1.084   0.8336
+gasprod_sarawak81                 1.238    1.237    0.508    1.030   0.9118
+crudeoil_lee4_06                  1.182    1.179    0.662    0.910   0.4952
+procurement1large                 1.175    1.064    0.455    0.797   0.5275
+popdynm200                        1.116    1.135    0.529    0.818   0.9364
+
+corpus wall (sum of per-row order()): base 151.13  peo0 150.85  maxn0 65.12  xchgOFF 136.92
+scored totals from the same logs: base 0.790252 | peo0 0.790369 | maxn0 0.800932 | xchgOFF 0.791922
+worst order(): base 1.536 | peo0 1.617 | maxn0 1.104 | xchgOFF 1.239
+
+peo0: rows whose ratio moved: 8 ; largest: rsyn0810m04m 0.7672->0.7814, crudeoil_lee2_06 0.6840->0.6890, transswitch0300p 0.9224->0.9264, chimera_mgw-c16-2031-01 0.7721->0.7759, crudeoil_lee1_07 0.7388->0.7413, chp_partload 0.7328->0.7352
+
+maxn0: rows whose ratio moved: 141 ; largest: pooling_adhya4pq 0.6809->0.8900, crudeoil_lee2_06 0.6840->0.7786, pooling_adhya4tp 0.7667->0.8595, pooling_sppa0pq 0.3171->0.3937, procurement1large 0.5275->0.6010, multiplants_stg1 0.7853->0.8588
+
+xchgOFF: rows whose ratio moved: 44 ; largest: methanol400 0.6931->0.7208, gabriel09 0.8695->0.8922, popdynm200 0.9364->0.9569, crudeoil_lee4_10 0.6080->0.6253, crudeoil_lee2_06 0.6840->0.6990, crudeoil_lee4_09 0.6122->0.6257

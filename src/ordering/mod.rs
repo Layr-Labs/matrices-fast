@@ -144,6 +144,7 @@
 //! the two required `order()` runs are byte-identical (determinism gate).
 
 use crate::Pattern;
+mod addition;
 
 /// TEST-ONLY measurement harness (timing headroom, tie lists, candidate
 /// what-if scoring). Not compiled into the shipped binary.
@@ -1305,7 +1306,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     ) {
         return perm;
     }
-    leader_order(pattern)
+    addition::refine(pattern, leader_order(pattern))
 }
 
 // Certificate fast path: only return when leaf peeling removes every vertex.

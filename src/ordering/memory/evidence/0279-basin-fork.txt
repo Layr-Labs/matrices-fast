@@ -1,0 +1,107 @@
+iter79 — BASIN DIVERSIFICATION ON THE CHEAP TIER: THE SHAKEDOWN OF ONE DEVICE WITH A REAL DEV DELTA
+==================================================================================================
+
+Everything below was produced this iteration on this checkout; every number is
+from a log kept in `.scratch/iter79/` and copied into `memory/evidence/0279-*`.
+
+1. WHERE THE CAP-CRITICAL CLASS ACTUALLY SPENDS (clean frame, first time)
+------------------------------------------------------------------------
+Probe, `SSI_MARK_NOSCORE=1`, the two production seams pinned (12 sweeps,
+pre-class off), contract corpus, 18 crown rows, repeat=2, `taskset -c 0-3`:
+[.scratch/iter79/phases-noscore.log]
+
+  4.subtree      4.707 s   22.6 % of those rows' wall   <- largest block
+  1.portfolio    4.683 s   22.5 %
+  9.reduce       1.513 s    7.3 %     (the iter75 probe frame read 15-18 % here)
+  1b.indep       0.911 s    4.4 %
+  15.minl        0.801 s    3.8 %
+  (unmarked phases, incl. the terminal ladder: ~6.0 s, 29 %)
+
+Per row: `arki0016` is portfolio-bound (0.492 s of 1.373), while
+`chp_partload` (0.324/1.261), `batchs121208m` (0.511/0.998), `hydroenergy2`
+(0.529/1.095) and `mpbp_47` (0.417/1.044) are subtree-bound. The iter75 phase
+frame that named `9.reduce` (0.23 s on arki0016) was a *scoring* frame: with
+`SSI_MARK_NOSCORE` the same row shows 0.206 s of subtree against 0.561 s of
+portfolio, and arki0016's probe wall drops 1.519 -> 1.373 s with repeat=2.
+
+2. THE SUBTREE CHAIN IS NOT WASTE (pricing the biggest block)
+-------------------------------------------------------------
+New test-only seam `SSI_SUBTREE_BUDGET_PCT` scales the budget of every round of
+the whole-graph `4.subtree` chain (`mod.rs`: round 1, the second ticket, rounds
+2-5) — production compiles the callers' own literals.
+
+18-row arms, repeat=2:            p=100      p=50      p=25      p=0
+  wall total                      20.887 s   18.618 s  17.140 s  16.228 s
+  flops changed vs p=100          --         11 rows   11 rows   12 rows
+Corpus-wide (300 rows, one build, contract corpus):
+[.scratch/iter79/full-p100.log, full-p50.log, full-p0.log]
+  p=50: 49 rows move, net +8.62 bips dev (worse)
+  p=0 : 58 rows move, net +17.49 bips dev (worse)
+So halving the largest block of the cap-critical class *loses* ~9 bips dev and
+buys 6.6 s of corpus wall (3.8 s of it on the 32 rows >= 1.0 s): the block is
+value-bearing, not waste. Negative result, recorded.
+
+3. THE BASIN EFFECT (the new device axis)
+-----------------------------------------
+The chain's acceptance is greedy: it moves the incumbent into a basin that the
+remaining monotone stages then refine. Suppressing it is *worse* on 41 rows but
+*strictly better* on 17, and the best of those are large: `crudeoil_lee4_06`
+32 348 553 -> 31 062 855 flops (-3.98 %, ~4.4 s of pipeline wall avoided),
+`waterund14` -2.35 %, `chimera_mgw-c8-439-onc8-001` -2.32 %,
+`edgecross10-080` -1.68 %, `crudeoil_lee1_07` -1.55 %, `gasprod_sarawak16`
+-1.34 %. Taking the *minimum of the two lineages' flops per row* is therefore
+one-sided by construction: it can only improve, and it is a deterministic
+function of the pattern (fixed shape gate, exact-flops comparison, ties keep the
+shipped lineage).
+
+Implemented in `order()`: gate `n <= 600 && nnz <= 5 000`; both lineages run
+concurrently via `std::thread::scope` on the same `&Pattern`, each with its own
+thread-local `CHAIN_LINEAGE` flag that `leader_order`'s chain reads. Rows
+outside the band take the byte-identical pre-fork path.
+
+4. WHY THE GATE IS WHERE IT IS (wall, worker frame, contract `.pat` files)
+-------------------------------------------------------------------------
+147-row `lt_1k` census, worker binary, 2 reps, `taskset -c 0-3`, md5 of the
+written permutation: [.scratch/iter79/ab-lt1k.tsv]
+  no fork     41.8 s   max row 0.81 s (`multiplants_stg1b`)
+  n < 1000    48.5 s   max forked row 1.21 s          -> +0.65 s on ONE row
+  n <= 600    43.3 s   max forked row 0.72 s          <- shipped gate
+The fork's cost tracks the row's own cost (median +0.01 s), and inside `lt_1k`
+that cost is monotone in `n` (class max 0.52 s at n<=400, 0.59 s at n<=600,
+0.81 s at n<1000), so the gate bounds the forked critical path at 0.72 s while
+keeping 3 of the 5 rows whose permutation the fork actually improves. The two
+dropped rows (`multiplants_mtg1b`, `sonet24v5`) are worth 0.11 bips combined and
+cost 1.05-1.21 s forked.
+35-row crown census, same frame: the *ungated* fork (n <= 20 000) costs
++0.19..+0.65 s on 33 of 35 rows — +0.65 s on `arki0016` (1.27 -> 1.92) — and is
+therefore unshippable at this cap margin. [.scratch/iter79/ab4core.tsv]
+
+5. THE CANDIDATE
+----------------
+  * retire the iter77 dense-band ladder rung (production `dense_rung_on =
+    false`; the seam stays, default now = production): bat `4d26ed3d` was the
+    promoted tree plus *only* this rung and was killed at the per-matrix cap at
+    86 s, the same mark as every other post-15:52 kill.
+  * add the gated basin fork.
+Exact match of the gated band in the worker frame: 3 permutations change
+(`waterund14`, `gancns`, `chimera_mgw-c8-439-onc8-001`), class wall +1.8 s of
+41.5 s, no nondeterminism over 147x2x2 runs.
+
+Official local sandboxed harness (`bash scripts/local-candidate-build.sh &&
+cargo run --release`), 300 rows:
+  tree before this iteration (dense rung, no fork):  0.790263 / 0.923140
+  dense rung + fork (this device alone):             0.790175 / 0.923114
+  candidate shipped (rung retired + fork):           0.790199 / 0.923124
+  per bucket: lt_1k 0.886979, 1k_10k 0.837342, gt_10k 0.682257
+  0 FAIL, 0 cap kills; `cargo test --release -p ssi-candidate-worker` 126
+  passed / 0 failed.
+[.scratch/iter79/official-fork600.log, official-fork600-norung.log]
+
+Caveat, stated for the record: the dev delta of the shipped candidate against
+the *promoted* tree (which has no rung) is -8.3e-5 dev, i.e. 0.83 bip — the
+promotion bar is 0.84 bip of hidden score, so this bat needs a transfer of
+>= 1.0 to promote. It is submitted because it is the first device this lane has
+measured whose wall lands *outside* every class the hidden cap has killed on
+(sparse, n <= 600, nnz <= 5 000), so its outcome is diagnostic either way: a
+pass measures the hidden transfer of a value-only device, a kill localises the
+cap's row class to the cheap tier.

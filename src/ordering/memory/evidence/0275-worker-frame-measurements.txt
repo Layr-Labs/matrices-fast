@@ -1,0 +1,74 @@
+iter75 — worker-frame (graded) measurements behind `0275-probe-code-frame.txt`
+============================================================================
+All commands were run from the repo root. The harness prints one decimal place less than
+the probe; a single-row corpus prints that row's own ratio as `score`.
+
+A. worker frame vs probe frame on the four diverging rows, shipped tree
+----------------------------------------------------------------------
+    for r in crudeoil_pooling_dt3 gabriel09 popdynm200 gasprod_sarawak81; do
+      grep -E "\"source\": ?\"$r\"" corpus/dev/patterns.jsonl > /tmp/one-$r.jsonl
+      SSI_CORPUS_FILE=/tmp/one-$r.jsonl cargo run --release
+    done
+
+    crudeoil_pooling_dt3  worker_ratio=0.6915   (official table 0.691)   probe 0.7056
+    gabriel09             worker_ratio=0.8968   (official table 0.897)   probe 0.8695
+    popdynm200            worker_ratio=0.9324   (official table 0.932)   probe 0.9364
+    gasprod_sarawak81     worker_ratio=0.9101   (official table 0.910)   probe 0.9118
+
+    The worker column reproduces the official per-row table of `0272-official-run-instruments.log`
+    exactly (`:288-478`), so the divergence is between *frames*, not between runs: the harness
+    itself compares two fresh worker runs per row and passes all 300.
+
+B. the worker frame is invariant to memory limit and to CPU affinity
+--------------------------------------------------------------------
+Contract `.pat` staged from the dev corpus with the loader's own rule (drop `i == j`, sort and
+dedup per column, `Pattern::from_adjacency`); nnz matches the harness census exactly
+(gabriel09 89 702, crudeoil_pooling_dt3 152 210).
+
+    for cfg in plain | ulimit -v 4194304 | taskset -c 0 | taskset -c 0-3 ; do
+      target/release/ssi-candidate-worker <row>.contract.pat /tmp/out.bin ; md5sum /tmp/out.bin
+    done
+
+    gabriel09            plain dccb8b327e923d08 | 4 GiB dccb8b327e923d08 | 1 core dccb8b327e923d08 | 4 cores dccb8b327e923d08
+    crudeoil_pooling_dt3 plain 65479dcc1c4be7e4 | 4 GiB 65479dcc1c4be7e4 | 1 core 65479dcc1c4be7e4 | 4 cores 65479dcc1c4be7e4
+
+    (walls do move — gabriel09 0.76 plain / 1.30 on one core — but the permutation does not.)
+
+C. does the shipped charge shape change the worker's answer? (ctl vs new binary)
+--------------------------------------------------------------------------------
+    md5 of the worker's output permutation, `taskset -c 0-3`, contract `.pat`:
+
+    crudeoil_lee4_06    SAME  c8ec8aa359fd      ndcc12                DIFF  914a45dd7e12 -> 61a58100fc3b
+    crudeoil_lee1_07    SAME  2ff0a2e616d2      chimera_selby-c16-01  DIFF  396febd5f4e3 -> 30222c643c73
+    procurement1large   SAME  567f2d8dbb46      crudeoil_lee4_09      SAME  d4a9b6c49a4c
+    crudeoil_pooling_dt3 SAME 65479dcc1c4b      mpbp_48               SAME  bf48037701e1
+    gabriel09           SAME  dccb8b327e92      popdynm200            SAME  c4976fb64d6f
+    gasprod_sarawak81   SAME  ba7b5aee9e36      arki0013              SAME  61e9069becff
+    nd_netgen-3000-1-1-b-b-ns_7  SAME 83c783122439
+
+    Of the 13 rows the probe moved (`procurement1large -0.0014`, `crudeoil_lee4_09 -0.0006`,
+    `crudeoil_pooling_dt3 -0.0006`, `ndcc12 -0.0006`, `crudeoil_lee4_06 -0.0005`,
+    `mpbp_48 -0.0005`, `crudeoil_lee1_07 +0.0013`) the graded frame changes **two**
+    (`ndcc12`, `chimera_selby-c16-01`); the other eleven are permutation-identical.
+    Official harness: 0.790282 (shipped) -> 0.790277 (this tree) = -5.0e-6 dev.
+
+D. phase attribution of the *small-mid* rows the crown census never contained
+-----------------------------------------------------------------------------
+    env SSI_PROBE_PHASES=1 SSI_MARK_NOSCORE=1 SSI_PROBE_ONLY=... taskset -c 0-3 \
+      cargo test --release -p ssi-candidate-worker -- --ignored --nocapture \
+      --test-threads=1 probe_timing_and_score                       # 26.9 s wall, 7 rows
+
+    row                 total   1.portfolio  4.subtree  9.reduce   rest
+    arki0016            1.5327     0.5613     0.2594     0.2305    1b 0.063, 10 0.013
+    chp_partload        1.4322     0.2794     0.4119     0.1242    3.search 0.088
+    rsyn0840m04m        1.4032     0.2273     0.3434     0.0464    1b 0.027, 13p 0.019
+    transswitch0300p    1.3284     0.1788     0.2567     0.1550    8.cleanup 0.029
+    crudeoil_lee4_09    1.3255     0.4155     0.1955     0.0868    1b 0.144, 12.peo 0.021
+    arki0013            1.2972     0.2489     0.1969     0.0977    1b 0.158
+    chimera_selby-c16-01 1.2409    0.3768     0.0241     0.0684    3.search 0.037
+
+    `4.subtree` — not the exchange — is the dominant block on `chp_partload` (0.41 of 1.43 s),
+    `rsyn0840m04m` (0.34) and `transswitch0300p` (0.26); `arki0016` spends 0.56 in
+    `1.portfolio` and an unusually large 0.23 in the `9.reduce` core ladder (18 % of the row,
+    against 7-10 % on `crudeoil_lee4_09`/`arki0013`). The probe's totals are ~20 % above the
+    worker's (arki0016 1.53 probe vs 1.28 worker), so the *shares* are the durable part.

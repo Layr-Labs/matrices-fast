@@ -1,0 +1,84 @@
+iter70 — SWEEPS 12 AT THE 2 GiB RUNG (shipped), THE COMPONENT-ADMISSION DEVICE (measured),
+          AND THE TWO CAP FRAMES IN WHICH A BAT MUST SURVIVE
+=========================================================================================
+
+0. What was shipped
+-------------------
+Tree: `PRODUCTION_EXCHANGE_LEDGER` 3 GiB -> **2 GiB** (2147483648), class-block
+`exchange_sweeps` 6 -> **12**, plus the inherited bit-exact `Game` bitset pool and the
+min-fill big-band restart clamp. Bat **bbf58495-127f-49c2-aa08-a93feec901f4** (validating,
+10:52 AM). Official local sandboxed harness, `cargo run --release`:
+
+    results.tsv:1789314683   OK   0.790288 / 0.923150   (buckets 0.8873 / 0.8373 / 0.6823)
+    corpus wall 281.0 s (user 451.8 s, sys 16.6 s)   [.scratch/iter70/official-s12-2G.log]
+
+The record's same-frame points at the 45 000 ceiling: 2 GiB 6 sweeps **0.790325**
+(`039c8e2d` tree), 3 GiB 6 sweeps **0.790243**, 4 GiB 6 sweeps **0.790175**; the promoted
+frontier's own dev point is **0.790412**. So twelve sweeps are worth **-3.7e-5 dev** at the
+cap-safe rung, and the bat sits **-1.24e-4 dev** under the frontier.
+
+1. Which rows the device moves (its whole effect, row by row)
+-------------------------------------------------------------
+Diff of the per-matrix tables, `0264-official-run-2G-ceil45k-final.log` (2 GiB + 45 000,
+6 sweeps) against `.scratch/iter70/official-alloc2.log` (2 GiB + 45 000, 12 sweeps, pool,
+alloc 2): **9 of 300 rows differ** at the printed precision —
+
+    edgecross24-115       n= 16747   0.805 -> 0.801   -0.004
+    rsyn0840m04m          n=  8508   0.808 -> 0.804   -0.004
+    crudeoil_lee1_07      n=  3670   0.747 -> 0.744   -0.003   (this one is the alloc device)
+    crudeoil_lee2_06      n=  6418   0.684 -> 0.682   -0.002
+    crudeoil_pooling_ct1  n=  1271   0.750 -> 0.748   -0.002
+    chp_shorttermplan2a   n=  8992   0.701 -> 0.700   -0.001
+    hydroenergy2          n=  2092   0.811 -> 0.810   -0.001
+    rsyn0830m04m          n=  7252   0.809 -> 0.808   -0.001
+    transswitch0300p      n= 11659   0.922 -> 0.926   **+0.004**  (regression)
+
+i.e. the sweep device is a small-win/small-loss exchange on mid-size rows, not a
+free lunch: eight rows improve and one is worse. `transswitch0300p` is the lowest value
+density row of the family, which is why it is the one that moves the wrong way.
+
+2. The component-admission rewrite (the in-flight experiment of iter69/70): MEASURED
+-------------------------------------------------------------------------------------
+`PRODUCTION_XCH_ALLOC` (window_dp.rs) skips the component the ledger cannot fund and, at 2,
+walks the window's live components smallest-first, so a fixed ledger buys the cheap
+components the call actually adopts. Control and device in the official frame, same tree
+(2 GiB, 45 000, 12 sweeps, pool), one run each:
+
+    results.tsv:1789314683   alloc 0   0.790288 / 0.923150   wall 281.0 s
+    results.tsv:1789315062   alloc 2   0.790282 / 0.923147   wall 284.2 s
+
+Exactly **one** dev row moves (crudeoil_lee1_07 0.746 -> 0.744); the crown 4-core census is
+unchanged (`0270-crown-4core-s12.tsv`, max 1.04 s either way). So the ledger's "dead zone"
+— the unfunded-component spend the hypothesis targeted — is worth **6e-6 dev**. It is kept
+in the tree (it is a strict improvement and wall-neutral) but it cannot carry a bat.
+Verdict: the hypothesis is real and priced, and it is too small to matter.
+
+3. The two cap frames, and the line in each
+-------------------------------------------
+(a) 4-core crown census of the shipped tree (`taskset -c 0-3`, `/usr/bin/time -f "%e %P"`):
+
+    chimera_selby-c16-02   1.04     procurement1large  1.01
+    crudeoil_lee4_09       1.00     mpbp_48            0.96
+    chimera_selby-c16-01   0.96     methanol400        0.93
+    crudeoil_pooling_dt3   0.92     nd_netgen          0.76     gams05 0.48
+
+    The 2 GiB trees that completed the hidden corpus read 1.01 s here (039c8e2d, 43c1ca7d);
+    the 3 GiB trees that were cap-killed read 1.09-1.10 s. Our 4-core line is therefore
+    ≈1.05 s, and this tree sits at 1.04 s — inside, but without slack.
+
+(b) 1-core census of the same tree (`taskset -c 0`), the frame iter67 calibrated:
+
+    crudeoil_lee4_09       1.60 (once) / 1.55 (twice, MAX_N reverted)
+    procurement1large      1.51     chimera_selby-c16-02 1.51
+    chimera_selby-c16-01   1.37     mpbp_48 1.34   methanol400 1.23
+    crudeoil_lee4_10       1.19     crudeoil_pooling_dt3 1.15   nd_netgen 1.01   gams05 0.76
+
+    iter67's bracket: the surviving 2 GiB tree read 1.55 s and the killed 3 GiB tree 1.72 s
+    in this frame, so the hidden line is ≈1.64-1.67 s here. This tree is at 1.55-1.60 s:
+    the twelve-sweep device costs ~0.05 s of that margin on `crudeoil_lee4_09` — the row
+    the sweeps improve — and that is half of the slack the surviving rung had.
+
+    Note the frame's meaning: on 1 core, wall ≈ user time, and the census row that sets the
+    hidden reading is the row with the largest *CPU* cost, not the largest 4-core wall.
+    That is why the 4-core census (max 1.04 s, a 2 031-row matrix) and the 1-core census
+    (max 1.60 s, a 15 904-row matrix) disagree about which row is binding.

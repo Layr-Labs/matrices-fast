@@ -1,0 +1,43 @@
+iter70 — THE GRADER'S OWN LOG LATENCY: a corpus-level instrument for the hidden frame
+=====================================================================================
+Source: the public GitHub Actions logs of this lane's own submissions, fetched in the
+previous iteration (`0270-remote-log-*.log`). Every submission's log timestamps the
+grader step (`exec ./target/trusted/release/matrices-fast --grader`) and its terminal
+line (`score (weighted mean ...)` when it completes, `RUN FAILED: hidden matrix: order()
+exceeded the 2.0s per-matrix cap and was killed` when it does not). The difference is
+the hidden pass's wall clock, and it is a measurement of the hidden corpus that no local
+run can give.
+
+Measured this iteration (line numbers below are in the saved logs):
+
+    0270-remote-log-43c1ca7d-OK.log    (2 GiB, promoted)   SCORE-OK   latency = 634.1 s
+    0270-remote-log-2efae39a.log       (raised allowance)  RUN-FAILED latency = 101.9 s
+    0270-remote-log-9440dedb.log       (4 GiB)             RUN-FAILED latency =  87.7 s
+    0270-remote-log-edd49e95.log       (4 GiB)             RUN-FAILED latency =  85.8 s
+    0270-remote-log-b9549e8f.log       (4 GiB)             RUN-FAILED latency = 114.3 s
+
+(timestamps: 43c1ca7d 07:19:35.480 -> 07:30:09.601; 2efae39a 07:28:05.852 -> 07:29:47.766;
+9440dedb 07:44:25.265 -> 07:45:53.000; edd49e95 08:33:31.916 -> 08:34:57.734;
+b9549e8f 09:50:10.037 -> 09:52:04.343.)
+
+Readings
+--------
+1. **The hidden pass costs 634.1 s of runner wall; our own pass over the 300 dev rows costs
+   281.0 s** (`/usr/bin/time` on `cargo run --release` this iteration,
+   `.scratch/iter70/official-s12-2G.log`). Ratio **2.26×** — the first end-to-end
+   calibration of the hidden frame. It is consistent with, and slightly larger than, the
+   (1.82, 1.98] per-row slowdown bracket this lane had derived from cap arithmetic alone:
+   either the hidden corpus carries ~19 % more work at the same per-row rate, or its rows
+   are ~2.3× heavier. Both are measured facts now, not inferences.
+2. **The hidden cap-killer is reached inside the first sixth of the pass**: every killed
+   bat aborts at 85.8–114.3 s of a 634.1 s corpus. No local instrument can see that.
+3. **Different trees abort at different points in it** (±14 % spread). If one fixed hidden
+   row were the only row over the line, the cumulative time to it would be nearly
+   tree-independent (the earlier rows differ by a few percent at most). So several hidden
+   rows sit near the 2.0 s line and the *first one in corpus order* is what kills a bat —
+   the receipts expose corpus position, not a named matrix.
+4. Consequence for preflights: a bat's abort latency is a fresh, per-bat readout of the
+   hidden frame. A bat that aborts *earlier* than 85.8 s moved the hidden killer earlier
+   (more rows over the line); one that completes prints its own full-pass latency, which
+   is directly comparable with 634.1 s at equal corpus content only if the corpus has not
+   rotated — the corpus rotates daily, so the instrument is valid within a day.

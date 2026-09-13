@@ -708,3 +708,64 @@ round, so note the round if you know it.
   the two pre-class exchange sites (4904/4921) that the same ceiling re-enables; the dead band rows
   (`emfl100_5_5` +0.645 s, `supplychainr1_053050` +0.442 s, ratio stays 1.0000) are pure waste that a
   cheaper call shape could remove.
+
+## iter55 (2026-09-13) — the ceiling extension promoted; the remote FAIL is a lottery, not a device; the ledger is a *second-order* device and 1G→2G is the largest dev device left
+
+- **Promoted: `52c744da` at hidden 0.841011 (−3.55e-4)** — `rgreedy::MAX_N` 12 000 → 25 000, the
+  band extension of the class-block exchange. The frontier is this lane's again. Its dev probe arm was
+  −9.4e-4 (0.791616 → 0.790679), i.e. the band device transferred at **0.38**, the weakest transfer of
+  the recent promotions (1.16-1.55 for the shape/exchange devices). [0235-armMAXN25k-4cpu.log,
+  `yukon submissions` receipt]
+- **The "1G ledger is the killer" reading is REFUTED.** Fetched every recent submission tree
+  (`origin/submissions/*`: `git show <ref>:src/ordering/{mod,rgreedy}.rs`) and joined it to the board
+  status: `6279dc68` (spans 13 + 1G) FAILED, `e012d8cb` (spans 26/18/4/32 + 1G + min-fill cut)
+  FAILED, `74f19b95` (1G + 5 sweeps, neither other suspect) FAILED; `83a8f4fc`, `e07fe7ae`, `a34c109a`
+  (512M) promoted — a clean-looking 3-for-3 kill. But `52c744da` = the *same* 1G + 5 sweeps **plus**
+  MAX_N 12 000 → 25 000 (strictly more work at that site) **PROMOTED**. MAX_N can only change rows with
+  n > 12 000, so any hidden row with n ≤ 12 000 runs bit-identically in `74f19b95` and `52c744da` and
+  the verdicts still differ ⇒ the verdict is a per-row **cap lottery** on near-cap hidden rows
+  (probability rising with added work), not a device label. Consequence for policy: a single FAILED
+  receipt is not evidence a device is cap-unsafe; the iters 51-54 per-device blacklisting over-read two
+  receipts. [origin/submissions/* + `yukon submissions`, this iteration]
+- **The ledger is a *second-order* device: its marginal value is a function of the ceiling.** One
+  binary/one session/300 dev rows/`taskset -c 0-3`, on the shipped 25k tree
+  (`0237-led-{1073741824,2147483648,4294967296}-4cpu.log`): 1G **0.790679** / gt_10k 0.6833 →
+  **2G 0.790425 (−2.54e-4)** / 0.6826 → 4G 0.790322 (−3.57e-4) / 0.6824. The *same* 512M→1G step was
+  worth −4.7e-5 on the 12k tree (`0235-armL1G-4cpu.log`) ⇒ raising the ceiling multiplied the ledger's
+  marginal value by ~5× (a work allowance only binds on rows the ceiling admits). The 1G→2G step moves
+  **12/300 rows, all with 10 429 ≤ n ≤ 23 999** (`methanol400` −1.55 %, `crudeoil_lee4_10` −0.79 %,
+  `crudeoil_lee4_09` −0.64 %, `gabriel09` −0.50 %, …), costs 0.05-0.15 s on those movers (0.6-0.8 s
+  under the cap) and leaves the corpus-wide worst `order()` **unchanged** (1.396 → 1.397 s). 4G is not
+  free: 2 movers, +0.16 s, `crudeoil_lee4_10` → 1.506 s ⇒ NOT shipped.
+- **Shipped & submitted: 2G.** Official local harness **300/300 OK, 0.790412 / 0.923338**
+  (`results.tsv:1789283745`), buckets 0.8873/0.8373/**0.6826** vs the promoted tree's own official
+  0.790636 ⇒ **−2.24e-4 in the graded frame**. Submitted **`43c1ca7d-d57f-41fe-8b65-472b18dc53bb`**
+  (`validating`). [0237-official-run-led2G.log, 0237-submission-note.md]
+- **New instrument: a ceiling curve in one binary.** `rgreedy::max_n_limit()` (test-only `SSI_MAX_N`
+  seam; `#[cfg(not(test))]` returns the constant) is read by every `n`-gate in `rgreedy` and by
+  `WindowDp`'s dimension check, so a ceiling curve costs one build instead of one per point. The
+  control arm reproduces the shipped number exactly (0.790679), which is the seam's own verification.
+- **Killed, with numbers (do not re-open):**
+  - *The ceiling above 25 000 is spent.* `SSI_MAX_N` 25 000/30 000/45 000 → 0.790679 / 0.790657 /
+    0.790610; the 25k→45k step buys −6.9e-5 for **4 movers** and its cost is the DP's O(n²/64)
+    per-call setup: `nd_netgen-3000-1-1-b-b-ns_7` (n = 33 155) 0.51 → **1.34 s** (+0.83 s) for
+    −0.16 %. [0237-ceilcur-{25000,30000,45000}-4cpu.log]
+  - *The ladder draw above its gate buys nothing.* `SSI_TERM_FULL_N` 25 000 / 45 000 on the 45k tree:
+    0.790611 / 0.790611 — **zero** value while the worst row climbs 1.465 → 1.519 → 1.628 s. The band's
+    responsiveness is specific to the *exact window* exchange, not to added search in general.
+    [0237-ladd-{25000,45000}-ceil45k-4cpu.log]
+  - *The gated-out big-row families are worse, not better.* `probe_large` on the five largest rows:
+    AMF-5 / AMF-ND / METIS all land above the shipped ratio (`gabriel10` 0.9285 vs 1.0275/1.0275/4.4925;
+    `cont6-qq` 0.6962 vs 0.9145). The remaining large-row `n` caps are not value levers.
+    [0237-probe-large-ceilcur.log]
+  - *The class gate's `nnz <= 200_000` gap is empty.* Against the dense/hub rule (`nnz > 16n ||
+    max_deg > n/2`) it contains exactly two dev rows (`gams05`, `nuclear104`).
+- **The joint arms (measured, not shipped — the next bat's menu):** 2G + 6 sweeps **0.790368**
+  (−5.7e-5: the sweeps axis *re-opens* at 2G, it was dead at 1G), 2G + 45k ceiling **0.790295**
+  (−1.30e-4: the ceiling's value *doubles* at 2G — the interaction is mutual), triple
+  (45k + 2G + 6 sweeps) **0.790238 = −4.41e-4 vs shipped**, worst row 1.533 s.
+  [0237-{joint-ceil45k-led2G,led2G-sweeps6,triple-45k-2G-s6}-4cpu.log]
+- **Deep experiment:** `1789281592961-145005` ended in `setup_error` before any rollout
+  (`snapshot requires a regular file <= 16777216 bytes: corpus/dev/patterns.jsonl`) — no patch, no
+  candidate, the dead-band-row hypothesis remains untested. Harness-side limit, not a candidate
+  finding.

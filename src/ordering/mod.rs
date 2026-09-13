@@ -676,7 +676,19 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 /// on near-cap rows (probability rising with added work), not a device label.
 /// A single FAILED receipt is therefore not evidence that a device is
 /// cap-unsafe. [origin/submissions/* constants + `yukon submissions`, iter55]
-const PRODUCTION_EXCHANGE_LEDGER: i64 = 2_147_483_648;
+/// iter55b: **4G, stacked with the 6th sweep.** The 2G step was receipted on the
+/// hidden frame (`43c1ca7d` -> **0.840782, −2.29e-4** for a dev −2.24e-4 official:
+/// the transfer of a *whole-class* device is ~**1.0**, unlike the band extension's
+/// 0.38). The next ledger step was priced in one binary/one session on the 25k
+/// tree (`0237-led4G-sweeps6-4cpu.log`): 4G + 6 sweeps **0.790252** vs 2G + 6
+/// sweeps 0.790368 = −1.16e-4, gt_10k 0.6825 -> 0.6822, worst `order()` 1.431 ->
+/// 1.550 s (`crudeoil_lee4_10`, the row the ledger device itself loads). The
+/// ceiling+ledger+6-sweep triple measured 0.790238 — *the same value* — but its
+/// marginal value sits in the 45k ceiling, the band device that transfers at 0.38
+/// and that loads `nd_netgen-3000` from 0.51 s to 1.34 s, so the triple is the
+/// worse trade at equal score. All of this step's value is in the higher-transfer
+/// (whole-class) device. [0237-triple-45k-2G-s6-4cpu.log, 0237-led4G-sweeps6-4cpu.log]
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 4_294_967_296;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
@@ -5305,13 +5317,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             .unwrap_or(12);
         #[cfg(not(test))]
         let exchange_width: usize = 12;
+        // iter55: the sweeps axis was **dead at a 1G allowance** (0234 family curve:
+        // 6 and 8 sweeps measured identical to 5) and is **live at 2G**: 2G + 6 sweeps
+        // priced 0.790425 -> **0.790368** (−5.7e-5) in one binary/one session on the
+        // shipped 25k tree, worst `order()` 1.397 -> 1.431 s. The allowance, not the
+        // sweep count, was the binding axis; the two are ordered, so re-price the
+        // sweep count whenever the ledger moves. [0237-led2G-sweeps6-4cpu.log]
         #[cfg(test)]
         let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
             .ok()
             .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(5);
+            .unwrap_or(6);
         #[cfg(not(test))]
-        let exchange_sweeps: usize = 5;
+        let exchange_sweeps: usize = 6;
         #[cfg(test)]
         let exchange_step: usize = std::env::var("SSI_EXCHANGE_STEP")
             .ok()

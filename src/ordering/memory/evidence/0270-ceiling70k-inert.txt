@@ -1,0 +1,40 @@
+iter70 KILL — the descent ceiling above 45 000 is inert, by gate and by measurement
+==================================================================================
+Claim under test (this lane's own "next action" from iter69): buy value back at the 2 GiB
+allowance by raising the descent ceiling `rgreedy::MAX_N` 45 000 -> 70 000, because "the
+cost lands on the n > 45 000 rows, which the census shows are cheap (0.15-0.5 s) and
+outside the cap's binding band".
+
+1. Which rows can even change
+-----------------------------
+`rgreedy::MAX_N` is a ceiling: raising it can only add work for rows above the old value.
+From the corpus census (`.scratch/widthcensus/rows.tsv`, all 300 dev rows), the rows with
+n in (45 000, 70 000] are exactly two:
+
+    transswitch2383wpr   n= 59 853   nnz= 337 415   ratio 0.979
+    transswitch2736spr   n= 69 651   nnz= 400 661   ratio 0.918
+
+Every `MAX_N`-gated caller in `mod.rs` additionally requires `nnz <= 200_000` (the two
+pre-class exchange sites at `mod.rs:5061`/`:5078`, and the class block's `class_nnz` gate
+at `:5469`), so both rows are excluded from those devices by nnz; only the window DP's own
+ceiling (`window_dp.rs:113-119`, `max_n_limit()`) is a pure `MAX_N` gate.
+
+2. Measurement (graded frame, `taskset -c 0-3`, `/usr/bin/time -f "%e %P"`)
+---------------------------------------------------------------------------
+Same tree (2 GiB, 12 sweeps, alloc 2, pool), built twice, once at `MAX_N = 45_000` and
+once at `MAX_N = 70_000`:
+
+    transswitch2383wpr   before 0.29/0.27/0.29 s      after 0.28/0.27/0.27 s
+    transswitch2736spr   before 0.24/0.23/0.24 s      after 0.23/0.23/0.23 s
+    output permutation md5, both rows: 59a9fffdf8109c624a4e3cc915d8eece / 43d18ad0b164d4f9c443d5479a34b907
+                          — IDENTICAL before and after, on both rows.
+
+Bit-identical outputs and identical walls on the only two rows the constant can reach, so
+the 45 000 -> 70 000 step is value-free and wall-free on the whole dev corpus. The reason
+is structural, not empirical: the ceiling's callers are all `nnz`-gated at 200 000 and both
+candidate rows carry 277 k-400 k nonzeros.
+
+Verdict: **KILL**. The next ceiling step cannot buy the 3 GiB rung's value back at 2 GiB;
+the row band above 45 000 is admitted by no device that a higher ceiling would unlock.
+(The constant was reverted to 45 000: a higher ceiling could still add work on hidden rows
+with n in (45 k, 70 k] and nnz <= 200 000, which is unpriced.)

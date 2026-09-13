@@ -1,0 +1,125 @@
+iter77 — THE AT-FLOOR CLASS IS CLOSED, AND THE LADDER'S BUDGET CURVE IS THE VALUE
+=================================================================================
+
+Frame note: every per-row ratio below is the *worker* frame (`cargo run --release`,
+contract patterns) or the probe frame with `SSI_MARK_NOSCORE=1`; the two agree to
+4 dp on every row named here, and the device's value transferred between them
+(probe -2.85e-5 -> official -2.4e-5), unlike the iter75 charge shape (-5.1e-5
+probe -> -5.0e-6 official).
+
+--------------------------------------------------------------------------
+1. THE AT-FLOOR CLASS, MEASURED FOR THE FIRST TIME AS A CLASS
+--------------------------------------------------------------------------
+From this tree's own official per-row table (300 rows, `.scratch/iter75/
+official-run-bigk75.log`, whose bucket geomeans 0.88727/0.83731/0.682257 are the
+worker frame's):
+
+    75 of 300 rows end at ratio EXACTLY 1.0000 (flops(yours) == flops(base)):
+      54 / 147 lt_1k      16 / 108 1k_10k      5 / 45 gt_10k
+    [0277-floor-certificate.log]
+
+`probe_floor_certificate` (new this iteration) counts the subclass the pipeline
+itself *proves*: `order()` returns the AMD permutation immediately when AMD's
+elimination adds no fill at all (`nnz_l == n + edges`, mod.rs:1765), because a
+fill-free ordering attains the graph's flop lower bound `n + 3e + 2t` — that
+row's ratio is the GLOBAL optimum over all orderings:
+
+    16 of the 75 at-floor rows are certified zero-fill  => provably irreducible
+       (st_e41, st_miqp2, st_iqpbk1, cvxnonsep_{psig20,psig20r,psig30,psig30r,
+        normcon20r,normcon40r}, autocorr_bern{20-15,25-19,30-23,35-35fix,40-30},
+        camshape400, polygon75)
+    the other 59 are merely *unbeaten* by everything the tree owns.
+
+Two independent probes then closed those 59:
+  * `probe_floor_battery` (iter34, 8 of the 12 rows at floor): no library engine
+    (amf5, amf_nd, metis, metis_dq, kahip, scotch) beats AMD on any of them —
+    several return *exactly* 1.0000 (fill-free orderings all attain the bound).
+  * `probe_lns_beyond_gate` (run this iteration, [0277-lns-beyond-gate.log]):
+    the exact-objective engine `rgreedy::search` seeded from the shipped
+    incumbent returns **no candidate at all** on all 13 hand-picked at-floor
+    rows, at 4e9 and 2e10 word-ops and at 1e11 where the row cap allowed it —
+    `won=false` on every row, e.g. squfl015-080persp 2e10/3.79 s, kissing2
+    2e10/4.20 s, emfl050_5_5 2e10 (skipped by the cap after 3.28 s).
+  * the extra-partitioner family is structurally OFF on the 13 at-floor rows
+    with n >= 1000 && nnz > 8000 (`part_extra`/`part_extra2`, mod.rs:2237/2314),
+    so iter77 added a test-only seam (`SSI_PART_FLOOR=1`) that widens the gate to
+    `best_flops == amd_flops` — measured on the three largest members
+    (supplychainr1_053050, knp5-44, squfl030-150): **no ratio moves**.
+
+Reading: a quarter of the dev corpus is a dead end for every device this tree
+has built, and 16 of those rows cannot be moved by any submission at all.
+
+--------------------------------------------------------------------------
+2. KNOCK-ON: THE PIPELINE'S OWN BOOKKEEPING IS STILL CLEAN
+--------------------------------------------------------------------------
+`probe_eval_audit` re-run on the current tree (the first re-run since the
+instrument was introduced, ~60 iterations ago):
+
+    rows=300  leak_rows=0  scored_candidates=3122
+    SCORE_SHIPPED = SCORE_MIN_EVALUATED = 0.790203  (recoverable_bips = 0.00)
+
+so no permutation the pipeline *scored* was left unshipped. [0277-eval-audit.log]
+
+--------------------------------------------------------------------------
+3. THE LADDER'S BUDGET CURVE (the new frame)
+--------------------------------------------------------------------------
+`probe_engine_census` over the class the ladder already searches (every dev row
+with n <= 10 000), re-seeding `rgreedy::search` from the shipped incumbent at a
+ladder of budgets [0277-engine-census-10k.log]:
+
+    level 0 = 2e8 (== the shipped rung)  : 0 wins on all 29 class rows
+    level 1 = 5e8                        : 4 wins   (mpbp_15, mpbp_07,
+                                           pooling_sppa9tp, qspp_0_14/13)
+    level 2 = 1e9                        : 2 more   (crudeoil_lee2_06, mpbp_15)
+    level 3 = 2e9                        : 0 more, +2.3 s
+
+and the seam A/B on the same rows ([0277-ab-ladder-*.tsv]) reproduces it:
+control 15.78 s -> +500M 18.18 s (-2.4e-5 dev) -> +1e9 23.29 s, whose two
+*regressions* (rsyn0840m04m 0.8040 -> 0.8056, meanvar-orl400_05_e_7
+0.9998 -> 0.9999) are the shared charge ledger being spent on draws instead of
+the exchange.
+
+Every non-dense winner pays +0.06..+0.10 s on rows already running 1.06-1.18 s
+(mpbp_15 +0.104 s on 1.137 s, mpbp_07 +0.098 s on 1.062 s, arki0016 +0.082 s on
+1.239 s) — i.e. exactly the profile that has killed nine builds today. The
+dense winners pay on rows with >= 0.55 s of slack.
+
+--------------------------------------------------------------------------
+4. SHIPPED DEVICE: THE DENSE-BAND SECOND RUNG
+--------------------------------------------------------------------------
+`SHIPPED_DENSE_LADDER = [(200e6, seed0), (500e6, seed1)]`, selected when
+`nnz >= 10n` (the same structural dense band the crown already uses) inside the
+existing `nnz < 3n` sparse/else fork (mod.rs, shipped_ladder). Structural gate,
+never matrix identity.
+
+Value, worker frame, official sandboxed harness
+(`bash scripts/local-candidate-build.sh && cargo run --release`):
+
+    0.790277 / 0.923142   ->   0.790253 / 0.923133     (-2.4e-5 dev)
+    300/300 rows, no FAIL; `cargo test --release -p ssi-candidate-worker`
+    126 passed / 0 failed
+    movers (probe and worker agree): pooling_digabel19 0.8433 -> 0.8405,
+    pooling_sppa9tp 0.16134 -> 0.16021, qspp_0_14 0.99498 -> 0.99367,
+    qspp_0_13 0.99480 -> 0.99460
+    [0277-official-run-dense-rung.log, results.tsv:1789326467]
+
+Wall, min of 2 reps per arm on all 33 dense-band rows
+([0277-wall-dense-*.tsv]): +1.92 s corpus-wide, worst rows torsion50
+0.582 -> 0.796, graphpart_clique-20 0.349 -> 0.533, st_m1 0.247 -> 0.425;
+the slowest dense-band row is pooling_sppa0pq at 0.733 s, i.e. ~0.55 s below
+this frame's worst row, and no census/crown row (arki0016, chp_partload,
+rsyn0840m04m, transswitch0300p, lee4_09/10, mpbp_48, procurement1large,
+chimera-01/02) is in the dense band at all.
+
+--------------------------------------------------------------------------
+5. TWO SIDE MEASUREMENTS
+--------------------------------------------------------------------------
+* The cap-critical rows are SERIAL: `RAYON_NUM_THREADS=1` vs `=4` with
+  `SSI_MARK_NOSCORE=1` gives chp_partload 1.2465/1.2690 s, arki0016
+  1.2310/1.2657, lee4_09 1.1392/1.1454, procurement1large 1.1279/1.1628,
+  chimera-01 1.0776/1.0913, mpbp_48 1.0470/1.0504 — within 2 %, i.e. never
+  worse than noise. So (a) thread parallelism buys nothing on the rows that
+  bind the cap today, and (b) our own corpus cannot decide whether the hidden
+  frame charges wall or CPU: the rows are serial either way.
+* The at-floor rows are not free: in the probe frame they cost 0.13-0.44 s each
+  (kissing2 0.41, qapw 0.41, supplychainr1_053050 0.36, emfl100_5_5 0.36).

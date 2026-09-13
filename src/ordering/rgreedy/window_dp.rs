@@ -93,7 +93,92 @@ fn xch_plateau_min_n() -> usize {
 /// which components are offered to it changes. Determinism is preserved: the
 /// walk is a stable sort of a deterministic enumeration (ties broken by the
 /// component's bit mask).
-const PRODUCTION_XCH_ALLOC: usize = 0;
+const PRODUCTION_XCH_ALLOC: usize = 2;
+
+/// Component-width ceiling of the exact window DP — the dial nobody has priced.
+///
+/// `refine_window` admits a live component only when `2 <= |C| <= MAX_WIDTH`
+/// and `solve_component` then enumerates all `2^|C|` subsets of it. The *cost*
+/// of a call therefore scales with `2^k` summed over its admitted components,
+/// and the width histogram (`xch_split`) shows that on the cap-critical rows
+/// the `k >= 9` bucket is ~8-12 % of the component *calls* and ~88 % of the
+/// `2^k·k` DP steps. This seam lets one binary price a ceiling: it is a pure
+/// admission filter whose only effect is which components are attempted.
+/// Production keeps `MAX_WIDTH`.
+
+/// Charge shape the exchange's ledger quotes (the `#[cfg(not(test))]` arm of
+/// [`xch_charge_scale`]): 75 % of the modelled price for every component of
+/// width `k >= 11`, 100 % below that.
+///
+/// iter75: **this is the shipped value.** The seam was last priced in iter72 on
+/// a probe whose env-unset defaults were *not* the production program (6 sweeps
+/// and the pre-class pair live, see `memory/evidence/0275-probe-code-frame.txt`),
+/// which quoted only −17.5 u-dev for this device. Re-measured in the
+/// production-identical probe frame (`SSI_EXCHANGE_SWEEPS=12`,
+/// `SSI_PRECLASS_WIN=0`, `SSI_PRECLASS_STEP=0`, `SSI_MARK_NOSCORE=1`, 300/300
+/// dev rows, one binary) the same charge shape is worth **−5.1e-5 dev**
+/// (0.790254 → 0.790203): the discount is what the 12-sweep walk converts into
+/// adopted wide components, so its value scales with the schedule depth the old
+/// measurement never had. The production arm *is* the measured point.
+const PRODUCTION_XCH_BIGK_MIN: usize = 11;
+const PRODUCTION_XCH_BIGK_PCT: usize = 75;
+
+/// Test-only seam: scale the *charged* price of a width-`k` component.
+///
+/// The ledger is a fixed precharge budget, so the price it quotes decides which
+/// components a call can attempt. `SSI_XCH_BIGK_MIN` / `SSI_XCH_BIGK_PCT` quote
+/// `PCT` % of the modelled price for every component of width `>= MIN`; unset
+/// falls back to the production point above.
+#[inline]
+pub(super) fn xch_charge_scale(k: usize) -> usize {
+    #[cfg(test)]
+    {
+        use std::sync::OnceLock;
+        static CFG: OnceLock<(usize, usize)> = OnceLock::new();
+        let &(min_k, pct) = CFG.get_or_init(|| {
+            (
+                std::env::var("SSI_XCH_BIGK_MIN")
+                    .ok()
+                    .and_then(|v| v.trim().parse::<usize>().ok())
+                    .unwrap_or(PRODUCTION_XCH_BIGK_MIN),
+                std::env::var("SSI_XCH_BIGK_PCT")
+                    .ok()
+                    .and_then(|v| v.trim().parse::<usize>().ok())
+                    .unwrap_or(PRODUCTION_XCH_BIGK_PCT)
+                    .clamp(1, 100),
+            )
+        });
+        if k >= min_k {
+            pct
+        } else {
+            100
+        }
+    }
+    #[cfg(not(test))]
+    {
+        if k >= PRODUCTION_XCH_BIGK_MIN {
+            PRODUCTION_XCH_BIGK_PCT
+        } else {
+            100
+        }
+    }
+}
+
+#[inline]
+fn xch_component_ceiling() -> usize {
+    #[cfg(test)]
+    {
+        std::env::var("SSI_XCH_MAX_K")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(MAX_WIDTH)
+            .clamp(2, MAX_WIDTH)
+    }
+    #[cfg(not(test))]
+    {
+        MAX_WIDTH
+    }
+}
 
 #[inline]
 fn xch_alloc() -> usize {
@@ -278,6 +363,13 @@ fn solve_component(
             .saturating_add(6usize.saturating_mul(game.w))
             .saturating_add(24),
     );
+    // iter75: the charge shape is SHIPPED, so the multiplier is live in the
+    // graded build too (it used to be `#[cfg(test)]`-only, which made every
+    // production charge exactly 100 % — the device was probe-only by
+    // construction). `xch_charge_scale` returns 100 for `k < 11`, so the
+    // narrow components keep the modelled price and only the wide ones are
+    // discounted.
+    let cost = cost.saturating_mul(xch_charge_scale(k)) / 100;
     if !work.charge(cost) {
         #[cfg(test)]
         WORK_STATS.with(|cell| cell.borrow_mut().refused_components += 1);
@@ -408,7 +500,7 @@ fn refine_window(
         // small components. Leave oversized components in their original
         // positions; their elimination cannot affect another component here.
         let size = component.count_ones();
-        if size < 2 || size as usize > MAX_WIDTH {
+        if size < 2 || size as usize > xch_component_ceiling() {
             continue;
         }
         comps.push((size, component));

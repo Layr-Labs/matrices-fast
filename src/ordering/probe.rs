@@ -148,6 +148,13 @@ fn probe_timing_and_score() {
             println!("LIFT\t{name}\t{ln}\t{core_n}\t{core_nnz}\t{x}");
         }
         println!("COUNTS\t{name}\t{n}\t{}\t{base}\t{mine}", pat.nnz());
+        if std::env::var_os("SSI_XCH_TIME").is_some() {
+            let ((win, dp, elim), c, hist) = rgreedy::xch_split::take();
+            println!(
+                "XCHSPLIT\t{name}\t{secs:.3}\twindows={}\tcomps={}\trefused={}\trefused_big={}\tengine={}\tbrute={}\twin={win:.3}\tdp={dp:.3}\telim={elim:.3}\thist={hist:?}",
+                c[0], c[1], c[2], c[3], c[4], c[5]
+            );
+        }
         let ratio = mine as f64 / base as f64;
 
         let b = bucket(n);

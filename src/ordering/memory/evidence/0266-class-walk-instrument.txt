@@ -1,0 +1,110 @@
+iter66 — THE CLASS-BLOCK WALK INSTRUMENT, AND THREE DEVICES PRICED IN THE GRADED FRAME
+=====================================================================================
+Frame of every number below: the *production* worker, `taskset -c 0-3`, one run per
+row (ABBA pairing, 4 runs/row/arm), plus one official local sandboxed harness run
+(300/300, a/b determinism gate). Probe-frame numbers are labelled as such.
+
+Why this instrument exists
+--------------------------
+The lane's "waster" model was: some rows spend the ledger and accept only *internal*
+window improvements that never reach the score (`0260-reserve-diff.txt`). Every stop
+device built on that model (reserve, staged spend, plateau, idle sweeps) assumed the
+signal "this spend did not pay" is observable inside the call — and none of them cut
+the wall on the rows that carry the cap.
+
+This instrument measures the thing directly, in the call, for free: `TripleWork::eliminate`
+already calls `Game::eliminate` (which returns the exact `c` whose square is that pivot's
+flop contribution) and a sweep *replays the whole ordering* it is scoring, so accumulating
+`c*c` over the sweep's own eliminations yields the true Σc² of the permutation after that
+sweep. The trailing window (never eliminated by the loop) is closed with uncharged
+`game.eliminate` calls; `(charged_eliminations - mark) + tail == n` guarantees the measure
+is complete before it is read. One `game.reset()` + a full seed replay gives the seed's own
+Σc² — the quantity the caller's strict adoption test compares against.
+Instrument (temporary, reverted before shipping): the tree at the moment of measurement is
+`.scratch/iter66/instrument-tree.patch`; the trace is `XCHSEED` (per call) / `XCHTRUE`
+(per sweep: n, seed, got, f, idle).
+
+FINDING 1 — the trajectory improves every sweep on every cap-critical row.
+   row (n)                       seed          f/seed after sweep 1,2,3,...      sweeps run
+   methanol400 (23999)           2076723       0.9494  0.9286                     2  (call ends)
+   crudeoil_pooling_dt3 (30660)  36080023      0.9987  0.9975                     2  (call ends)
+   nd_netgen-3000-1-1-b-b (33155) 886391       0.9965  0.9963  0.9963             3  (call ends)
+   crudeoil_lee4_09 (15904)      134030106     0.9959  0.9916  0.9879  0.9842      4  (call ends)
+   crudeoil_lee4_10 (17809)      188951530     0.9946  0.9902  0.9868             3  (call ends)
+   procurement1large (14416)     8757624       0.9965 ... 0.9902 (6 sweeps) then 8513178 -> 8513153
+   chimera_selby-c16-01 (2031)   2443323       0.9957 ... 0.9847 (6 sweeps), then f == seed
+   mpbp_48 (28368)               16144599      0.9984 ... 0.9937 (6 sweeps)
+Consequence: no stop keyed on "the sweeps stopped paying" can ever fire on these rows —
+the trajectory is monotone-improving right up to the charge abort. The cap-critical rows
+are not rows where the exchange gains nothing; they are rows where the *first funded*
+sweep already delivers everything the score keeps seeing.
+
+FINDING 2 — the call is ended by the charge model, not by the sweep count.
+`refine_window -> None` (probe refused) / `solve_component -> None` return
+`changed.then_some(current)` immediately, so the schedule stops at the first window or
+component the ledger cannot fund: 2 sweeps on methanol400/pooling_dt3, 3 on nd_netgen and
+crudeoil_lee4_10, 4 on crudeoil_lee4_09, 6 on procurement1large/chimera/mpbp_48 — under the
+shipped 3 GiB ledger. The ledger is therefore a *per-call wall budget*, spent on the
+low-index windows first.
+
+FINDING 3 — the ledger's dead zone is now exact, in the graded frame.
+methanol400: family off 0.56 s -> 2 GiB 0.91 -> 3 GiB 1.08 -> 4 GiB 1.25 s
+(`censusled0/L2G/L3G/L4G.tsv`), while the official per-row ratio is 0.721 -> **0.693 at all
+three rungs** (`0265-official-run-ledger0.log`, `0264-official-run-2G-ceil45k-final.log`,
+`0264-official-3G-45k.log`, `0264-official-4G-45k.log`). The row's whole class-block gain
+arrives in the first funded sweep; 0.34 s of extra graded wall above 2 GiB buys nothing on
+it. Same shape on `crudeoil_pooling_dt3` (0.99 -> 1.01 -> 1.25 s for an unchanged ratio).
+
+THREE DEVICES PRICED (all ABBA-paired, same session, production worker)
+-----------------------------------------------------------------------
+a) STAGED SPEND (probe-at-25%-then-grant-the-rest iff the caller adopts): **REJECTED**.
+   `0266-pair-staged-crown.txt` — mpbp_48 +0.145, chimera c16-01 +0.190, c16-02 +0.200,
+   nd_netgen +0.060, crudeoil_lee4_09 +0.010, methanol400 +0.015; only procurement1large
+   -0.070. Cause: on rows where the ledger does not bind within sweep 1, stage 1 runs a
+   whole sweep anyway, is adopted (its first sweep pays, FINDING 1), and stage 2 then spends
+   the schedule *again* on top.
+b) TRUE-Σc² TRAJECTORY STOP (abandon the schedule when a sweep fails to beat the best
+   Σc² seen): inert by FINDING 1. `0266-pair-trueidle-crown.txt` — methanol400 -0.010,
+   chimera -0.015/-0.060, crudeoil_lee4_09 -0.065, crudeoil_lee4_10 -0.060, mpbp_48 +0.025,
+   pooling_dt3 0.000. No cap margin to buy here.
+c) REGION-WALK ROTATION (start sweep k's window walk at band k, `sweep*n/sweeps`, large
+   budgets only): returns wall but **costs score — REJECTED**. Crown wall:
+   `0266-pair-rotation-crown.txt` (mpbp_48 -0.190, procurement1large -0.105,
+   crudeoil_lee4_09 -0.100, c16-02 -0.070, c16-01 -0.040, crudeoil_lee4_10 -0.030,
+   methanol400 -0.010 = -0.58 s over the ten) but the official harness reads
+   **0.7907 / 0.9233** (0.8873 / 0.8378 / 0.6828) against the shipped tree's own
+   **0.790243 / 0.923082** (0.8873 / 0.8375 / 0.6820): **+4.6e-4 dev**, i.e. the region the
+   shipped schedule already walks (low-index windows) is where the score comes from.
+   [`0266-official-run-rot.log`]
+
+THE SCHEDULE PRICE, FOR REFERENCE (production frame, same pairing)
+------------------------------------------------------------------
+`exchange_sweeps` 6 -> 1 returns -0.295 methanol400, -0.245 procurement1large, -0.240
+crudeoil_lee4_09, -0.200 crudeoil_lee4_10, -0.190 pooling_dt3, -0.190 mpbp_48, -0.170
+chimera c16-02, -0.105 nd_netgen, -0.045 c16-01, -0.010 gams05 (sum ≈ -1.49 s over ten rows)
+— but the sweep count is the lane's oldest measured *value* axis, so this is a ceiling on
+what any schedule-side device can return, not a shippable arm. [0266-pair-sweeps1-crown.txt]
+
+CAUTION recorded for whoever re-runs the instrument
+---------------------------------------------------
+The seed replay must be preceded by `game.reset()`: `pristine.game()` hands out a game whose
+bucket links are only valid from a reset state, and a raw replay panics in `Game::blink`
+(`bhead[-1]`, rgreedy.rs:497). With the reset the measure is exact and deterministic.
+
+THE CAP BRACKET, RE-DERIVED FROM THE BOARD (same session as the runs above)
+---------------------------------------------------------------------------
+`yukon submissions` tail, read this iteration:
+  43c1ca7d  promoted  0.840782  (2 GiB + MAX_N 25 000)          -> completed the hidden corpus
+  039c8e2d  rejected  0.840725  -0.000057 (-0.01%)              -> completed, sub-1-bip
+  65cb40ec  failed    n/a       (this lane's 3 GiB + anchor gate) -> died on the hidden cap
+The two 2 GiB trees finished the hidden corpus; their graded-frame census max is 1.010 s
+(`census4cpu.tsv`: procurement1large). The 3 GiB tree was killed on the 2 s cap; its
+graded-frame census max is 1.100 s (`censusgate3G.tsv`: crudeoil_lee4_09). Under the
+"same worst-row shape" model the hidden frame's slowdown factor is therefore bracketed to
+  f in (2.0/1.100, 2.0/1.010] = (1.818, 1.980]
+— an eight-percent window, down from the (1.60, 1.98] the previous iteration could infer.
+Operational form: **the graded-frame (production worker, taskset -c 0-3) corpus max wall is a
+calibrated survival predictor whose line lies between 1.010 s (passed twice) and 1.100 s
+(killed)**; every second of class-exchange wall on a near-cap row costs ~0.5 % of hidden head-
+room, and the 3 GiB rung's value (-1.83e-4 dev vs the 2 GiB rung, i.e. above the 1 bip
+promotion threshold) is exactly what that headroom buys.

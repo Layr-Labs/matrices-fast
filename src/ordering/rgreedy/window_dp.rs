@@ -4,6 +4,112 @@ use super::window_signatures::{ChargeModel, SignatureEngine};
 use super::{Game, TripleWork};
 
 const MAX_WIDTH: usize = 14;
+/// Stop the sweep loop once a sweep accepts **no** change, for rows at or above
+/// [`PRODUCTION_XCH_PLATEAU_MIN_N`]. Measured (`0260-plateau-*`): on `n >= 10 000`
+/// this is wall-free value-wise — 45 rows move, 44 keep their ratio exactly and
+/// one (`glider400`) pays +1e-4 — while it returns 0.09-0.20 s per large row and
+/// 0.095 s on the binding row `crudeoil_lee4_10`, whose ratio is untouched. Below
+/// the gate the schedule is worth real value (27 rows lose up to +0.0108 if it is
+/// applied to the whole corpus, score +1.9e-4), so the gate is structural: `n`,
+/// never matrix identity.
+const PRODUCTION_XCH_PLATEAU: usize = 1;
+const PRODUCTION_XCH_PLATEAU_MIN_N: usize = 10_000;
+
+/// Fraction of a large exchange budget withheld until the search proves it
+/// pays **this call**. Measured and REJECTED at 50 % (`0260-reserve-diff.txt`):
+/// the score is bit-identical to the unreserved 4 GiB arm (0 of 300 ratios
+/// differ) but the corpus wall is +3.1 s *worse*, because every waster row
+/// accepts *internal* window improvements (which never reach the score) and so
+/// releases the reserve and then spends it — the released budget is spent, not
+/// saved. The signal "this call's spend pays" is not observable inside the
+/// call; only the caller knows whether the candidate was adopted. Kept at 0 and
+/// wired with `SSI_XCH_RESERVE` for the record.
+const PRODUCTION_XCH_RESERVE_PCT: i64 = 0;
+/// Only budgets at or above this are worth reserving against; the smaller sites
+/// (64 MB, 16 MB) are untouched.
+const XCH_RESERVE_MIN_BUDGET: i64 = 1 << 30;
+
+#[inline]
+fn xch_reserve_pct() -> i64 {
+    #[cfg(test)]
+    {
+        std::env::var("SSI_XCH_RESERVE")
+            .ok()
+            .and_then(|v| v.trim().parse::<i64>().ok())
+            .unwrap_or(PRODUCTION_XCH_RESERVE_PCT)
+            .clamp(0, 90)
+    }
+    #[cfg(not(test))]
+    {
+        PRODUCTION_XCH_RESERVE_PCT
+    }
+}
+
+#[inline]
+fn xch_plateau() -> usize {
+    #[cfg(test)]
+    {
+        std::env::var("SSI_XCH_PLATEAU")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(PRODUCTION_XCH_PLATEAU)
+    }
+    #[cfg(not(test))]
+    {
+        PRODUCTION_XCH_PLATEAU
+    }
+}
+
+#[inline]
+fn xch_plateau_min_n() -> usize {
+    #[cfg(test)]
+    {
+        std::env::var("SSI_XCH_PLATEAU_N")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(PRODUCTION_XCH_PLATEAU_MIN_N)
+    }
+    #[cfg(not(test))]
+    {
+        PRODUCTION_XCH_PLATEAU_MIN_N
+    }
+}
+
+/// Component *admission* policy for the exchange's per-window exact DP.
+///
+/// The shipped policy is a **hard stop**: `solve_component` precharges
+/// `2^k * (16k + 6w + 24)` before it allocates anything, and the first
+/// component the ledger cannot fund ends `refine_window`'s walk — with
+/// `Some(true)`/`None`, the whole call when the window had not changed yet.
+/// The ledger therefore funds the window's components in *position* order and
+/// abandons whatever it could not reach, even when the refused component is the
+/// expensive one and the remaining components are cheap.
+///
+/// Policy 1 skips the unfunded component and keeps walking the window's other
+/// components; policy 2 additionally walks them **smallest-first**, so whatever
+/// the ledger can still fund is spent on the cheap components — the ones whose
+/// reorderings the call actually adopts. Both policies keep the precharge
+/// itself, so the ledger still bounds this window's spend; only the *order* in
+/// which components are offered to it changes. Determinism is preserved: the
+/// walk is a stable sort of a deterministic enumeration (ties broken by the
+/// component's bit mask).
+const PRODUCTION_XCH_ALLOC: usize = 0;
+
+#[inline]
+fn xch_alloc() -> usize {
+    #[cfg(test)]
+    {
+        std::env::var("SSI_XCH_ALLOC")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(PRODUCTION_XCH_ALLOC)
+            .min(2)
+    }
+    #[cfg(not(test))]
+    {
+        PRODUCTION_XCH_ALLOC
+    }
+}
 /// The dimension ceiling this DP obeys. It *is* `rgreedy::MAX_N` in
 /// production; in test builds it follows the same `SSI_MAX_N` seam, so one
 /// binary can price a ceiling curve (the DP refuses any `n` above it, which is
@@ -28,9 +134,28 @@ thread_local! {
 }
 
 #[cfg(test)]
+#[derive(Default)]
 struct WorkReport {
     width: usize,
     completed: bool,
+    // iter60 phase attribution (env `SSI_XCH_TIME`): the exchange's own wall
+    // split. `build` = Game::build_adj + Game::new, `reset` = every
+    // `Game::reset()` (full bitset memcpy + bucket rebuild), `prefix` = the
+    // per-sweep prefix eliminations, `refine` = the window refines + their
+    // interleaved eliminations.
+    n: usize,
+    adj_ns: u128,
+    new_ns: u128,
+    reset_ns: u128,
+    prefix_ns: u128,
+    refine_ns: u128,
+    resets: u32,
+    prefixes: u32,
+    // Call key: `build_adj` is a pure function of the CSR, so identical
+    // (n, col_ptr ptr, row_idx ptr, nnz) inside one row means identical bytes.
+    cptr: usize,
+    rptr: usize,
+    nnz: usize,
 }
 
 #[cfg(test)]
@@ -41,6 +166,102 @@ impl Drop for WorkReport {
             stats.calls[self.width] += 1;
             stats.completed[self.width] += usize::from(self.completed);
         });
+        if std::env::var_os("SSI_XCH_TIME").is_some() {
+            let total =
+                self.adj_ns + self.new_ns + self.reset_ns + self.prefix_ns + self.refine_ns;
+            eprintln!(
+                "XCHTIME\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                self.n,
+                self.resets,
+                self.prefixes,
+                total,
+                self.adj_ns,
+                self.new_ns,
+                self.reset_ns,
+                self.prefix_ns,
+                self.refine_ns,
+                self.cptr,
+                self.rptr,
+                self.nnz,
+            );
+        }
+    }
+}
+
+/// ── iter68 TEST-ONLY instrument: the intra-`refine` split.
+///
+/// `WorkReport::refine_ns` lumps two very different costs together: the window
+/// DP itself (`solve_component` / `SignatureEngine::solve_component`) and the
+/// interleaved `Game::eliminate` replay that advances the sweep between
+/// windows. This module separates them, plus the component-width histogram and
+/// the charge-refusal counts, so a device can be aimed at the half that
+/// actually carries the wall. Compiled out of the graded worker (`cfg(test)`).
+#[cfg(test)]
+pub(crate) mod split {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    pub(crate) static WIN_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static DP_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static ELIM_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static WINDOWS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static COMPONENTS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static REFUSED: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static REFUSED_BIG: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static ENGINE: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static BRUTE: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static K2_4: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static K5_6: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static K7_8: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static K9_10: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static K11_12: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static K13_14: AtomicU64 = AtomicU64::new(0);
+
+    #[inline]
+    pub(crate) fn add(c: &AtomicU64, ns: u128) {
+        c.fetch_add(ns as u64, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub(crate) fn bump(c: &AtomicU64) {
+        c.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub(crate) fn width_bump(k: usize) {
+        match k {
+            2..=4 => bump(&K2_4),
+            5..=6 => bump(&K5_6),
+            7..=8 => bump(&K7_8),
+            9..=10 => bump(&K9_10),
+            11..=12 => bump(&K11_12),
+            _ => bump(&K13_14),
+        }
+    }
+
+    /// seconds: (win, dp, elim); counts: (windows, components, refused,
+    /// refused_big, engine, brute); then the six width buckets.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn take() -> ((f64, f64, f64), [u64; 6], [u64; 6]) {
+        let s = |c: &AtomicU64| c.swap(0, Ordering::Relaxed) as f64 / 1e9;
+        let n = |c: &AtomicU64| c.swap(0, Ordering::Relaxed);
+        let times = (s(&WIN_NS), s(&DP_NS), s(&ELIM_NS));
+        let counts = [
+            n(&WINDOWS),
+            n(&COMPONENTS),
+            n(&REFUSED),
+            n(&REFUSED_BIG),
+            n(&ENGINE),
+            n(&BRUTE),
+        ];
+        let hist = [
+            n(&K2_4),
+            n(&K5_6),
+            n(&K7_8),
+            n(&K9_10),
+            n(&K11_12),
+            n(&K13_14),
+        ];
+        (times, counts, hist)
     }
 }
 
@@ -158,8 +379,12 @@ fn refine_window(
     if !work.charge(8 * k * k + 8 * k) {
         return None;
     }
+    // Component admission (see `xch_alloc`). Enumerate the window's live
+    // components in ascending lowest-position order — the shipped order — and
+    // collect only the ones this DP may attempt (2..=MAX_WIDTH positions).
+    let alloc = xch_alloc();
     let mut unseen = if k == 64 { u64::MAX } else { (1u64 << k) - 1 };
-    let mut changed = false;
+    let mut comps: Vec<(u32, u64)> = Vec::new();
     while unseen != 0 {
         let mut component = 1u64 << unseen.trailing_zeros();
         let mut frontier = component;
@@ -182,22 +407,57 @@ fn refine_window(
         // Large spans are useful when their live induced graph separates into
         // small components. Leave oversized components in their original
         // positions; their elimination cannot affect another component here.
-        if component.count_ones() < 2 || component.count_ones() as usize > MAX_WIDTH {
+        let size = component.count_ones();
+        if size < 2 || size as usize > MAX_WIDTH {
             continue;
         }
+        comps.push((size, component));
+    }
+    if alloc >= 2 {
+        // Smallest first: the ledger is a fixed precharge budget, so the cheap
+        // components are the ones it can still fund once a big one appears.
+        comps.sort_unstable();
+    }
+    let mut changed = false;
+    for &(_, component) in comps.iter() {
         let positions: Vec<usize> = (0..k).filter(|&i| component & (1 << i) != 0).collect();
         let vertices: Vec<usize> = positions.iter().map(|&i| window[i]).collect();
         let incident = vertices.iter().map(|&v| game.deg[v] as usize).sum();
         let (union_cost, signature_cost) =
             SignatureEngine::charge_costs(vertices.len(), game.w, incident);
-        let solution = if vertices.len() >= 5 && signature_cost < union_cost {
+        #[cfg(test)]
+        let t_dp = std::time::Instant::now();
+        // iter68 KILL (0268-xchsplit-engine-small): dropping the `k >= 5` floor so
+        // the calibrated model could route k<=4 components to the engine is
+        // wall-neutral (dp 0.285 -> 0.260 s on procurement1large, <=0.01 s
+        // elsewhere) even though it moved 30 340 of 37 009 component calls off
+        // the dense-union path, so the `2^k * w` scratch is NOT the exchange's
+        // DP wall. Kept at the shipped floor.
+        let use_engine = vertices.len() >= 5 && signature_cost < union_cost;
+        let solution = if use_engine {
             let engine = engine.get_or_insert_with(|| SignatureEngine::new(game.n));
             engine.set_charge_model(charge_model);
             engine.solve_component(game, &vertices, work)
         } else {
             solve_component(game, &vertices, work)
         };
+        #[cfg(test)]
+        {
+            split::add(&split::DP_NS, t_dp.elapsed().as_nanos());
+            split::bump(&split::COMPONENTS);
+            split::width_bump(vertices.len());
+            split::bump(if use_engine { &split::ENGINE } else { &split::BRUTE });
+            if solution.is_none() {
+                split::bump(&split::REFUSED);
+                if vertices.len() >= 9 {
+                    split::bump(&split::REFUSED_BIG);
+                }
+            }
+        }
         let Some((order, best, incumbent)) = solution else {
+            if alloc >= 1 {
+                continue;
+            }
             return if changed { Some(true) } else { None };
         };
         if best < incumbent {
@@ -302,9 +562,23 @@ fn subset_window_descent_config(
     #[cfg(test)]
     let mut report = WorkReport {
         width: width.min(16),
-        completed: false,
+        n,
+        ..WorkReport::default()
     };
     let mut work = TripleWork { remaining: budget };
+    let reserve = if budget >= XCH_RESERVE_MIN_BUDGET {
+        budget * xch_reserve_pct() / 100
+    } else {
+        0
+    };
+    let mut reserved = reserve;
+    work.remaining -= reserve;
+    #[cfg(test)]
+    {
+        report.cptr = col_ptr.as_ptr() as usize;
+        report.rptr = row_idx.as_ptr() as usize;
+        report.nnz = row_idx.len();
+    }
     if !work.charge(n + 1 + row_idx.len() + 2 * n)
         || col_ptr.first().copied() != Some(0)
         || col_ptr.last().copied() != Some(row_idx.len())
@@ -325,43 +599,108 @@ fn subset_window_descent_config(
     if !work.charge(setup) {
         return None;
     }
-    let pristine = Game::build_adj(n, col_ptr, row_idx)?;
-    let mut game = Game::new(n, &pristine)?;
+    #[cfg(test)]
+    let t_adj = std::time::Instant::now();
+    let pristine = super::pristine_memo(n, col_ptr, row_idx)?;
+    #[cfg(test)]
+    {
+        report.adj_ns += t_adj.elapsed().as_nanos();
+    }
+    #[cfg(test)]
+    let t_new = std::time::Instant::now();
+    let mut game = pristine.game()?;
+    #[cfg(test)]
+    {
+        report.new_ns += t_new.elapsed().as_nanos();
+    }
     let mut engine = None;
     let mut current = seed.to_vec();
     let mut changed = false;
+    let plateau = if n >= xch_plateau_min_n() { xch_plateau() } else { 0 };
+    let mut idle_sweeps = 0usize;
     for sweep in 0..sweeps {
         if !work.charge(2 * n * words + 8 * n) {
             return changed.then_some(current);
         }
+        #[cfg(test)]
+        let t_reset = std::time::Instant::now();
         game.reset();
+        #[cfg(test)]
+        {
+            report.reset_ns += t_reset.elapsed().as_nanos();
+            report.resets += 1;
+        }
         let offset = (sweep * offset_step) % width;
         for &v in current.iter().take(offset.min(n)) {
+            #[cfg(test)]
+            let t_prefix = std::time::Instant::now();
             if !work.eliminate(&mut game, v) {
                 return changed.then_some(current);
             }
+            #[cfg(test)]
+            {
+                report.prefix_ns += t_prefix.elapsed().as_nanos();
+                report.prefixes += 1;
+            }
         }
         let mut start = offset;
+        let mut sweep_changed = false;
         while start + 1 < n {
             let end = (start + width).min(n);
-            match refine_window(
+            #[cfg(test)]
+            let t_refine = std::time::Instant::now();
+            #[cfg(test)]
+            let t_refine = std::time::Instant::now();
+            let outcome = refine_window(
                 &game,
                 &mut current[start..end],
                 &mut work,
                 &mut engine,
                 charge_model,
-            ) {
-                Some(improved) => changed |= improved,
+            );
+            #[cfg(test)]
+            {
+                let e = t_refine.elapsed().as_nanos();
+                report.refine_ns += e;
+                split::add(&split::WIN_NS, e);
+                split::bump(&split::WINDOWS);
+            }
+            match outcome {
+                Some(improved) => {
+                    changed |= improved;
+                    sweep_changed |= improved;
+                }
                 None => return changed.then_some(current),
             }
             if end < n {
                 for &v in &current[start..end] {
+                    #[cfg(test)]
+                    let t_elim = std::time::Instant::now();
                     if !work.eliminate(&mut game, v) {
                         return changed.then_some(current);
+                    }
+                    #[cfg(test)]
+                    {
+                        let e = t_elim.elapsed().as_nanos();
+                        report.refine_ns += e;
+                        split::add(&split::ELIM_NS, e);
                     }
                 }
             }
             start = end;
+        }
+        if sweep_changed {
+            idle_sweeps = 0;
+            if reserved > 0 {
+                // The row's own sweep just paid for the withheld ledger: release it.
+                work.remaining += reserved;
+                reserved = 0;
+            }
+        } else {
+            idle_sweeps += 1;
+        }
+        if plateau > 0 && idle_sweeps >= plateau {
+            break;
         }
     }
     #[cfg(test)]

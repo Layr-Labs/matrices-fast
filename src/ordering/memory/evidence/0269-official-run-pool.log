@@ -1,0 +1,31 @@
+    Finished `release` profile [optimized] target(s) in 0.16s
+     Running `target/release/matrices-fast --note 'iter69: recycle the mutable n*w fill-graph bitset across Game builds (thread-local one-buffer pool + Drop return) — 300/300 permutations bit-identical, corpus minor faults 5.50M->3.87M, nd_netgen 0.99->0.73 s'`
+matrix                              n     nnz(A)    flops(base)   flops(yours)    ratio      time
+slay06m                           357       1080           4025           4025    1.000  (capped)
+sssd25-08                         401       1200           5389           5389    1.000  (capped)
+rsyn0810m04m                     4772      13836         147553         113207    0.767  (capped)
+pooling_sppc3pq                 23173     893724     1153877333      325595394    0.282  (capped)
+sporttournament48                1131       6676         919582         592120    0.644  (capped)
+pooling_sppa9pq                  5030     120730       23971280       15198662    0.634  (capped)
+edgecross10-090                  1053       5204         126115         103179    0.818  (capped)
+maxcsp-ehi-85-297-71             2372     207996     1381768944     1110971341    0.804  (capped)
+st_bpaf1a                          30        120            623            580    0.931  (capped)
+risk2bpb                         1462       5396         118471          66041    0.557  (capped)
+qap                               255      43748        3802533        3650113    0.960  (capped)
+rsyn0830m04m                     7252      20752         212130         171516    0.809  (capped)
+lop97icx                         1073       2118          79286          64044    0.808  (capped)
+chain400                         1201       4796          16382          16382    1.000  (capped)
+mpbp_07                          9532      30810        1368477        1248083    0.912  (capped)
+sonetgr17                         440       2958          37814          30971    0.819  (capped)
+p_ball_30b_7p_2d_h               2207       7516          42456          42319    0.997  (capped)
+pinene200                       19995      97990        1358716        1132609    0.834  (capped)
+unitcommit_200_100_1_mod_8     146830     476332        3053940        2981835    0.976  (capped)
+ex8_3_9                           123        834          15050          11503    0.764  (capped)
+rsyn0820m02m                     2486       6932          38190          35781    0.937  (capped)
+p_ball_10b_5p_2d_m                293        964           6648           6547    0.985  (capped)
+pooling_adhya4tp                  170        936          26842          20581    0.767  (capped)
+squfl015-080persp                7295      21600          74520          74520    1.000  (capped)
+edgecross10-080                  1053       5940         170814         164639    0.964  (capped)
+clay0204hfsg                      590       1696           7198           6562    0.912  (capped)
+
+RUN FAILED: st_bsj2: order() exceeded the 2.0s per-matrix cap and was killed (took ≥ 2.0s). Your ordering must return within 2s on every matrix. This matrix is n=13, nnz=40, nnz/n≈3 — if it is dense, the cost is in order() itself; gate expensive paths by BOTH n and nnz.

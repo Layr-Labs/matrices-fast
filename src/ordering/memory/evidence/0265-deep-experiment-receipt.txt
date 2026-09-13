@@ -1,0 +1,13 @@
+iter65 — the in-flight deep experiment's own record (closed, not integrated)
+===========================================================================
+artifact_dir: /home/frosty/.angel/loop-experiments/1789305280559-145005
+result.json: stop_reason = "setup_error", model_phase_entered = false, rollout_id = null,
+patch_sha256 = null, patch_path = null, answer = ""
+error: "snapshot requires a regular file <= 16777216 bytes: corpus/dev/patterns.jsonl"
+requested_route / resolved_route: driver deepseek-v4-pro, model deepseek-v4-flash, effort max.
+=> the hypothesis it was to test ("a hidden corpus containing an already-expensive row in
+25k-45k is the unpriced failure mode of the 45 000 ceiling") never rolled out: no patch, no
+candidate, no evaluation. Its baseline/working dirs contain no candidate source.
+The snapshot limit is why: the dev corpus is 103 879 806 bytes, 6.2x the 16 MiB snapshot cap.
+Re-driving that hypothesis through this route therefore needs a corpus subset staged as its own
+file (e.g. the 45 rows with n > 25 000), not the whole patterns.jsonl.

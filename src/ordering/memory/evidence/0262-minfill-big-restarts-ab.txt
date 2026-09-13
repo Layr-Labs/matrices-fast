@@ -1,0 +1,78 @@
+iter62 — the portfolio's inherited family groups priced as blocks (first time),
+and the one device they yielded: the min-fill big-band restart clamp.
+
+Frames: every arm is the SAME binary, `SSI_MARK_NOSCORE=1`, `taskset -c 0-3`,
+one session, 300/300 dev rows. Command shape:
+  taskset -c 0-3 env SSI_MARK_NOSCORE=1 <seams> bash target/probe-sandbox.sh run
+
+=== A. Whole-group prices (seams SSI_NO_PART / SSI_NO_MINFILL / SSI_NO_CUSTOM) ===
+arm       SCORE      lt_1k    1k_10k   gt_10k   worst order()   corpus wall
+ON        0.790323   0.8873   0.8373   0.6824   1.419 s         —
+noMIN     0.790610   0.8877   0.8379   0.6824   1.432 s         —
+noPART    0.791746   0.8876   0.8378   0.6852   1.474 s         —
+OFF(-3)   0.792031   0.8880   0.8384   0.6852   —               —
+=> min-fill is worth 2.9e-4 (mostly lt_1k / 1k_10k); the partitioner cascade
+   1.4e-3, of which 2.8e-3 of the 40 %-weight gt_10k bucket. NEITHER group is
+   dead weight, so neither may be deleted. [0262-groups-*.log]
+
+=== B. Where the min-fill bill lands (panel, 1.portfolio = portfolio wall) ===
+row                       ON      noPART   noMIN    noCUS    OFF
+chimera_selby-c16-01    0.759    0.748    0.239    0.764    0.219
+crudeoil_pooling_ct3    0.745    0.741    0.246    0.750    0.225
+squfl015-060            0.689    0.664    0.141    0.682    0.118
+multiplants_stg1        0.282    0.263    0.100    0.282    0.077
+ndcc13                  0.210    0.188    0.122    0.207    0.097
+mpbp_35                 0.221    0.097    0.221    0.224    0.097
+nuclear25a              0.308    0.236    0.311    0.306    0.238
+=> the min-fill family is ~0.5 s of the portfolio on the cap-binding class,
+   while the partitioners are its cost only on mpbp_35 (0.12 s, and mpbp_35 is
+   also a value row: OFF loses +0.067 on it).
+
+=== C. Per-row attribution of the min-fill family (full corpus, noMIN vs ON) ===
+value rows (min-fill ON better): blend721 (1428/4548) +0.0329,
+multiplants_stg1 (736/3594) +0.0244, crudeoil_pooling_ct1 (1271/4642) +0.0234,
+chimera_mgw-c8-439-onc8-002 (440/3038) +0.0141, multiplants_stg5 +0.0083,
+gancns +0.0080, rsyn0810m02hfsg (2670/6964) +0.0053, rsyn0840m +0.0022,
+powerflow0014r +0.0013, powerflow0030p +0.0010  (5 rows lose slightly).
+cost rows (dt >= 0.15 s, ratio unchanged): squfl015-060 +0.547,
+chimera_selby-c16-01 +0.535, chimera_selby-c16-02 +0.532, crudeoil_pooling_ct3
++0.497, squfl010-080 +0.415, squfl025-030 +0.384, squfl010-040persp +0.348,
+rsyn0805m03m +0.290, p_ball_30b_7p_2d_h +0.277, multiplants_stg1b +0.222,
+slay09h +0.206, multiplants_stg1c +0.199, multiplants_mtg1b +0.197 …
+=> value rows and cost rows are INTERLEAVED in (n, nnz); no static threshold
+   separates them. What does separate them is the restart count itself.
+
+=== D. The device: the big-band restart clamp ===
+`minfill_restarts` has three arms; the third (`else`) hands the LARGEST restart
+number to the LARGEST rows in the gate:
+   n <= 1000 && nnz <= 5000 -> 24      (tiny; cheap per call)
+   n <  2000 && nnz <  10000 -> 6
+   else -> clamp(MINFILL_RELABEL_BUDGET/nnz, 2, 8)   <- chimera/squfl/crudeoil
+With the clamp top moved 8 -> 4 -> 2 (in-frame, 300 rows, one binary):
+   restarts=8   SCORE 0.790323   corpus wall 145.0 s
+   restarts=4   SCORE 0.790338   corpus wall 144.9 s
+   restarts=2   SCORE 0.790341   corpus wall 141.8 s
+Value price of 2: exactly TWO rows change to 4 dp —
+   rsyn0810m02hfsg 0.9406 -> 0.9439, rsyn0820m02m 0.9328 -> 0.9369  = +1.8e-5.
+Time returned (restarts 8 -> 2, rows with min-fill in the big band):
+   squfl015-060      0.897 -> 0.435   chimera_selby-c16-02 1.402 -> 1.020
+   crudeoil_pooling_ct3 1.297 -> 0.877  chimera_selby-c16-01 1.382 -> 0.953
+   squfl010-080      0.721 -> 0.368   squfl025-030        0.705 -> 0.383
+   rsyn0805m03m      1.028 -> 0.810   p_ball_30b_7p_2d_h  0.729 -> 0.538
+   slay09h           0.630 -> 0.461   (all at ratios unchanged to 4 dp)
+[0262-minfill-big{8,4,2}-4cpu.log]
+
+=== E. Official local sandboxed harness (`local-candidate-build.sh && cargo run`) ===
+300/300 OK, no FAIL, 0.790297 / 0.923247 (results.tsv:1789299130) — the SAME
+tree without the device reads 0.790279 (results.tsv:1789295008), i.e. the price
+of the shipped margin device is +1.8e-5 in the graded frame, matching the probe
+exactly. [0262-official-run-mf2.log]
+
+=== F. The census instrument (existing `probe_census`, re-used) ===
+On the 12 exposed rows, EVERY isolated portfolio family is far worse than the
+shipped value (`mpbp_34` best isolated 0.4605 vs shipped 0.2880; `nuclear25a`
+0.6825 vs 0.5750; `crudeoil_lee4_10` 0.7271 vs 0.6080; `chimera_selby-c16-02`
+0.5803 vs 0.5370), and the best isolated candidate is usually also among the
+cheapest (0.000-0.025 s). The terminal chain, not the portfolio, is the value
+producer on those rows. `minfill` in isolation reads ratio 40.03 on
+`chimera_selby-c16-01`. [0262-census-panel-binding.txt]

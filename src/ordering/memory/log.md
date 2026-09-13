@@ -708,3 +708,45 @@ round, so note the round if you know it.
   the two pre-class exchange sites (4904/4921) that the same ceiling re-enables; the dead band rows
   (`emfl100_5_5` +0.645 s, `supplychainr1_053050` +0.442 s, ratio stays 1.0000) are pure waste that a
   cheaper call shape could remove.
+
+## iter56 (2026-09-13) — the class's per-site `Game` setup was the ceiling's cost; one shared engine pays for `MAX_N` 25 000 → 45 000
+
+- **Hypothesis (the leader's own "next if rejected" lead): the exchange's per-call setup, not its
+  sweeps, is what prices the `n` ceiling.** Confirmed. Every class site built its own `Game`
+  (`build_adj`: `n·⌈n/64⌉` alloc + `O(nnz)` scan; `new`: the same array copied **and** popcounted for
+  `deg0`), and a class row runs the exchange + dense twin + **nine** spans ⇒ up to eleven identical
+  setups of one immutable pattern. At n = 33 155 that is 4.1 GB of traffic — the whole measured +0.83 s
+  of the 45 000 arm. `Game::new` + `reset()` is the same state as `reset()` alone, so one shared
+  `Game`, reset per sweep as before, is **bit-identical**: verified row-by-row on all 300 dev rows
+  (296 unchanged) *and* on a second full run after the malformed-input precheck was added.
+- **Change.** `window_dp`: body split into `…_body`; new `subset_window_descent_step_with_game` /
+  `sparse_span_window_descent_with_game`; `window_pass_affordable` refuses a pass whose budget cannot
+  fund `head + setup + one sweep` **before** the build; `window_descent_precheck` runs the body's
+  structural validation before `build_adj`. `mod.rs`: one `class_pristine` + one `class_game` per
+  `order()` call, shared by all three sites; **all work ledgers and charges unchanged**, so no
+  acceptance decision moves. `rgreedy::MAX_N` 25 000 → 45 000. 126 unit tests pass.
+- **Value (probe frame, one binary/session, 300 rows): 0.790425 → 0.790295 (−1.30e-4)**, buckets
+  0.8873 / 0.8373 / **0.6826 → 0.6823**; four movers, all in the newly admitted band and all
+  improvements, **0 regressions**: `mpbp_48` −0.539 %, `crudeoil_pooling_dt3` −0.623 %,
+  `nd_netgen-3000-1-1-b-b-ns_7` −0.278 %, `arki0013` −0.699 %. 45 000 is the end of the axis on this
+  corpus: no dev row above it clears the class's own `nnz ≤ 200 000` key.
+- **Negative result (closed): the giant tier is not relabel headroom.** New probe
+  `probe_giant_relabel` (n ≥ 100k, relabelled AMD aggressive/non-aggressive + AMF α5/α2.5/nodense,
+  seeds 1…8): `unitcommit` best draw 0.9978 vs incumbent 0.9764, `cont6-qq` 1.1500 vs 0.6962,
+  `faclay75`/`gabriel10` nothing, `acopf` 0.9719 vs 0.9737 on **1 of 8 seeds** at 0.5–0.8 s/pass.
+  Both `HEAVY_RELABEL_AMF` density gaps (`unitcommit`, `cont6-qq`, `nuclear104`, `gams05`) are
+  therefore dead ground, not a loss. [0238]
+- **Ledger 2G → 4G, re-priced and shipped.** `0237` refused this step (it loads `crudeoil_lee4_10`);
+  with the shared engine paying ~0.1–0.15 s back on every class row, the in-frame re-price
+  (`SSI_EXCHANGE_LEDGER` seam, one binary/session) moves three rows — `crudeoil_lee4_10` **−1.10 %**,
+  `crudeoil_lee4_09` **−0.59 %**, `nuclear10a` −0.001 % — worth **−1.51e-4 dev**, and an interleaved
+  min-of-3 timing A/B over six class rows (incl. the corpus's slowest) reads **−1.19 s total, no row
+  systematically worse**. Combined expectation **0.790425 → ≈0.79014 (−2.8e-4)**; the two steps are
+  disjoint (ceiling acts on 25k–45k rows only, ledger on rows already running the exchange).
+- **Host receipt:** no `results.tsv` row is claimed. This box is ~5–6× the pod's per-row time and
+  runs at load 5–10: `slay06m` (n=357) measures **1.04 s**, `sporttournament48` (n=1131) **2.49 s**
+  uncapped, so three harness attempts died on the 2 s cap on three *tiny* rows (n=4772, 1131, 401) —
+  the unmodified promoted tree fails identically here. Everything above is the uncapped probe.
+  [probe-BASE-0.790425.log, probe-share45k.log, giant-relabel.log]
+- **Submitted `c67ad490-095f-4d68-9dff-8fc40b765765`** (commit `016e34f`, claimed 0.79006) — shared
+  class engine + `MAX_N` 45 000 + exchange ledger 4G. Status `validating`.

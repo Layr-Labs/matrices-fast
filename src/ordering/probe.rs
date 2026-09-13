@@ -4335,3 +4335,100 @@ fn probe_floor_battery() {
         println!("{line}");
     }
 }
+
+/// GIANT-TIER RELABEL HEADROOM.
+///
+/// The heavy-tier relabelled-AMF lottery stops at `HEAVY_RELABEL_AMF_DENSE_MAX_NNZ`
+/// = 700 000, and on dev the rows above that ceiling are exactly the ones with
+/// the worst `gt_10k` ratios (`unitcommit_200_100_1_mod_8` 0.9764, `acopf_case9241pegase_qcqp`
+/// 0.9737, `transswitch2383wpr` 0.9785 — a row 0.3 s under the cap). This probe
+/// asks the only question that matters before widening that gate: does a
+/// relabelled AMD/AMF pass on a giant row ever beat the shipped incumbent, and
+/// what does one pass cost there?
+///
+/// Test-only; compiled into no shipped binary. `SSI_PROBE_MIN_N` re-points the
+/// size filter (default 100 000).
+#[test]
+#[ignore]
+fn probe_giant_relabel() {
+    let corpus = crate::corpus::corpus();
+    let min_n: usize = std::env::var("SSI_PROBE_MIN_N")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(100_000);
+    let seeds: Vec<u64> = std::env::var("SSI_PROBE_SEEDS")
+        .ok()
+        .map(|v| v.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+        .unwrap_or_else(|| vec![1, 2, 3, 4, 5, 6, 7, 8]);
+    println!("\nrow\tn\tnnz\tcur_s\tcur_r\tkind\tseed\tshape\tpass_s\tratio\tbest_r");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n < min_n || n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let t0 = Instant::now();
+        let cur = order(pat);
+        let cur_s = t0.elapsed().as_secs_f64();
+        let cur_f = flops_of(&sp, &cur);
+        let mut best_r = cur_f as f64 / base as f64;
+        println!(
+            "{name}\t{n}\t{nnz}\t{cur_s:.3}\t{best_r:.4}\tcur\t-\t-\t-\t-\t{best_r:.4}"
+        );
+        for &seed in &seeds {
+            let q = super::relabel(n, seed);
+            let b = permute_pattern(&sp, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Some(bcore) = feral_ordering_core::CscPattern::new(n, &bcp, &bri) else {
+                continue;
+            };
+            for (shape, is_amf, alpha) in [
+                ("amf5", true, 5.0f64),
+                ("amf25", true, 2.5),
+                ("amfnd", true, -1.0),
+                ("amd", false, 10.0),
+                ("amdna", false, 10.0),
+            ] {
+                let t = Instant::now();
+                let produced: Option<Vec<i32>> = if is_amf {
+                    let o = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
+                    feral_amf::amf_order_opts(&bcore, &o).ok().map(|(p, ..)| p)
+                } else {
+                    let o = feral_amd::AmdOptions {
+                        aggressive: shape == "amd",
+                        dense_alpha: 10.0,
+                    };
+                    feral_amd::amd_order_opts(&bcore, &o).ok().map(|(p, ..)| p)
+                };
+                let pass_s = t.elapsed().as_secs_f64();
+                let Some(p) = produced else { continue };
+                let cand: Vec<usize> = p.iter().map(|&x| q[x as usize] as usize).collect();
+                if !super::is_bijection(&cand, n) {
+                    continue;
+                }
+                let f = flops_of(&sp, &cand);
+                let r = f as f64 / base as f64;
+                if r < best_r {
+                    best_r = r;
+                }
+                println!(
+                    "{name}\t{n}\t{nnz}\t{cur_s:.3}\t{:.4}\t{shape}\t{seed}\t{shape}\t{pass_s:.3}\t{r:.4}\t{best_r:.4}",
+                    cur_f as f64 / base as f64
+                );
+            }
+        }
+        println!("BEST\t{name}\t{best_r:.4}\t{:.6}", cur_f as f64 / base as f64);
+    }
+}

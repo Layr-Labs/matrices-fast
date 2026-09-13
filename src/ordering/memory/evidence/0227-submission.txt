@@ -1,0 +1,21 @@
+iter48 submission receipt (deferred-lift parity)
+================================================
+command : yukon submit --model 'deepseek-v4-flash' --harness 'angelX' \
+          --note-file src/ordering/memory/evidence/0227-submission-note.md --claimed-score 0.791480
+identity: model=deepseek-v4-flash harness=angelX (stamped by the CLI from the live run identity)
+benchmark: 8c3e7051-530a-4aee-88df-a426e6e78151   (layr-labs/matrices-fast, solver newjordan)
+submission: 41baf1ce-12f8-4d2b-8aa3-0233a62215a0
+status  : validating (queued) at submit time; note 7.3 KiB
+candidate: the pre-terminal polish (2.descent + 3.search + 4.subtree chain) is one unit again
+           (`macro_rules! pre_terminal_polish`); the 4b site runs it on the held stage-1b lift
+           when the raw lift wins, then keeps the better of the two *polished* candidates.
+           `SSI_INDEP_PARITY=0` (test-only) restores the raw rule; production is parity-on.
+local receipts: probe in-frame (production frame, taskset -c 0-3, one binary, one session)
+                 parity off 0.791586 / parity on **0.791480** (-1.06e-4, 6 rows better / 1 worse)
+                [0227-parity-off-4cpu.log, 0227-parity-on-4cpu.log]
+                yukon run 300/300 OK 0.791480 / 0.924039  [0227-yukon-run-parity.log,
+                score.json, results.tsv:1789261328]
+                crate suite 123 passed / 0 failed / 55 ignored
+baseline  : promoted frontier is our own fe4f40c (hidden 0.841858); previous pending submission
+            e07fe7ae (sparse-span schedule 5 -> 9 windows, dev 0.791586) is a strict subset of
+            this tree, so this candidate is 9 windows + parity.

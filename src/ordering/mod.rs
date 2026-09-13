@@ -5253,8 +5253,36 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
         #[cfg(not(test))]
         let exchange_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
+        // iter53 MERGE — the `83a8f4f` device: on the crown `475be33` the class
+        // block's exchange window 8/4/3 -> 12/4/5 promoted remotely at hidden
+        // 0.841666 (−1.02e-4). The current frontier (`78c434c`, `7df69b9`) was
+        // diffed against `475be33` and carries none of it, so this is the one
+        // device of ours that is *validated on the hidden frame* and absent here.
+        // Test-only env seam: one binary prices both arms in-frame.
+        #[cfg(test)]
+        let exchange_width: usize = std::env::var("SSI_EXCHANGE_WIDTH")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(12);
+        #[cfg(not(test))]
+        let exchange_width: usize = 12;
+        #[cfg(test)]
+        let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(4);
+        #[cfg(not(test))]
+        let exchange_sweeps: usize = 4;
+        #[cfg(test)]
+        let exchange_step: usize = std::env::var("SSI_EXCHANGE_STEP")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(5);
+        #[cfg(not(test))]
+        let exchange_step: usize = 5;
         if let Some(candidate) = rgreedy::subset_window_descent_step(
-            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, exchange_ledger,
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, exchange_width, exchange_sweeps,
+            exchange_step, exchange_ledger,
         ) {
             #[cfg(test)]
             if std::env::var_os("SSI_CLASS_TRACE").is_some() {

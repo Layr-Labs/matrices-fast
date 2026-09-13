@@ -1,0 +1,434 @@
+
+running 1 test
+test ordering::probe::probe_timing_and_score ... PORTSTATS	floor	n=1600	nnz=6240	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=1600	nnz=6240	queued=12	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	ported	n=1600	nnz=6240	queued=12	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	qmetric	n=1600	nnz=6240	queued=115	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	qmultistart	n=1600	nnz=6240	queued=199	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	sub10k	n=1600	nnz=6240	queued=283	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	sub10k-followup	n=1600	nnz=6240	queued=343	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	amf-extra	n=1600	nnz=6240	queued=345	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	heavy-qmetric	n=1600	nnz=6240	queued=345	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	heavy-nodense-amd	n=1600	nnz=6240	queued=345	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	metis-shapes	n=1600	nnz=6240	queued=393	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	relabel-amf	n=1600	nnz=6240	queued=527	gen_s=0.4391	score_s=0.0026	produced=28	scored=28	memo=7	stale_s=0.0025	win_s=0.0001	stale=27	wins=1	tasks=28	batches=3
+PORTSTATS	heavy-relabel-amf	n=1600	nnz=6240	queued=0	gen_s=0.8356	score_s=0.0728	produced=571	scored=571	memo=68	stale_s=0.0727	win_s=0.0001	stale=570	wins=1	tasks=571	batches=5
+LADGATE	1600	10000	0.519	1
+LIFT	ood_grid2d_40	1600	1524	6232	1524
+COUNTS	ood_grid2d_40	1600	6240	504745	391395
+PORTSTATS	floor	n=6400	nnz=25280	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=6400	nnz=25280	queued=0	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	ported	n=6400	nnz=25280	queued=0	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	qmetric	n=6400	nnz=25280	queued=47	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	qmultistart	n=6400	nnz=25280	queued=103	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	sub10k	n=6400	nnz=25280	queued=159	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	sub10k-followup	n=6400	nnz=25280	queued=199	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	amf-extra	n=6400	nnz=25280	queued=201	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	heavy-qmetric	n=6400	nnz=25280	queued=201	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	heavy-nodense-amd	n=6400	nnz=25280	queued=201	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	metis-shapes	n=6400	nnz=25280	queued=216	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	relabel-amf	n=6400	nnz=25280	queued=246	gen_s=0.0448	score_s=0.0027	produced=9	scored=9	memo=2	stale_s=0.0024	win_s=0.0003	stale=8	wins=1	tasks=9	batches=3
+PORTSTATS	heavy-relabel-amf	n=6400	nnz=25280	queued=0	gen_s=0.7210	score_s=0.1339	produced=255	scored=255	memo=19	stale_s=0.1336	win_s=0.0003	stale=254	wins=1	tasks=255	batches=4
+LADGATE	6400	10000	0.639	1
+LIFT	ood_grid2d_80	6400	3278	25274	3278
+COUNTS	ood_grid2d_80	6400	25280	6036298	3815554
+PORTSTATS	floor	n=16900	nnz=67080	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=16900	nnz=67080	queued=0	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	ported	n=16900	nnz=67080	queued=0	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	qmetric	n=16900	nnz=67080	queued=41	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	qmultistart	n=16900	nnz=67080	queued=55	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	sub10k	n=16900	nnz=67080	queued=55	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	sub10k-followup	n=16900	nnz=67080	queued=55	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	amf-extra	n=16900	nnz=67080	queued=57	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	heavy-qmetric	n=16900	nnz=67080	queued=57	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	heavy-nodense-amd	n=16900	nnz=67080	queued=57	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	metis-shapes	n=16900	nnz=67080	queued=69	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	relabel-amf	n=16900	nnz=67080	queued=93	gen_s=0.0640	score_s=0.0046	produced=8	scored=8	memo=2	stale_s=0.0039	win_s=0.0007	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	heavy-relabel-amf	n=16900	nnz=67080	queued=0	gen_s=0.6745	score_s=0.1178	produced=101	scored=101	memo=2	stale_s=0.1171	win_s=0.0007	stale=100	wins=1	tasks=101	batches=3
+LADGATE	16900	10000	0.553	0
+LIFT	ood_grid2d_130	16900	8578	67074	8578
+COUNTS	ood_grid2d_130	16900	67080	27469516	17126042
+PORTSTATS	floor	n=40000	nnz=159200	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=40000	nnz=159200	queued=0	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	ported	n=40000	nnz=159200	queued=0	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	qmetric	n=40000	nnz=159200	queued=0	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	qmultistart	n=40000	nnz=159200	queued=0	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	sub10k	n=40000	nnz=159200	queued=0	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	sub10k-followup	n=40000	nnz=159200	queued=0	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	amf-extra	n=40000	nnz=159200	queued=2	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	heavy-qmetric	n=40000	nnz=159200	queued=4	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	heavy-nodense-amd	n=40000	nnz=159200	queued=4	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	metis-shapes	n=40000	nnz=159200	queued=8	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	relabel-amf	n=40000	nnz=159200	queued=12	gen_s=0.1564	score_s=0.0089	produced=5	scored=5	memo=0	stale_s=0.0073	win_s=0.0016	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	heavy-relabel-amf	n=40000	nnz=159200	queued=0	gen_s=0.4335	score_s=0.0462	produced=17	scored=17	memo=0	stale_s=0.0446	win_s=0.0016	stale=16	wins=1	tasks=17	batches=3
+LADGATE	40000	10000	0.524	0
+LIFT	ood_grid2d_200	40000	20198	159194	20198
+COUNTS	ood_grid2d_200	40000	159200	111966993	70424695
+PORTSTATS	floor	n=102400	nnz=408320	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=102400	nnz=408320	queued=0	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	ported	n=102400	nnz=408320	queued=0	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmetric	n=102400	nnz=408320	queued=0	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmultistart	n=102400	nnz=408320	queued=0	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k	n=102400	nnz=408320	queued=0	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k-followup	n=102400	nnz=408320	queued=0	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	amf-extra	n=102400	nnz=408320	queued=0	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-qmetric	n=102400	nnz=408320	queued=0	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-nodense-amd	n=102400	nnz=408320	queued=0	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	metis-shapes	n=102400	nnz=408320	queued=1	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	relabel-amf	n=102400	nnz=408320	queued=1	gen_s=0.0491	score_s=0.0128	produced=3	scored=3	memo=0	stale_s=0.0085	win_s=0.0044	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-relabel-amf	n=102400	nnz=408320	queued=0	gen_s=0.1060	score_s=0.0204	produced=4	scored=4	memo=0	stale_s=0.0160	win_s=0.0044	stale=3	wins=1	tasks=4	batches=2
+LIFT	ood_grid2d_320	102400	51518	408314	51518
+COUNTS	ood_grid2d_320	102400	408320	540215046	288696704
+PORTSTATS	floor	n=4096	nnz=23040	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=4096	nnz=23040	queued=0	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	ported	n=4096	nnz=23040	queued=0	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	qmetric	n=4096	nnz=23040	queued=47	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	qmultistart	n=4096	nnz=23040	queued=117	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	sub10k	n=4096	nnz=23040	queued=187	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	sub10k-followup	n=4096	nnz=23040	queued=237	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	amf-extra	n=4096	nnz=23040	queued=239	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	heavy-qmetric	n=4096	nnz=23040	queued=239	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	heavy-nodense-amd	n=4096	nnz=23040	queued=239	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	metis-shapes	n=4096	nnz=23040	queued=256	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	relabel-amf	n=4096	nnz=23040	queued=304	gen_s=0.1314	score_s=0.0054	produced=18	scored=18	memo=2	stale_s=0.0051	win_s=0.0003	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	heavy-relabel-amf	n=4096	nnz=23040	queued=0	gen_s=1.3005	score_s=0.1631	produced=354	scored=354	memo=22	stale_s=0.1628	win_s=0.0003	stale=353	wins=1	tasks=354	batches=5
+LADGATE	4096	10000	0.973	1
+LIFT	ood_grid3d_16	4096	2388	33276	2388
+COUNTS	ood_grid3d_16	4096	23040	60004644	44052402
+PORTSTATS	floor	n=17576	nnz=101400	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=17576	nnz=101400	queued=0	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	ported	n=17576	nnz=101400	queued=0	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	qmetric	n=17576	nnz=101400	queued=41	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	qmultistart	n=17576	nnz=101400	queued=55	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	sub10k	n=17576	nnz=101400	queued=55	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	sub10k-followup	n=17576	nnz=101400	queued=55	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	amf-extra	n=17576	nnz=101400	queued=57	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	heavy-qmetric	n=17576	nnz=101400	queued=57	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	heavy-nodense-amd	n=17576	nnz=101400	queued=57	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	metis-shapes	n=17576	nnz=101400	queued=69	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	relabel-amf	n=17576	nnz=101400	queued=77	gen_s=0.1147	score_s=0.0083	produced=8	scored=8	memo=2	stale_s=0.0070	win_s=0.0013	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	heavy-relabel-amf	n=17576	nnz=101400	queued=0	gen_s=1.2020	score_s=0.1404	produced=85	scored=85	memo=6	stale_s=0.1390	win_s=0.0013	stale=84	wins=1	tasks=85	batches=3
+LADGATE	17576	10000	0.695	0
+LIFT	ood_grid3d_26	17576	17568	101400	17568
+COUNTS	ood_grid3d_26	17576	101400	1912180431	1261674182
+PORTSTATS	floor	n=64000	nnz=374400	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=64000	nnz=374400	queued=0	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	ported	n=64000	nnz=374400	queued=0	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	qmetric	n=64000	nnz=374400	queued=0	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	qmultistart	n=64000	nnz=374400	queued=0	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	sub10k	n=64000	nnz=374400	queued=0	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	sub10k-followup	n=64000	nnz=374400	queued=0	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	amf-extra	n=64000	nnz=374400	queued=2	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	heavy-qmetric	n=64000	nnz=374400	queued=2	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	heavy-nodense-amd	n=64000	nnz=374400	queued=2	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	metis-shapes	n=64000	nnz=374400	queued=3	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	relabel-amf	n=64000	nnz=374400	queued=3	gen_s=0.0651	score_s=0.0096	produced=2	scored=2	memo=0	stale_s=0.0048	win_s=0.0048	stale=1	wins=1	tasks=2	batches=1
+PORTSTATS	heavy-relabel-amf	n=64000	nnz=374400	queued=0	gen_s=0.8294	score_s=0.0619	produced=9	scored=9	memo=0	stale_s=0.0571	win_s=0.0048	stale=8	wins=1	tasks=9	batches=2
+LIFT	ood_grid3d_40	64000	34280	552672	34280
+COUNTS	ood_grid3d_40	64000	374400	32704523648	22590905706
+PORTSTATS	floor	n=2000	nnz=24000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=2000	nnz=24000	queued=0	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	ported	n=2000	nnz=24000	queued=0	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	qmetric	n=2000	nnz=24000	queued=103	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	qmultistart	n=2000	nnz=24000	queued=173	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	sub10k	n=2000	nnz=24000	queued=243	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	sub10k-followup	n=2000	nnz=24000	queued=293	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	amf-extra	n=2000	nnz=24000	queued=295	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	heavy-qmetric	n=2000	nnz=24000	queued=295	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	heavy-nodense-amd	n=2000	nnz=24000	queued=295	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	metis-shapes	n=2000	nnz=24000	queued=311	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	relabel-amf	n=2000	nnz=24000	queued=356	gen_s=0.0742	score_s=0.0059	produced=18	scored=18	memo=3	stale_s=0.0055	win_s=0.0004	stale=17	wins=1	tasks=18	batches=3
+PORTSTATS	heavy-relabel-amf	n=2000	nnz=24000	queued=0	gen_s=1.4333	score_s=0.1338	produced=374	scored=374	memo=43	stale_s=0.1326	win_s=0.0012	stale=371	wins=3	tasks=374	batches=4
+LADGATE	2000	10000	0.850	1
+LIFT	ood_rand_d12_n2000	2000	1969	24196	1969
+COUNTS	ood_rand_d12_n2000	2000	24000	479766260	467528714
+PORTSTATS	floor	n=6000	nnz=72000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=6000	nnz=72000	queued=0	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	ported	n=6000	nnz=72000	queued=0	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	qmetric	n=6000	nnz=72000	queued=47	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	qmultistart	n=6000	nnz=72000	queued=61	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	sub10k	n=6000	nnz=72000	queued=75	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	sub10k-followup	n=6000	nnz=72000	queued=85	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	amf-extra	n=6000	nnz=72000	queued=87	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	heavy-qmetric	n=6000	nnz=72000	queued=87	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	heavy-nodense-amd	n=6000	nnz=72000	queued=87	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	metis-shapes	n=6000	nnz=72000	queued=99	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	relabel-amf	n=6000	nnz=72000	queued=123	gen_s=0.2249	score_s=0.0149	produced=17	scored=17	memo=3	stale_s=0.0139	win_s=0.0010	stale=16	wins=1	tasks=17	batches=3
+PORTSTATS	heavy-relabel-amf	n=6000	nnz=72000	queued=0	gen_s=2.1169	score_s=0.1623	produced=140	scored=140	memo=11	stale_s=0.1568	win_s=0.0055	stale=136	wins=4	tasks=140	batches=4
+LADGATE	6000	10000	1.131	1
+LIFT	ood_rand_d12_n6000	6000	5988	71994	5988
+COUNTS	ood_rand_d12_n6000	6000	72000	12459505215	12273677928
+PORTSTATS	floor	n=20000	nnz=200000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=20000	nnz=200000	queued=0	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	ported	n=20000	nnz=200000	queued=0	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	qmetric	n=20000	nnz=200000	queued=0	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	qmultistart	n=20000	nnz=200000	queued=0	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	sub10k	n=20000	nnz=200000	queued=0	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	sub10k-followup	n=20000	nnz=200000	queued=0	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	amf-extra	n=20000	nnz=200000	queued=2	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	heavy-qmetric	n=20000	nnz=200000	queued=2	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	heavy-nodense-amd	n=20000	nnz=200000	queued=2	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	metis-shapes	n=20000	nnz=200000	queued=4	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	relabel-amf	n=20000	nnz=200000	queued=6	gen_s=0.8031	score_s=0.0406	produced=13	scored=13	memo=0	stale_s=0.0375	win_s=0.0031	stale=12	wins=1	tasks=13	batches=2
+PORTSTATS	heavy-relabel-amf	n=20000	nnz=200000	queued=0	gen_s=1.1207	score_s=0.0648	produced=19	scored=19	memo=0	stale_s=0.0556	win_s=0.0092	stale=16	wins=3	tasks=19	batches=3
+LADGATE	20000	10000	1.511	0
+LIFT	ood_rand_d10_n20000	20000	19802	199902	19802
+COUNTS	ood_rand_d10_n20000	20000	200000	343832763324	338423625140
+PORTSTATS	floor	n=20000	nnz=400000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=20000	nnz=400000	queued=0	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	ported	n=20000	nnz=400000	queued=0	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmetric	n=20000	nnz=400000	queued=0	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmultistart	n=20000	nnz=400000	queued=0	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k	n=20000	nnz=400000	queued=0	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k-followup	n=20000	nnz=400000	queued=0	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	amf-extra	n=20000	nnz=400000	queued=0	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-qmetric	n=20000	nnz=400000	queued=0	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-nodense-amd	n=20000	nnz=400000	queued=0	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	metis-shapes	n=20000	nnz=400000	queued=1	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	relabel-amf	n=20000	nnz=400000	queued=1	gen_s=0.2132	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0097	win_s=0.0050	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-relabel-amf	n=20000	nnz=400000	queued=0	gen_s=0.2888	score_s=0.0197	produced=4	scored=4	memo=0	stale_s=0.0148	win_s=0.0050	stale=3	wins=1	tasks=4	batches=2
+LIFT	ood_rand_d20_n20000	20000	16809	972282	16809
+COUNTS	ood_rand_d20_n20000	20000	400000	850679226678	847375675045
+PORTSTATS	floor	n=40000	nnz=400000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=40000	nnz=400000	queued=0	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	ported	n=40000	nnz=400000	queued=0	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmetric	n=40000	nnz=400000	queued=0	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmultistart	n=40000	nnz=400000	queued=0	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k	n=40000	nnz=400000	queued=0	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k-followup	n=40000	nnz=400000	queued=0	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	amf-extra	n=40000	nnz=400000	queued=0	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-qmetric	n=40000	nnz=400000	queued=0	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-nodense-amd	n=40000	nnz=400000	queued=0	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	metis-shapes	n=40000	nnz=400000	queued=1	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	relabel-amf	n=40000	nnz=400000	queued=1	gen_s=0.6456	score_s=0.0196	produced=3	scored=3	memo=0	stale_s=0.0130	win_s=0.0066	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-relabel-amf	n=40000	nnz=400000	queued=0	gen_s=0.7767	score_s=0.0264	produced=4	scored=4	memo=0	stale_s=0.0198	win_s=0.0066	stale=3	wins=1	tasks=4	batches=2
+LIFT	ood_rand_d10_n40000	40000	37380	416958	37380
+COUNTS	ood_rand_d10_n40000	40000	400000	2747754992618	2724687491267
+PORTSTATS	floor	n=40000	nnz=800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=40000	nnz=800000	queued=0	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	ported	n=40000	nnz=800000	queued=0	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	qmetric	n=40000	nnz=800000	queued=0	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	qmultistart	n=40000	nnz=800000	queued=0	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	sub10k	n=40000	nnz=800000	queued=0	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	sub10k-followup	n=40000	nnz=800000	queued=0	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	amf-extra	n=40000	nnz=800000	queued=0	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	heavy-qmetric	n=40000	nnz=800000	queued=2	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	heavy-nodense-amd	n=40000	nnz=800000	queued=2	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	metis-shapes	n=40000	nnz=800000	queued=2	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	relabel-amf	n=40000	nnz=800000	queued=2	gen_s=0.8196	score_s=0.0304	produced=3	scored=3	memo=0	stale_s=0.0102	win_s=0.0202	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	heavy-relabel-amf	n=40000	nnz=800000	queued=0	gen_s=1.3360	score_s=0.0514	produced=5	scored=5	memo=0	stale_s=0.0311	win_s=0.0202	stale=3	wins=2	tasks=5	batches=2
+LIFT	ood_rand_d20_n40000	40000	39804	809084	39804
+COUNTS	ood_rand_d20_n40000	40000	800000	6789596885439	6740188301504
+PORTSTATS	floor	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	ported	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	qmetric	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	qmultistart	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	sub10k	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	sub10k-followup	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	amf-extra	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	heavy-qmetric	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	heavy-nodense-amd	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	metis-shapes	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	relabel-amf	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	heavy-relabel-amf	n=40000	nnz=1600000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+COUNTS	ood_rand_d40_n40000	40000	1600000	11258411344066	11258411344066
+PORTSTATS	floor	n=20000	nnz=800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=20000	nnz=800000	queued=0	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	ported	n=20000	nnz=800000	queued=0	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmetric	n=20000	nnz=800000	queued=0	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmultistart	n=20000	nnz=800000	queued=0	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k	n=20000	nnz=800000	queued=0	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k-followup	n=20000	nnz=800000	queued=0	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	amf-extra	n=20000	nnz=800000	queued=0	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-qmetric	n=20000	nnz=800000	queued=2	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-nodense-amd	n=20000	nnz=800000	queued=2	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	metis-shapes	n=20000	nnz=800000	queued=2	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	relabel-amf	n=20000	nnz=800000	queued=2	gen_s=0.4040	score_s=0.0241	produced=3	scored=3	memo=0	stale_s=0.0159	win_s=0.0082	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-relabel-amf	n=20000	nnz=800000	queued=0	gen_s=0.6575	score_s=0.0404	produced=5	scored=5	memo=0	stale_s=0.0322	win_s=0.0082	stale=4	wins=1	tasks=5	batches=2
+LIFT	ood_rand_d40_n20000	20000	18877	1621092	18877
+COUNTS	ood_rand_d40_n20000	20000	800000	1406686040255	1399718749205
+PORTSTATS	floor	n=60000	nnz=480000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=60000	nnz=480000	queued=0	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	ported	n=60000	nnz=480000	queued=0	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmetric	n=60000	nnz=480000	queued=0	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmultistart	n=60000	nnz=480000	queued=0	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k	n=60000	nnz=480000	queued=0	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k-followup	n=60000	nnz=480000	queued=0	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	amf-extra	n=60000	nnz=480000	queued=0	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-qmetric	n=60000	nnz=480000	queued=0	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-nodense-amd	n=60000	nnz=480000	queued=0	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	metis-shapes	n=60000	nnz=480000	queued=1	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	relabel-amf	n=60000	nnz=480000	queued=1	gen_s=1.1101	score_s=0.0266	produced=3	scored=3	memo=0	stale_s=0.0177	win_s=0.0089	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-relabel-amf	n=60000	nnz=480000	queued=0	gen_s=4.1587	score_s=0.0667	produced=7	scored=7	memo=0	stale_s=0.0486	win_s=0.0181	stale=5	wins=2	tasks=7	batches=2
+LIFT	ood_rand_d8_n60000	60000	57481	478364	57481
+COUNTS	ood_rand_d8_n60000	60000	480000	6099091071866	6015132463789
+PORTSTATS	floor	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	ported	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	qmetric	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	qmultistart	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	sub10k	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	sub10k-followup	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	amf-extra	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	heavy-qmetric	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	heavy-nodense-amd	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	metis-shapes	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	relabel-amf	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	heavy-relabel-amf	n=300000	nnz=1800000	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+COUNTS	ood_rand_d6_n300000	300000	1800000	383299133940067	383299133940067
+PORTSTATS	floor	n=8200	nnz=143754	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=8200	nnz=143754	queued=0	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	ported	n=8200	nnz=143754	queued=0	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	qmetric	n=8200	nnz=143754	queued=0	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	qmultistart	n=8200	nnz=143754	queued=0	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	sub10k	n=8200	nnz=143754	queued=0	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	sub10k-followup	n=8200	nnz=143754	queued=0	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	amf-extra	n=8200	nnz=143754	queued=2	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	heavy-qmetric	n=8200	nnz=143754	queued=2	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	heavy-nodense-amd	n=8200	nnz=143754	queued=2	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	metis-shapes	n=8200	nnz=143754	queued=14	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	relabel-amf	n=8200	nnz=143754	queued=26	gen_s=0.7176	score_s=0.0263	produced=15	scored=15	memo=0	stale_s=0.0248	win_s=0.0015	stale=14	wins=1	tasks=15	batches=3
+PORTSTATS	heavy-relabel-amf	n=8200	nnz=143754	queued=0	gen_s=2.7847	score_s=0.0796	produced=41	scored=41	memo=0	stale_s=0.0780	win_s=0.0015	stale=40	wins=1	tasks=41	batches=4
+LADGATE	8200	10000	2.168	1
+LIFT	ood_kkt_b40x200+200	8200	8180	143898	8180
+COUNTS	ood_kkt_b40x200+200	8200	143754	246166792	236291435
+PORTSTATS	floor	n=30300	nnz=479412	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=30300	nnz=479412	queued=0	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	ported	n=30300	nnz=479412	queued=0	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmetric	n=30300	nnz=479412	queued=0	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmultistart	n=30300	nnz=479412	queued=0	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k	n=30300	nnz=479412	queued=0	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k-followup	n=30300	nnz=479412	queued=0	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	amf-extra	n=30300	nnz=479412	queued=0	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-qmetric	n=30300	nnz=479412	queued=0	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-nodense-amd	n=30300	nnz=479412	queued=0	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	metis-shapes	n=30300	nnz=479412	queued=1	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	relabel-amf	n=30300	nnz=479412	queued=1	gen_s=1.5620	score_s=0.0167	produced=3	scored=3	memo=0	stale_s=0.0110	win_s=0.0056	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-relabel-amf	n=30300	nnz=479412	queued=0	gen_s=5.3924	score_s=0.0405	produced=7	scored=7	memo=0	stale_s=0.0291	win_s=0.0114	stale=5	wins=2	tasks=7	batches=2
+LIFT	ood_kkt_b100x300+300	30300	30267	479388	30267
+COUNTS	ood_kkt_b100x300+300	30300	479412	1835872408	1800825306
+PORTSTATS	floor	n=40400	nnz=797550	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=40400	nnz=797550	queued=0	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	ported	n=40400	nnz=797550	queued=0	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmetric	n=40400	nnz=797550	queued=0	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	qmultistart	n=40400	nnz=797550	queued=0	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k	n=40400	nnz=797550	queued=0	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	sub10k-followup	n=40400	nnz=797550	queued=0	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	amf-extra	n=40400	nnz=797550	queued=0	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-qmetric	n=40400	nnz=797550	queued=1	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-nodense-amd	n=40400	nnz=797550	queued=1	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	metis-shapes	n=40400	nnz=797550	queued=1	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	relabel-amf	n=40400	nnz=797550	queued=1	gen_s=6.2683	score_s=0.0235	produced=3	scored=3	memo=0	stale_s=0.0156	win_s=0.0080	stale=2	wins=1	tasks=3	batches=1
+PORTSTATS	heavy-relabel-amf	n=40400	nnz=797550	queued=0	gen_s=8.2867	score_s=0.0313	produced=4	scored=4	memo=0	stale_s=0.0233	win_s=0.0080	stale=3	wins=1	tasks=4	batches=2
+LIFT	ood_kkt_b200x200+400	40400	36605	940108	36605
+COUNTS	ood_kkt_b200x200+400	40400	797550	3149459475	3122064589
+PORTSTATS	floor	n=20000	nnz=129964	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=20000	nnz=129964	queued=0	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	ported	n=20000	nnz=129964	queued=0	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	qmetric	n=20000	nnz=129964	queued=41	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	qmultistart	n=20000	nnz=129964	queued=55	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	sub10k	n=20000	nnz=129964	queued=55	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	sub10k-followup	n=20000	nnz=129964	queued=55	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	amf-extra	n=20000	nnz=129964	queued=57	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	heavy-qmetric	n=20000	nnz=129964	queued=57	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	heavy-nodense-amd	n=20000	nnz=129964	queued=57	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	metis-shapes	n=20000	nnz=129964	queued=69	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	relabel-amf	n=20000	nnz=129964	queued=77	gen_s=0.1026	score_s=0.0142	produced=8	scored=8	memo=2	stale_s=0.0118	win_s=0.0024	stale=7	wins=1	tasks=8	batches=2
+PORTSTATS	heavy-relabel-amf	n=20000	nnz=129964	queued=0	gen_s=0.7053	score_s=0.2080	produced=85	scored=85	memo=3	stale_s=0.2026	win_s=0.0053	stale=83	wins=2	tasks=85	batches=3
+LADGATE	20000	10000	1.141	0
+LIFT	ood_geo_n20000	20000	18375	124524	18375
+COUNTS	ood_geo_n20000	20000	129964	1951035	1579610
+PORTSTATS	floor	n=40000	nnz=261928	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=40000	nnz=261928	queued=0	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	ported	n=40000	nnz=261928	queued=0	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	qmetric	n=40000	nnz=261928	queued=0	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	qmultistart	n=40000	nnz=261928	queued=0	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	sub10k	n=40000	nnz=261928	queued=0	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	sub10k-followup	n=40000	nnz=261928	queued=0	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	amf-extra	n=40000	nnz=261928	queued=2	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	heavy-qmetric	n=40000	nnz=261928	queued=2	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	heavy-nodense-amd	n=40000	nnz=261928	queued=2	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	metis-shapes	n=40000	nnz=261928	queued=3	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	relabel-amf	n=40000	nnz=261928	queued=3	gen_s=0.2515	score_s=0.0270	produced=5	scored=5	memo=0	stale_s=0.0216	win_s=0.0054	stale=4	wins=1	tasks=5	batches=2
+PORTSTATS	heavy-relabel-amf	n=40000	nnz=261928	queued=0	gen_s=0.2664	score_s=0.0410	produced=8	scored=8	memo=0	stale_s=0.0356	win_s=0.0054	stale=7	wins=1	tasks=8	batches=3
+LIFT	ood_geo_n40000	40000	32897	237068	32897
+COUNTS	ood_geo_n40000	40000	261928	3624167	3248137
+PORTSTATS	floor	n=20000	nnz=239958	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=20000	nnz=239958	queued=0	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	ported	n=20000	nnz=239958	queued=0	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	qmetric	n=20000	nnz=239958	queued=0	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	qmultistart	n=20000	nnz=239958	queued=0	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	sub10k	n=20000	nnz=239958	queued=0	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	sub10k-followup	n=20000	nnz=239958	queued=0	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	amf-extra	n=20000	nnz=239958	queued=2	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	heavy-qmetric	n=20000	nnz=239958	queued=2	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	heavy-nodense-amd	n=20000	nnz=239958	queued=2	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	metis-shapes	n=20000	nnz=239958	queued=4	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	relabel-amf	n=20000	nnz=239958	queued=4	gen_s=1.4674	score_s=0.0392	produced=15	scored=15	memo=0	stale_s=0.0311	win_s=0.0081	stale=12	wins=3	tasks=15	batches=2
+PORTSTATS	heavy-relabel-amf	n=20000	nnz=239958	queued=0	gen_s=1.7088	score_s=0.0488	produced=19	scored=19	memo=0	stale_s=0.0407	win_s=0.0081	stale=16	wins=3	tasks=19	batches=3
+LIFT	ood_ba_m6_n20000	20000	4619	160038	4619
+COUNTS	ood_ba_m6_n20000	20000	239958	135886550	133225403
+PORTSTATS	floor	n=40000	nnz=479958	queued=0	gen_s=0.0000	score_s=0.0000	produced=0	scored=0	memo=0	stale_s=0.0000	win_s=0.0000	stale=0	wins=0	tasks=0	batches=0
+PORTSTATS	core	n=40000	nnz=479958	queued=0	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	ported	n=40000	nnz=479958	queued=0	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	qmetric	n=40000	nnz=479958	queued=0	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	qmultistart	n=40000	nnz=479958	queued=0	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	sub10k	n=40000	nnz=479958	queued=0	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	sub10k-followup	n=40000	nnz=479958	queued=0	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	amf-extra	n=40000	nnz=479958	queued=0	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	heavy-qmetric	n=40000	nnz=479958	queued=0	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	heavy-nodense-amd	n=40000	nnz=479958	queued=0	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	metis-shapes	n=40000	nnz=479958	queued=1	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	relabel-amf	n=40000	nnz=479958	queued=1	gen_s=6.2395	score_s=0.0146	produced=3	scored=3	memo=0	stale_s=0.0042	win_s=0.0104	stale=1	wins=2	tasks=3	batches=1
+PORTSTATS	heavy-relabel-amf	n=40000	nnz=479958	queued=0	gen_s=6.8262	score_s=0.0374	produced=7	scored=7	memo=0	stale_s=0.0204	win_s=0.0170	stale=4	wins=3	tasks=7	batches=2
+LIFT	ood_ba_m6_n40000	40000	9309	334836	9309
+COUNTS	ood_ba_m6_n40000	40000	479958	1034421227	1015584733
+COUNTS	ood_band_w8_n50000	50000	799928	4049556	4049556
+COUNTS	ood_band_w4_n200000	200000	1599980	4999930	4999930
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+11.0830	ood_kkt_b200x200+400	40400	797550	0.9913
+6.5700	ood_ba_m6_n40000	40000	479958	0.9818
+4.2077	ood_kkt_b100x300+300	30300	479412	0.9809
+3.6172	ood_rand_d8_n60000	60000	480000	0.9862
+3.5732	ood_rand_d6_n300000	300000	1800000	1.0000
+2.2991	ood_rand_d40_n20000	20000	800000	0.9950
+2.1856	ood_kkt_b40x200+200	8200	143754	0.9599
+1.8668	ood_rand_d10_n40000	40000	400000	0.9916
+1.7134	ood_rand_d20_n20000	20000	400000	0.9961
+1.5133	ood_rand_d10_n20000	20000	200000	0.9843
+1.3187	ood_rand_d20_n40000	40000	800000	0.9927
+1.2807	ood_ba_m6_n20000	20000	239958	0.9804
+1.2083	ood_rand_d12_n6000	6000	72000	0.9851
+1.1433	ood_geo_n20000	20000	129964	0.8096
+1.1043	ood_geo_n40000	40000	261928	0.8962
+1.0829	ood_grid3d_16	4096	23040	0.7341
+0.9745	ood_rand_d12_n2000	2000	24000	0.9745
+0.8545	ood_grid2d_80	6400	25280	0.6321
+0.7767	ood_grid2d_40	1600	6240	0.7754
+0.6953	ood_grid3d_26	17576	101400	0.6598
+0.5535	ood_grid2d_130	16900	67080	0.6235
+0.5250	ood_grid2d_200	40000	159200	0.6290
+0.5216	ood_grid3d_40	64000	374400	0.6908
+0.4905	ood_rand_d40_n40000	40000	1600000	1.0000
+0.2136	ood_grid2d_320	102400	408320	0.5344
+0.0076	ood_band_w4_n200000	200000	1599980	1.0000
+0.0032	ood_band_w8_n50000	50000	799928	1.0000
+matrices under 0.010s: 2/27
+matrices under 0.050s: 2/27
+matrices under 0.100s: 2/27
+matrices under 0.200s: 2/27
+matrices under 0.400s: 3/27
+
+--- per-bucket ---
+1k_10k   count=6     geomean=0.8320
+gt_10k   count=21    geomean=0.8756
+SCORE = 0.856895
+WORST order() = 11.083 s
+FORCEAUDIT	stage1b_sites=10	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=3	tie_pass_run=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 177 filtered out; finished in 58.81s
+

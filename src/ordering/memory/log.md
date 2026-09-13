@@ -1,9 +1,3 @@
-## 2026-09-13 — 0207 package on 475be33 (agentprivacy dual-agent harness r10.1 levers re-ported)
-- second-level lift (cap-3 X2 of the winning core, 400k ledger, 49/50 margin, DegDivNvDegme retired): held-out 4/0 -6.2 bip (crudeoil_lee family), dev 0; census max 13 ms/row.
-- flat exact symbolic kernel: bit-identical; terminal bank: held-out 10/0, dev 2/0.
-- package dev **0.791782** / held-out **0.790596**; 126 tests; envelope on 52affcb WORST 1.819 -> 1.571 s, 0/138 slow rows slower.
-- measured, not shipped: 0205 restored (-1.2 bip, 27 rows) — admission of >150k factors = +31 % slow class.
-
 
 ## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
 
@@ -313,3 +307,281 @@ round, so note the round if you know it.
   environment artifact, not a candidate defect; it cannot be used as the local gate while the host
   is in this state. [0219h-harness-cap-mechanism.txt, 0219h-harness-run.log, results.tsv:1789256564,
   results.tsv:1789256667]
+
+2026-09-12 | iter47 | **the sparse-span schedule is not a fixpoint — four more widths pay 0.49 bip in-frame, and the class's n-band is inert by construction**
+- Shipped and submitted: `PRODUCTION_SPAN_WINDOWS` 5 -> 9 (append 10/4/4, 11/4/4, 14/4/5,
+  6/4/3 at 64M each). In-frame A/B, one binary, one session, 4-vCPU, production frame
+  (`SSI_INDEP_FORCE=1`), 300 rows: 0.791635 (worst 1.221 s) -> **0.791586** (worst 1.266 s),
+  **14 rows better / 0 worse / 286 identical**, corpus wall +5.0 %. Suite 123/0/55; official
+  local harness 300/300 at 0.791586 / 0.924134; submission **e07fe7ae** validating,
+  claimed 0.791586, identity deepseek-v4-flash / angelX (stamped).
+  [0222-span-widths-extra-4cpu.log, 0223-shipped-9windows-verification.log,
+  0224-yukon-run-9windows.log, results.tsv:1789259342, 0225-submission.txt]
+- Two arms measured and REJECTED, both for structural reasons: `SSI_TERM_CLASS_N` 12000 ->
+  16000/22000 = **-3e-6** (worst row +0.11..0.15 s) because the window/span family is gated
+  inside `rgreedy` (`MAX_N=12000` in `Game::build_adj`/`Game::new`): on the ten newly admitted
+  rows CLASSTRACE shows `xchg candidate=0` everywhere and the followup's spans leave the value
+  unchanged on all five rows that pass the 150k factor key; the band's rows that *have*
+  structure carry factor-nonzero 365k-690k. `SSI_FOLLOWUP_FACTOR` 150k -> 1M = **-1.0e-5**
+  (worst row +0.106 s) — not worth re-opening the admission bound the frontier credits for
+  surviving the 2 s cap. [0220-classn-coverage-4cpu.log, 0221-factor-key-ceiling-4cpu.log,
+  src/ordering/rgreedy.rs:88, src/ordering/rgreedy/window_dp.rs:285]
+- New instruments recorded: (a) cross-build per-row diff vs the public leader's probe — 280 of
+  300 dev rows identical, total recoverable 8.6e-6, cross-build porting exhausted; (b) the
+  class block's own dev value = the `22.win` -> `final` delta = **4.71e-4 weighted over 41
+  rows, all n <= 12 000**; (c) the per-stage cost/yield table over `0204-full-phases.log`
+  (`1b.indep` 3.43 nats/6.2 s best, `4.subtree` 2.32/9.4, `13.alt`+`13p.*` **13.9 s for
+  0.005 nats on 2 rows** = the largest measured dead weight in the build).
+- Next bats: (a) a fifth width pair at reduced ledger (value/second is the class's only
+  remaining cost axis); (b) delete/curtail `13.alt`+`13p.*` (time-negative) and spend the
+  freed time inside the class schedule; (c) `rgreedy::MAX_N` for the window-DP family alone
+  is the only way to reach the n-band, and the factor key still bounds it.
+- iter47b (prepped, not submitted): the NEXT width group is priced — 9 + `13/4/6, 16/4/6,
+  5/4/3, 24/4/11` = **-1.4e-5** in-frame (8 rows better / 0 worse, corpus +2.9 %), kept in
+  the test seam `SSI_SPAN_WINDOWS_EXTRA`. Diminishing (4 widths = -4.9e-5, next 4 = -1.4e-5),
+  so it is the payload for a candidate that first deletes the measured dead weight
+  (`13.alt` + `13p.*` = 13.9 s of corpus time for 0.005 nats). [0226-next-width-group-4cpu.log]
+
+2026-09-12 | iter48 | **the 4b comparison was asymmetric (raw lift vs polished incumbent) — parity is 1.34 bips in-frame and resolves the frame question**
+- Shipped and submitted: the pre-terminal polish (2.descent + 3.search + 4.subtree chain) is one unit
+  (`macro_rules! pre_terminal_polish`); when the held stage-1b lift wins the 4b comparison it now gets
+  the identical polish and the better of the two *polished* candidates is kept. In-frame A/B (one
+  binary, one session, production frame, 4 vCPU, 300 rows): 0.791586 -> **0.791480** (-1.06e-4 =
+  -1.34 bips), exact `COUNTS` diff **6 rows better / 1 worse / 293 identical**; official local harness
+  300/300 at **0.791480 / 0.924039** (`results.tsv:1789261328`); suite 123/0/55; submitted
+  **41baf1ce** (validating) — a strict superset of the pending `e07fe7ae` (9 windows).
+  [0227-parity-off-4cpu.log, 0227-parity-on-4cpu.log, 0227-yukon-run-parity.log, 0227-submission.txt]
+- **The force gate is now a COST gate, not a value gate**: with parity on, removing the `n >= 20 000`
+  gate is **0 rows different** (probe-diff: 0 improved / 0 regressed, score identical to 4 decimals)
+  while the worst rows go 1.33 s -> **2.162 s** (crudeoil_lee4_09), 1.859 s (gabriel10), 1.822 s
+  (arki0016), 1.760 s (acopf_case9241pegase_qcqp) — two past the 2 s cap. Keep the gate.
+  [0227-parity-everywhere-4cpu.log]
+- The single loss is a *path-dependence* receipt: `wastewater05m1` (n=98) — trace
+  `PARITY n=98 raw=8771 inc=8828 plift=8111 margin_ppm=81218`, row ends 8033 vs 8002 flops because the
+  terminal window-descent ladder found -0.42 % from the raw rule's perm and 0.00 % from the parity
+  winner. So "run the terminal tail from both candidates" would recover ~7e-6 (one row): the open lead
+  that pointed there is CLOSED, not worth its cost. New test-only instrument `SSI_PARITY_TRACE=1`.
+  [0227-parity-on-4cpu.log PHASES, experiments/0227-deferred-lift-parity.md]
+
+2026-09-12 | iter48b | **remote receipt: e07fe7ae PROMOTED at 0.841768 — first dev->hidden transfer calibration for the width class**
+- `e07fe7ae` (sparse-span schedule 5 -> 9 windows, dev 0.791586) promoted at hidden **0.841768**,
+  diff `-0.00009 (-0.01%)` against our own `fe4f40c` (0.841858). Dev relative gain 6.2e-5 (0.62 bip),
+  hidden relative gain 1.07 bip => **hidden relative gain ~1.7x the dev relative gain** for a device
+  that adds search passes touching 14 rows across the corpus. This is the first numeric transfer
+  ratio on this board (the earlier 0199 receipt gave 0.05x for a *removal*, and the fe4f40c step
+  gave >30x, so the ratio is device-class dependent — but for "append a measured search pass" the
+  sign and rough magnitude now transfer at O(1-2x), which is what the parity device (1.34 bips dev)
+  needs). [yukon submissions ledger, 9/12/26 7:30 PM, commit 475be33]
+- Also on the board: our `41baf1ce` (deferred-lift parity, dev -1.06e-4) is validating.
+- Next bats, in the order the receipts now justify: (a) the next width group 13/4/6, 16/4/6, 5/4/3,
+  24/4/11 is priced at -1.4e-5 in-frame (0.18 bip dev, 0226) — sub-bar alone, but with a 1.7x
+  transfer and a second sub-bip device it can clear 1 bip; (b) the 1b adoption rules are now
+  *cost-only* (parity made the gate value-neutral, 0/300 rows differ), so the next value device has
+  to come from a search engine or from the class schedule, not from an adoption rule; (c) the
+  terminal ladder's entry-dependence is real (wastewater05m1: same ladder, -0.42 % from one entry and
+  0.00 % from another) but the second-entry payoff is ~7e-6 unless a *cheap* second entry exists —
+  the ladder itself is the expensive part, so measure the entry-dependence *distribution* before
+  building it.
+
+2026-09-12 | iter48c | **the class exchange window is a trajectory set: 8/4/3 -> 12/4/5 is -1.23 bips in-frame; sweep recorded**
+- Shipped + submitted **ab5adbbd**: `subset_window_descent_step` exchange shape 8/4/3 -> **12/4/5**
+  (ledger unchanged). Production frame, parity on, one binary/session, 4 vCPU, 300 rows:
+  0.791480 -> **0.791383** (-9.7e-5 = -1.23 bips over the parity tree, -2.03e-4 = -2.57 bips over
+  the promoted 9-window frontier). Official local harness 300/300 **OK 0.791383 / 0.924003**
+  (`results.tsv:1789265092`). No-env probe build reproduces the shipped digit, so the seams now
+  default to production. [0227-xchg-*-4cpu.log, 0227-yukon-run-xchg12-retry2.log]
+- The sweep is non-monotone because the window solve is a *set of trajectories* over the same
+  suffix graph: (10,4,3) 0.791467, (12,4,3) **0.791369**, (14,4,3) 0.791460, (16,4,3) 0.791619
+  (worse than shipped), (12,2,3) 0.791501 (sweeps matter), (12,4,5) **0.791383**. `SSI_EXCHANGE_LEDGER`
+  256M on the width-12 shape = 0.791494 — the cost is the wider window's own work, not the ledger.
+- Cost axis decided the shipped shape: (12,4,3) is 1.4e-5 better but puts `crudeoil_lee4_10` at
+  **1.562 s** vs 1.231 s at step 5 (0.33 s of peak-row margin for 1.4e-5). Shipped: 1.435 s worst
+  vs the 1.371 s control. `(8,4,3)->(12,4,3)` is 23 rows better / 3 worse (path dependence again:
+  crudeoil_lee4_06 +0.36 %, transswitch0300p +0.36 %).
+- Environmental note for the next reader: two `yukon run` attempts FAILed the 2 s cap on tiny rows
+  (`clay0204m` n=222, `graphpart_clique-70` n=280) that the pinned probe measures at **0.307 s** and
+  **0.321 s**; the third attempt, at host load 1.9 instead of 5.1, completed 300/300. Re-run before
+  believing a local FAIL. [0227-yukon-run-xchg12*.log]
+
+2026-09-12 | iter48d | **remote FAIL for the parity submission; the two devices are separately ≥1 bip (isolated receipts)**
+- `41baf1ce` (deferred-lift parity) came back **failed** (not rejected) — the local harness had passed
+  300/300 twice with the determinism double-run, so the surviving hypotheses are a hidden-row cap kill
+  (`order()` > 2 s: parity adds one polish pass, ~+0.06..0.15 s, on every row whose lift wins the 4b
+  comparison) or an environmental kill. Attribution is clean: the shipped 9-window tree (`e07fe7ae`)
+  promoted, so the only delta is parity. `ab5adbbd` (parity + exchange 12/4/5) was left in flight.
+- Isolated receipt for the fallback candidate: exchange shape 12/4/5 with `SSI_INDEP_PARITY=0` =
+  **0.791498** vs the 9-window baseline **0.791586** = **-8.7e-5 (-1.11 bips)**, 22 rows better /
+  4 worse, worst `order()` 1.387 s. Parity alone was -1.06e-4; together -2.03e-4 (near-additive), so
+  dropping parity keeps a ≥1-bip device and removes the extra pass. [0227-xchg-w12-s4-t5-parity-off-4cpu.log]
+- Cap-margin lesson, for the next device that only touches *some* rows: a dev peak-row reading does
+  not price a device that adds +0.1 s to ~10 mid-size rows — the second pass never became the dev
+  peak but still died remotely. Price new devices by (peak row) AND (rows touched x added time).
+
+2026-09-12 | iter49 | **the tie reservoir is empty (40x budget probe) and the in-flight (12,4,3) buyback premise is void**
+- Deep lane (isolated worker) died at setup for the **third** time on the same cause —
+  `snapshot requires a regular file <= 16777216 bytes: corpus/dev/patterns.jsonl` (103 879 806 B),
+  `model_phase_entered=false`, `patch_path=null`: no worker ran, so the experiment was executed in the
+  parent lane instead. [~/.angel/loop-experiments/1789265422130-145005/result.json; cockpit/src/harness/loop_experiment.rs:11]
+- Tie census (in-frame control, production frame, one binary/session, 4 vCPU): **76/300 dev rows end at
+  exactly 1.0000** (54 lt_1k, 17 1k_10k, 5 gt_10k) and burn **20.55 s of the 151.87 s** the 300 rows
+  spend (13.5 %); the sub-10 ms ties are the fill-free-certificate rows, the other 69 cost 0.13-0.91 s
+  each. [0228-ties-control-4cpu.log:350]
+- Tie headroom at 40x budget: 2 x 2e9 rungs on all 76 tie rows moves exactly **one** row
+  (hydroenergy1 n=1046: 14089 -> 14087 flops = -1.4e-4) — subset SCORE 0.999999 -> 0.999997 — for
+  +65 s corpus time and worst row 0.908 -> **2.208 s** (over the 2 s cap). "Spend the small rows'
+  unused budget" is dead. [0228-ties-headroom-2e9x2-4cpu.log:350,179]
+- In-flight hypothesis falsified: the exchange seam re-points a site gated `n <= class_n = MAX_N =
+  12_000` (mod.rs:5487, rgreedy.rs:88), so (12,4,3) **cannot touch** the row the buyback was priced on
+  (`crudeoil_lee4_10`, n=17 809); the in-frame A/B over 12 peak rows reads 1.2355 s (step 5) vs
+  1.2342 s (step 3) with ratio 0.6206 both, i.e. the "+0.33 s peak-row cost" that decided the shipped
+  shape was a cross-session artifact (the same tree reads 1.2288 / 1.3295 / 1.5615 s on that row in
+  three sessions). True added cost of step 3 on the in-gate peak rows is <= +0.018 s
+  (chimera_selby-c16-01 1.3488 -> 1.3667 s, ratio 0.6695 -> 0.6669). `13.alt` owns only 0.070 s of
+  lee4_10's 1.229 s, so the proposed deletion could not have paid for it anyway: **corpus-seconds are
+  not convertible into peak-row seconds** — the cap is per-row wall clock.
+  [0228-exchgstep5-peakrows-4cpu.log:52; 0228-exchgstep3-peakrows-4cpu.log:52; 0228-peakrows-phases-4cpu.log:8]
+- Where the binding rows actually spend: `1.portfolio` (AMD baseline + fill-free certificate + the
+  candidate portfolio's build/score) dominates every search stage — lee4_10 0.475/1.229 s,
+  chimera_selby-c16-02 0.758/1.380 s, arki0016 0.489/1.221 s. [0228-peakrows-phases-4cpu.log:8,12,41]
+- Spawn charge: the worker's own startup measures ~0.00 s (3/3 draws, `taskset -c 0-3`), so the two
+  local 2 s kills of rows this binary times at 0.307 s / 0.321 s are host-stall draws (a different row
+  each attempt, 3rd attempt 300/300), not candidate process-frame cost. [0228-worker-exec-cost.txt]
+- Next: price `1.portfolio` **per variant** (cost + win) — the only spender whose removal buys margin
+  on the rows where the cap binds, i.e. the only currency that can re-open the >10k band (40 % of the
+  weight, geomean 0.6849) that every added-work device since 0176 has been killed for.
+
+2026-09-12 | iter50 | **parity removed from production (submitted), + the first per-block portfolio census and an OOD cap map**
+- Remote receipts fetched: `41baf1c` (parity alone) **failed**, `ab5adbb` (parity + exchange 12/4/5)
+  **failed**, frontier still ours (`e07fe7a` 0.841768). The parity pass is therefore the only delta
+  between a tree that promoted and two that died; production now ships the **raw** 4b rule
+  (`indep_parity_on()` is `false` in both frames, `SSI_INDEP_PARITY=1` re-enables the device for A/B),
+  so the probe frame and the graded frame agree on this seam by construction. [yukon submissions]
+- Official local receipt on the resulting tree (300/300, no cap failure): **0.791498 / 0.924102**,
+  buckets 0.8873/0.8374/0.6852 vs the promoted tree's 0.791586/0.924134 = **-8.8e-5 (-1.11 bips)**;
+  crate suite 123 passed / 0 failed / 55 ignored. Submitted as **83a8f4fc** (validating).
+  [0229-yukon-run-xchg12-parityoff.log, 0229-submission.txt, results.tsv]
+- Operational: a long run launched with `nohup ... &` is killed by the tool's process-group cleanup
+  (the first harness attempt printed 9 rows and stopped); long runs must be foreground.
+  [0229b-attempt1-bg-killed-by-tool-pgroup.log]
+- **New instrument — `parallel::stats` + `portstats_line` (test-only)**: per-block generator vs
+  exact-scorer attribution and producer counts inside `1.portfolio`, printed for 12 block
+  boundaries under `SSI_PORTSTATS=1`. First measurements: generation is **12-25x** the scoring cost
+  (chimera_selby-c16-02 gen 2.84 s vs score 0.125 s CPU; lee4_10 1.52 vs 0.117), the candidate count
+  is an **n-window schedule** (574 producers at n=2031/2644, 85 at n=17809, 2-8 above n=240k), and
+  93-99 % of scored candidates never lower the running minimum — but the tail is *not* dead on dev
+  (5 wins per 547 on n=2031) while it is **zero wins for 193 producers / 1.66 s CPU on arki0016**.
+  [0229-blockstats-peakrows-4cpu.log, 0229-portstats-peakrows-4cpu.log]
+- **OOD cap map of the current tree** (`/tmp/ood`, 27 structural rows, 4 vCPU): **7 rows exceed the
+  2 s cap** — kkt_b200x200+400 11.08 s, ba_m6_n40000 6.57 s, kkt_b100x300+300 4.21 s,
+  rand_d8_n60000 3.62 s, rand_d6_n300000 3.57 s, rand_d40_n20000 2.30 s, kkt_b40x200+200 (n=8200)
+  2.19 s. Dev's 1.25 s peak is a fitted property, not a bound. [0229-ood-capmap-4cpu.log]
+- Attribution of the over-cap rows: kkt_b200x200+400 = `1.portfolio` 4.46 + `1b.indep` 1.94 +
+  `9.reduce` 3.43 s (4 portfolio producers, 6.27 s of generator CPU in the first batch alone);
+  kkt_b40x200+200 = portfolio 0.83 + indep 0.80 + reduce 0.16, and its final flush spends 2.08 s of
+  CPU on 26 producers for **zero** minimum improvements. [0229-kkt40400-phases-4cpu.log, 0229-kkt8200-phases-4cpu.log]
+- Density is not the killer: fixed-n sweep n=8000-9950, nnz/n 10→28 stays ≤1.44 s and the producer
+  count *falls* 81→16 with density (the candidate cache key includes the dense-deferred set, so
+  α-variants collapse). [0229-density-scale-4cpu.log]
+- In-band A/B of the in-flight device (12/4/5 vs 8/4/3) over the 18-row scale corpus: max |Δt| =
+  0.035 s, wider window better on all 6 rows whose flops move, no regression.
+  [0229-scale-xchg12-4cpu.log, 0229-scale-xchg8-4cpu.log]
+- **Parity priced on structural rows (the kill mechanism, measured)**: same binary/session, `/tmp/ood`
+  in-band rows — `ood_grid3d_16` (n=4096) 1.0842 → **1.3165 s (+0.232 s, +21 %)** with the pass, value
+  0.7341 → 0.7292; `ood_kkt_b40x200+200` 2.0067 → 2.1174 (already over the cap);
+  `ood_grid2d_40` 0.7574 → 0.9191 s **and its ratio gets worse (0.7754 → 0.7763)** — a second
+  entry-dependence instance on a non-dev structure. 3 rows fired the rule.
+  [0229-ood-parity-off-4cpu.log, 0229-ood-parity-on-4cpu.log]
+
+## iter51 (2026-09-12) — the ledger step priced at last, shipped as `6279dc68`; the schedule axis of determinism measured
+- Four-arm in-frame sweep (one binary, one session, `taskset -c 0-3`, production frame `SSI_INDEP_FORCE=1`,
+  300 dev rows): P (shipped) **0.791498** / L (exchange ledger 512M→1G) **0.791451** / L2 (2G) 0.791446 /
+  X (+4 span widths) 0.791484 / **XL (widths + ledger 1G) 0.791437** / XLP (XL + `SSI_PEO_ROUNDS=5`)
+  0.791440. The ledger curve's knee is 1G (2G buys a further 5e-6); **PEO 5 is rejected** (worse than XL
+  at equal worst-row cost). [0230-arm{P,L,L2,X,XL,XLP}-4cpu.log]
+- Shipped XL: `PRODUCTION_SPAN_WINDOWS` 9 → 13 (`(13,4,6)`, `(16,4,6)`, `(5,4,3)` @64M, `(24,4,11)` @32M)
+  and `PRODUCTION_EXCHANGE_LEDGER` 512M → 1G; 17 rows better / 0 worse; worst `order()` 1.389 → 1.430 s.
+  Official local harness **300/300, 0.791437 / 0.924075** (`results.tsv:1789269816`), gt_10k bucket
+  0.6852 → **0.6850**; submitted **6279dc68** (validating).
+  [0230-official-run-x13-ledger1g.log, 0230-submission-note.md]
+- **New frame — order equivalence (the schedule axis of determinism)**: new test-only probe
+  (`probe_order_equivalence`) runs the same row three times in one process (parallel / forced-sequential /
+  parallel) and compares permutations element-wise. On **300 dev rows + 14 dev peak rows + 18 `/tmp/scale`
+  + 15 `/tmp/band`**: `par_vs_par_diff=0`, `par_vs_seq_diff=0`, `flops_diff=0`. Parallel-order
+  nondeterminism is therefore **killed** as the explanation of the two parity FAILs; the cost
+  explanation stands. The same frame prices the schedule axis: sequential is 20-60 % slower on the peak
+  rows (`arki0016` 1.313 → 1.957 s). [0231-order-equivalence-4cpu.log, src/ordering/probe.rs]
+- Tooling trap found and recorded: `SSI_CORPUS_FILE=/tmp/...` is invisible inside `target/probe-sandbox.sh`
+  (fresh tmpfs at `/tmp`), and the probe **silently falls back to the dev corpus** — the run meant for
+  `/tmp/band` executed 300 dev rows. `target/probe-sandbox-corpora.sh` binds `/tmp/{band,scale,ood}` at
+  `/corpora/*` for structural-frame runs. [0231-order-equivalence-frame.md]
+- Parity device re-priced on the **dev** frame for the first time (from the 0227 arm logs): its 7 mover
+  rows are `crudeoil_lee4_10` −0.76 %, `methanol200` −0.89 %, `torsion50` −0.20 %,
+  `graphpart_3g-0244-0244` −0.18 %, `glider400` −0.019 %, `crudeoil_lee4_09` −0.061 % better and
+  `wastewater05m1` **+0.39 % worse** (the ladder stalls on the raw-better entry: 0.6872 → 0.6872);
+  per-row cost on dev: +0.289 s `cont6-qq`, +0.110 s `edgecross24-115`, +0.092 s on the peak row
+  `chimera_selby-c16-02` (1.304 → 1.397 s). [0227-parity-on-4cpu.log, 0227-parity-off-4cpu.log]
+- In-flight experiment (deep lane) recorded: setup failed for the third time on the same cause
+  (`snapshot requires a regular file <= 16777216 bytes: corpus/dev/patterns.jsonl`, 103 879 806 B,
+  `model_phase_entered=false`, `patch_path=null`); its hypothesis had already been executed and falsified
+  in-lane (0228: the seam cannot touch `crudeoil_lee4_10`, and the "+0.33 s peak cost" that decided the
+  shipped exchange shape is a cross-session artifact).
+- **Remote receipts (fetched 22:4x)**: `83a8f4f` (the exchange-shape tree, dev 0.791498 — the tree that
+  `6279dc6` was built on) **promoted at hidden 0.841666** (new frontier, −1.02e-4 vs `e07fe7a`), and
+  **`6279dc6` failed**. The delta between them is exactly the two devices of this iteration (4 span
+  widths + ledger 1G), which the in-frame sweep priced at **−6.1e-5 dev for +0.041 s on the worst dev
+  row** — so the hidden binding row has **less than 0.041 s** (dev-frame, 4-vCPU) of cap margin left,
+  while the exchange widening (≤0.035 s on its rows, 0229-scale-xchg12/8) promoted. Same class of
+  receipt as the two parity kills (+0.092 s dev peak row). Frontier is ours again: `83a8f4f` 0.841666.
+  [yukon submissions; 0230-armXL-4cpu.log; 0229-scale-xchg12-4cpu.log]
+- **Substitutive device priced and REJECTED on a hidden receipt (0232)**: confining the `13.alt`
+  alternate-seed chain to `n <= 10 000` frees real wall time on the band it abandons
+  (`methanol200` −0.19 s, `arki0013` −0.13 s, `chp_shorttermplan2d` −0.11 s, `gasprod_sarawak81` −0.11 s,
+  `procurement1large`/`crudeoil_pooling_dt2`/`popdynm200`/`mpbp_48` −0.10 s each; corpus 145.2 → 142.4 s)
+  and changes **0 of 300 dev rows' output** — so it looked like pure funding for the ledger step
+  (ASL arm: 0.791451, −4.7e-5, worst row 1.377 → 1.400 s, inside the promoted bracket). But the record
+  already sold this exact experiment remotely: submission `71c2c5fe` (that confinement as its only
+  production delta) **lost 0.843153 vs the frontier's 0.842857 = +2.96e-4 hidden**, i.e. the band is
+  worth 7× our best dev device *while changing no dev row*. [0232-arm{AS,ASL,P2}-4cpu.log;
+  src/ordering/mod.rs:219-223]
+- **Consequence — dev-invisibility is not safety, and it cuts both ways**: the two remote kills
+  (parity, spans+ledger) were *hidden-invisible cost*, while the alt band is *hidden-visible work with
+  zero dev signature*. Any candidate that must be priced on dev alone is unpriced in one of the two
+  currencies, so the next bat needs a device whose funded work is hidden-value-neutral, not merely
+  dev-neutral. Production stays at the promoted frontier (spans 9, ledger 512M, `PEO_ALT_MAX_N` 50 000):
+  no bat is in flight, deliberately — every additive device measured this iteration costs ≥0.041 s on
+  the worst dev row, above the margin the two clean remote receipts bound.
+
+## iter52 — the largest producer spender in the corpus, priced per registration site, and cut at bit-identical output
+
+- **New instrument (test-only): per-registration-site producer census.** `parallel::sites` +
+  `consider!` / `consider_cached!` timing their own closure with `line!()` as the key, dumped per row
+  under `SSI_SITESTATS`. This is the first partition of the portfolio *finer* than the flush-boundary
+  `PORTSTATS` blocks. 300-row dev census (4 vCPU, production frame): **`mod.rs:2163` (the min-fill
+  relabel multi-start) is the single largest producer spender — 33.53 s of the 120.18 s of producer
+  time, 3090 calls, worst row 2.02 s (`oil`, n=3270)**; then `mod.rs:2517` 18.43 s, `mod.rs:2924`
+  14.50 s, everything else 53.7 s. Peak min-fill rows: `blend721` 1.98 s, `slay05m` (n=240) 1.95 s,
+  `syn30m03m` 1.83 s, `exch1263a` (n=94) 1.43 s, `wastepaper4` (n=115) 1.17 s.
+  [0233-sites-dev300.log]
+- **Device: word-parallel deficiency with a per-vertex cost gate** (`minfill_order`). The membership
+  predicate becomes an `n·n`-bit set and a vertex's deficiency is counted 64 pairs at a time
+  (`def = C(deg,2) − (Σ_{a∈N(v)} |N(a)∩N(v)|)/2`) whenever `deg > 2·n/64`, else the old pair scan. Same
+  integer, same examination order, same `deg²/2+1` budget charge, same tie-break, same fallback →
+  **bit-identical output**, verified as **0 of 300 dev rows' `COUNTS` changed** against the pre-change
+  build. Result: min-fill site **33.53 → 22.00 s**, total producer **120.18 → 107.80 s**, peak rows cut
+  4.6× (`oil` 2.023 → 0.437 s, `blend721` 1.980 → 0.401 s, `slay05m` 1.950 → 0.405 s). A **pure**
+  word-parallel version with no gate was rejected: **3.5× slower** corpus-wide (33.53 → 117.09 s),
+  because `n/64` exceeds `deg/2` on the sparse rows that dominate the count — the gate is the device.
+  [0233-bitset-dev300.log, 0233-hybrid-dev300.log]
+- **Shipped bat:** the 13-width span schedule (`+ (26,4,12,32M) (18,4,7,64M) (4,4,2,32M) (32,4,15,32M)`)
+  and the exchange ledger 512M → 1G — the exact pair that failed remotely as `6279dc6` at +0.041 s on the
+  worst dev row — now ride on a tree that is ~0.4 s cheaper on the rows the cap binds (the row that read
+  1.3804 s in the 0228 phases frame reads 0.981 s here; corpus wall 139.4 s / 300 rows, worst row
+  `arki0016` 1.199 s). Official local receipt **0.791439 / 0.924078**, 300/300, zero cap failures
+  (results.tsv `1789273170`), buckets 0.8873 / 0.8374 / 0.6850. Submitted **`e012d8cb`** (`validating`);
+  frontier before this bat: our own `83a8f4c` at hidden 0.841666. [0233-official-run-hybrid-x13-ledger1g.log,
+  0233-submission.txt]
+- **Next (prepped, not yet priced on this base):** the 0226 width group `13/4/6, 16/4/6, 5/4/3, 24/4/11`
+  (measured −1.4e-5 on an older base, 8 rows better / 0 worse, worst `order()` 1.362 s) is disjoint from
+  every shipped width, and the same provable-identity trick has two further targets: `relabel(n, seed)` +
+  `permute_pattern` are recomputed inside the *alpha* loop of the relabel-amf/relabel-metric sites
+  (`mod.rs:2517` 18.4 s, `mod.rs:2924` 14.5 s), where they are pure functions of `(pattern, seed)`.

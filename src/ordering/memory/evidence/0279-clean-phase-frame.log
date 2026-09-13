@@ -1,0 +1,341 @@
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1299:1
+     |
+1299 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1300 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1301 | | /// budget disables the stream, which is what production compiles to — the
+1302 | | /// switch can never change a submitted ordering. Configured through
+1303 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1304 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1585:1
+     |
+1585 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1586 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:335:1
+    |
+335 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+336 | | /// can run the SAME `order()` both ways in one process and compare the
+337 | | /// returned permutations element by element. Production builds compile
+338 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:369:1
+    |
+369 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+370 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+371 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+372 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5199:5
+     |
+5199 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+5200 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+5201 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+5202 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5208 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5209 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5210 |       #[cfg(test)]
+5211 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5212 | |         .ok()
+5213 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5214 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5374:9
+     |
+5374 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5375 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5376 | /         let shipped_ladder = || {
+5377 | |             if nnz < 3 * n {
+5378 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5379 | |             } else if dense_rung_on && nnz >= 10 * n {
+...    |
+5384 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4165:9
+     |
+4165 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `t_refine`
+   --> candidate-worker/src/../../src/ordering/rgreedy/window_dp.rs:763:17
+    |
+763 |             let t_refine = std::time::Instant::now();
+    |                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_t_refine`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:733:29
+    |
+733 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:946:7
+    |
+946 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: function `audit_enabled` is never used
+   --> candidate-worker/src/../../src/ordering/symbolic_flat.rs:316:15
+    |
+316 | pub(super) fn audit_enabled() -> bool {
+    |               ^^^^^^^^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:189:15
+    |
+189 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:314:15
+    |
+314 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:134:4
+    |
+134 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:230:4
+    |
+230 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:725:4
+    |
+725 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:560:19
+    |
+560 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 19 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.01s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+LADGATE	19995	10000	0.799	0
+PHASES	pinene200	1.1000	1.portfolio=0.1776/0.8796	1b.indep=0.0612/0.8796	2.descent=0.0000/0.8796	3.search=0.0000/0.8796	4.subtree=0.2726/0.8483	4b.indep-accept=0.0000/0.8483	5.terminal=0.0045/0.8468	6.extra=0.0000/0.8468	7.telos=0.0000/0.8468	8.cleanup=0.0000/0.8468	9.reduce=0.0652/0.8468	10.completion=0.0105/0.8467	11.corecand=0.0000/0.8467	12.peo=0.0076/0.8467	13p.prep=0.0150/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=18.0000/0.0000	13p.ledger=3877514.0000/0.0000	13p.recon=0.0115/0.0000	13p.mcs=0.0148/0.0000	13.alt=0.0618/0.8467	14.transplant=0.0078/0.8376	15.minl=0.0919/0.8358	15.peel=0.0000/0.8358	16.late=0.0000/0.8358	17.final=0.0431/0.8350	18.simp=0.0000/0.8350	19.five=0.0000/0.8350	20.lt1k=0.0000/0.8350	21.comp=0.0000/0.8350	22.win=0.0000/0.8350	final=0.8336
+LADGATE	19995	10000	0.797	0
+PHASES	pinene200	1.0688	1.portfolio=0.1761/0.8796	1b.indep=0.0618/0.8796	2.descent=0.0000/0.8796	3.search=0.0000/0.8796	4.subtree=0.2729/0.8483	4b.indep-accept=0.0000/0.8483	5.terminal=0.0046/0.8468	6.extra=0.0000/0.8468	7.telos=0.0000/0.8468	8.cleanup=0.0000/0.8468	9.reduce=0.0651/0.8468	10.completion=0.0099/0.8467	11.corecand=0.0000/0.8467	12.peo=0.0076/0.8467	13p.prep=0.0150/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=18.0000/0.0000	13p.ledger=3877514.0000/0.0000	13p.recon=0.0114/0.0000	13p.mcs=0.0144/0.0000	13.alt=0.0613/0.8467	14.transplant=0.0077/0.8376	15.minl=0.0921/0.8358	15.peel=0.0000/0.8358	16.late=0.0000/0.8358	17.final=0.0432/0.8350	18.simp=0.0000/0.8350	19.five=0.0000/0.8350	20.lt1k=0.0000/0.8350	21.comp=0.0000/0.8350	22.win=0.0000/0.8350	final=0.8336
+LIFT	pinene200	19995	15795	89590	15795
+COUNTS	pinene200	19995	97990	1358716	1132609
+COPYSTATS	pinene200	secs=1.069	asm_calls=612	asm_words=125434140	asm_ms=48.1	rst_calls=427658	rst_words=228981940	rst_ms=90.5	rst_tail_ms=48.3	elims=22135596	fullclear_words=140778298	sparse_words=27078734	sparse_clears=0
+LADGATE	5456	10000	0.773	1
+PHASES	rsyn0815m04m	1.0856	1.portfolio=0.2076/0.8705	1b.indep=0.0173/0.8705	2.descent=0.0084/0.8621	3.search=0.0944/0.8324	4.subtree=0.2218/0.8129	4b.indep-accept=0.0000/0.8129	5.terminal=0.0017/0.8129	6.extra=0.0015/0.8129	7.telos=0.0000/0.8129	8.cleanup=0.0159/0.8127	9.reduce=0.0480/0.8127	10.completion=0.0049/0.7915	11.corecand=0.0000/0.7915	12.peo=0.0010/0.7915	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.7915	14.transplant=0.0112/0.7872	15.minl=0.0962/0.7863	15.peel=0.0000/0.7863	16.late=0.0000/0.7863	17.final=0.0424/0.7855	18.simp=0.0021/0.7855	19.five=0.0091/0.7823	20.lt1k=0.0000/0.7823	21.comp=0.0000/0.7823	22.win=0.0000/0.7823	final=0.7779
+LADGATE	5456	10000	0.773	1
+PHASES	rsyn0815m04m	1.0845	1.portfolio=0.2075/0.8705	1b.indep=0.0173/0.8705	2.descent=0.0091/0.8621	3.search=0.0942/0.8324	4.subtree=0.2219/0.8129	4b.indep-accept=0.0000/0.8129	5.terminal=0.0016/0.8129	6.extra=0.0015/0.8129	7.telos=0.0000/0.8129	8.cleanup=0.0159/0.8127	9.reduce=0.0478/0.8127	10.completion=0.0049/0.7915	11.corecand=0.0000/0.7915	12.peo=0.0010/0.7915	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.7915	14.transplant=0.0110/0.7872	15.minl=0.0956/0.7863	15.peel=0.0000/0.7863	16.late=0.0000/0.7863	17.final=0.0423/0.7855	18.simp=0.0022/0.7855	19.five=0.0091/0.7823	20.lt1k=0.0000/0.7823	21.comp=0.0000/0.7823	22.win=0.0000/0.7823	final=0.7779
+LIFT	rsyn0815m04m	5456	2966	10968	2966
+COUNTS	rsyn0815m04m	5456	15756	184352	143402
+COPYSTATS	rsyn0815m04m	secs=1.085	asm_calls=456	asm_words=23793196	asm_ms=12.4	rst_calls=383838	rst_words=121959108	rst_ms=65.0	rst_tail_ms=40.8	elims=20521232	fullclear_words=111055430	sparse_words=23255404	sparse_clears=0
+LADGATE	28368	10000	0.813	0
+PHASES	mpbp_48	1.1023	1.portfolio=0.2867/0.4938	1b.indep=0.0825/0.4938	2.descent=0.0000/0.4938	3.search=0.0000/0.4938	4.subtree=0.1767/0.4858	4b.indep-accept=0.0000/0.4858	5.terminal=0.0038/0.4858	6.extra=0.0000/0.4858	7.telos=0.0000/0.4858	8.cleanup=0.0000/0.4858	9.reduce=0.0257/0.4858	10.completion=0.0067/0.4858	11.corecand=0.0000/0.4858	12.peo=0.0483/0.4858	13p.prep=0.0183/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=18.0000/0.0000	13p.ledger=3775285.0000/0.0000	13p.recon=0.0137/0.0000	13p.mcs=0.0239/0.0000	13.alt=0.0761/0.4858	14.transplant=0.0118/0.4805	15.minl=0.0972/0.4772	15.peel=0.0000/0.4772	16.late=0.0000/0.4772	17.final=0.0054/0.4772	18.simp=0.0000/0.4772	19.five=0.0000/0.4772	20.lt1k=0.0000/0.4772	21.comp=0.0000/0.4772	22.win=0.0000/0.4772	final=0.4746
+LADGATE	28368	10000	0.808	0
+PHASES	mpbp_48	1.0428	1.portfolio=0.2844/0.4938	1b.indep=0.0824/0.4938	2.descent=0.0000/0.4938	3.search=0.0000/0.4938	4.subtree=0.1763/0.4858	4b.indep-accept=0.0000/0.4858	5.terminal=0.0038/0.4858	6.extra=0.0000/0.4858	7.telos=0.0000/0.4858	8.cleanup=0.0000/0.4858	9.reduce=0.0255/0.4858	10.completion=0.0067/0.4858	11.corecand=0.0000/0.4858	12.peo=0.0488/0.4858	13p.prep=0.0188/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=18.0000/0.0000	13p.ledger=3775285.0000/0.0000	13p.recon=0.0138/0.0000	13p.mcs=0.0237/0.0000	13.alt=0.0769/0.4858	14.transplant=0.0117/0.4805	15.minl=0.0938/0.4772	15.peel=0.0000/0.4772	16.late=0.0000/0.4772	17.final=0.0053/0.4772	18.simp=0.0000/0.4772	19.five=0.0000/0.4772	20.lt1k=0.0000/0.4772	21.comp=0.0000/0.4772	22.win=0.0000/0.4772	final=0.4746
+LIFT	mpbp_48	28368	16000	66180	16000
+COUNTS	mpbp_48	28368	91016	33835023	16057644
+COPYSTATS	mpbp_48	secs=1.043	asm_calls=354	asm_words=25837728	asm_ms=9.8	rst_calls=33196	rst_words=208898100	rst_ms=66.3	rst_tail_ms=15.1	elims=8152212	fullclear_words=191466302	sparse_words=13183008	sparse_clears=0
+LADGATE	11659	10000	0.804	0
+PHASES	transswitch0300p	1.2432	1.portfolio=0.1753/0.9724	1b.indep=0.0300/0.9724	2.descent=0.0138/0.9724	3.search=0.0000/0.9724	4.subtree=0.2192/0.9419	4b.indep-accept=0.0000/0.9419	5.terminal=0.0027/0.9419	6.extra=0.0000/0.9419	7.telos=0.0000/0.9419	8.cleanup=0.0277/0.9411	9.reduce=0.1378/0.9411	10.completion=0.0120/0.9387	11.corecand=0.0000/0.9387	12.peo=0.0025/0.9387	13p.prep=0.0200/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=33.0000/0.0000	13p.ledger=3723829.0000/0.0000	13p.recon=0.0130/0.0001	13p.mcs=0.0179/0.0000	13.alt=0.0862/0.9387	14.transplant=0.0121/0.9372	15.minl=0.0773/0.9365	15.peel=0.0000/0.9365	16.late=0.0000/0.9365	17.final=0.0055/0.9365	18.simp=0.0000/0.9365	19.five=0.0124/0.9354	20.lt1k=0.0000/0.9354	21.comp=0.0000/0.9354	22.win=0.0000/0.9354	final=0.9264
+LADGATE	11659	10000	0.814	0
+LIFT	transswitch0300p	11659	6750	41276	6750
+COUNTS	transswitch0300p	11659	48446	404940	375155
+COPYSTATS	transswitch0300p	secs=1.243	asm_calls=756	asm_words=71745712	asm_ms=28.4	rst_calls=246086	rst_words=163885340	rst_ms=58.9	rst_tail_ms=36.4	elims=18265276	fullclear_words=120080960	sparse_words=24910374	sparse_clears=0
+LADGATE	3404	10000	0.820	1
+PHASES	batchs121208m	0.9983	1.portfolio=0.1640/1.0000	1b.indep=0.0101/1.0000	2.descent=0.0025/1.0000	3.search=0.0683/0.9479	4.subtree=0.5108/0.9402	4b.indep-accept=0.0000/0.9402	5.terminal=0.0016/0.9402	6.extra=0.0018/0.9402	7.telos=0.0000/0.9402	8.cleanup=0.0119/0.9351	9.reduce=0.0285/0.9339	10.completion=0.0035/0.9339	11.corecand=0.0000/0.9339	12.peo=0.0005/0.9339	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.9339	14.transplant=0.0038/0.9332	15.minl=0.0038/0.9332	15.peel=0.0000/0.9332	16.late=0.0000/0.9332	17.final=0.0061/0.9332	18.simp=0.0025/0.9332	19.five=0.0035/0.9332	20.lt1k=0.0000/0.9332	21.comp=0.0000/0.9332	22.win=0.0000/0.9332	final=0.9332
+LADGATE	3404	10000	0.824	1
+LIFT	batchs121208m	3404	1725	8392	1725
+COUNTS	batchs121208m	3404	11462	138030	128816
+COPYSTATS	batchs121208m	secs=0.998	asm_calls=398	asm_words=10081774	asm_ms=3.5	rst_calls=1115076	rst_words=127148064	rst_ms=104.6	rst_tail_ms=82.4	elims=34248904	fullclear_words=110385650	sparse_words=36965920	sparse_clears=0
+LADGATE	17809	10000	1.007	0
+PHASES	crudeoil_lee4_10	1.2132	1.portfolio=0.4751/0.6858	1b.indep=0.1408/0.6858	2.descent=0.0000/0.6858	3.search=0.0000/0.6858	4.subtree=0.1606/0.6763	4b.indep-accept=0.0000/0.6512	5.terminal=0.0044/0.6512	6.extra=0.0000/0.6512	7.telos=0.0000/0.6512	8.cleanup=0.0000/0.6512	9.reduce=0.0945/0.6512	10.completion=0.0013/0.6512	11.corecand=0.0000/0.6512	12.peo=0.0145/0.6512	13p.prep=0.0143/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=10.0000/0.0000	13p.ledger=3414409.0000/0.0000	13p.recon=0.0124/0.0000	13p.mcs=0.0227/0.0000	13.alt=0.0606/0.6512	14.transplant=0.0120/0.6278	15.minl=0.0145/0.6278	15.peel=0.0000/0.6278	16.late=0.0000/0.6278	17.final=0.0305/0.6253	18.simp=0.0000/0.6253	19.five=0.0000/0.6253	20.lt1k=0.0000/0.6253	21.comp=0.0000/0.6253	22.win=0.0000/0.6253	final=0.6147
+LADGATE	17809	10000	1.007	0
+PHASES	crudeoil_lee4_10	1.1971	1.portfolio=0.4802/0.6858	1b.indep=0.1394/0.6858	2.descent=0.0000/0.6858	3.search=0.0000/0.6858	4.subtree=0.1609/0.6763	4b.indep-accept=0.0000/0.6512	5.terminal=0.0045/0.6512	6.extra=0.0000/0.6512	7.telos=0.0000/0.6512	8.cleanup=0.0000/0.6512	9.reduce=0.0922/0.6512	10.completion=0.0013/0.6512	11.corecand=0.0000/0.6512	12.peo=0.0129/0.6512	13p.prep=0.0143/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=10.0000/0.0000	13p.ledger=3414409.0000/0.0000	13p.recon=0.0128/0.0000	13p.mcs=0.0221/0.0000	13.alt=0.0603/0.6512	14.transplant=0.0119/0.6278	15.minl=0.0144/0.6278	15.peel=0.0000/0.6278	16.late=0.0000/0.6278	17.final=0.0311/0.6253	18.simp=0.0000/0.6253	19.five=0.0000/0.6253	20.lt1k=0.0000/0.6253	21.comp=0.0000/0.6253	22.win=0.0000/0.6253	final=0.6147
+LIFT	crudeoil_lee4_10	17809	10229	106656	10229
+COUNTS	crudeoil_lee4_10	17809	120632	294531623	181053364
+COPYSTATS	crudeoil_lee4_10	secs=1.197	asm_calls=418	asm_words=12062328	asm_ms=4.2	rst_calls=51136	rst_words=89779914	rst_ms=20.3	rst_tail_ms=13.0	elims=5136066	fullclear_words=53678674	sparse_words=9609890	sparse_clears=0
+LADGATE	14416	10000	0.674	0
+PHASES	procurement1large	1.0942	1.portfolio=0.1780/0.6518	1b.indep=0.0568/0.6518	2.descent=0.0000/0.6518	3.search=0.0000/0.6518	4.subtree=0.2008/0.6493	4b.indep-accept=0.0000/0.6150	5.terminal=0.0032/0.6145	6.extra=0.0000/0.6145	7.telos=0.0000/0.6145	8.cleanup=0.0000/0.6145	9.reduce=0.0782/0.5971	10.completion=0.0173/0.5971	11.corecand=0.0000/0.5971	12.peo=0.0063/0.5971	13p.prep=0.0187/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=28.0000/0.0000	13p.ledger=3920504.0000/0.0000	13p.recon=0.0151/0.0000	13p.mcs=0.0224/0.0000	13.alt=0.0852/0.5971	14.transplant=0.0151/0.5335	15.minl=0.0151/0.5335	15.peel=0.0000/0.5335	16.late=0.0000/0.5335	17.final=0.0309/0.5323	18.simp=0.0000/0.5323	19.five=0.0000/0.5323	20.lt1k=0.0000/0.5323	21.comp=0.0000/0.5323	22.win=0.0000/0.5323	final=0.5275
+LADGATE	14416	10000	0.674	0
+PHASES	procurement1large	1.0888	1.portfolio=0.1780/0.6518	1b.indep=0.0568/0.6518	2.descent=0.0000/0.6518	3.search=0.0000/0.6518	4.subtree=0.2004/0.6493	4b.indep-accept=0.0000/0.6150	5.terminal=0.0033/0.6145	6.extra=0.0000/0.6145	7.telos=0.0000/0.6145	8.cleanup=0.0000/0.6145	9.reduce=0.0775/0.5971	10.completion=0.0176/0.5971	11.corecand=0.0000/0.5971	12.peo=0.0062/0.5971	13p.prep=0.0191/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=28.0000/0.0000	13p.ledger=3920504.0000/0.0000	13p.recon=0.0153/0.0000	13p.mcs=0.0230/0.0000	13.alt=0.0856/0.5971	14.transplant=0.0150/0.5335	15.minl=0.0150/0.5335	15.peel=0.0000/0.5335	16.late=0.0000/0.5335	17.final=0.0312/0.5323	18.simp=0.0000/0.5323	19.five=0.0000/0.5323	20.lt1k=0.0000/0.5323	21.comp=0.0000/0.5323	22.win=0.0000/0.5323	final=0.5275
+LIFT	procurement1large	14416	6606	28248	6606
+COUNTS	procurement1large	14416	41068	13858240	7309631
+COPYSTATS	procurement1large	secs=1.089	asm_calls=590	asm_words=67932652	asm_ms=25.9	rst_calls=108074	rst_words=161906708	rst_ms=50.3	rst_tail_ms=23.0	elims=11793204	fullclear_words=133776546	sparse_words=18416442	sparse_clears=0
+LADGATE	2031	10000	0.644	1
+PHASES	chimera_selby-c16-02	1.1802	1.portfolio=0.3061/0.5557	1b.indep=0.0152/0.5557	2.descent=0.0041/0.5555	3.search=0.0365/0.5548	4.subtree=0.1102/0.5409	4b.indep-accept=0.0000/0.5409	5.terminal=0.0016/0.5409	6.extra=0.0012/0.5409	7.telos=0.0000/0.5409	8.cleanup=0.0166/0.5389	9.reduce=0.0350/0.5389	10.completion=0.0124/0.5389	11.corecand=0.0000/0.5389	12.peo=0.0013/0.5389	13p.prep=0.0082/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=39.0000/0.0000	13p.ledger=2494745.0000/0.0000	13p.recon=0.0098/0.0000	13p.mcs=0.0198/0.0000	13.alt=0.0521/0.5389	14.transplant=0.0070/0.5382	15.minl=0.0215/0.5382	15.peel=0.0000/0.5382	16.late=0.0000/0.5382	17.final=0.0159/0.5381	18.simp=0.0039/0.5380	19.five=0.0099/0.5377	20.lt1k=0.0000/0.5377	21.comp=0.0000/0.5377	22.win=0.0000/0.5377	final=0.5366
+LADGATE	2031	10000	0.665	1
+LIFT	chimera_selby-c16-02	2031	1436	15878	1436
+COUNTS	chimera_selby-c16-02	2031	10878	4280329	2296781
+COPYSTATS	chimera_selby-c16-02	secs=1.180	asm_calls=238	asm_words=3728660	asm_ms=1.0	rst_calls=125578	rst_words=35225798	rst_ms=10.3	rst_tail_ms=12.5	elims=5007456	fullclear_words=28508100	sparse_words=9965190	sparse_clears=0
+LADGATE	5211	10000	0.900	1
+PHASES	chp_partload	1.2658	1.portfolio=0.2481/0.8105	1b.indep=0.0210/0.8105	2.descent=0.0087/0.8082	3.search=0.0834/0.8080	4.subtree=0.3233/0.7839	4b.indep-accept=0.0000/0.7839	5.terminal=0.0017/0.7839	6.extra=0.0016/0.7839	7.telos=0.0000/0.7839	8.cleanup=0.0197/0.7800	9.reduce=0.1159/0.7423	10.completion=0.0107/0.7423	11.corecand=0.0000/0.7423	12.peo=0.0013/0.7423	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.7423	14.transplant=0.0150/0.7407	15.minl=0.0150/0.7407	15.peel=0.0000/0.7407	16.late=0.0000/0.7407	17.final=0.0360/0.7389	18.simp=0.0026/0.7389	19.five=0.0098/0.7370	20.lt1k=0.0000/0.7370	21.comp=0.0000/0.7370	22.win=0.0000/0.7370	final=0.7328
+LADGATE	5211	10000	0.898	1
+PHASES	chp_partload	1.2609	1.portfolio=0.2474/0.8105	1b.indep=0.0210/0.8105	2.descent=0.0086/0.8082	3.search=0.0826/0.8080	4.subtree=0.3237/0.7839	4b.indep-accept=0.0000/0.7839	5.terminal=0.0018/0.7839	6.extra=0.0014/0.7839	7.telos=0.0000/0.7839	8.cleanup=0.0195/0.7800	9.reduce=0.1153/0.7423	10.completion=0.0107/0.7423	11.corecand=0.0000/0.7423	12.peo=0.0013/0.7423	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.7423	14.transplant=0.0149/0.7407	15.minl=0.0149/0.7407	15.peel=0.0000/0.7407	16.late=0.0000/0.7407	17.final=0.0359/0.7389	18.simp=0.0026/0.7389	19.five=0.0098/0.7370	20.lt1k=0.0000/0.7370	21.comp=0.0000/0.7370	22.win=0.0000/0.7370	final=0.7328
+LIFT	chp_partload	5211	3186	12690	3186
+COUNTS	chp_partload	5211	16740	509170	373130
+COPYSTATS	chp_partload	secs=1.261	asm_calls=570	asm_words=23120702	asm_ms=11.3	rst_calls=431032	rst_words=136552956	rst_ms=73.9	rst_tail_ms=46.1	elims=22203878	fullclear_words=124702334	sparse_words=29333914	sparse_clears=0
+LADGATE	10429	10000	0.924	0
+PHASES	crudeoil_lee4_06	1.2179	1.portfolio=0.3106/0.6843	1b.indep=0.0797/0.5424	2.descent=0.0078/0.5424	3.search=0.0000/0.5424	4.subtree=0.1859/0.5185	4b.indep-accept=0.0000/0.5185	5.terminal=0.0031/0.5185	6.extra=0.0000/0.5185	7.telos=0.0000/0.5185	8.cleanup=0.0249/0.5182	9.reduce=0.0604/0.5182	10.completion=0.0053/0.5182	11.corecand=0.0000/0.5182	12.peo=0.0410/0.5182	13p.prep=0.0100/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=13.0000/0.0000	13p.ledger=3816181.0000/0.0000	13p.recon=0.0139/0.0000	13p.mcs=0.0246/0.0000	13.alt=0.0641/0.5182	14.transplant=0.0124/0.5084	15.minl=0.0961/0.5066	15.peel=0.0000/0.5066	16.late=0.0000/0.5066	17.final=0.0295/0.5058	18.simp=0.0000/0.5058	19.five=0.0112/0.5044	20.lt1k=0.0000/0.5044	21.comp=0.0000/0.5044	22.win=0.0000/0.5044	final=0.4951
+LADGATE	10429	10000	0.924	0
+PHASES	crudeoil_lee4_06	1.2168	1.portfolio=0.3122/0.6843	1b.indep=0.0798/0.5424	2.descent=0.0074/0.5424	3.search=0.0000/0.5424	4.subtree=0.1858/0.5185	4b.indep-accept=0.0000/0.5185	5.terminal=0.0032/0.5185	6.extra=0.0000/0.5185	7.telos=0.0000/0.5185	8.cleanup=0.0248/0.5182	9.reduce=0.0598/0.5182	10.completion=0.0053/0.5182	11.corecand=0.0000/0.5182	12.peo=0.0410/0.5182	13p.prep=0.0100/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=13.0000/0.0000	13p.ledger=3816181.0000/0.0000	13p.recon=0.0143/0.0000	13p.mcs=0.0247/0.0000	13.alt=0.0644/0.5182	14.transplant=0.0123/0.5084	15.minl=0.0961/0.5066	15.peel=0.0000/0.5066	16.late=0.0000/0.5066	17.final=0.0292/0.5058	18.simp=0.0000/0.5058	19.five=0.0112/0.5044	20.lt1k=0.0000/0.5044	21.comp=0.0000/0.5044	22.win=0.0000/0.5044	final=0.4951
+LIFT	crudeoil_lee4_06	10429	6797	109128	6797
+COUNTS	crudeoil_lee4_06	10429	55492	65337120	32348553
+COPYSTATS	crudeoil_lee4_06	secs=1.217	asm_calls=430	asm_words=25101878	asm_ms=14.2	rst_calls=116916	rst_words=93590960	rst_ms=37.1	rst_tail_ms=19.3	elims=8666148	fullclear_words=64569424	sparse_words=13876426	sparse_clears=0
+LADGATE	5065	10000	0.818	1
+PHASES	powerflow0118p	1.1654	1.portfolio=0.2047/0.9919	1b.indep=0.0150/0.9919	2.descent=0.0072/0.9919	3.search=0.0731/0.9919	4.subtree=0.2936/0.9707	4b.indep-accept=0.0000/0.9707	5.terminal=0.0015/0.9707	6.extra=0.0015/0.9707	7.telos=0.0000/0.9707	8.cleanup=0.0174/0.9682	9.reduce=0.1346/0.9682	10.completion=0.0036/0.9682	11.corecand=0.0000/0.9682	12.peo=0.0010/0.9682	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.9682	14.transplant=0.0103/0.9681	15.minl=0.0128/0.9681	15.peel=0.0000/0.9681	16.late=0.0000/0.9681	17.final=0.0402/0.9670	18.simp=0.0021/0.9670	19.five=0.0091/0.9666	20.lt1k=0.0000/0.9666	21.comp=0.0000/0.9666	22.win=0.0000/0.9666	final=0.9656
+LADGATE	5065	10000	0.817	1
+LIFT	powerflow0118p	5065	2810	15480	2810
+COUNTS	powerflow0118p	5065	18730	121503	117327
+COPYSTATS	powerflow0118p	secs=1.165	asm_calls=644	asm_words=21848278	asm_ms=10.4	rst_calls=456224	rst_words=126795894	rst_ms=64.0	rst_tail_ms=48.6	elims=23489396	fullclear_words=114800148	sparse_words=27883684	sparse_clears=0
+LADGATE	8508	10000	0.832	1
+PHASES	rsyn0840m04m	1.2724	1.portfolio=0.2072/0.8720	1b.indep=0.0243/0.8720	2.descent=0.0114/0.8720	3.search=0.0000/0.8720	4.subtree=0.2764/0.8411	4b.indep-accept=0.0000/0.8411	5.terminal=0.0019/0.8411	6.extra=0.0016/0.8411	7.telos=0.0000/0.8411	8.cleanup=0.0200/0.8391	9.reduce=0.0434/0.8391	10.completion=0.0066/0.8213	11.corecand=0.0000/0.8213	12.peo=0.0015/0.8213	13p.prep=0.0197/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=55.0000/0.0000	13p.ledger=3468899.0000/0.0000	13p.recon=0.0137/0.0002	13p.mcs=0.0158/0.0000	13.alt=0.0849/0.8213	14.transplant=0.0132/0.8170	15.minl=0.1009/0.8152	15.peel=0.0000/0.8152	16.late=0.0000/0.8152	17.final=0.0400/0.8139	18.simp=0.0000/0.8139	19.five=0.0111/0.8120	20.lt1k=0.0000/0.8120	21.comp=0.0000/0.8120	22.win=0.0000/0.8120	final=0.8040
+LADGATE	8508	10000	0.831	1
+PHASES	rsyn0840m04m	1.2697	1.portfolio=0.2075/0.8720	1b.indep=0.0242/0.8720	2.descent=0.0110/0.8720	3.search=0.0000/0.8720	4.subtree=0.2761/0.8411	4b.indep-accept=0.0000/0.8411	5.terminal=0.0018/0.8411	6.extra=0.0016/0.8411	7.telos=0.0000/0.8411	8.cleanup=0.0201/0.8391	9.reduce=0.0431/0.8391	10.completion=0.0067/0.8213	11.corecand=0.0000/0.8213	12.peo=0.0015/0.8213	13p.prep=0.0197/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=55.0000/0.0000	13p.ledger=3468899.0000/0.0000	13p.recon=0.0137/0.0002	13p.mcs=0.0155/0.0000	13.alt=0.0846/0.8213	14.transplant=0.0129/0.8170	15.minl=0.1004/0.8152	15.peel=0.0000/0.8152	16.late=0.0000/0.8152	17.final=0.0404/0.8139	18.simp=0.0000/0.8139	19.five=0.0112/0.8120	20.lt1k=0.0000/0.8120	21.comp=0.0000/0.8120	22.win=0.0000/0.8120	final=0.8040
+LIFT	rsyn0840m04m	8508	4368	17360	4368
+COUNTS	rsyn0840m04m	8508	24272	229914	184844
+COPYSTATS	rsyn0840m04m	secs=1.270	asm_calls=506	asm_words=38908526	asm_ms=22.3	rst_calls=431362	rst_words=155560574	rst_ms=91.7	rst_tail_ms=49.3	elims=24056512	fullclear_words=136665276	sparse_words=26882062	sparse_clears=0
+LADGATE	4596	10000	0.753	1
+PHASES	gasprod_sarawak16	1.1273	1.portfolio=0.2160/0.9929	1b.indep=0.0107/0.9929	2.descent=0.0071/0.9888	3.search=0.0726/0.9829	4.subtree=0.2455/0.9205	4b.indep-accept=0.0000/0.9205	5.terminal=0.0021/0.9198	6.extra=0.0019/0.9192	7.telos=0.0000/0.9192	8.cleanup=0.0167/0.9172	9.reduce=0.1086/0.9172	10.completion=0.0048/0.9172	11.corecand=0.0000/0.9172	12.peo=0.0010/0.9172	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.9172	14.transplant=0.0101/0.9171	15.minl=0.0129/0.9171	15.peel=0.0000/0.9171	16.late=0.0000/0.9171	17.final=0.0412/0.9168	18.simp=0.0018/0.9168	19.five=0.0090/0.9168	20.lt1k=0.0000/0.9168	21.comp=0.0000/0.9168	22.win=0.0000/0.9168	final=0.9168
+LADGATE	4596	10000	0.753	1
+LIFT	gasprod_sarawak16	4596	2632	12316	2632
+COUNTS	gasprod_sarawak16	4596	15316	213850	196064
+COPYSTATS	gasprod_sarawak16	secs=1.127	asm_calls=532	asm_words=17532092	asm_ms=7.9	rst_calls=373942	rst_words=121246652	rst_ms=55.0	rst_tail_ms=37.5	elims=17550652	fullclear_words=107294282	sparse_words=23000856	sparse_clears=0
+LADGATE	15904	10000	0.988	0
+PHASES	crudeoil_lee4_09	1.2095	1.portfolio=0.3856/0.6866	1b.indep=0.1282/0.6866	2.descent=0.0000/0.6866	3.search=0.0000/0.6866	4.subtree=0.1670/0.6815	4b.indep-accept=0.0000/0.6651	5.terminal=0.0049/0.6647	6.extra=0.0000/0.6647	7.telos=0.0000/0.6647	8.cleanup=0.0000/0.6647	9.reduce=0.0827/0.6647	10.completion=0.0011/0.6647	11.corecand=0.0000/0.6647	12.peo=0.0212/0.6647	13p.prep=0.0153/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=12.0000/0.0000	13p.ledger=3496772.0000/0.0000	13p.recon=0.0128/0.0000	13p.mcs=0.0227/0.0000	13.alt=0.0629/0.6647	14.transplant=0.0120/0.6297	15.minl=0.0960/0.6280	15.peel=0.0000/0.6280	16.late=0.0000/0.6280	17.final=0.0307/0.6258	18.simp=0.0000/0.6258	19.five=0.0000/0.6258	20.lt1k=0.0000/0.6258	21.comp=0.0000/0.6258	22.win=0.0000/0.6258	final=0.6171
+LADGATE	15904	10000	0.989	0
+PHASES	crudeoil_lee4_09	1.2010	1.portfolio=0.3847/0.6866	1b.indep=0.1277/0.6866	2.descent=0.0000/0.6866	3.search=0.0000/0.6866	4.subtree=0.1669/0.6815	4b.indep-accept=0.0000/0.6651	5.terminal=0.0049/0.6647	6.extra=0.0000/0.6647	7.telos=0.0000/0.6647	8.cleanup=0.0000/0.6647	9.reduce=0.0841/0.6647	10.completion=0.0011/0.6647	11.corecand=0.0000/0.6647	12.peo=0.0209/0.6647	13p.prep=0.0149/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=12.0000/0.0000	13p.ledger=3496772.0000/0.0000	13p.recon=0.0129/0.0000	13p.mcs=0.0224/0.0000	13.alt=0.0621/0.6647	14.transplant=0.0120/0.6297	15.minl=0.0970/0.6280	15.peel=0.0000/0.6280	16.late=0.0000/0.6280	17.final=0.0310/0.6258	18.simp=0.0000/0.6258	19.five=0.0000/0.6258	20.lt1k=0.0000/0.6258	21.comp=0.0000/0.6258	22.win=0.0000/0.6258	final=0.6171
+LIFT	crudeoil_lee4_09	15904	10632	92014	10632
+COUNTS	crudeoil_lee4_09	15904	101792	208785578	128851771
+COPYSTATS	crudeoil_lee4_09	secs=1.201	asm_calls=418	asm_words=9830260	asm_ms=3.4	rst_calls=64812	rst_words=78233268	rst_ms=18.5	rst_tail_ms=14.6	elims=6473794	fullclear_words=56291330	sparse_words=11212364	sparse_clears=0
+LADGATE	44909	10000	0.856	0
+PHASES	arki0013	1.2306	1.portfolio=0.2477/0.6159	1b.indep=0.1427/0.4393	2.descent=0.0000/0.4393	3.search=0.0000/0.4393	4.subtree=0.1841/0.4328	4b.indep-accept=0.0000/0.4328	5.terminal=0.0065/0.4328	6.extra=0.0000/0.4328	7.telos=0.0000/0.4328	8.cleanup=0.0000/0.4328	9.reduce=0.0960/0.4328	10.completion=0.0000/0.4328	11.corecand=0.0000/0.4328	12.peo=0.0202/0.4328	13p.prep=0.0292/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=12.0000/0.0000	13p.ledger=3763668.0000/0.0000	13p.recon=0.0153/0.0000	13p.mcs=0.0247/0.0000	13.alt=0.0909/0.4328	14.transplant=0.0146/0.4024	15.minl=0.0190/0.4024	15.peel=0.0000/0.4024	16.late=0.0000/0.4024	17.final=0.0368/0.4021	18.simp=0.0000/0.4021	19.five=0.0000/0.4021	20.lt1k=0.0000/0.4021	21.comp=0.0000/0.4021	22.win=0.0000/0.4021	final=0.3993
+LADGATE	44909	10000	0.890	0
+PHASES	arki0013	1.1963	1.portfolio=0.2886/0.6159	1b.indep=0.1450/0.4393	2.descent=0.0000/0.4393	3.search=0.0000/0.4393	4.subtree=0.1764/0.4328	4b.indep-accept=0.0000/0.4328	5.terminal=0.0065/0.4328	6.extra=0.0000/0.4328	7.telos=0.0000/0.4328	8.cleanup=0.0000/0.4328	9.reduce=0.0942/0.4328	10.completion=0.0000/0.4328	11.corecand=0.0000/0.4328	12.peo=0.0200/0.4328	13p.prep=0.0291/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=12.0000/0.0000	13p.ledger=3763668.0000/0.0000	13p.recon=0.0151/0.0000	13p.mcs=0.0254/0.0000	13.alt=0.0910/0.4328	14.transplant=0.0148/0.4024	15.minl=0.0192/0.4024	15.peel=0.0000/0.4024	16.late=0.0000/0.4024	17.final=0.0366/0.4021	18.simp=0.0000/0.4021	19.five=0.0000/0.4021	20.lt1k=0.0000/0.4021	21.comp=0.0000/0.4021	22.win=0.0000/0.4021	final=0.3993
+LIFT	arki0013	44909	18463	161472	18463
+COUNTS	arki0013	44909	160172	390472987	155907534
+COPYSTATS	arki0013	secs=1.196	asm_calls=410	asm_words=64484612	asm_ms=23.2	rst_calls=25224	rst_words=107532552	rst_ms=29.3	rst_tail_ms=10.6	elims=5824108	fullclear_words=85156562	sparse_words=9960952	sparse_clears=0
+LADGATE	5310	10000	0.854	1
+PHASES	mpbp_47	1.0453	1.portfolio=0.2084/0.9380	1b.indep=0.0157/0.9380	2.descent=0.0087/0.9362	3.search=0.0768/0.9315	4.subtree=0.4153/0.8948	4b.indep-accept=0.0000/0.8948	5.terminal=0.0015/0.8948	6.extra=0.0013/0.8948	7.telos=0.0000/0.8948	8.cleanup=0.0162/0.8943	9.reduce=0.0672/0.8943	10.completion=0.0109/0.8929	11.corecand=0.0000/0.8929	12.peo=0.0010/0.8929	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.8929	14.transplant=0.0091/0.8929	15.minl=0.0150/0.8929	15.peel=0.0000/0.8929	16.late=0.0000/0.8929	17.final=0.0049/0.8929	18.simp=0.0022/0.8929	19.five=0.0080/0.8928	20.lt1k=0.0000/0.8928	21.comp=0.0000/0.8928	22.win=0.0000/0.8928	final=0.8927
+LADGATE	5310	10000	0.856	1
+PHASES	mpbp_47	1.0438	1.portfolio=0.2097/0.9380	1b.indep=0.0153/0.9380	2.descent=0.0090/0.9362	3.search=0.0776/0.9315	4.subtree=0.4174/0.8948	4b.indep-accept=0.0000/0.8948	5.terminal=0.0015/0.8948	6.extra=0.0012/0.8948	7.telos=0.0000/0.8948	8.cleanup=0.0161/0.8943	9.reduce=0.0668/0.8943	10.completion=0.0106/0.8929	11.corecand=0.0000/0.8929	12.peo=0.0009/0.8929	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.8929	14.transplant=0.0090/0.8929	15.minl=0.0148/0.8929	15.peel=0.0000/0.8929	16.late=0.0000/0.8929	17.final=0.0048/0.8929	18.simp=0.0021/0.8929	19.five=0.0078/0.8928	20.lt1k=0.0000/0.8928	21.comp=0.0000/0.8928	22.win=0.0000/0.8928	final=0.8927
+LIFT	mpbp_47	5310	3182	12798	3182
+COUNTS	mpbp_47	5310	17098	730624	652208
+COPYSTATS	mpbp_47	secs=1.044	asm_calls=394	asm_words=22405442	asm_ms=11.8	rst_calls=799400	rst_words=145059474	rst_ms=98.7	rst_tail_ms=66.7	elims=25130420	fullclear_words=125115834	sparse_words=29439424	sparse_clears=0
+LADGATE	7993	10000	1.028	1
+PHASES	arki0016	1.3810	1.portfolio=0.4900/0.9636	1b.indep=0.0550/0.9636	2.descent=0.0000/0.9636	3.search=0.0000/0.9636	4.subtree=0.2191/0.9533	4b.indep-accept=0.0000/0.9533	5.terminal=0.0016/0.9533	6.extra=0.0022/0.9525	7.telos=0.0000/0.9525	8.cleanup=0.0000/0.9525	9.reduce=0.2081/0.9525	10.completion=0.0133/0.9519	11.corecand=0.0000/0.9519	12.peo=0.0017/0.9519	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.9519	14.transplant=0.0093/0.9514	15.minl=0.0167/0.9514	15.peel=0.0000/0.9514	16.late=0.0000/0.9514	17.final=0.0049/0.9514	18.simp=0.0000/0.9514	19.five=0.0111/0.9512	20.lt1k=0.0000/0.9512	21.comp=0.0000/0.9512	22.win=0.0000/0.9512	final=0.9508
+LADGATE	7993	10000	1.028	1
+PHASES	arki0016	1.3730	1.portfolio=0.4923/0.9636	1b.indep=0.0547/0.9636	2.descent=0.0000/0.9636	3.search=0.0000/0.9636	4.subtree=0.2195/0.9533	4b.indep-accept=0.0000/0.9533	5.terminal=0.0017/0.9533	6.extra=0.0022/0.9525	7.telos=0.0000/0.9525	8.cleanup=0.0000/0.9525	9.reduce=0.2060/0.9525	10.completion=0.0132/0.9519	11.corecand=0.0000/0.9519	12.peo=0.0017/0.9519	13p.prep=0.0000/0.0000	13p.seeds=0.0000/0.0000	13p.rounds=0.0000/0.0000	13p.ledger=0.0000/0.0000	13p.recon=0.0000/0.0000	13p.mcs=0.0000/0.0000	13.alt=0.0000/0.9519	14.transplant=0.0092/0.9514	15.minl=0.0166/0.9514	15.peel=0.0000/0.9514	16.late=0.0000/0.9514	17.final=0.0049/0.9514	18.simp=0.0000/0.9514	19.five=0.0113/0.9512	20.lt1k=0.0000/0.9512	21.comp=0.0000/0.9512	22.win=0.0000/0.9512	final=0.9508
+LIFT	arki0016	7993	4968	26810	4968
+COUNTS	arki0016	7993	37208	878890	835661
+COPYSTATS	arki0016	secs=1.373	asm_calls=662	asm_words=25952718	asm_ms=14.4	rst_calls=177560	rst_words=126114414	rst_ms=50.5	rst_tail_ms=32.1	elims=15026480	fullclear_words=98285044	sparse_words=23685810	sparse_clears=0
+LADGATE	2092	10000	0.917	1
+PHASES	hydroenergy2	1.0979	1.portfolio=0.1473/0.8769	1b.indep=0.0044/0.8769	2.descent=0.0014/0.8744	3.search=0.1025/0.8743	4.subtree=0.5306/0.8667	4b.indep-accept=0.0000/0.8667	5.terminal=0.0023/0.8667	6.extra=0.0024/0.8658	7.telos=0.0000/0.8658	8.cleanup=0.0067/0.8528	9.reduce=0.0913/0.8155	10.completion=0.0016/0.8155	11.corecand=0.0016/0.8155	12.peo=0.0004/0.8155	13p.prep=0.0017/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=18.0000/0.0000	13p.ledger=302848.0000/0.0000	13p.recon=0.0012/0.0003	13p.mcs=0.0015/0.0000	13.alt=0.0075/0.8155	14.transplant=0.0028/0.8155	15.minl=0.0028/0.8155	15.peel=0.0000/0.8155	16.late=0.0060/0.8146	17.final=0.0056/0.8146	18.simp=0.0011/0.8146	19.five=0.0014/0.8146	20.lt1k=0.0000/0.8146	21.comp=0.0000/0.8146	22.win=0.0000/0.8146	final=0.8105
+LADGATE	2092	10000	0.915	1
+PHASES	hydroenergy2	1.0954	1.portfolio=0.1478/0.8769	1b.indep=0.0045/0.8769	2.descent=0.0014/0.8744	3.search=0.1018/0.8743	4.subtree=0.5292/0.8667	4b.indep-accept=0.0000/0.8667	5.terminal=0.0023/0.8667	6.extra=0.0024/0.8658	7.telos=0.0000/0.8658	8.cleanup=0.0066/0.8528	9.reduce=0.0911/0.8155	10.completion=0.0016/0.8155	11.corecand=0.0016/0.8155	12.peo=0.0004/0.8155	13p.prep=0.0017/0.0000	13p.seeds=8.0000/0.0000	13p.rounds=18.0000/0.0000	13p.ledger=302848.0000/0.0000	13p.recon=0.0012/0.0003	13p.mcs=0.0015/0.0000	13.alt=0.0075/0.8155	14.transplant=0.0029/0.8155	15.minl=0.0029/0.8155	15.peel=0.0000/0.8155	16.late=0.0060/0.8146	17.final=0.0056/0.8146	18.simp=0.0011/0.8146	19.five=0.0015/0.8146	20.lt1k=0.0000/0.8146	21.comp=0.0000/0.8146	22.win=0.0000/0.8146	final=0.8105
+LIFT	hydroenergy2	2092	1090	4556	1090
+COUNTS	hydroenergy2	2092	6236	69051	55964
+COPYSTATS	hydroenergy2	secs=1.095	asm_calls=472	asm_words=4617966	asm_ms=1.1	rst_calls=1459968	rst_words=91564890	rst_ms=111.9	rst_tail_ms=88.6	elims=36515114	fullclear_words=78954248	sparse_words=40198634	sparse_clears=0
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.3730	arki0016	7993	37208	0.9508
+1.2697	rsyn0840m04m	8508	24272	0.8040
+1.2609	chp_partload	5211	16740	0.7328
+1.2432	transswitch0300p	11659	48446	0.9264
+1.2168	crudeoil_lee4_06	10429	55492	0.4951
+1.2010	crudeoil_lee4_09	15904	101792	0.6171
+1.1971	crudeoil_lee4_10	17809	120632	0.6147
+1.1963	arki0013	44909	160172	0.3993
+1.1802	chimera_selby-c16-02	2031	10878	0.5366
+1.1654	powerflow0118p	5065	18730	0.9656
+1.1273	gasprod_sarawak16	4596	15316	0.9168
+1.0954	hydroenergy2	2092	6236	0.8105
+1.0888	procurement1large	14416	41068	0.5275
+1.0845	rsyn0815m04m	5456	15756	0.7779
+1.0688	pinene200	19995	97990	0.8336
+1.0438	mpbp_47	5310	17098	0.8927
+1.0428	mpbp_48	28368	91016	0.4746
+0.9983	batchs121208m	3404	11462	0.9332
+matrices under 0.010s: 0/18
+matrices under 0.050s: 0/18
+matrices under 0.100s: 0/18
+matrices under 0.200s: 0/18
+matrices under 0.400s: 0/18
+
+--- per-bucket ---
+1k_10k   count=10    geomean=0.8214
+gt_10k   count=8     geomean=0.5891
+SCORE = 0.688626
+WORST order() = 1.373 s
+FORCEAUDIT	stage1b_sites=12	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=6	tie_pass_run=0
+test ordering::probe::probe_timing_and_score ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 42.47s
+

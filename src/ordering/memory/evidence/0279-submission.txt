@@ -1,0 +1,15 @@
+iter79 — bat 3587d1b7 in flight
+===============================
++--------------------------------------------------+
+| Submission queued                                |
+| benchmark   8c3e7051-530a-4aee-88df-a426e6e78151 |
+| submission  3587d1b7-331e-4745-ad1f-0ce89a32bcb5 |
+| status      validating                           |
+| note        7.4 KiB                              |
++--------------------------------------------------+
+
+Tree: promoted profile (no dense rung) + gated basin fork (n <= 600 && nnz <= 5 000).
+Local sandboxed harness: 0.790199 / 0.923124, 300/300, no FAIL; 126 unit tests pass.
+Note: src/ordering/memory/evidence/0279-submission-note.md
+Evidence: 0279-basin-fork.txt, 0279-lt1k-census.tsv, 0279-crown-census.tsv,
+          0279-official-run-fork600-shipped.log, 0279-lineage-chain*.log

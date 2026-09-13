@@ -1,0 +1,41 @@
+iter78 — THE PRE-CLASS PAIR IS VALUED *ON THE ROWS ITS WALL COSTS*, MEASURED IN ONE BINARY
+========================================================================================
+
+Frame: production-identical probe frame (contract corpus, 300 rows, SSI_MARK_NOSCORE=1,
+SSI_EXCHANGE_SWEEPS=12, SSI_XCH_BIGK_PCT=100 = this bat's production point, taskset -c 0-3).
+One binary prices all arms; the new test-only seam `SSI_PRECLASS_NNZ` (mod.rs:5092) sets the
+pair's own nnz key, so the *gate* is the only thing that differs between the pair arms.
+
+  arm                                   SCORE (2 passes)        WORST order()
+  pair OFF (control)                    0.790230 / 0.790230     1.519 / 1.386 s
+  pair LIVE, shipped key nnz<=200 000   0.790208 / 0.790208     1.433 / 1.411 s
+  pair LIVE, slack-only key nnz<=4 000  0.790230 / 0.790230     1.399 / 1.395 s
+
+  => the pair is worth -2.2e-5 dev at its shipped key (reproducing iter75 exactly) and
+     exactly 0.0e-5 dev at the clean key. The slack-only arm is bit-identical to the control.
+
+MOVER CENSUS (per-row `flops(yours)` vs the control arm, one pass each):
+
+  pair LIVE, shipped key: 7 movers of 300, every one of them with nnz > 4 000 —
+      crudeoil_lee1_07         n= 3670 nnz= 19322   -0.710 %
+      pooling_sppa9pq          n= 5030 nnz=120730   -0.448 %
+      chimera_rfr-02           n= 2032 nnz= 15140   -0.137 %
+      chp_shorttermplan1a      n= 4952 nnz= 15700   -0.087 %
+      chimera_mgw-c16-2031-01  n= 2032 nnz= 15900   -0.014 %
+      crudeoil_pooling_ct3     n= 2644 nnz= 11426   +0.001 %   (regression)
+      chimera_lga-01           n= 1120 nnz=  6400   +0.471 %   (regression)
+
+  pair LIVE, slack-only key: 0 movers of 300.
+
+Reading — lead 18 ("gate the pair to the rows with slack") is CLOSED, by measurement:
+  * The pair's entire value sits on rows with 6 400 <= nnz <= 120 730. Below the clean key
+    (nnz <= 4 000, the only clause that excludes every row >= 1.0 s, see
+    0278-prexch-gate-census.txt) it moves *nothing*: the same gate that takes its wall off
+    the cap takes 100 % of its value with it. Value and wall are the same rows.
+  * Consequently the pair is currently unshippable: its wall window is the 6-8 rows that sit
+    within ~0.1 s of the hidden cap (the pair's own last measurement: +0.055 s on the binding
+    row, iter61), and there is no structural clause that separates them from its movers
+    (n <= 5000 would keep 6 of the 7 movers, including both regressions, and every one of
+    those rows is itself in the >= 1.0 s class).
+  * Two of its seven movers REGRESS, so the device is also not monotone: at the shipped key
+    four rows pay for three.

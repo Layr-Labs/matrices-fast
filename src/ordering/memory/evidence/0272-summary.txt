@@ -1,0 +1,89 @@
+iter72 — WHERE THE CAP'S MARGIN IS NOT: the buffer-restore axis, the charge shape, and the width ceiling
+========================================================================================================
+Frame of every number: the production worker unless labelled probe; the probe frame =
+in-process `order()` (probe_timing_and_score), taskset -c 0-3 (or -c 0 for the 1-core
+column). Box load is printed in each artifact (the deep worker was running: /proc/loadavg
+showed 0.76 at the start and 3.20 during the production-frame A/Bs).
+
+1. THE BUFFER-RESTORE AXIS IS ~2 % OF A CAP ROW (kills open lead 18's premise)
+   New cfg(test)-only counters (`copy_stats`, src/ordering/rgreedy.rs:363) around the
+   three bulk touches of the mutable fill-graph bitset: the `assemble` copy
+   (rgreedy.rs:563), the `reset` copy (rgreedy.rs:602) and the full-width row clear in
+   `Game::eliminate` (rgreedy.rs:790). Per-row, probe frame:
+
+   row                          order()   asm calls/words/ms      rst calls/words/ms   rst tail ms  elims       clear words (full | nonzero)
+   crudeoil_lee4_09 (15904)     1.278 s   213 / 20.76 M / 7.6      32409 / 51.0 M / 14.3   6.9        3 240 538   29.05 M | 5.62 M
+   procurement1large (14416)    1.178 s   299 / 46.99 M / 17.8     54039 / 87.47 M / 28.9  10.7       5 891 046   65.63 M | 9.20 M
+   nuclear10a (17493)           1.024 s   210 / 24.57 M / 9.3      26515 / 77.47 M / 19.3   7.9        3 155 108   37.48 M | 6.46 M
+   chimera_selby-c16-01 (2031)  0.994 s   133 / 2.33 M / 0.6       33283 / 13.48 M / 4.4    3.4        1 387 322   11.59 M | 3.04 M
+   -> copies = 1.7-4.0 % of `order()`, and the whole restore axis (copies + reset tail +
+      clear) is 2-5 %. It is NOT the ≥0.09 s the allowance rung needs.
+
+2. THE ALLOCATOR AXIS IS EXHAUSTED (the iter69 pool captured all of it)
+   Production frame, ABBA x2, /usr/bin/time: A = default, B = MALLOC_MMAP_THRESHOLD_=1e9
+   MALLOC_TRIM_THRESHOLD_=-1 — the knobs that moved nd_netgen 0.99->0.73 s BEFORE the pool.
+   Now: chimera-01 A 2.535 / B 2.445, chimera-02 2.545/2.595, lee4_09 2.685/2.630,
+   mpbp_48 2.395/2.400, procurement 2.305/2.425, nuclear10a 2.095/2.205,
+   methanol400 1.745/1.740, pooling_dt3 2.205/2.245, nd_netgen 1.860/1.820 s.
+   Both signs, ±0.12 s under load; minor faults fall only 1-3 %. Nothing left here.
+
+3. THE NONZERO-ONLY ROW CLEAR: value-free by construction, wall a WASH (NOT shipped)
+   The clear at rgreedy.rs:790 writes `w` words per pivot although the preceding scan
+   proved exactly `nonzero_words` of them are non-zero (a 5.2x reduction on lee4_09:
+   29.05 M -> 5.62 M words). Binaries differ by that loop alone; ABBA x4 per row,
+   production frame: chimera-01 -0.008, chimera-02 +0.075, lee4_09 -0.098,
+   mpbp_48 -0.093, procurement -0.018, nuclear10a +0.122 s (user deltas likewise mixed:
+   -0.050/+0.120/-0.147/-0.093/-0.045/+0.077). Mixed sign on the binding row => reverted.
+
+4. THE COMPONENT-WIDTH CEILING IS PRICED FOR THE FIRST TIME (`SSI_XCH_MAX_K`)
+   `refine_window` admits a live component only when `2 <= |C| <= MAX_WIDTH = 14`
+   (window_dp.rs:479, const at :6); `solve_component` then enumerates all `2^k` subsets
+   (window_dp.rs:341 charge, :365 `unions` scratch). Probe frame, min of 2, 4 cores:
+   - K=12: ratios IDENTICAL on all nine crown rows (only chimera-01 0.6669->0.6671) and
+     wall within noise => the k=13-14 bucket is never adopted AND costs nothing.
+   - K=10: wall -0.26 s (chimera-01 0.999->0.744), -0.17 (chimera-02), -0.18
+     (procurement), -0.07 (lee4_09) but the value is real: lee4_09 0.6171->0.6252,
+     methanol400 0.6931->0.7132, procurement 0.5275->0.5315, mpbp_48 0.4746->0.4767,
+     nuclear10a 0.6706->0.6765, chimera-01 0.6669->0.6709 = +415 u-dev on these nine rows.
+   - K=8 is +507 u-dev: the cap cannot fund the allowance ladder (which is worth 150 u-dev).
+
+5. THE LEDGER'S CHARGE SHAPE IS THE ALLOWANCE IN DISGUISE (`SSI_XCH_BIGK_MIN/PCT`)
+   Discounting the charged price of wide components re-allocates the same 2 GiB ledger:
+   - k>=11 @75 %: lee4_09 0.6171->0.6165, pooling_dt3 0.7056->0.7050, mpbp_48
+     0.4746->0.4741 = -17.5 u-dev, at +0.02..+0.07 s on the cap rows.
+   - k>=11 @50 %: -22.2 u-dev; k>=12 @50 %: exactly the same ratios => the value is k=11.
+   - k>=13 @50 %: ratios and wall identical to base (inert, like the K=12 ceiling).
+   - ledger -10 % alone: +16.4 u-dev (lee4_09 0.6171->0.6185) at LOWER wall on every row.
+   - k>=11 @75 % + ledger -10 %: +0.9 u-dev, i.e. the gain is exactly cancelled by the
+     ledger cut needed to pay for its wall. The shape is not a separate dial.
+
+6. WHERE THE CAP ROWS ACTUALLY SPEND (probe frame, SSI_PROBE_PHASES / SSI_XCH_TIME)
+   - 1 core: crudeoil_lee4_09 2.072 s = 1.portfolio 0.787 + 1b.indep 0.330 + 4.subtree
+     0.329 + 9.reduce 0.112 + 15.minl 0.099 + 13.alt 0.063 + 17.final 0.058 ...
+     chimera_selby-c16-01 1.507 s = 1.portfolio 0.765 (51 %) + 9.reduce 0.075 + 15.minl 0.064.
+   - 4 cores: chimera-01 1.007 s = 1.portfolio 0.331 + 9.reduce 0.066 + 15.minl 0.052;
+     mpbp_48 1.156 s = 1.portfolio 0.292 + 4.subtree 0.224 + 15.minl 0.095 + 1b.indep 0.082.
+   - the base separator family is INERT on these rows: SSI_NO_PART=0 (all METIS/Scotch/
+     KaHIP base passes off) and SSI_NO_PART_EX=0 (variants off) leave both the ratios and
+     `1.portfolio` unchanged on all ten rows (0.7219/0.7538/0.5557/0.4938/... identical).
+   - the exchange's `win` contains `dp` (they differ by 3-6 ms): chimera-01 win 0.291 /
+     dp 0.288 of 0.978 s for 8 526 components; lee4_09 0.165/0.160 of 1.280 for 10 678;
+     mpbp_48 0.077/0.067 of 1.155 for 1 219. Width histogram k>=9: 8-12 % of calls but
+     ~88 % of the `2^k·k` DP steps (chimera-01 hist [4387,1681,1391,461,594,12]).
+   - the exchange's *seam-addressable* blocks are value-free AND wall-free here:
+     SSI_NO_CUSTOM=0, SSI_NO_MINFILL=0, SSI_PEO_ROUNDS=0, SSI_XCH_ALLOC=0 each leave all
+     six cap rows' ratios identical to 4 dp and the wall within +-0.02 s.
+
+7. THE TREE IS UNCHANGED (instruments only): `cargo test --release -p
+   ssi-candidate-worker` 126 passed / 0 failed; the official local sandboxed harness
+   reproduces the shipped table row for row (0 of 300 rows differ from
+   `0270-official-run-alloc2.log`), 0.790282 / 0.923147, results.tsv:1789317324.
+
+FILES
+  0272-copy-phase-xch-crown.txt   COPYSTATS + PHASES + XCHSPLIT, 4-core and 1-core, 11 rows
+  0272-alloc-knob-ab.txt          the allocator A/B on nine cap rows (production frame)
+  0272-sparseclear-ab.txt         nonzero-only vs full-width clear, ABBA x4, six rows
+  0272-kceiling-{14,12,10,08}.log the width-ceiling curve, nine crown rows
+  0272-bigk-discount.log          the charge-shape curve (100/50/25 %, k>=13 control)
+  0272-price-table.txt            the analytic bucket levers and every arm priced in u-dev
+  0272-official-run-instruments.log  official local run of the instrumented tree

@@ -1,0 +1,771 @@
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1299:1
+     |
+1299 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1300 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1301 | | /// budget disables the stream, which is what production compiles to — the
+1302 | | /// switch can never change a submitted ordering. Configured through
+1303 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1304 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1585:1
+     |
+1585 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1586 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:335:1
+    |
+335 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+336 | | /// can run the SAME `order()` both ways in one process and compare the
+337 | | /// returned permutations element by element. Production builds compile
+338 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:369:1
+    |
+369 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+370 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+371 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+372 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5186:5
+     |
+5186 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+5187 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+5188 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+5189 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5195 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5196 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5197 |       #[cfg(test)]
+5198 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5199 | |         .ok()
+5200 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5201 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5338:9
+     |
+5338 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5339 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5340 | /         let shipped_ladder = || {
+5341 | |             if nnz < 3 * n {
+5342 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5343 | |             } else {
+...    |
+5346 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4165:9
+     |
+4165 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `t_refine`
+   --> candidate-worker/src/../../src/ordering/rgreedy/window_dp.rs:743:17
+    |
+743 |             let t_refine = std::time::Instant::now();
+    |                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_t_refine`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:733:29
+    |
+733 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:946:7
+    |
+946 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: function `audit_enabled` is never used
+   --> candidate-worker/src/../../src/ordering/symbolic_flat.rs:316:15
+    |
+316 | pub(super) fn audit_enabled() -> bool {
+    |               ^^^^^^^^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:189:15
+    |
+189 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:314:15
+    |
+314 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:134:4
+    |
+134 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:230:4
+    |
+230 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:725:4
+    |
+725 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:560:19
+    |
+560 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 19 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.01s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+CERT	name	n	nnz	edges	fill	certified	shipped_ratio
+LADGATE	357	10000	0.230	1
+CERT	slay06m	357	1080	540	1113	0	1.000000
+LADGATE	401	10000	0.267	1
+CERT	sssd25-08	401	1200	600	1325	0	1.000000
+LADGATE	4772	10000	0.756	1
+CERT	rsyn0810m04m	4772	13836	6918	18067	0	0.767229
+CERT	pooling_sppc3pq	23173	893724	446862	2295441	0	0.282175
+LADGATE	1131	10000	0.482	1
+CERT	sporttournament48	1131	6676	3338	24246	0	0.643663
+LADGATE	5030	10000	0.326	1
+CERT	pooling_sppa9pq	5030	120730	60365	183822	0	0.634036
+LADGATE	1053	10000	0.303	1
+CERT	edgecross10-090	1053	5204	2602	5805	0	0.818134
+CERT	maxcsp-ehi-85-297-71	2372	207996	103998	1408498	0	0.804021
+LADGATE	30	10000	0.209	1
+CERT	st_bpaf1a	30	120	60	123	0	0.930979
+LADGATE	1462	10000	0.422	1
+CERT	risk2bpb	1462	5396	2698	7509	0	0.557444
+LADGATE	255	10000	0.108	1
+CERT	qap	255	43748	21874	25839	0	0.959916
+LADGATE	7252	10000	0.692	1
+CERT	rsyn0830m04m	7252	20752	10376	26580	0	0.808457
+LADGATE	1073	10000	0.244	1
+CERT	lop97icx	1073	2118	1059	4190	0	0.807759
+LADGATE	1201	10000	0.181	1
+CERT	chain400	1201	4796	2398	4398	0	1.000000
+LADGATE	9532	10000	0.811	1
+CERT	mpbp_07	9532	30810	15405	57731	0	0.912023
+LADGATE	440	10000	0.317	1
+CERT	sonetgr17	440	2958	1479	2966	0	0.819035
+LADGATE	2207	10000	0.356	1
+CERT	p_ball_30b_7p_2d_h	2207	7516	3758	7774	0	0.996773
+LADGATE	19995	10000	0.840	0
+CERT	pinene200	19995	97990	48995	144434	0	0.833588
+CERT	unitcommit_200_100_1_mod_8	146830	476332	238166	500270	0	0.976390
+LADGATE	123	10000	0.305	1
+CERT	ex8_3_9	123	834	417	1098	0	0.764319
+LADGATE	2486	10000	0.521	1
+CERT	rsyn0820m02m	2486	6932	3466	8256	0	0.936764
+LADGATE	293	10000	0.282	1
+CERT	p_ball_10b_5p_2d_m	293	964	482	1138	0	0.984807
+LADGATE	170	10000	0.211	1
+CERT	pooling_adhya4tp	170	936	468	1586	0	0.766746
+LADGATE	7295	10000	0.218	1
+CERT	squfl015-080persp	7295	21600	10800	20600	0	1.000000
+LADGATE	1053	10000	0.288	1
+CERT	edgecross10-080	1053	5940	2970	6292	0	0.963850
+LADGATE	590	10000	0.337	1
+CERT	clay0204hfsg	590	1696	848	1908	0	0.911642
+LADGATE	13	10000	0.176	1
+CERT	st_bsj2	13	40	20	39	0	0.797203
+LADGATE	440	10000	0.352	1
+CERT	chimera_mgw-c8-439-onc8-002	440	3038	1519	5470	0	0.881986
+LADGATE	5188	10000	0.788	1
+CERT	batchs201210m	5188	17910	8955	21964	0	0.868545
+LADGATE	5456	10000	0.786	1
+CERT	rsyn0815m04m	5456	15756	7878	21002	0	0.777871
+LADGATE	560	10000	0.307	1
+CERT	syn40m	560	1528	764	1611	0	0.964450
+LADGATE	2157	10000	0.207	1
+CERT	knp5-44	2157	32604	16302	38039	0	1.000000
+LADGATE	94	10000	0.215	1
+CERT	ex1263a	94	390	195	392	0	1.000000
+CERT	st_e41	8	32	16	24	1	1.000000
+LADGATE	2305	10000	0.270	1
+CERT	squfl025-030	2305	6000	3000	7105	0	1.000000
+LADGATE	98	10000	0.261	1
+CERT	wastewater05m1	98	536	268	834	0	0.684517
+CERT	cvxnonsep_psig20	20	380	190	210	1	1.000000
+LADGATE	4405	10000	0.170	1
+CERT	meanvar-orl400_05_e_8	4405	171604	85802	91408	0	0.999963
+LADGATE	301	10000	0.293	1
+CERT	st_e31	301	744	372	994	0	0.938906
+CERT	pooling_sppc1pq	14100	477680	238840	1565388	0	0.168289
+LADGATE	31	10000	0.210	1
+CERT	pooling_haverly1pq	31	96	48	106	0	0.978155
+LADGATE	128	10000	0.232	1
+CERT	graphpart_3g-0244-0244	128	672	336	1622	0	0.972732
+LADGATE	80	10000	0.238	1
+CERT	graphpart_clique-20	80	1260	630	1397	0	0.798509
+LADGATE	28368	10000	0.780	0
+CERT	mpbp_48	28368	91016	45508	262367	0	0.474137
+CERT	pooling_sppb5pq	18529	674470	337235	1228957	0	0.407723
+LADGATE	497	10000	0.262	1
+CERT	slay07m	497	1512	756	1554	0	1.000000
+CERT	nvs19	24	200	100	145	0	0.653363
+LADGATE	3270	10000	0.640	1
+CERT	oil	3270	8430	4215	10069	0	0.957233
+LADGATE	2775	10000	0.350	1
+CERT	squfl015-060	2775	7200	3600	8280	0	1.000000
+LADGATE	1112	10000	0.455	1
+CERT	ndcc12persp	1112	5522	2761	11053	0	0.952119
+CERT	kissing2	20772	401024	200512	482006	0	1.000000
+LADGATE	1942	10000	0.515	1
+CERT	nuclear25a	1942	16030	8015	33075	0	0.574657
+LADGATE	222	10000	0.235	1
+CERT	clay0204m	222	704	352	682	0	1.000000
+LADGATE	23	10000	0.186	1
+CERT	st_ph13	23	68	34	63	0	0.859903
+LADGATE	1053	10000	0.375	1
+CERT	edgecross10-030	1053	4654	2327	5900	0	0.736673
+LADGATE	601	10000	0.209	1
+CERT	chain200	601	2396	1198	2198	0	1.000000
+LADGATE	25	10000	0.214	1
+CERT	ex1223b	25	66	33	64	0	1.000000
+LADGATE	2718	10000	0.471	1
+CERT	slay09h	2718	7488	3744	8991	0	0.898161
+LADGATE	974	10000	0.456	1
+CERT	ndcc12	974	5982	2991	12452	0	0.952693
+LADGATE	1306	10000	0.423	1
+CERT	kall_circlesrectangles_c6r39	1306	5378	2689	7958	0	0.985029
+LADGATE	9170	10000	0.387	1
+CERT	squfl020-150	9170	24000	12000	27360	0	1.000000
+CERT	autocorr_bern40-30	43	1534	767	810	1	1.000000
+LADGATE	660	10000	0.284	1
+CERT	slay08m	660	2016	1008	2068	0	1.000000
+LADGATE	2032	10000	0.563	1
+CERT	chimera_mgw-c16-2031-01	2032	15900	7950	58577	0	0.771712
+LADGATE	713	10000	0.389	1
+CERT	forest	713	2658	1329	2450	0	0.993311
+LADGATE	280	10000	0.134	1
+CERT	qspp_0_10_0_1_10_1	280	29636	14818	16691	0	0.994599
+LADGATE	16	10000	0.186	1
+CERT	st_ph1	16	58	29	58	0	0.850365
+LADGATE	124	10000	0.212	1
+CERT	elf	124	376	188	475	0	0.795097
+LADGATE	18	10000	0.199	1
+CERT	ex3_1_3	18	36	18	38	0	0.922222
+CERT	cvxnonsep_normcon40r	162	322	161	323	1	1.000000
+LADGATE	155	10000	0.283	1
+CERT	demo7	155	618	309	627	0	0.957251
+LADGATE	615	10000	0.332	1
+CERT	waternd2	615	2580	1290	5276	0	0.480600
+LADGATE	64	10000	0.253	1
+CERT	prolog	64	292	146	259	0	0.983936
+LADGATE	11	10000	0.167	1
+CERT	ex14_1_8	11	30	15	28	0	1.000000
+CERT	faclay75	272878	1379706	689853	3449330	0	0.940482
+LADGATE	55	10000	0.167	1
+CERT	st_qpk3	55	548	274	429	0	0.688129
+LADGATE	11556	10000	0.524	0
+CERT	mpbp_34	11556	40860	20430	89469	0	0.287992
+CERT	cvxnonsep_normcon20r	82	162	81	163	1	1.000000
+CERT	cvxnonsep_psig20r	86	170	85	171	1	1.000000
+LADGATE	18742	10000	0.656	0
+CERT	crudeoil_pooling_dt2	18742	75910	37955	193874	0	0.661015
+LADGATE	2868	10000	0.884	1
+CERT	rsyn0805m03m	2868	8270	4135	10341	0	0.899162
+CERT	st_iqpbk1	22	98	49	71	1	1.000000
+LADGATE	96	10000	0.294	1
+CERT	waterund01	96	404	202	512	0	0.729652
+LADGATE	29	10000	0.195	1
+CERT	pointpack04	29	120	60	113	0	1.000000
+LADGATE	12	10000	0.161	1
+CERT	st_e22	12	30	15	29	0	0.909091
+LADGATE	16678	10000	0.420	0
+CERT	faclay30	16678	82242	41121	116585	0	0.955215
+LADGATE	4432	10000	0.401	1
+CERT	arki0002	4432	11248	5624	28164	0	0.976441
+LADGATE	11659	10000	0.816	0
+CERT	transswitch0300p	11659	48446	24223	52822	0	0.926446
+LADGATE	30660	10000	0.744	0
+CERT	crudeoil_pooling_dt3	30660	152210	76105	542121	0	0.704985
+LADGATE	22536	10000	0.491	0
+CERT	gasprod_sarawak81	22536	75636	37818	113176	0	0.911750
+LADGATE	660	10000	0.343	1
+CERT	maxcsp-langford-3-11	660	29646	14823	128241	0	0.309799
+LADGATE	1543	10000	0.337	1
+CERT	p_ball_30b_5p_2d_h	1543	5224	2612	5373	0	0.996092
+LADGATE	6709	10000	0.340	1
+CERT	ringpack_20_3	6709	45220	22610	50226	0	0.358417
+LADGATE	4825	10000	0.534	1
+CERT	waste	4825	21504	10752	41827	0	0.865411
+LADGATE	2001	10000	0.185	1
+CERT	catmix400	2001	11192	5596	8397	0	0.999753
+LADGATE	3054	10000	0.580	1
+CERT	rsyn0815m02hfsg	3054	7968	3984	10068	0	0.927809
+LADGATE	1236	10000	0.290	1
+CERT	p_ball_10b_7p_3d_h	1236	4186	2093	4450	0	0.973913
+LADGATE	1225	10000	0.601	1
+CERT	chimera_k64ising-02	1225	3846	1923	13636	0	0.605067
+LADGATE	3404	10000	0.864	1
+CERT	batchs121208m	3404	11462	5731	13388	0	0.933246
+LADGATE	11	10000	0.162	1
+CERT	nvs02	11	46	23	36	0	1.000000
+LADGATE	191	10000	0.270	1
+CERT	wastepaper6	191	1416	708	1511	0	1.000000
+LADGATE	399	10000	0.281	1
+CERT	syn15hfsg	399	1022	511	1110	0	0.991515
+LADGATE	36	10000	0.196	1
+CERT	st_jcbpaf2	36	246	123	203	0	0.943731
+CERT	camshape400	2000	7188	3594	5594	1	1.000000
+LADGATE	120	10000	0.249	1
+CERT	graphpart_clique-30	120	2790	1395	3045	0	0.796061
+LADGATE	280	10000	0.185	1
+CERT	graphpart_clique-70	280	14910	7455	15972	0	0.810251
+CERT	smallinvDAXr1b010-011	39	1120	560	602	0	0.985862
+LADGATE	22074	10000	0.378	0
+CERT	nd_netgen-2000-3-4-b-a-ns_7	22074	60000	30000	66306	0	0.942354
+LADGATE	240	10000	0.240	1
+CERT	slay05m	240	720	360	745	0	1.000000
+LADGATE	2031	10000	0.565	1
+CERT	chimera_selby-c16-01	2031	10964	5482	58548	0	0.666577
+LADGATE	110	10000	0.204	1
+CERT	csched1	110	376	188	323	0	1.000000
+LADGATE	1310	10000	0.122	1
+CERT	watercontamination0303r	1310	37028	18514	20194	0	1.000000
+LADGATE	15	10000	0.162	1
+CERT	ex9_2_4	15	36	18	41	0	1.000000
+LADGATE	163	10000	0.205	1
+CERT	sssd15-04	163	440	220	497	0	1.000000
+CERT	autocorr_bern35-35fix	38	1264	632	670	1	1.000000
+LADGATE	1491	10000	0.317	1
+CERT	sfacloc2_4_90	1491	4500	2250	5482	0	0.910391
+CERT	cont6-qq	120395	557994	278997	3829110	0	0.696163
+LADGATE	5205	10000	0.150	1
+CERT	meanvar-orl400_05_e_7	5205	174804	87402	95408	0	0.999836
+LADGATE	10017	10000	0.293	0
+CERT	glider400	10017	49624	24812	56862	0	0.877840
+LADGATE	4960	10000	0.883	1
+CERT	syn40m04m	4960	13792	6896	15340	0	0.958822
+LADGATE	31	10000	0.214	1
+CERT	ex2_1_3	31	72	36	73	0	1.000000
+LADGATE	705	10000	0.407	1
+CERT	qapw	705	87496	43748	69878	0	1.000000
+LADGATE	14	10000	0.156	1
+CERT	himmel11	14	60	30	48	0	1.000000
+LADGATE	1908	10000	0.342	1
+CERT	syn15m04m	1908	5288	2644	5890	0	0.960412
+LADGATE	118	10000	0.286	1
+CERT	pooling_rt2tp	118	654	327	710	0	0.986385
+LADGATE	333	10000	0.279	1
+CERT	waterund14	333	2204	1102	4846	0	0.360049
+LADGATE	17809	10000	0.908	0
+test ordering::probe::probe_floor_certificate has been running for over 60 seconds
+CERT	crudeoil_lee4_10	17809	120632	60316	850849	0	0.614300
+LADGATE	1294	10000	0.386	1
+CERT	pooling_foulds4pq	1294	8302	4151	9770	0	0.998904
+LADGATE	3097	10000	0.304	1
+CERT	edgecross14-156	3097	19664	9832	23053	0	0.925421
+LADGATE	72	10000	0.228	1
+CERT	tspn08	72	668	334	722	0	0.686292
+LADGATE	4225	10000	0.584	1
+CERT	crudeoil_li05	4225	14628	7314	28014	0	0.784464
+LADGATE	14416	10000	0.660	0
+CERT	procurement1large	14416	41068	20534	129276	0	0.526091
+LADGATE	1428	10000	0.280	1
+CERT	blend721	1428	4548	2274	6432	0	0.852798
+LADGATE	2031	10000	0.592	1
+CERT	chimera_selby-c16-02	2031	10878	5439	61133	0	0.536590
+LADGATE	16640	10000	0.376	0
+CERT	supplychainr1_053050	16640	57800	28900	77190	0	1.000000
+LADGATE	5067	10000	0.618	1
+CERT	sfacloc2_4_80	5067	21424	10712	18036	0	0.955249
+CERT	st_e24	10	26	13	24	0	0.890625
+LADGATE	1053	10000	0.289	1
+CERT	edgecross10-040	1053	5116	2558	6187	0	0.886729
+LADGATE	8232	10000	0.321	1
+CERT	sonet21v6	8232	40744	20372	40593	0	0.965046
+LADGATE	2490	10000	0.272	1
+CERT	squfl010-080	2490	6400	3200	7335	0	1.000000
+LADGATE	221	10000	0.244	1
+CERT	genpooling_lee2	221	1048	524	1469	0	0.705102
+LADGATE	2807	10000	0.635	1
+CERT	popdynm25	2807	13904	6952	23533	0	0.796165
+LADGATE	5211	10000	0.903	1
+CERT	chp_partload	5211	16740	8370	30122	0	0.732820
+LADGATE	560	10000	0.219	1
+CERT	qspp_0_14_0_1_10_1	560	120274	60137	67314	0	0.994977
+LADGATE	24	10000	0.193	1
+CERT	st_glmp_ss1	24	66	33	60	0	1.000000
+LADGATE	2508	10000	0.442	1
+CERT	torsion50	2508	29808	14904	51713	0	0.661675
+LADGATE	40	10000	0.203	1
+CERT	st_rv2	40	340	170	255	0	1.000000
+LADGATE	6885	10000	0.196	1
+CERT	emfl100_3_3	6885	15948	7974	18972	0	1.000000
+CERT	pedigree_sim400	351	23546	11773	12125	0	0.999744
+CERT	polygon75	5846	49652	24826	30672	1	1.000000
+CERT	gabriel10	244056	1148210	574105	4641114	0	0.928462
+LADGATE	1049	10000	0.274	1
+CERT	fo9_ar25_1	1049	4336	2168	4928	0	0.917659
+LADGATE	1159	10000	0.369	1
+CERT	rsyn0840m	1159	3168	1584	3388	0	0.940394
+LADGATE	548	10000	0.365	1
+CERT	gancns	548	2800	1400	4214	0	0.842057
+LADGATE	1049	10000	0.256	1
+CERT	o9_ar4_1	1049	4336	2168	4928	0	0.917659
+LADGATE	123	10000	0.287	1
+CERT	ex1265a	123	560	280	598	0	0.949848
+LADGATE	28	10000	0.204	1
+CERT	ex9_2_6	28	68	34	70	0	1.000000
+LADGATE	481	10000	0.162	1
+CERT	qspp_0_13_0_1_10_1	481	88522	44261	49577	0	0.994804
+LADGATE	146	10000	0.247	1
+CERT	slay04m	146	432	216	450	0	1.000000
+CERT	st_e25	20	92	46	72	0	0.779762
+LADGATE	32	10000	0.217	1
+CERT	ex8_4_1	32	100	50	83	0	1.000000
+LADGATE	19	10000	0.202	1
+CERT	st_e07	19	60	30	59	0	1.000000
+LADGATE	26	10000	0.213	1
+CERT	ex1225	26	66	33	65	0	0.941520
+LADGATE	969	10000	0.432	1
+CERT	ndcc13	969	5882	2941	15162	0	0.618278
+LADGATE	1224	10000	0.297	1
+CERT	syn10m04m	1224	3384	1692	3643	0	0.997185
+LADGATE	18	10000	0.199	1
+CERT	ex5_2_4	18	62	31	56	0	0.946078
+LADGATE	72	10000	0.224	1
+CERT	st_m2	72	1226	613	895	0	1.000000
+LADGATE	16	10000	0.197	1
+CERT	st_bpk1	16	44	22	41	0	0.939130
+LADGATE	736	10000	0.460	1
+CERT	multiplants_stg1	736	3594	1797	7462	0	0.785341
+LADGATE	11251	10000	0.801	0
+CERT	powerflow0300p	11251	41918	20959	46019	0	0.951704
+LADGATE	33155	10000	0.511	0
+CERT	nd_netgen-3000-1-1-b-b-ns_7	33155	90000	45000	104449	0	0.958386
+LADGATE	803	10000	0.443	1
+CERT	sonet23v4	803	6462	3231	6963	0	0.675347
+LADGATE	1649	10000	0.389	1
+CERT	pooling_sppa0pq	1649	24192	12096	46806	0	0.316981
+LADGATE	645	10000	0.432	1
+CERT	multiplants_mtg1b	645	4404	2202	8065	0	0.662742
+LADGATE	338	10000	0.258	1
+CERT	sssd18-08persp	338	1168	584	1142	0	1.000000
+LADGATE	19	10000	0.202	1
+CERT	ex9_1_2	19	54	27	58	0	0.952128
+LADGATE	3670	10000	0.854	1
+CERT	crudeoil_lee1_07	3670	19322	9661	58998	0	0.745253
+LADGATE	31	10000	0.209	1
+CERT	pooling_haverly1tp	31	96	48	107	0	0.952719
+LADGATE	230	10000	0.222	1
+CERT	waterund08	230	1290	645	1852	0	0.853361
+LADGATE	76	10000	0.174	1
+CERT	kall_diffcircles_6	76	302	151	281	0	1.000000
+LADGATE	440	10000	0.345	1
+CERT	chimera_mgw-c8-439-onc8-001	440	3040	1520	5611	0	0.752167
+LADGATE	160	10000	0.266	1
+CERT	waterund11	160	828	414	1064	0	0.722432
+LADGATE	16364	10000	0.671	0
+CERT	chp_shorttermplan2d	16364	52108	26054	94481	0	0.502534
+LADGATE	156	10000	0.296	1
+CERT	sporttournament18	156	886	443	1476	0	0.774590
+CERT	cvxnonsep_psig30	30	870	435	465	1	1.000000
+LADGATE	6089	10000	0.341	1
+CERT	ringpack_20_2	6089	40368	20184	43892	0	0.377856
+LADGATE	1386	10000	0.296	1
+CERT	blend718	1386	4310	2155	6033	0	0.873655
+LADGATE	115	10000	0.296	1
+CERT	wastepaper4	115	724	362	955	0	0.739677
+LADGATE	2450	10000	0.299	1
+CERT	squfl010-040persp	2450	7200	3600	6895	0	1.000000
+LADGATE	10429	10000	0.889	0
+CERT	crudeoil_lee4_06	10429	55492	27746	318972	0	0.494619
+LADGATE	1746	10000	0.539	1
+CERT	netmod_kar1	1746	4928	2464	6824	0	0.771737
+LADGATE	14	10000	0.161	1
+CERT	ex8_1_7	14	46	23	41	0	0.934307
+LADGATE	108	10000	0.207	1
+CERT	graphpart_3g-0333-0333	108	648	324	1724	0	0.806357
+LADGATE	760	10000	0.325	1
+CERT	slay05h	760	2080	1040	2505	0	0.896077
+LADGATE	156	10000	0.308	1
+CERT	korcns	156	712	356	907	0	0.911338
+LADGATE	5065	10000	0.840	1
+CERT	powerflow0118p	5065	18730	9365	20221	0	0.965630
+LADGATE	4799	10000	0.666	1
+CERT	sfacloc2_3_80	4799	20600	10300	16960	0	0.958038
+LADGATE	6028	10000	0.691	1
+CERT	rsyn0820m04m	6028	17372	8686	22868	0	0.775804
+LADGATE	1046	10000	0.241	1
+CERT	hydroenergy1	1046	3024	1512	3435	0	1.000000
+LADGATE	181	10000	0.203	1
+CERT	maxmin	181	1440	720	925	0	1.000000
+LADGATE	8	10000	0.181	1
+CERT	st_ht	8	18	9	19	0	0.862745
+LADGATE	6418	10000	0.837	1
+CERT	crudeoil_lee2_06	6418	34646	17323	156769	0	0.681662
+LADGATE	3183	10000	0.468	1
+CERT	kan_r3_h1_n4	3183	14062	7031	15983	0	0.940464
+LADGATE	378	10000	0.286	1
+CERT	primary	378	5610	2805	3575	0	0.868833
+LADGATE	1071	10000	0.298	1
+CERT	syn10m03hfsg	1071	2772	1386	3044	0	0.992113
+LADGATE	36	10000	0.221	1
+CERT	wastewater02m1	36	138	69	162	0	0.931604
+LADGATE	4620	10000	0.356	1
+CERT	supplychainr1_022020	4620	15680	7840	20540	0	0.999854
+LADGATE	3800	10000	0.222	1
+CERT	squfl025-025persp	3800	11250	5625	10975	0	1.000000
+LADGATE	17999	10000	0.663	0
+CERT	ringpack_30_2	17999	121458	60729	144580	0	0.231087
+CERT	nuclear104	39098	257806	128903	575283	0	0.759348
+LADGATE	4952	10000	0.655	1
+CERT	chp_shorttermplan1a	4952	15700	7850	23582	0	0.796378
+LADGATE	555	10000	0.343	1
+CERT	rocket50	555	3488	1744	3233	0	0.964069
+LADGATE	8508	10000	0.842	1
+CERT	rsyn0840m04m	8508	24272	12136	30568	0	0.803970
+LADGATE	11716	10000	0.643	0
+CERT	mpbp_21	11716	37660	18830	69382	0	0.861540
+LADGATE	172	10000	0.240	1
+CERT	orth_d4m6_pl	172	1096	548	1024	0	0.978515
+LADGATE	1681	10000	0.450	1
+CERT	kall_circlespolygons_c1p5b	1681	7432	3716	12051	0	0.960755
+CERT	acopf_case9241pegase_qcqp	313068	1292408	646204	1996335	0	0.973719
+LADGATE	33	10000	0.220	1
+CERT	ex1223	33	82	41	86	0	1.000000
+LADGATE	10	10000	0.180	1
+CERT	ex6_1_4	10	48	24	41	0	0.776650
+LADGATE	403	10000	0.281	1
+CERT	powerflow0014r	403	1630	815	1799	0	0.962829
+LADGATE	2065	10000	0.229	1
+CERT	knp5-43	2065	31132	15566	36336	0	1.000000
+LADGATE	21688	10000	0.626	0
+CERT	gabriel09	21688	89702	44851	238444	0	0.869493
+LADGATE	32	10000	0.212	1
+CERT	tln2	32	88	44	83	0	1.000000
+LADGATE	22	10000	0.196	1
+CERT	prob02	22	76	38	69	0	0.868914
+LADGATE	1422	10000	0.310	1
+CERT	blend146	1422	4460	2230	6340	0	0.823231
+LADGATE	4518	10000	0.429	1
+CERT	mpbp_46	4518	14492	7246	25651	0	0.896018
+LADGATE	413	10000	0.358	1
+CERT	tls6	413	2860	1430	2477	0	0.947411
+LADGATE	21925	10000	0.349	0
+CERT	emfl100_5_5	21925	52300	26150	62300	0	1.000000
+LADGATE	341	10000	0.148	1
+CERT	qspp_0_11_0_1_10_1	341	44264	22132	24841	0	0.991079
+LADGATE	403	10000	0.271	1
+CERT	p_ball_10b_5p_4d_m	403	1484	742	1743	0	0.978426
+LADGATE	90	10000	0.258	1
+CERT	st_rv9	90	840	420	691	0	0.944702
+LADGATE	3486	10000	0.666	1
+CERT	rsyn0840m02m	3486	9576	4788	11123	0	0.946391
+LADGATE	22	10000	0.197	1
+CERT	nvs05	22	84	42	73	0	0.960289
+CERT	autocorr_bern25-19	28	612	306	334	1	1.000000
+LADGATE	356	10000	0.264	1
+CERT	sssd20-08persp	356	1232	616	1208	0	1.000000
+LADGATE	827	10000	0.559	1
+CERT	multiplants_stg5	827	3804	1902	9712	0	0.412188
+LADGATE	2032	10000	0.587	1
+CERT	chimera_rfr-02	2032	15140	7570	61737	0	0.644574
+LADGATE	726	10000	0.494	1
+CERT	multiplants_stg1a	726	3510	1755	6500	0	0.854883
+LADGATE	170	10000	0.235	1
+CERT	pooling_adhya4pq	170	932	466	1514	0	0.680925
+LADGATE	17493	10000	0.657	0
+CERT	nuclear10a	17493	163816	81908	420095	0	0.670600
+LADGATE	874	10000	0.450	1
+CERT	sonet24v5	874	7260	3630	8094	0	0.593987
+CERT	transswitch2736spr	69651	331010	165505	436299	0	0.917860
+LADGATE	8992	10000	0.477	1
+CERT	chp_shorttermplan2a	8992	26288	13144	41100	0	0.700027
+LADGATE	1001	10000	0.194	1
+CERT	catmix200	1001	5592	2796	4197	0	0.999505
+CERT	nvs23	27	252	126	181	0	0.635606
+LADGATE	20	10000	0.209	1
+CERT	oaer	20	40	20	45	0	1.000000
+LADGATE	168	10000	0.191	1
+CERT	hybriddynamic_fixed	168	388	194	421	0	1.000000
+LADGATE	16747	10000	0.508	0
+CERT	edgecross24-115	16747	77352	38676	169764	0	0.801444
+LADGATE	1178	10000	0.290	1
+CERT	space25	1178	4334	2167	4219	0	0.955913
+LADGATE	23999	10000	0.646	0
+CERT	methanol400	23999	151728	75864	222594	0	0.693063
+LADGATE	1218	10000	0.438	1
+CERT	pooling_foulds5tp	1218	8364	4182	11055	0	0.682758
+LADGATE	5040	10000	0.639	1
+CERT	pooling_sppa9tp	5040	121302	60651	422292	0	0.161338
+CERT	st_miqp2	10	18	9	19	1	1.000000
+CERT	autocorr_bern30-23	33	878	439	472	1	1.000000
+LADGATE	9858	10000	0.716	1
+CERT	mpbp_15	9858	31692	15846	59074	0	0.777151
+CERT	cvxnonsep_psig30r	126	250	125	251	1	1.000000
+LADGATE	1590	10000	0.447	1
+CERT	rsyn0830hfsg	1590	4100	2050	4768	0	0.951447
+LADGATE	1271	10000	0.496	1
+CERT	crudeoil_pooling_ct1	1271	4642	2321	7967	0	0.747664
+LADGATE	800	10000	0.482	1
+CERT	multiplants_stg1c	800	3894	1947	7047	0	0.953219
+LADGATE	11	10000	0.184	1
+CERT	st_pan1	11	32	16	33	0	0.764228
+LADGATE	814	10000	0.488	1
+CERT	multiplants_stg1b	814	3992	1996	8958	0	0.607860
+LADGATE	11999	10000	0.695	0
+CERT	methanol200	11999	76128	38064	111194	0	0.701828
+LADGATE	26778	10000	0.545	0
+CERT	faclay35	26778	132380	66190	204090	0	0.952177
+LADGATE	13175	10000	0.214	0
+CERT	emfl050_5_5	13175	32300	16150	38550	0	1.000000
+CERT	transswitch2383wpr	59853	277562	138781	333165	0	0.978512
+LADGATE	1120	10000	0.456	1
+CERT	chimera_lga-01	1120	6400	3200	17755	0	0.740575
+LADGATE	4596	10000	0.720	1
+CERT	gasprod_sarawak16	4596	15316	7658	23086	0	0.916830
+LADGATE	15904	10000	0.914	0
+CERT	crudeoil_lee4_09	15904	101792	50896	691520	0	0.616476
+LADGATE	44909	10000	0.818	0
+CERT	arki0013	44909	160172	80086	888037	0	0.398944
+LADGATE	42	10000	0.172	1
+CERT	st_m1	42	432	216	313	0	1.000000
+LADGATE	5310	10000	0.832	1
+CERT	mpbp_47	5310	17098	8549	31840	0	0.892673
+LADGATE	821	10000	0.499	1
+CERT	rsyn0815m	821	2242	1121	2414	0	0.937651
+LADGATE	7993	10000	0.862	1
+CERT	arki0016	7993	37208	18604	47956	0	0.950814
+LADGATE	18	10000	0.197	1
+CERT	st_glmp_ss2	18	48	24	45	0	1.000000
+LADGATE	2670	10000	0.667	1
+CERT	rsyn0810m02hfsg	2670	6964	3482	8720	0	0.943899
+LADGATE	55	10000	0.182	1
+CERT	pointpack06	55	276	138	241	0	1.000000
+LADGATE	6328	10000	0.323	1
+CERT	syn40m04hfsg	6328	16896	8448	19016	0	0.964503
+LADGATE	258	10000	0.231	1
+CERT	clay0304m	258	840	420	798	0	1.000000
+LADGATE	1218	10000	0.333	1
+CERT	pooling_foulds5pq	1218	8300	4150	9583	0	1.000000
+LADGATE	1000	10000	0.374	1
+CERT	clay0305hfsg	1000	2910	1455	3240	0	0.916803
+LADGATE	64	10000	0.228	1
+CERT	st_test8	64	232	116	333	0	0.838242
+CERT	gams05	17364	252910	126455	4367430	0	0.527420
+LADGATE	31	10000	0.207	1
+CERT	sporttournament08	31	156	78	154	0	1.000000
+LADGATE	1121	10000	0.361	1
+CERT	powerflow0030p	1121	4194	2097	4436	0	0.947803
+LADGATE	22407	10000	0.743	0
+CERT	popdynm200	22407	105584	52792	184922	0	0.936411
+LADGATE	11120	10000	0.692	0
+CERT	mpbp_35	11120	40790	20395	88343	0	0.321164
+LADGATE	1492	10000	0.491	1
+CERT	syn30m02m	1492	3936	1968	4248	0	0.978403
+LADGATE	481	10000	0.321	1
+CERT	wastewater13m1	481	3252	1626	3561	0	0.998886
+LADGATE	1022	10000	0.320	1
+CERT	syn40hfsg	1022	2624	1312	2848	0	0.967149
+LADGATE	69	10000	0.209	1
+CERT	sep1	69	206	103	253	0	0.954421
+LADGATE	2508	10000	0.433	1
+CERT	syn30m03m	2508	6804	3402	7428	0	0.990525
+CERT	st_qpc-m3a	30	304	152	210	0	0.675536
+LADGATE	2644	10000	0.643	1
+CERT	crudeoil_pooling_ct3	2644	11426	5713	31346	0	0.626200
+LADGATE	634	10000	0.359	1
+CERT	space25a	634	3246	1623	3386	0	0.958629
+CERT	autocorr_bern20-15	23	394	197	220	1	1.000000
+LADGATE	35	10000	0.220	1
+CERT	ex7_2_1	35	134	67	104	0	0.968750
+LADGATE	2092	10000	0.987	1
+CERT	hydroenergy2	2092	6236	3118	8655	0	0.810473
+LADGATE	514	10000	0.347	1
+CERT	pooling_digabel19	514	5340	2670	9389	0	0.843289
+LADGATE	132	10000	0.245	1
+CERT	clay0203m	132	420	210	402	0	1.000000
+LADGATE	13680	10000	0.301	0
+CERT	squfl030-150	13680	36000	18000	41115	0	1.000000
+
+CERT-SUMMARY	certified_rows=16
+CERT-SUMMARY	shipped_at_floor=75	of_which_certified=16
+CERT-FLOOR	st_e41	n=8	nnz=32
+CERT-FLOOR	cvxnonsep_psig20	n=20	nnz=380
+CERT-FLOOR	autocorr_bern40-30	n=43	nnz=1534
+CERT-FLOOR	cvxnonsep_normcon40r	n=162	nnz=322
+CERT-FLOOR	cvxnonsep_normcon20r	n=82	nnz=162
+CERT-FLOOR	cvxnonsep_psig20r	n=86	nnz=170
+CERT-FLOOR	st_iqpbk1	n=22	nnz=98
+CERT-FLOOR	camshape400	n=2000	nnz=7188
+CERT-FLOOR	autocorr_bern35-35fix	n=38	nnz=1264
+CERT-FLOOR	polygon75	n=5846	nnz=49652
+CERT-FLOOR	cvxnonsep_psig30	n=30	nnz=870
+CERT-FLOOR	autocorr_bern25-19	n=28	nnz=612
+CERT-FLOOR	st_miqp2	n=10	nnz=18
+CERT-FLOOR	autocorr_bern30-23	n=33	nnz=878
+CERT-FLOOR	cvxnonsep_psig30r	n=126	nnz=250
+CERT-FLOOR	autocorr_bern20-15	n=23	nnz=394
+test ordering::probe::probe_floor_certificate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 152.84s
+

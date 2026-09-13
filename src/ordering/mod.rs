@@ -396,6 +396,28 @@ fn indep_force_off() -> bool {
     std::env::var("SSI_INDEP_FORCE").is_err()
 }
 
+
+/// ── 0227: DEFERRED-LIFT PARITY (the 4b comparison's own asymmetry) ─────────
+/// The 4b rule compares the held lift's value as scored at 1b (raw) against the
+/// incumbent's value *after* 2.descent + 3.search + the 4.subtree chain. When
+/// the raw lift wins it is installed raw, so it enters the terminal stages
+/// unpolished, while the forced arm (n >= 20k) hands the lift that whole polish
+/// instead. Measured on dev, that asymmetry is exactly where the two frames
+/// disagree (`crudeoil_lee4_10`: 0.6253 deferred, 0.6206 forced). With parity on
+/// (production) the lift is given the identical polish and the better of the two
+/// *polished* candidates is kept, so the row can only improve; the price is one
+/// extra polish pass, and only on rows whose lift actually wins the 4b
+/// comparison. `SSI_INDEP_PARITY=0` (test-only) restores the raw rule.
+#[cfg(test)]
+fn indep_parity_off() -> bool {
+    std::env::var("SSI_INDEP_PARITY").map(|v| v.trim() == "0").unwrap_or(false)
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+fn indep_parity_off() -> bool {
+    false
+}
 /// ── 0219: EARLY-ARBITRATION BAND for the held stage-1b lift (test-only) ─────
 /// The held `indep_deferred` lift is compared with the incumbent at 4b — i.e.
 /// *after* the subtree cascade has already been spent on whichever candidate
@@ -636,6 +658,20 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 ];
 const PRODUCTION_EXCHANGE_LEDGER: i64 = 536_870_912;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
+
+/// ── iter47b (test-only seam): the NEXT sparse-span widths ───────────────────
+/// The shipped schedule is a schedule, not a fixpoint — four appended widths paid
+/// −4.9e-5 in-frame (0222). This is the next candidate group, priced by appending
+/// it to the shipped nine (`SSI_SPAN_WINDOWS_EXTRA`). Every pass accepts only a
+/// strict exact decrease, so the measurement is purely "residual value, and what
+/// does it cost"; nothing here ships until that measurement says so.
+#[cfg(test)]
+const SPAN_WINDOWS_EXTRA: [(usize, usize, usize, i64); 4] = [
+    (13, 4, 6, 64_000_000),
+    (16, 4, 6, 64_000_000),
+    (5, 4, 3, 64_000_000),
+    (24, 4, 11, 32_000_000),
+];
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
 const LADDER_FILL_CAP: usize = 64;
@@ -2960,6 +2996,26 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     } else {
         PAIR_DESCENT_OPS_BUDGET
     };
+    // ── 0227: DEFERRED-LIFT PARITY ──────────────────────────────────────────
+    // Stage 1b holds the lift (instead of adopting it) when it leads the
+    // portfolio incumbent by less than the immediate margin. The incumbent then
+    // runs the whole pre-terminal polish below; the held lift is compared against
+    // it RAW at 4b and, when it wins, installed raw — while the forced arm
+    // (n >= 20k) hands the lift that polish instead. That asymmetry is the whole
+    // difference between the two frames (lee4_10: 0.6253 deferred, 0.6206
+    // forced). This macro is that polish as a unit, so the deferred lift can be
+    // given the same pass before the 4b comparison and the better of the two
+    // *polished* candidates kept — never worse than the raw comparison, since the
+    // polished lift is <= the raw one. `SSI_INDEP_PARITY=0` (test-only) restores
+    // the raw rule so one binary can price both in-frame.
+    const SIMPLICIAL_PROMOTION_MIN_N: usize = 3;
+    const SIMPLICIAL_PROMOTION_MAX_N: usize = 6_000;
+    const SIMPLICIAL_PROMOTION_MAX_NNZ: usize = 100_000;
+    const SIMPLICIAL_PROMOTION_MAX_DENSITY: usize = 24;
+    const SIMPLICIAL_PROMOTION_OPS_BUDGET: i64 = 64_000_000;
+
+    macro_rules! pre_terminal_polish {
+        () => {{
     let well_below;
     let medium_exact_gate;
     let mid_engine_gate;
@@ -2986,11 +3042,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // vertices across a local lookahead window. Because simplicial pivots add
     // zero fill edges, early elimination is provably safe and avoids premature
     // clique coupling. Re-scored against exact flops; strictly monotonic.
-    const SIMPLICIAL_PROMOTION_MIN_N: usize = 3;
-    const SIMPLICIAL_PROMOTION_MAX_N: usize = 6_000;
-    const SIMPLICIAL_PROMOTION_MAX_NNZ: usize = 100_000;
-    const SIMPLICIAL_PROMOTION_MAX_DENSITY: usize = 24;
-    const SIMPLICIAL_PROMOTION_OPS_BUDGET: i64 = 64_000_000;
 
     if (SIMPLICIAL_PROMOTION_MIN_N..=SIMPLICIAL_PROMOTION_MAX_N).contains(&n)
         && nnz > 0
@@ -3491,19 +3542,44 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    }};
+    }
+    pre_terminal_polish!();
 
     #[cfg(test)]
     parallel::phase_mark("4.subtree", _tph, markval!(best_perm, best_flops));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
-    // Independent-set-first acceptance (see stage 1b): a lift that still beats
-    // the subtree-polished incumbent becomes the incumbent for the remaining
-    // stages. Every later stage is monotone, so a lift that loses here cannot
-    // win later; nothing is held back past this point.
-    if let Some((f, cand)) = indep_deferred {
+    // Independent-set-first acceptance (see stage 1b), now on *polished* pairs.
+    // The held lift was scored at 1b, before any of the stages above ran; the
+    // incumbent above has been through all of them. Raw-vs-polished biased this
+    // rule against the lift on rows where the polish is worth more than the
+    // lift's lead (and let the raw lift through unpolished where it did win),
+    // which is the whole measured difference between the deferred and forced
+    // frames. Parity (0227) runs the same polish on the lift and compares like
+    // with like; `SSI_INDEP_PARITY=0` restores the raw rule for A/B.
+    if let Some((f, cand)) = indep_deferred.take() {
         if f < best_flops {
-            best_flops = f;
-            best_perm = cand;
+            if indep_parity_off() {
+                best_flops = f;
+                best_perm = cand;
+            } else {
+                let inc_flops = best_flops;
+                let inc_perm = std::mem::replace(&mut best_perm, cand);
+                best_flops = f;
+                pre_terminal_polish!();
+                #[cfg(test)]
+                if std::env::var("SSI_PARITY_TRACE").is_ok() {
+                    println!(
+                        "PARITY\tn={n}\traw={f}\tinc={inc_flops}\tplift={best_flops}\tmargin_ppm={}",
+                        (inc_flops as i128 - best_flops as i128) * 1_000_000 / inc_flops.max(1) as i128
+                    );
+                }
+                if best_flops >= inc_flops {
+                    best_perm = inc_perm;
+                    best_flops = inc_flops;
+                }
+            }
         }
     }
     #[cfg(test)]
@@ -5530,16 +5606,25 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // allowance* (small = 16M+16M+32M, full = 32M+32M+64M) separately
             // from the factor bound; `SSI_FOLLOWUP_FULL_WINDOWS` re-points it so
             // one binary measures both arms.
+            // iter47b seam (test-only): append the next candidate width group to
+            // the shipped schedule so one binary prices it in-frame; unset, and in
+            // any `cfg(not(test))` build, the shipped list is used verbatim.
             #[cfg(test)]
-            let span_windows: &[(usize, usize, usize, i64)] =
-                if std::env::var_os("SSI_FOLLOWUP_SMALL_WINDOWS").is_some() {
-                    &[(48, 4, 19, 16_000_000), (9, 4, 4, 16_000_000), (8, 4, 3, 32_000_000)]
-                } else {
-                    &PRODUCTION_SPAN_WINDOWS
-                };
+            let span_windows: Vec<(usize, usize, usize, i64)> = {
+                let mut v: Vec<(usize, usize, usize, i64)> =
+                    if std::env::var_os("SSI_FOLLOWUP_SMALL_WINDOWS").is_some() {
+                        vec![(48, 4, 19, 16_000_000), (9, 4, 4, 16_000_000), (8, 4, 3, 32_000_000)]
+                    } else {
+                        PRODUCTION_SPAN_WINDOWS.to_vec()
+                    };
+                if std::env::var_os("SSI_SPAN_WINDOWS_EXTRA").is_some() {
+                    v.extend_from_slice(&SPAN_WINDOWS_EXTRA);
+                }
+                v
+            };
             #[cfg(not(test))]
             let span_windows: &[(usize, usize, usize, i64)] = &PRODUCTION_SPAN_WINDOWS;
-            for &(width, sweeps, step, budget) in span_windows {
+            for &(width, sweeps, step, budget) in span_windows.iter() {
                 if let Some(candidate) = rgreedy::sparse_span_window_descent(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     width, sweeps, step, budget,

@@ -307,3 +307,37 @@ round, so note the round if you know it.
   environment artifact, not a candidate defect; it cannot be used as the local gate while the host
   is in this state. [0219h-harness-cap-mechanism.txt, 0219h-harness-run.log, results.tsv:1789256564,
   results.tsv:1789256667]
+
+2026-09-12 | iter47 | **the sparse-span schedule is not a fixpoint — four more widths pay 0.49 bip in-frame, and the class's n-band is inert by construction**
+- Shipped and submitted: `PRODUCTION_SPAN_WINDOWS` 5 -> 9 (append 10/4/4, 11/4/4, 14/4/5,
+  6/4/3 at 64M each). In-frame A/B, one binary, one session, 4-vCPU, production frame
+  (`SSI_INDEP_FORCE=1`), 300 rows: 0.791635 (worst 1.221 s) -> **0.791586** (worst 1.266 s),
+  **14 rows better / 0 worse / 286 identical**, corpus wall +5.0 %. Suite 123/0/55; official
+  local harness 300/300 at 0.791586 / 0.924134; submission **e07fe7ae** validating,
+  claimed 0.791586, identity deepseek-v4-flash / angelX (stamped).
+  [0222-span-widths-extra-4cpu.log, 0223-shipped-9windows-verification.log,
+  0224-yukon-run-9windows.log, results.tsv:1789259342, 0225-submission.txt]
+- Two arms measured and REJECTED, both for structural reasons: `SSI_TERM_CLASS_N` 12000 ->
+  16000/22000 = **-3e-6** (worst row +0.11..0.15 s) because the window/span family is gated
+  inside `rgreedy` (`MAX_N=12000` in `Game::build_adj`/`Game::new`): on the ten newly admitted
+  rows CLASSTRACE shows `xchg candidate=0` everywhere and the followup's spans leave the value
+  unchanged on all five rows that pass the 150k factor key; the band's rows that *have*
+  structure carry factor-nonzero 365k-690k. `SSI_FOLLOWUP_FACTOR` 150k -> 1M = **-1.0e-5**
+  (worst row +0.106 s) — not worth re-opening the admission bound the frontier credits for
+  surviving the 2 s cap. [0220-classn-coverage-4cpu.log, 0221-factor-key-ceiling-4cpu.log,
+  src/ordering/rgreedy.rs:88, src/ordering/rgreedy/window_dp.rs:285]
+- New instruments recorded: (a) cross-build per-row diff vs the public leader's probe — 280 of
+  300 dev rows identical, total recoverable 8.6e-6, cross-build porting exhausted; (b) the
+  class block's own dev value = the `22.win` -> `final` delta = **4.71e-4 weighted over 41
+  rows, all n <= 12 000**; (c) the per-stage cost/yield table over `0204-full-phases.log`
+  (`1b.indep` 3.43 nats/6.2 s best, `4.subtree` 2.32/9.4, `13.alt`+`13p.*` **13.9 s for
+  0.005 nats on 2 rows** = the largest measured dead weight in the build).
+- Next bats: (a) a fifth width pair at reduced ledger (value/second is the class's only
+  remaining cost axis); (b) delete/curtail `13.alt`+`13p.*` (time-negative) and spend the
+  freed time inside the class schedule; (c) `rgreedy::MAX_N` for the window-DP family alone
+  is the only way to reach the n-band, and the factor key still bounds it.
+- iter47b (prepped, not submitted): the NEXT width group is priced — 9 + `13/4/6, 16/4/6,
+  5/4/3, 24/4/11` = **-1.4e-5** in-frame (8 rows better / 0 worse, corpus +2.9 %), kept in
+  the test seam `SSI_SPAN_WINDOWS_EXTRA`. Diminishing (4 widths = -4.9e-5, next 4 = -1.4e-5),
+  so it is the payload for a candidate that first deletes the measured dead weight
+  (`13.alt` + `13p.*` = 13.9 s of corpus time for 0.005 nats). [0226-next-width-group-4cpu.log]

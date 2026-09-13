@@ -1,0 +1,30 @@
+{
+  "score": 0.79129,
+  "metrics": {
+    "geomean_flop_ratio": 0.79129,
+    "geomean_fill_ratio": 0.92411,
+    "matrices": 300,
+    "weights": {
+      "lt_1k": 0.3,
+      "1k_10k": 0.3,
+      "gt_10k": 0.4
+    },
+    "buckets": {
+      "lt_1k": {
+        "count": 147,
+        "geomean_flop_ratio": 0.887368,
+        "geomean_fill_ratio": 0.959764
+      },
+      "1k_10k": {
+        "count": 108,
+        "geomean_flop_ratio": 0.838152,
+        "geomean_fill_ratio": 0.946262
+      },
+      "gt_10k": {
+        "count": 45,
+        "geomean_flop_ratio": 0.684086,
+        "geomean_fill_ratio": 0.880756
+      }
+    }
+  }
+}

@@ -154,6 +154,10 @@ mod transplant_probe;
 pub mod rgreedy;
 mod completion;
 mod peo_extract;
+mod post_core;
+mod runner_up;
+#[cfg(test)]
+mod terminal_polish;
 mod minl_watch;
 pub mod custom_metrics;
 /// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
@@ -531,31 +535,84 @@ const SWEEP_EXTRA_MAX_NNZ: usize = 150_000;
 /// is already installed before the first batch, so a truncation can only drop
 /// extra candidates, never the baseline.
 const LADDER_FILL_BOUND: u64 = 20_000_000_000;
-/// ── iter42 production constants (single source of truth) ────────────────────
-/// The terminal exact-kernel extension this branch ships is a *window/ledger*
-/// extension of the promoted terminal class: the sparse-span sweep allowance,
-/// the exact-window ledger and the PEO re-extraction round count are named here
-/// so the `#[cfg(test)]` seams default to the production values (a test build
-/// with no environment overrides must reproduce the shipped `order()` exactly).
-/// ── iter43: the measured next-bat point (one binary, 4-vCPU frame) ──────────
-/// Shipped point 0.791693 (-1.72e-4 vs the promoted base) -> **0.791635**
-/// (-2.30e-4), 10 rows better / 0 worse / 290 unchanged. The two appended span
-/// passes are the seam measured last iteration (`SSI_SPAN_EXTRA`, -3.0e-5) and
-/// the ledger/PEO step is the leader's own arm (512M / four rounds, -3.9e-5);
-/// both were measured separately and then together, and no row regresses
-/// (every pass accepts only a strict exact decrease).
-const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 5] = [
-    (48, 4, 19, 32_000_000),
-    (9, 4, 4, 32_000_000),
-    (8, 4, 3, 64_000_000),
-    (12, 4, 5, 64_000_000),
-    (7, 4, 3, 64_000_000),
-];
-const PRODUCTION_EXCHANGE_LEDGER: i64 = 536_870_912;
-const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
-const LADDER_FILL_CAP: usize = 64;
+const LADDER_FILL_CAP: usize = 32;
+/// Retain a fixed prefix sooner on moderately expensive candidate batches.
+const MEDIUM_BATCH_FILL_BOUND:u64=100_000_000;
+const MEDIUM_BATCH_CAP:usize=64;
+
+// Terminal schedule from newjordan's promoted fe4f40c, retained under its
+// original dimension/input/factor gates. See ordering memory experiment0217.
+const TERMINAL_EXCHANGE_LEDGER:i64=536_870_912;
+const TERMINAL_PEO_ROUNDS:usize=4;
+const TERMINAL_SPAN_WINDOWS:[(usize,usize,usize,i64);5]=[
+    (48,4,19,32_000_000),(9,4,4,32_000_000),(8,4,3,64_000_000),
+    (12,4,5,64_000_000),(7,4,3,64_000_000),
+];
+
+#[cfg(test)]
+thread_local! {static EXTENDED_TERMINAL_RESEARCH:std::cell::Cell<Option<bool>>=std::cell::Cell::new(None);}
+#[cfg(test)]
+fn set_extended_terminal(enabled:Option<bool>) {EXTENDED_TERMINAL_RESEARCH.with(|c|c.set(enabled));}
+#[cfg(test)]
+thread_local! {static LEX_AFTER_PRIORITY_WIN_RESEARCH:std::cell::Cell<Option<bool>>=std::cell::Cell::new(None);}
+#[cfg(test)]
+fn set_lex_after_priority_win(enabled:Option<bool>) {LEX_AFTER_PRIORITY_WIN_RESEARCH.with(|c|c.set(enabled));}
+#[cfg(test)]
+thread_local! {static COMPLETION_WIN_FLAGS:std::cell::Cell<u8>=std::cell::Cell::new(0);}
+#[cfg(test)]
+fn take_completion_win_flags()->u8 {COMPLETION_WIN_FLAGS.with(|c|c.replace(0))}
+
+fn terminal_profile()->(i64,usize,&'static [(usize,usize,usize,i64)]) {
+    #[cfg(test)]
+    if let Some(enabled)=EXTENDED_TERMINAL_RESEARCH.with(|c|c.get()) {
+        return if enabled {(536_870_912,4,&[
+            (48,4,19,32_000_000),(9,4,4,32_000_000),(8,4,3,64_000_000),
+            (12,4,5,64_000_000),(7,4,3,64_000_000),
+        ])} else {(64_000_000,2,&[
+            (48,4,19,16_000_000),(9,4,4,16_000_000),(8,4,3,32_000_000),
+        ])};
+    }
+    (TERMINAL_EXCHANGE_LEDGER,TERMINAL_PEO_ROUNDS,&TERMINAL_SPAN_WINDOWS)
+}
+
+#[cfg(test)]
+thread_local! {static MEDIUM_BATCH_ENABLED:std::cell::Cell<bool>=std::cell::Cell::new(false);}
+#[cfg(test)]
+thread_local! {static MEDIUM_BATCH_DROPS:std::cell::Cell<u64>=std::cell::Cell::new(0);}
+#[cfg(test)]
+fn set_medium_batch_enabled(enabled:bool) {MEDIUM_BATCH_ENABLED.with(|c|c.set(enabled));}
+#[cfg(test)]
+fn take_medium_batch_drops()->u64 {MEDIUM_BATCH_DROPS.with(|c|c.replace(0))}
+#[cfg(test)]
+thread_local! {static RAW_COMPLETION_RESEARCH:std::cell::Cell<bool>=std::cell::Cell::new(false);}
+#[cfg(test)]
+fn set_raw_completion_research(enabled:bool) {RAW_COMPLETION_RESEARCH.with(|c|c.set(enabled));}
+#[cfg(test)]
+thread_local! {static CORE_WINDOW_EXCLUSION:std::cell::Cell<Option<bool>>=std::cell::Cell::new(None);}
+#[cfg(test)]
+fn set_core_window_exclusion(enabled:Option<bool>) {CORE_WINDOW_EXCLUSION.with(|c|c.set(enabled));}
+#[cfg(test)]
+thread_local! {static ORIGINAL_LARGE_RESEARCH:std::cell::Cell<Option<bool>>=std::cell::Cell::new(None);}
+#[cfg(test)]
+fn set_original_large_research(enabled:Option<bool>) {ORIGINAL_LARGE_RESEARCH.with(|c|c.set(enabled));}
+fn original_large_enabled()->bool {
+    let enabled=true;
+    #[cfg(test)]
+    let enabled=ORIGINAL_LARGE_RESEARCH.with(|c|c.get()).unwrap_or(enabled);
+    enabled
+}
+#[cfg(test)]
+thread_local! {static ORIGINAL_SECOND_RESEARCH:std::cell::Cell<Option<bool>>=std::cell::Cell::new(None);}
+#[cfg(test)]
+fn set_original_second_research(enabled:Option<bool>) {ORIGINAL_SECOND_RESEARCH.with(|c|c.set(enabled));}
+fn original_second_enabled()->bool {
+    let enabled=false;
+    #[cfg(test)]
+    let enabled=ORIGINAL_SECOND_RESEARCH.with(|c|c.get()).unwrap_or(enabled);
+    enabled
+}
 
 /// NON-AGGRESSIVE AMD envelope. `aggressive = false` is a genuinely different
 /// elimination order (not just a dense-threshold tweak). It runs at baseline AMD
@@ -1486,6 +1543,15 @@ fn flush_batch<'a>(
     let (fill_bound, fill_cap) = (LADDER_FILL_BOUND, LADDER_FILL_CAP);
     if *best_flops > fill_bound && tasks.len() > fill_cap {
         tasks.truncate(fill_cap);
+    } else {
+        let enabled=false;
+        #[cfg(test)]
+        let enabled=MEDIUM_BATCH_ENABLED.with(|c|c.get());
+        if enabled &&*best_flops>MEDIUM_BATCH_FILL_BOUND &&tasks.len()>MEDIUM_BATCH_CAP {
+            #[cfg(test)]
+            MEDIUM_BATCH_DROPS.with(|c|c.set(c.get().saturating_add((tasks.len()-MEDIUM_BATCH_CAP) as u64)));
+            tasks.truncate(MEDIUM_BATCH_CAP);
+        }
     }
     let results = parallel::run_candidates(tasks, sp, n, nnz, *best_flops, true);
     tasks.clear();
@@ -1502,10 +1568,10 @@ fn flush_batch<'a>(
             // different ordering converges to a different minimal triangulation,
             // and the leader's is not always the cheapest one.
             let mut r = runner_up.borrow_mut();
-            if f < *best_flops { r.push((*best_flops, best_perm.clone())); } else { r.push((f, perm.clone())); }
-            r.sort_by_key(|(s, _)| *s);
-            r.dedup_by_key(|(s, _)| *s);
-            r.truncate(PEO_ALT_SEEDS);
+            let displaced=f<*best_flops;
+            let key=if displaced {*best_flops} else {f};
+            runner_up::retain(&mut r,key,
+                ||if displaced {best_perm.clone()} else {perm.clone()},PEO_ALT_SEEDS);
         }
         if f < *best_flops {
             *best_flops = f;
@@ -2817,8 +2883,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // lift 0.283 against a 0.494 portfolio best, subtree on the old incumbent
     // 0.15 s).
     let mut indep_deferred: Option<(u64, Vec<usize>)> = None;
+    let mut indep_extra: Option<indep_first::ExtraCores> = None;
     if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
-        if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
+        if let Some((core_total, cand, cores)) = indep_first::run_with_cores(&scoring_pat, INDEP_WORK_LEDGER) {
+            indep_extra = Some(cores);
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
                 // ADOPTION RULE. The lift is taken at once when it leads by
@@ -5294,55 +5362,18 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Exact window descent follows the promoted terminal greedy search, so
     // every accepted replacement improves the final incumbent. The shared
     // ledger includes preparation, DP states, and elimination replay.
-    //
-    // ── iter43 seam (test-only): the class's only structural wall is `n`
-    //
-    // Every gt_10k row on dev that ties at AMD (ratio 1.0000) has `n` above
-    // `rgreedy::MAX_N = 12_000`, i.e. it is outside the class by the `n` gate
-    // alone (four of the five also pass the 150k factor key). `SSI_TERM_CLASS_N`
-    // re-points the limit at all three admission sites (exchange, followup,
-    // PEO extraction) so one binary measures that band; unset or a `cfg(not(test))`
-    // build reproduces the shipped `order()` exactly.
-    #[cfg(test)]
-    let class_n: usize = std::env::var("SSI_TERM_CLASS_N")
-        .ok()
-        .and_then(|v| v.trim().parse::<usize>().ok())
-        .unwrap_or(rgreedy::MAX_N);
-    #[cfg(not(test))]
-    let class_n: usize = rgreedy::MAX_N;
-    let terminal_exchange = n >= 6 && n <= class_n && nnz <= 200_000
+    let (exchange_ledger,terminal_peo_rounds,terminal_spans)=terminal_profile();
+    let terminal_exchange = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
         && nnz <= n.saturating_mul(16) && max_deg <= n / 2;
     #[cfg(test)]
     let terminal_exchange = terminal_exchange && probe::leader_tail::exchange_enabled();
+    let mut terminal_work_spent = terminal_exchange;
     if terminal_exchange {
-        #[cfg(test)]
-        if std::env::var_os("SSI_CLASS_TRACE").is_some() {
-            eprintln!("CLASSTRACE	xchg	{n}	{nnz}	admitted");
-        }
-        // iter42 seam: the exchange's own ledger (the leader measured its
-        // 32M -> 64M step as paying; this re-points it so the next step is
-        // measurable in the same binary).
-        #[cfg(test)]
-        let exchange_ledger: i64 = std::env::var("SSI_EXCHANGE_LEDGER")
-            .ok()
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
-        #[cfg(not(test))]
-        let exchange_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, exchange_ledger,
         ) {
-            #[cfg(test)]
-            if std::env::var_os("SSI_CLASS_TRACE").is_some() {
-                eprintln!("CLASSTRACE	xchg	{n}	{nnz}	candidate=1");
-            }
             if is_bijection(&candidate, n) && score(&candidate) < score(&best_perm) {
                 best_perm = candidate;
-            }
-        } else {
-            #[cfg(test)]
-            if std::env::var_os("SSI_CLASS_TRACE").is_some() {
-                eprintln!("CLASSTRACE	xchg	{n}	{nnz}	candidate=0");
             }
         }
     }
@@ -5353,74 +5384,48 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // additionally obeys its factor-nonzero limits before materializing fill.
     // Reject an expensive existing ledger before scoring again. Admission
     // below still requires the fresh exact score and factor-nonzero bound.
-    let terminal_followup = n >= 6 && n <= class_n && nnz <= 200_000
+    let mut final_symbolic = None;
+    let terminal_followup = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
         && best_flops <= LADDER_FILL_BOUND;
     #[cfg(test)]
     let terminal_followup = terminal_followup && probe::terminal_followup::enabled();
     if terminal_followup {
-        // iter42 seam: the leader prices the *admission* key (factor-nnz
-        // 150k vs 300k) separately from the window allowance.
-        #[cfg(test)]
-        let followup_factor: u64 = std::env::var("SSI_FOLLOWUP_FACTOR")
-            .ok()
-            .and_then(|v| v.trim().parse::<u64>().ok())
-            .unwrap_or(150_000);
-        #[cfg(not(test))]
-        let followup_factor: u64 = 150_000;
-        #[cfg(test)]
-        let peo_rounds: usize = std::env::var("SSI_PEO_ROUNDS")
-            .ok()
-            .and_then(|v| v.trim().parse::<usize>().ok())
-            .unwrap_or(PRODUCTION_PEO_ROUNDS);
-        #[cfg(not(test))]
-        let peo_rounds: usize = PRODUCTION_PEO_ROUNDS;
-        #[cfg(test)]
-        let class_trace = std::env::var_os("SSI_CLASS_TRACE").is_some();
         let mut final_flops = score(&best_perm);
-        #[cfg(test)]
-        if class_trace {
-            eprintln!(
-                "CLASSTRACE	follow	{n}	{nnz}	flops={final_flops}	nnzl={}	key={followup_factor}",
-                score_workspace.borrow().nnz_l()
-            );
-        }
-        if final_flops <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= followup_factor {
+        let fill = score_workspace.borrow().nnz_l();
+        final_symbolic = Some((final_flops,fill));
+        if final_flops <= LADDER_FILL_BOUND && fill <= 150_000 {
+            terminal_work_spent = true;
             // The same fixed window allowance also covers dense/hub patterns;
             // preparation and elimination are charged regardless of density.
             if nnz > n.saturating_mul(16) || max_deg > n / 2 {
-                #[cfg(test)]
-                let dense_window_ledger: i64 = std::env::var("SSI_EXCHANGE_LEDGER")
-                    .ok()
-                    .and_then(|v| v.trim().parse::<i64>().ok())
-                    .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
-                #[cfg(not(test))]
-                let dense_window_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
-                    8, 4, 3, dense_window_ledger,
+                    8, 4, 3, exchange_ledger,
                 ) {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
-                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                        if f < final_flops {
+                            best_perm = candidate; final_flops = f;
+                            final_symbolic = Some((f,score_workspace.borrow().nnz_l()));
+                        }
                     }
                 }
             }
-            for _ in 0..peo_rounds {
+            for _ in 0..terminal_peo_rounds {
                 let before = final_flops;
                 let pp = permute_current(&best_perm);
                 let et = EliminationTree::from_pattern(&pp);
                 let counts = column_counts_gnp(&pp, &et);
                 if let Some(candidates) = peo_extract::candidates_bounded(
                     n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
-                    class_n, 200_000, 150_000,
+                    rgreedy::MAX_N, 200_000, 150_000,
                 ) {
-                    #[cfg(test)]
-                    if class_trace {
-                        eprintln!("CLASSTRACE	peo	{n}	{nnz}	cands={}", candidates.len());
-                    }
                     for candidate in candidates {
                         let f = score(&candidate);
-                        if f < final_flops { best_perm = candidate; final_flops = f; }
+                        if f < final_flops {
+                            best_perm = candidate; final_flops = f;
+                            final_symbolic = Some((f,score_workspace.borrow().nnz_l()));
+                        }
                     }
                 }
                 if final_flops == before { break; }
@@ -5428,108 +5433,103 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Wide spans solve only connected components of at most fourteen
             // vertices, preserving each component's slots and skipping larger
             // components. Narrow passes then refine the resulting incumbent.
-            // iter42 seam: the leader's own arm table prices the *window
-            // allowance* (small = 16M+16M+32M, full = 32M+32M+64M) separately
-            // from the factor bound; `SSI_FOLLOWUP_FULL_WINDOWS` re-points it so
-            // one binary measures both arms.
-            #[cfg(test)]
-            let span_windows: &[(usize, usize, usize, i64)] =
-                if std::env::var_os("SSI_FOLLOWUP_SMALL_WINDOWS").is_some() {
-                    &[(48, 4, 19, 16_000_000), (9, 4, 4, 16_000_000), (8, 4, 3, 32_000_000)]
-                } else {
-                    &PRODUCTION_SPAN_WINDOWS
-                };
-            #[cfg(not(test))]
-            let span_windows: &[(usize, usize, usize, i64)] = &PRODUCTION_SPAN_WINDOWS;
-            for &(width, sweeps, step, budget) in span_windows {
+            for &(width, sweeps, step, budget) in terminal_spans {
                 if let Some(candidate) = rgreedy::sparse_span_window_descent(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     width, sweeps, step, budget,
                 ) {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
-                        if f < final_flops { best_perm = candidate; final_flops = f; }
-                    }
-                }
-            }
-            // iter43: the two further sparse-span passes (12/5 and 7/3) that
-            // were measured through last iteration's `SSI_SPAN_EXTRA` seam are
-            // now part of `PRODUCTION_SPAN_WINDOWS` itself, so they need no
-            // separate seam: the arm table's three widths (48/9/8) were a fixed
-            // schedule, not a fixpoint, and the appended widths are the
-            // measured residual (-3.0e-5 on the shipped point).
-            #[cfg(test)]
-            if class_trace {
-                eprintln!("CLASSTRACE	spans	{n}	{nnz}	final={final_flops}");
-            }
-        }
-    }
-    // ── iter42: the terminal four-stream round, re-admitted on the leader's own
-    //    exact factor-nnz key instead of this branch's structural + live-ratio
-    //    gates.
-    //
-    // The round is this branch's device (four `rgreedy` streams merged by a
-    // strict `(flops, source)` argmin, so its output is a pure function of the
-    // four specs and the thread count cannot change it). Its dose curve on our
-    // own tree is linear in the per-stream budget and lands hardest on rows it
-    // cannot move; three submissions carrying it died on the hidden 2.0 s cap.
-    // The public leader's own admission rule for its terminal kernels is an
-    // *exact symbolic factor-nonzero* bound (150_000) read off the scoring
-    // arena, which is what this round now obeys: a row is only walked if its
-    // incumbent's factor is small, i.e. if the pipeline's own elimination work
-    // on it is small. That is a property of the row's own state, not a window.
-    {
-        const FANOUT_MAX_N: usize = 12_000;
-        const FANOUT_SMALL_N: usize = 6_000;
-        const FANOUT_MIN_NNZ: usize = 30_000;
-        // Per-stream `rgreedy` budget of the shipped round; 0 disables it.
-        const FANOUT_BUDGET: i64 = 0;
-        // Exact factor-nonzero bound the round obeys (the leader's key).
-        const FANOUT_FACTOR_BOUND: u64 = 150_000;
-        const FANOUT_SEEDS: [u64; 4] = [
-            0x9E37_79B9_7F4A_7C15,
-            0xD1B5_4A32_D192_ED03,
-            0xA24B_AED4_963E_E407,
-            0x9FB2_1C65_1E5B_0B9C,
-        ];
-        #[cfg(test)]
-        let fanout_budget: i64 = std::env::var("SSI_FANOUT_BUDGET")
-            .ok()
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .unwrap_or(FANOUT_BUDGET);
-        #[cfg(not(test))]
-        let fanout_budget: i64 = FANOUT_BUDGET;
-        #[cfg(test)]
-        let factor_bound: u64 = std::env::var("SSI_FANOUT_FACTOR")
-            .ok()
-            .and_then(|v| v.trim().parse::<u64>().ok())
-            .unwrap_or(FANOUT_FACTOR_BOUND);
-        #[cfg(not(test))]
-        let factor_bound: u64 = FANOUT_FACTOR_BOUND;
-        let fanout_gate = fanout_budget > 0
-            && n <= FANOUT_MAX_N
-            && (n > FANOUT_SMALL_N || nnz > FANOUT_MIN_NNZ);
-        if fanout_gate {
-            // The leader's own idiom: re-score the current incumbent and read the
-            // arena's fresh symbolic factor count; no stale scalar admits a row.
-            let cur = score(&best_perm);
-            if cur <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= factor_bound {
-                let specs = FANOUT_SEEDS.map(|rng| (rng, rgreedy::Params::DEFAULT, fanout_budget));
-                if let Some((cand, _)) = rgreedy::search_par_specs(
-                    n,
-                    &pattern.col_ptr,
-                    &pattern.row_idx,
-                    &best_perm,
-                    cur,
-                    specs,
-                ) {
-                    if is_bijection(&cand, n) {
-                        let f = score(&cand);
-                        if f < cur {
-                            best_perm = cand;
+                        if f < final_flops {
+                            best_perm = candidate; final_flops = f;
+                            final_symbolic = Some((f,score_workspace.borrow().nnz_l()));
                         }
                     }
                 }
+            }
+        }
+    }
+    // The independent-set stage already built these competitive cores. Reuse
+    // at most two for one missing quotient metric, after the winning prefix.
+    // Refresh the exact original factor count before authorizing the late walk.
+    // Terminal windows and the late quotient walk share this final-stage
+    // budget. Keep the quotient walk available when no terminal work ran.
+    let core_budget_open = !terminal_work_spent;
+    let mut final_budget_spent = terminal_work_spent;
+    #[cfg(test)]
+    let core_budget_open = CORE_WINDOW_EXCLUSION.with(|c|c.get())
+        .map(|enabled|!enabled ||core_budget_open).unwrap_or(core_budget_open);
+    if let Some(cores) = indep_extra {
+        if core_budget_open &&!cores.is_empty() &&n<=18_000 &&nnz<=80_000 &&best_flops<=LADDER_FILL_BOUND {
+            // Carry only exact observations of the accepted incumbent. This
+            // avoids another eligibility score on rows the terminal pass saw.
+            let (f,fill) = final_symbolic.unwrap_or_else(|| {
+                let f=score(&best_perm);(f,score_workspace.borrow().nnz_l())
+            });
+            #[cfg(test)]
+            {
+                assert_eq!(score(&best_perm),f,"final symbolic cache flops");
+                assert_eq!(score_workspace.borrow().nnz_l(),fill,"final symbolic cache fill");
+            }
+            let mut changed=false;
+            if fill<=200_000 {
+                final_budget_spent = true;
+                if let Some(candidate) = cores.refine(f,&score) {
+                    best_perm=post_core::refine(pattern,&candidate,1,200_000,&score,
+                        &permute_current,||score_workspace.borrow().nnz_l()).unwrap_or(candidate);
+                    changed=true;
+                }
+            }
+            let (search_f,search_fill)=if changed {
+                let sf=score(&best_perm);(sf,score_workspace.borrow().nnz_l())
+            } else {(f,fill)};
+            if search_f<=LADDER_FILL_BOUND &&search_fill<=100_000 {
+                if let Some(candidate)=cores.refine_search(&best_perm,search_f,&score) {
+                    best_perm=post_core::refine(pattern,&candidate,1,200_000,&score,
+                        &permute_current,||score_workspace.borrow().nnz_l()).unwrap_or(candidate);
+                }
+            }
+        }
+    }
+    if original_large_enabled() &&!final_budget_spent &&n>rgreedy::MAX_N &&n<=50_000
+        &&nnz<=180_000 &&amd_flops<=post_core::AMD_WORK_LIMIT {
+        let incumbent_flops=score(&best_perm);
+        if incumbent_flops<amd_flops {
+            if let Some(candidate)=post_core::refine_original(pattern,&best_perm,&score,
+                &permute_current,||score_workspace.borrow().nnz_l()) {
+                best_perm=candidate;
+                if original_second_enabled() {
+                    if let Some(candidate)=post_core::refine_original_policy(pattern,&best_perm,2,&score,
+                        &permute_current,||score_workspace.borrow().nnz_l()) {
+                        best_perm=candidate;
+                        #[cfg(test)]
+                        COMPLETION_WIN_FLAGS.with(|c|c.set(c.get()|8));
+                    }
+                }
+                #[cfg(test)]
+                COMPLETION_WIN_FLAGS.with(|c|c.set(c.get()|4));
+            }
+        }
+    }
+    #[cfg(test)]
+    if RAW_COMPLETION_RESEARCH.with(|c|c.get()) &&amd_flops<=post_core::AMD_WORK_LIMIT {
+        let mut priority_changed=false;
+        if let Some(candidate)=post_core::refine_priority(pattern,&best_perm,&score,
+            &permute_current,||score_workspace.borrow().nnz_l()) {
+            best_perm=candidate;priority_changed=true;
+            #[cfg(test)]
+            COMPLETION_WIN_FLAGS.with(|c|c.set(c.get()|1));
+        }
+        let lex_allowed=priority_changed;
+        #[cfg(test)]
+        let lex_allowed=LEX_AFTER_PRIORITY_WIN_RESEARCH.with(|c|c.get())
+            .map(|enabled|!enabled ||priority_changed).unwrap_or(lex_allowed);
+        if lex_allowed {
+            if let Some(candidate)=post_core::refine_lex(pattern,&best_perm,&score,
+                &permute_current,||score_workspace.borrow().nnz_l()) {
+                best_perm=candidate;
+                #[cfg(test)]
+                COMPLETION_WIN_FLAGS.with(|c|c.set(c.get()|2));
             }
         }
     }

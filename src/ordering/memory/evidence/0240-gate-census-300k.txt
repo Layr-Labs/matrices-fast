@@ -1,0 +1,67 @@
+corpus rows: 300   key K = 300000   class_n = 25000
+bucket counts: {'lt_1k': 147, '1k_10k': 108, 'gt_10k': 45}
+
+rows above the key (nnz > 300000): 10
+  by bucket: {'gt_10k': 10}
+   faclay75                               n= 272878 nnz=  1379706 nnz/n=   5.06 maxdeg=  2777 gt_10k  n>class_n=Y dense=n hub=n
+   acopf_case9241pegase_qcqp              n= 313068 nnz=  1292408 nnz/n=   4.13 maxdeg=   175 gt_10k  n>class_n=Y dense=n hub=n
+   gabriel10                              n= 244056 nnz=  1148210 nnz/n=   4.70 maxdeg=    54 gt_10k  n>class_n=Y dense=n hub=n
+   pooling_sppc3pq                        n=  23173 nnz=   893724 nnz/n=  38.57 maxdeg=   533 gt_10k  n>class_n=n dense=Y hub=n
+   pooling_sppb5pq                        n=  18529 nnz=   674470 nnz/n=  36.40 maxdeg=   601 gt_10k  n>class_n=n dense=Y hub=n
+   cont6-qq                               n= 120395 nnz=   557994 nnz/n=   4.63 maxdeg=   204 gt_10k  n>class_n=Y dense=n hub=n
+   pooling_sppc1pq                        n=  14100 nnz=   477680 nnz/n=  33.88 maxdeg=   271 gt_10k  n>class_n=n dense=Y hub=n
+   unitcommit_200_100_1_mod_8             n= 146830 nnz=   476332 nnz/n=   3.24 maxdeg=   301 gt_10k  n>class_n=Y dense=n hub=n
+   kissing2                               n=  20772 nnz=   401024 nnz/n=  19.31 maxdeg=   298 gt_10k  n>class_n=n dense=Y hub=n
+   transswitch2736spr                     n=  69651 nnz=   331010 nnz/n=   4.75 maxdeg=    72 gt_10k  n>class_n=Y dense=n hub=n
+
+fail the class-gate key alone (armed by raising only this key): 0
+fail the follow-up key (routed to the dense/hub site once armed): 4
+   pooling_sppc3pq n=23173 nnz=893724
+   pooling_sppc1pq n=14100 nnz=477680
+   pooling_sppb5pq n=18529 nnz=674470
+   kissing2 n=20772 nnz=401024
+
+clause n > class_n      excludes  13 rows {'gt_10k': 13}
+
+clause nnz > K          excludes  10 rows {'gt_10k': 10}
+
+clause nnz > 16n        excludes  29 rows {'gt_10k': 4, '1k_10k': 6, 'lt_1k': 19}
+
+clause max_deg > n/2    excludes  34 rows {'1k_10k': 5, 'lt_1k': 29}
+
+hub class (max_deg > n/2): 34 rows, 29 of them lt_1k
+   n, maxdeg/n  -- the class is dominated by tiny saturated graphs:
+   st_e41                             n=     8 nnz=     32 maxdeg=   5 d/n= 0.62 dense=n
+   ex6_1_4                            n=    10 nnz=     48 maxdeg=   7 d/n= 0.70 dense=n
+   nvs02                              n=    11 nnz=     46 maxdeg=   7 d/n= 0.64 dense=n
+   himmel11                           n=    14 nnz=     60 maxdeg=   8 d/n= 0.57 dense=n
+   cvxnonsep_psig20                   n=    20 nnz=    380 maxdeg=  19 d/n= 0.95 dense=Y
+   st_e25                             n=    20 nnz=     92 maxdeg=  11 d/n= 0.55 dense=n
+   autocorr_bern20-15                 n=    23 nnz=    394 maxdeg=  22 d/n= 0.96 dense=Y
+   nvs19                              n=    24 nnz=    200 maxdeg=  15 d/n= 0.62 dense=n
+   nvs23                              n=    27 nnz=    252 maxdeg=  17 d/n= 0.63 dense=n
+   autocorr_bern25-19                 n=    28 nnz=    612 maxdeg=  27 d/n= 0.96 dense=Y
+   cvxnonsep_psig30                   n=    30 nnz=    870 maxdeg=  29 d/n= 0.97 dense=Y
+   st_qpc-m3a                         n=    30 nnz=    304 maxdeg=  19 d/n= 0.63 dense=n
+   sporttournament08                  n=    31 nnz=    156 maxdeg=  30 d/n= 0.97 dense=n
+   ex8_4_1                            n=    32 nnz=    100 maxdeg=  20 d/n= 0.62 dense=n
+   autocorr_bern30-23                 n=    33 nnz=    878 maxdeg=  32 d/n= 0.97 dense=Y
+   autocorr_bern35-35fix              n=    38 nnz=   1264 maxdeg=  37 d/n= 0.97 dense=Y
+   smallinvDAXr1b010-011              n=    39 nnz=   1120 maxdeg=  33 d/n= 0.85 dense=Y
+   st_rv2                             n=    40 nnz=    340 maxdeg=  21 d/n= 0.53 dense=n
+   autocorr_bern40-30                 n=    43 nnz=   1534 maxdeg=  42 d/n= 0.98 dense=Y
+   st_rv9                             n=    90 nnz=    840 maxdeg=  51 d/n= 0.57 dense=n
+   sporttournament18                  n=   156 nnz=    886 maxdeg= 155 d/n= 0.99 dense=n
+   qap                                n=   255 nnz=  43748 maxdeg= 198 d/n= 0.78 dense=Y
+   qspp_0_10_0_1_10_1                 n=   280 nnz=  29636 maxdeg= 172 d/n= 0.61 dense=Y
+   qspp_0_11_0_1_10_1                 n=   341 nnz=  44264 maxdeg= 212 d/n= 0.62 dense=Y
+   chimera_mgw-c8-439-onc8-002        n=   440 nnz=   3038 maxdeg= 439 d/n= 1.00 dense=n
+   chimera_mgw-c8-439-onc8-001        n=   440 nnz=   3040 maxdeg= 439 d/n= 1.00 dense=n
+   qspp_0_13_0_1_10_1                 n=   481 nnz=  88522 maxdeg= 292 d/n= 0.61 dense=Y
+   rocket50                           n=   555 nnz=   3488 maxdeg= 402 d/n= 0.72 dense=n
+   qspp_0_14_0_1_10_1                 n=   560 nnz= 120274 maxdeg= 346 d/n= 0.62 dense=Y
+   chimera_lga-01                     n=  1120 nnz=   6400 maxdeg=1119 d/n= 1.00 dense=n
+   sporttournament48                  n=  1131 nnz=   6676 maxdeg=1130 d/n= 1.00 dense=n
+   chimera_mgw-c16-2031-01            n=  2032 nnz=  15900 maxdeg=2031 d/n= 1.00 dense=n
+   chimera_rfr-02                     n=  2032 nnz=  15140 maxdeg=1944 d/n= 0.96 dense=n
+   torsion50                          n=  2508 nnz=  29808 maxdeg=2501 d/n= 1.00 dense=n

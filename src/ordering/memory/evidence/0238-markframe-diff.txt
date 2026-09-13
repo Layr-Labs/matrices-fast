@@ -1,0 +1,22 @@
+corpus wall: with mark-scoring 151.31 s   NOSCORE 151.13 s   delta 0.17 s (0.11%)
+
+top 15 rows by mark-overhead:
+row                              with  noscore    delta       nnz
+acopf_case9241pegase_qcqp      1.0651   0.6198   0.4453   1292408
+gabriel10                      0.9787   0.7303   0.2484   1148210
+faclay75                       0.7961   0.5559   0.2402   1379706
+unitcommit_200_100_1_mod_8     0.5925   0.4122   0.1803    476332
+cont6-qq                       0.3981   0.2848   0.1133    557994
+transswitch2736spr             0.5537   0.4576   0.0961    331010
+transswitch2383wpr             0.6275   0.5317   0.0958    277562
+rsyn0840m02m                   0.7506   0.6686   0.0820      9576
+pooling_sppc3pq                0.7706   0.7070   0.0636    893724
+mpbp_07                        1.0147   0.9591   0.0556     30810
+pooling_sppb5pq                0.6410   0.5870   0.0540    674470
+gams05                         0.9358   0.8882   0.0476    252910
+faclay30                       0.9430   0.8964   0.0466     82242
+kissing2                       0.4139   0.3732   0.0407    401024
+arki0013                       0.8629   0.8254   0.0375    160172
+
+rows where |delta| > 0.01 s: 111/300 ; max delta 0.4453 s
+ratio column identical for all rows: True

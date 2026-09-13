@@ -85,43 +85,7 @@ pub(crate) fn rank_alpha_three_quarters_cmp(
 /// bytes (two bitset adjacency copies) = ~`n²/4` bytes; at 4000 that is 4 MB,
 /// far inside the 4 GiB worker cap. The SHIPPED gate at the call site is much
 /// lower and is chosen for TIME, not memory.
-///
-/// iter54: `12_000` -> `25_000` — the band extension of the one device that is
-/// validated on the hidden frame (the terminal class-block exchange). The 0220
-/// arm (`SSI_TERM_CLASS_N`) measured the class *gate* inert precisely because
-/// this limit refuses inside `Game::build_adj`; the limit itself is the variable
-/// that had never been moved. Memory is ~156 MB per `Game` at 25_000 (two bitset
-/// copies), far inside the 4 GiB worker cap; the cost is TIME, measured on the
-/// band in `0235-armMAXN25k-4cpu.log`. See the note at
-/// `PRODUCTION_EXCHANGE_LEDGER` for the receipt. **The hidden receipt
-/// (`52c744da` -> 0.841011, −3.55e-4) is the only *hidden-validated* value
-/// receipt this lane has produced since `83a8f4f`; the ceiling is therefore the
-/// live value axis, and `max_n_limit()` below exists to price the next step of
-/// it in one binary/session instead of one build per point.**
-pub(crate) const MAX_N: usize = 25_000;
-
-/// The ceiling every `n`-gate in this module reads. Production: the constant,
-/// so the shipped `order()` is unchanged. Test builds: `SSI_MAX_N` re-points it
-/// (allocation-free, so no recompile), which is what makes a *ceiling curve*
-/// (25k / 36k / 45k / 60k) measurable in one binary. Memory is the binding
-/// resource at the top of that curve (`n²/4` bytes per `Game`, `2n⌈n/64⌉·8`),
-/// and the graded 4 GiB address-space cap is NOT enforced locally, so record
-/// both the score and the ceiling each arm used.
-///
-/// NOTE: the unit tests that assert `*_descent(MAX_N + 1, ..).is_none()` pin the
-/// constant, not the seam; do not run a full test pass with `SSI_MAX_N` set.
-#[cfg(test)]
-pub(crate) fn max_n_limit() -> usize {
-    std::env::var("SSI_MAX_N")
-        .ok()
-        .and_then(|v| v.trim().parse::<usize>().ok())
-        .unwrap_or(MAX_N)
-}
-#[cfg(not(test))]
-#[inline(always)]
-pub(crate) fn max_n_limit() -> usize {
-    MAX_N
-}
+pub(crate) const MAX_N: usize = 12_000;
 
 /// Pivot selection switches from a linear scan over the live set to degree
 /// buckets above this `n`. Swept on the full small tier at the shipped budget:
@@ -222,7 +186,7 @@ impl<'a> Game<'a> {
     /// `None` if `n` is out of range or the pattern references an
     /// out-of-range row (the caller then simply skips this phase).
     pub(crate) fn build_adj(n: usize, col_ptr: &[usize], row_idx: &[usize]) -> Option<Vec<u64>> {
-        if n == 0 || n > max_n_limit() {
+        if n == 0 || n > MAX_N {
             return None;
         }
         let w = n.div_ceil(64);
@@ -265,7 +229,7 @@ impl<'a> Game<'a> {
 
     /// A working game over a shared pristine adjacency.
     pub(crate) fn new(n: usize, adj0: &'a [u64]) -> Option<Game<'a>> {
-        if n == 0 || n > max_n_limit() {
+        if n == 0 || n > MAX_N {
             return None;
         }
         let w = n.div_ceil(64);
@@ -1439,7 +1403,7 @@ pub(crate) fn search_par_default_seeds(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn search_par_specs(
+fn search_par_specs(
     n: usize,
     col_ptr: &[usize],
     row_idx: &[usize],
@@ -1772,7 +1736,7 @@ pub(crate) fn adjacent_triple_descent(
     sweeps: usize,
     budget: i64,
 ) -> Option<Vec<usize>> {
-    if n < 3 || n > max_n_limit() || budget <= 0 || sweeps == 0 || seed.len() != n || col_ptr.len() != n + 1
+    if n < 3 || n > MAX_N || budget <= 0 || sweeps == 0 || seed.len() != n || col_ptr.len() != n + 1
     {
         return None;
     }
@@ -2056,7 +2020,7 @@ pub(crate) fn adjacent_four_descent(
     seed: &[usize],
     budget: i64,
 ) -> Option<Vec<usize>> {
-    if n < 4 || n > max_n_limit() || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
+    if n < 4 || n > MAX_N || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
         return None;
     }
     let mut work = TripleWork { remaining: budget };
@@ -2390,7 +2354,7 @@ pub(crate) fn adjacent_five_descent(
     seed: &[usize],
     budget: i64,
 ) -> Option<Vec<usize>> {
-    if n < 5 || n > max_n_limit() || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
+    if n < 5 || n > MAX_N || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
         return None;
     }
     let mut work = TripleWork { remaining: budget };
@@ -2513,7 +2477,7 @@ pub(crate) fn simplicial_promotion(
         }
     }
 
-    if n < 3 || n > max_n_limit() || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
+    if n < 3 || n > MAX_N || budget <= 0 || seed.len() != n || col_ptr.len() != n + 1 {
         return None;
     }
     let mut work = PrechargedBudget { remaining: budget };
@@ -2660,7 +2624,7 @@ fn collect_subtree_vertices(
         local[v] = u32::MAX;
     }
     touched.clear();
-    let limit = max_sub.min(max_n_limit());
+    let limit = max_sub.min(MAX_N);
     if block.len() > limit {
         return false;
     }
@@ -2817,7 +2781,7 @@ pub(crate) fn subtree_refine(
                     let mut touched: Vec<usize> = Vec::new();
                     let mut verts: Vec<usize> = Vec::new();
                     let mut got: Vec<(usize, Vec<usize>)> = Vec::new();
-                    let max_sub_bound = cfg.max_sub.min(max_n_limit());
+                    let max_sub_bound = cfg.max_sub.min(MAX_N);
                     let max_adj_words = max_sub_bound.saturating_mul(max_sub_bound.div_ceil(64));
                     let mut adj0: Vec<u64> = vec![0u64; max_adj_words];
                     let mut bi = t;

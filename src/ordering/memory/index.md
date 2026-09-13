@@ -1,3 +1,33 @@
+[0206: factor-bounded terminal PEO and smaller windows](experiments/0206-factor-bounded-terminal-polish.md):
+revision after `026c5a9c` timed out; **sandboxed 0.792030 -> 0.791865**,
+fill 0.924246, 23 wins / 0 losses; all 300 counts match. Add 150k factor-nnz
+gate and existing-ledger precheck;
+remove late watcher, halve window allowance to 16M + 16M + 32M. Preserve the
+promoted prefix and exact component ceiling 14. All 123 active tests and
+44 generated paired orders pass; maximum new minimum 0.993 s. Submission pending.
+
+[0205: final completion and sparse spans](experiments/0205-post-search-completion-and-sparse-spans.md):
+**local 0.792030 -> 0.791769**, fill **0.924200**, 30 wins / 0 losses against
+promoted `fb35d11` (hidden **0.842526**). Late PEO, 4M watcher and bounded
+span/narrow windows; exact component ceiling 14, 12k/200k/20-billion-flop gate.
+All 300 sandboxed counts match; 123 active tests and 44 generated paired orders
+pass, maximum new minimum 0.987 s. Submission **`026c5a9c` / `c508ad7`**
+**failed the hidden 2 s cap** in workflow `34710571494`, 106 s into Benchmark;
+no hidden score. Remote ordering matches tested `a427c32`; narrower follow-up
+will be measured separately.
+
+[0203: exact kernels and post-search terminal window](experiments/0203-exact-kernels-terminal-window.md):
+**PROMOTED `c5e6c2ff` / `fb35d11`: hidden 0.842716 -> 0.842526**, fill
+**0.944945**, all workflow checks and hidden time caps passed. Winning Rust
+source is saved on `fenced-terminal-window`; later admission screen is separate.
+Prior promoted `7fd61df` baseline passes all 300 at **0.792226**, previous target
+**0.842716**. A terminal width-8/step-3/64M screen reaches **0.792029985254**,
+35 wins / 0 regressions; keep the full 50k alternate-PEO phase and 64-candidate
+high-flop fence. Exact flat/pooled PEO comparisons cover 535 cases; sorted CSC
+matches feral on 1,200 cases; 121 active release tests pass. Integrated
+sandboxed run passes all 300 at **0.792030**, fill **0.924364**; every emitted
+flop count matches the screen. Official hidden improvement is confirmed above.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->
@@ -279,13 +309,3 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0090: transplant verification reservation](experiments/0090-transplant-verification-reservation-screen.md) — 100k reservation retains partial donor gains, 26 winners / 0.93139 dev bips; below screen.
 - [0091: residual-core exact minimum fill](experiments/0091-residual-core-exact-minimum-fill.md) — a second OBJECTIVE on the cores the reduction already builds, 18.28998 dev bips, 6 wins / 0 losses; and the call-site work counter that priced it after a 300-row A/B could not.
 - [0094: light-tier α grid {10,5,2.5,1}](experiments/0094-light-alpha-grid.md) — aa5b471 dev 0.812247 → **0.811892** (−3.55 bips, all 1k_10k); ports the e7988e5 pattern atop relabelled lotteries (disjoint mid-α draws); 71 tests, worst 0.484 s.
-
-- [0218: the probe default is not the graded program](experiments/0218-production-frame-mirror.md) — the stage-1b force gate is ON in production and OFF in the probe default; the 0.791635/0.791851 "unreproducible" pair is one program in two frames (2.16e-4 on the four largest dev rows), the gate is load-bearing (8000 costs 1.1e-3), and the record's ledger-1G/PEO-5 bats are dead in the graded frame.
-
-- [0219: the stage-1b seed choice is a lottery](experiments/0219-early-arbitration.md) — moving the held lift's comparison from after the subtree cascade to before it (zero added work) is measured at +1.17e-3: 8 gains worth -1.43e-4 against two losses worth +1.31e-3, because the post-4b stages invert the cascade's own ranking, and no cheap observable (raw lead, arbitration margin, portfolio headroom, residual-core shape) separates the 13 force-wins from the 6 defer-wins.
-
-- [0219h: the harness cap is wall clock from spawn](evidence/0219h-harness-cap-mechanism.txt) — two full local-harness runs on the current tree died `FAIL (capped)` on rows the pinned probe measures at < 0.400 s and 0.826 s (slowest corpus row 1.2496 s); the trusted watchdog charges spawn + sandbox setup + host stalls to the row's 2 s, so local cap receipts must be read against the row's probe time.
-
-- [0230: span schedule 9 → 13 widths + exchange-site ledger 512M → 1G](experiments/0230-span13-ledger1g.md) — four-arm in-frame sweep: shipped **0.791498** → **0.791437** (−0.61 bip, 17 rows better / 0 worse); the ledger's knee is 1G (2G buys 5e-6 more), `SSI_PEO_ROUNDS=5` is rejected; official local 300/300 at 0.791437 / 0.924075, submitted `6279dc68`.
-
-- [0231: the order-equivalence frame (schedule axis of determinism)](experiments/0231-order-equivalence-frame.md) — new test-only probe compares parallel / forced-sequential / parallel runs of the same row element-wise: **0 divergences on 300 dev + 14 peak + 33 structural rows**, which kills parallel-order nondeterminism as the explanation of the two parity FAILs; also records the silent dev-corpus fallback trap for `SSI_CORPUS_FILE=/tmp/...` inside the probe sandbox (fixed by `probe-sandbox-corpora.sh`).

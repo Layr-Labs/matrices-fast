@@ -46,14 +46,16 @@ pub(crate) const MINL_AMD_REALIZE_MAX_M: usize = 600_000;
 
 fn filled_graph(pat: &ScoringPattern, perm: &[usize], max_lnnz: usize) -> Option<(Vec<i32>, Vec<i32>)> {
     let n = pat.n;
-    let (permuted, etree_parent, counts) = super::symbolic_flat::analyze_sorted(pat, perm);
+    let permuted = permute_pattern(pat, perm);
+    let etree = EliminationTree::from_pattern(&permuted);
+    let counts = column_counts_gnp(&permuted, &etree);
     let lnnz: usize = counts.iter().sum();
     if lnnz > max_lnnz {
         return None;
     }
     let mut children: Vec<Vec<u32>> = vec![Vec::new(); n];
     for j in 0..n {
-        if let Some(p) = etree_parent[j] {
+        if let Some(p) = etree.parent[j] {
             children[p].push(j as u32);
         }
     }

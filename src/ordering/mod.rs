@@ -144,6 +144,7 @@
 //! the two required `order()` runs are byte-identical (determinism gate).
 
 use crate::Pattern;
+mod addition;
 
 /// TEST-ONLY measurement harness (timing headroom, tie lists, candidate
 /// what-if scoring). Not compiled into the shipped binary.
@@ -159,7 +160,6 @@ pub mod custom_metrics;
 /// Exact low-degree elimination prefix + residual core (matrices_mage, REDUCE-THEN-AMF).
 mod core_lift;
 mod scoring_ws;
-mod symbolic_flat;
 mod sorted_permutation;
 mod parallel;
 mod candidate_cache;
@@ -175,10 +175,8 @@ mod bit_kernels;
 use candidate_cache::Family as CandidateFamily;
 use prefix_score::PrefixScore as SmallScore;
 use feral::ordering::amd::permute_pattern;
-#[cfg_attr(not(test), allow(unused_imports))]
 use feral::ordering::elimination_tree::EliminationTree;
 use feral::sparse::csc::CscPattern as ScoringPattern;
-#[cfg_attr(not(test), allow(unused_imports))]
 use feral::symbolic::column_counts_gnp;
 
 /// AMF cost is a smooth ~1.4x of AMD's with no observed structural blow-up, so
@@ -375,58 +373,9 @@ const INDEP_FORCE_MIN_N: usize = 20_000;
 /// (`0197-probe-no-force-dev.log`), i.e. it buys dev value on the 10 rows it
 /// fires on — the same shape of dev-negative, hidden-positive trade the
 /// frontier's own step made.
-///
-/// `SSI_INDEP_FORCE_N` (test-only) re-points the *gate* itself so one binary
-/// can sweep the monotone predicate in the production frame. Unset it is the
-/// production constant, so a test run with only `SSI_INDEP_FORCE` set is
-/// bit-identical to the shipped `order()` on every row.
-#[cfg(test)]
-fn indep_force_min_n() -> usize {
-    std::env::var("SSI_INDEP_FORCE_N")
-        .ok()
-        .and_then(|v| v.trim().parse::<usize>().ok())
-        .unwrap_or(INDEP_FORCE_MIN_N)
-}
-
-#[cfg(not(test))]
-#[inline(always)]
-const fn indep_force_min_n() -> usize {
-    INDEP_FORCE_MIN_N
-}
-
 #[cfg(test)]
 fn indep_force_off() -> bool {
     std::env::var("SSI_INDEP_FORCE").is_err()
-}
-
-/// ── 0219: EARLY-ARBITRATION BAND for the held stage-1b lift (test-only) ─────
-/// The held `indep_deferred` lift is compared with the incumbent at 4b — i.e.
-/// *after* the subtree cascade has already been spent on whichever candidate
-/// the 1b gate picked. But the 1b gate is a structural proxy (`n`), and the
-/// cascade on the portfolio can overturn a lift that was better *before* the
-/// cascade ran. This switch moves that comparison forward to the top of the
-/// cascade: the held lift is handed the cascade whenever its exact value beats
-/// the incumbent's value after the cheap pre-cascade polish (2.descent +
-/// 3.search) by more than `-δ`. Zero added work — the cascade still runs once,
-/// on the winner of a measured comparison instead of on the gate's choice.
-/// Note the moving decision is *more* permissive than 4b (the pre-cascade
-/// incumbent is never better than the post-cascade one), so no adoption that
-/// 4b made today is lost.
-/// `SSI_INDEP_ARB` = band in per-mille (0 = strict). Unset = production.
-#[cfg(test)]
-fn indep_arb_band_permille() -> Option<u64> {
-    std::env::var("SSI_INDEP_ARB")
-        .ok()
-        .and_then(|v| v.trim().parse::<u64>().ok())
-}
-
-#[cfg(not(test))]
-#[inline(always)]
-fn indep_arb_band_permille() -> Option<u64> {
-    // Production keeps the 4b comparison (see the 0199/0197 receipts: what
-    // transfers on the hidden corpus is the adoption trajectory, and this
-    // switch changes *which candidate* receives the cascade).
-    None
 }
 
 #[cfg(not(test))]
@@ -493,30 +442,9 @@ pub(crate) mod force_audit {
     pub(crate) static TIE_WINDOW_OPENED: AtomicU64 = AtomicU64::new(0);
     pub(crate) static TIE_PASS_RUN: AtomicU64 = AtomicU64::new(0);
 
-    /// 0219: per-row records of the early-arbitration comparison —
-    /// `(n, lift_flops, incumbent_flops_after_cheap_stages)` — pushed at the
-    /// arbitration site and drained by the probe after each row, so the
-    /// *margin* that decides "hand the cascade to the lift" is measurable
-    /// instead of inferred from the two full-arm scores.
-    pub(crate) static ARB: std::sync::Mutex<Vec<(usize, u64, u64)>> =
-        std::sync::Mutex::new(Vec::new());
-
     #[inline]
-    pub(crate) fn note_arb(n: usize, lift: u64, incumbent: u64) {
-        if let Ok(mut v) = ARB.lock() {
-            v.push((n, lift, incumbent));
-        }
-    }
-
-    pub(crate) fn take_arb() -> Vec<(usize, u64, u64)> {
-        match ARB.lock() {
-            Ok(mut v) => std::mem::take(&mut *v),
-            Err(_) => Vec::new(),
-        }
-    }
-
-    #[inline]
-    pub(crate) fn note(force: bool, core_total: u64, exact: u64, incumbent: u64) {        SITES.fetch_add(1, Ordering::Relaxed);
+    pub(crate) fn note(force: bool, core_total: u64, exact: u64, incumbent: u64) {
+        SITES.fetch_add(1, Ordering::Relaxed);
         if core_total != exact {
             CORE_TOTAL_MISMATCH.fetch_add(1, Ordering::Relaxed);
             let d = core_total.abs_diff(exact);
@@ -604,80 +532,6 @@ const SWEEP_EXTRA_MAX_NNZ: usize = 150_000;
 /// is already installed before the first batch, so a truncation can only drop
 /// extra candidates, never the baseline.
 const LADDER_FILL_BOUND: u64 = 20_000_000_000;
-/// ── iter42 production constants (single source of truth) ────────────────────
-/// The terminal exact-kernel extension this branch ships is a *window/ledger*
-/// extension of the promoted terminal class: the sparse-span sweep allowance,
-/// the exact-window ledger and the PEO re-extraction round count are named here
-/// so the `#[cfg(test)]` seams default to the production values (a test build
-/// with no environment overrides must reproduce the shipped `order()` exactly).
-/// ── iter43: the measured next-bat point (one binary, 4-vCPU frame) ──────────
-/// Shipped point 0.791693 (-1.72e-4 vs the promoted base) -> **0.791635**
-/// (-2.30e-4), 10 rows better / 0 worse / 290 unchanged. The two appended span
-/// passes are the seam measured last iteration (`SSI_SPAN_EXTRA`, -3.0e-5) and
-/// the ledger/PEO step is the leader's own arm (512M / four rounds, -3.9e-5);
-/// both were measured separately and then together, and no row regresses
-/// (every pass accepts only a strict exact decrease).
-/// ── iter47: the span schedule, extended by four measured widths ─────────────
-/// The schedule is a schedule, not a fixpoint: 3 → 5 widths paid −3.0e-5 (iter43)
-/// and these four next widths measure **−4.9e-5 in-frame** (one binary, one
-/// session, 4-vCPU, production frame, 300 dev rows: 0.791635 → 0.791586, 14 rows
-/// better / 0 worse, worst `order()` 1.221 → 1.266 s, corpus +5.0 %).
-/// [evidence 0222-span-widths-extra-4cpu.log]
-/// Each pass accepts only a strict exact decrease, so appending a width cannot
-/// worsen any row; the price is wall time on class rows only (~+0.05 s/row on
-/// the rows the class admits), and every pass carries its own work ledger.
-const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
-    (48, 4, 19, 32_000_000),
-    (9, 4, 4, 32_000_000),
-    (8, 4, 3, 64_000_000),
-    (12, 4, 5, 64_000_000),
-    (7, 4, 3, 64_000_000),
-    (10, 4, 4, 64_000_000),
-    (11, 4, 4, 64_000_000),
-    (14, 4, 5, 64_000_000),
-    (6, 4, 3, 64_000_000),
-];
-/// iter54: the class-block exchange ledger 512M -> 1G and its sweep count
-/// 4 -> 5. Both halves were priced in one binary/one session on the merged
-/// frontier tree (`0235-arm{P,L1G,L2G,L55}-4cpu.log`, 300 dev rows,
-/// `taskset -c 0-3`): P **0.791694** / 1G 0.791647 (-4.7e-5) / 2G 0.791641 /
-/// 1G + 5 sweeps **0.791616** (-7.8e-5). The ledger step moves 5 rows with 0
-/// worse; the fifth sweep adds 8 more movers (2 rows pay back a little:
-/// `rsyn0810m02hfsg` +0.053 %, `glider400` +0.034 %). The 6-sweep/8-sweep arms
-/// measured identical on the same base (0234 family curve), so 5 is the
-/// saturation point. Worst `order()` 1.358 -> 1.398 s, and the added time is
-/// spent on the rows that move (`chimera_selby-c16-02` +0.040 s,
-/// `crudeoil_lee4_06` +0.069 s), not on the dense rows this ledger is shared
-/// with (`graphpart_clique-70` +0.001 s, `qapw` -0.004 s).
-/// iter55: **2G — the ledger is a *second-order* device: its marginal value is a
-/// function of the `n` ceiling, not of the ledger.** Priced in one binary/one
-/// session on the 25 000-ceiling tree (`0237-led-{1G,2G,4G}-4cpu.log`, 300 dev
-/// rows, `taskset -c 0-3`): 1G (shipped) **0.790679** / gt_10k 0.6833 →
-/// 2G **0.790425 (−2.54e-4)** / 0.6826 → 4G 0.790322 (−3.57e-4) / 0.6824.
-/// The same 512M→1G step was worth −4.7e-5 on the 12 000-ceiling tree
-/// (`0235-armL1G-4cpu.log`), so raising the ceiling **multiplied the ledger's
-/// marginal value by ~5x**: the ledger only binds where the ceiling now admits
-/// rows, and it binds *there*. The 1G→2G step moves 12 rows, every one of them
-/// in the 10 429 ≤ n ≤ 23 999 band (`crudeoil_lee4_10` −0.79 %, `methanol400`
-/// −1.55 %, `crudeoil_lee4_09` −0.64 %, `gabriel09` −0.50 % …) and the
-/// corpus-wide worst `order()` is **unchanged** (1.396 → 1.397 s) — the added
-/// time is 0.05-0.15 s on movers that sit 0.6-0.8 s under the cap. The 2G→4G
-/// step is NOT free: it moves only two rows (`crudeoil_lee4_09/10`) for
-/// −1.03e-4 and pushes `crudeoil_lee4_10` to 1.506 s, i.e. it loads the one row
-/// class the hidden cap lottery kills, so it is deliberately NOT shipped.
-///
-/// Record: the three submissions that raised this constant to 1G all FAILED and
-/// the three before them (512M) promoted, which read as a 3-for-3 device kill;
-/// it is not. `52c744da` (1G + 5 sweeps + `rgreedy::MAX_N` 12 000 -> 25 000,
-/// i.e. *strictly more* work at this site) **PROMOTED at hidden 0.841011
-/// (−3.55e-4)**. `MAX_N` can only change rows with n > 12 000, so any row that
-/// could have killed `74f19b95` with n <= 12 000 runs bit-identically in both
-/// trees and the verdicts still differ ⇒ the hidden verdict is a cap *lottery*
-/// on near-cap rows (probability rising with added work), not a device label.
-/// A single FAILED receipt is therefore not evidence that a device is
-/// cap-unsafe. [origin/submissions/* constants + `yukon submissions`, iter55]
-const PRODUCTION_EXCHANGE_LEDGER: i64 = 2_147_483_648;
-const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
 const LADDER_FILL_CAP: usize = 64;
@@ -991,7 +845,22 @@ fn refine_core(
     let mut f_cur = f_core;
 
     let prep = |perm: &[usize]| -> (Vec<usize>, Vec<u32>, Vec<i32>) {
-        symbolic_flat::prep_subtree(core_pat, perm)
+        let permuted = permute_pattern(core_pat, perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let candidate: Vec<usize> = post.iter().map(|&j| perm[j]).collect();
+        let post_pattern = permute_pattern(core_pat, &candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
+        (candidate, counts, parent)
     };
 
     let (mut cand, counts, parent) = prep(&p_cur);
@@ -1305,7 +1174,7 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
     ) {
         return perm;
     }
-    leader_order(pattern)
+    addition::refine(pattern, leader_order(pattern))
 }
 
 // Certificate fast path: only return when leaf peeling removes every vertex.
@@ -1372,25 +1241,12 @@ fn plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<us
     best
 }
 
-/// Fixed xorshift streams of the terminal SmallScore walks. The original pair is the
-/// crown's; the alternate pair is a second, independent stream over the same budget.
-const TERMINAL_PAIRED_SEED: u64 = 0x917ad73;
-const TERMINAL_PLATEAU_SEED: u64 = 0xa839d37;
-const TERMINAL_ALT_PAIRED_SEED: u64 = 0x243f6a8885a308d3;
-const TERMINAL_ALT_PLATEAU_SEED: u64 = 0x13198a2e03707344;
-/// Factor-nonzero bound for the reverse-MCS PEO seed of a terminal walk (n <= 1000 rows).
-const TERMINAL_SEED_MAX_LNNZ: usize = 100_000;
-
-fn cutoff_paired_swap_refine(pattern: &Pattern, best: Vec<usize>) -> Vec<usize> {
-    cutoff_paired_swap_refine_seeded(pattern, best, TERMINAL_PAIRED_SEED)
-}
-
-fn cutoff_paired_swap_refine_seeded(pattern: &Pattern, mut best: Vec<usize>, seed: u64) -> Vec<usize> {
+fn cutoff_paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
     let n = best.len();
     if n < 4 { return best; }
     let scoring = SmallScore::new(pattern);
     let mut best_f = scoring.flops(&best);
-    let mut state = seed;
+    let mut state = 0x917ad73u64;
     for _ in 0..512 {
         let mut positions = [0usize; 4];
         for p in &mut positions {
@@ -1409,17 +1265,12 @@ fn cutoff_paired_swap_refine_seeded(pattern: &Pattern, mut best: Vec<usize>, see
 
 // Walk score-neutral permutations, retaining strict-best output separately.
 fn cutoff_plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<usize> {
-    cutoff_plateau_refine_seeded(pattern, start, neutral, TERMINAL_PLATEAU_SEED).0
-}
-
-/// Same walk under a caller-chosen stream; also returns the walk's best SmallScore flops.
-fn cutoff_plateau_refine_seeded(pattern: &Pattern, start: Vec<usize>, neutral: bool, seed: u64) -> (Vec<usize>, u64) {
     let n=start.len();
+    if n<2 { return start; }
     let scoring=SmallScore::new(pattern);
-    if n<2 { let f=scoring.flops(&start); return (start, f); }
     let mut best=start.clone(); let mut current=start;
     let mut best_f=scoring.flops(&best);
-    let mut state=seed;
+    let mut state=0xa839d37u64;
     for _ in 0..1024 {
         state^=state<<13; state^=state>>7; state^=state<<17; let a=state as usize%n;
         state^=state<<13; state^=state>>7; state^=state<<17; let b=state as usize%n;
@@ -1429,7 +1280,7 @@ fn cutoff_plateau_refine_seeded(pattern: &Pattern, start: Vec<usize>, neutral: b
         if f<best_f { best_f=f; best=current.clone(); }
         else if f>best_f || !neutral { current.swap(a,b); }
     }
-    (best, best_f)
+    best
 }
 
 
@@ -2946,7 +2797,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // 0.15 s).
     let mut indep_deferred: Option<(u64, Vec<usize>)> = None;
     if n >= INDEP_MIN_N && nnz <= INDEP_MAX_NNZ {
-        if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER, best_flops) {
+        if let Some((core_total, cand)) = indep_first::run(&scoring_pat, INDEP_WORK_LEDGER) {
             if core_total < best_flops && is_bijection(&cand, n) {
                 let f = score(&cand);
                 // ADOPTION RULE. The lift is taken at once when it leads by
@@ -2963,7 +2814,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // removed. The size gate is kept because it is an ordinary
                 // monotone predicate on `n`, not a window fitted around
                 // particular rows.
-                let force = !indep_force_off() && n >= indep_force_min_n();
+                let force = !indep_force_off() && n >= INDEP_FORCE_MIN_N;
                 #[cfg(test)]
                 force_audit::note(force, core_total, f, best_flops);
                 if force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
@@ -3255,23 +3106,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // 0.26-0.48 s on exactly the rows nearest the cap (cont6-qq, transswitch,
     // arki0013, nuclear104, gabriel10, unitcommit). It stays where it wins
     // (pooling_sppc1pq -0.45, pooling_sppc3pq -0.15, mpbp_35 -0.10, all n < 30k).
-    // ── 0219: EARLY ARBITRATION OF THE HELD STAGE-1B LIFT (test-only) ───────
-    // See `indep_arb_band_permille`. The held lift is handed the cascade here
-    // — after the cheap pre-cascade polish, before the chain — when its exact
-    // value beats the incumbent's; the winner of that comparison runs the
-    // chain exactly once, so this site adds no work.
-    if let Some(band) = indep_arb_band_permille() {
-        if let Some((f, cand)) = indep_deferred.take() {
-            #[cfg(test)]
-            force_audit::note_arb(n, f, best_flops);
-            if f.saturating_mul(1_000) <= best_flops.saturating_mul(1_000 + band) {
-                best_flops = f;
-                best_perm = cand;
-            }
-        }
-    }
     if (SUBTREE_MIN_N..=SUBTREE_CHAIN_MAX_N).contains(&n) && nnz <= 1_500_000 {
-        let (mut candidate, counts, parent) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+        let permuted = permute_current(&best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+        let post_pattern = permute_current(&candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
         let mut cfg1 = subtree_cfg_for(n, nnz);
         let mut improved = rgreedy::subtree_refine(
             n,
@@ -3321,7 +3172,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // Round 2: Refine the newly improved incumbent's elimination tree.
                 // Uses round = 1 to activate diversified search seeds across blocks.
                 // Bounded at 24 blocks and 1M ops per block, strictly monotonic.
-                let (mut candidate2, counts2, parent2) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+                let permuted2 = permute_current(&best_perm);
+                let etree2 = EliminationTree::from_pattern(&permuted2);
+                let post2 = etree2.postorder();
+                let mut candidate2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
+
+                let post_pattern2 = permute_current(&candidate2);
+                let post_etree2 = EliminationTree::from_pattern(&post_pattern2);
+                let counts2: Vec<u32> = column_counts_gnp(&post_pattern2, &post_etree2)
+                    .into_iter()
+                    .map(|c| c as u32)
+                    .collect();
+                let parent2: Vec<i32> = post_etree2
+                    .parent
+                    .iter()
+                    .map(|p| p.map_or(-1, |j| j as i32))
+                    .collect();
                 let mut cfg2 = subtree_cfg_for(n, nnz);
                 cfg2.round = 1;
                 cfg2.max_blocks = 32;
@@ -3359,7 +3225,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         // Same 1M ops per block, so the whole phase stays a
                         // deterministic bounded-work chain; strictly
                         // monotonic (accepted only on fewer flops).
-                        let (mut candidate3, counts3, parent3) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+                        let permuted3 = permute_current(&best_perm);
+                        let etree3 = EliminationTree::from_pattern(&permuted3);
+                        let post3 = etree3.postorder();
+                        let mut candidate3: Vec<usize> =
+                            post3.iter().map(|&j| best_perm[j]).collect();
+
+                        let post_pattern3 = permute_current(&candidate3);
+                        let post_etree3 = EliminationTree::from_pattern(&post_pattern3);
+                        let counts3: Vec<u32> = column_counts_gnp(&post_pattern3, &post_etree3)
+                            .into_iter()
+                            .map(|c| c as u32)
+                            .collect();
+                        let parent3: Vec<i32> = post_etree3
+                            .parent
+                            .iter()
+                            .map(|p| p.map_or(-1, |j| j as i32))
+                            .collect();
                         let mut cfg3 = subtree_cfg_for(n, nnz);
                         cfg3.round = 1;
                         cfg3.max_blocks = 32;
@@ -3389,7 +3271,24 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                 // 64M per block only in the measured-safe
                                 // lower-medium band; retain the hidden-proven
                                 // 32M budget everywhere else.
-                                let (mut candidate4, counts4, parent4) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+                                let permuted4 = permute_current(&best_perm);
+                                let etree4 = EliminationTree::from_pattern(&permuted4);
+                                let post4 = etree4.postorder();
+                                let mut candidate4: Vec<usize> =
+                                    post4.iter().map(|&j| best_perm[j]).collect();
+
+                                let post_pattern4 = permute_current(&candidate4);
+                                let post_etree4 = EliminationTree::from_pattern(&post_pattern4);
+                                let counts4: Vec<u32> =
+                                    column_counts_gnp(&post_pattern4, &post_etree4)
+                                        .into_iter()
+                                        .map(|c| c as u32)
+                                        .collect();
+                                let parent4: Vec<i32> = post_etree4
+                                    .parent
+                                    .iter()
+                                    .map(|p| p.map_or(-1, |j| j as i32))
+                                    .collect();
                                 let mut cfg4 = subtree_cfg_for(n, nnz);
                                 cfg4.round = 3;
                                 cfg4.max_blocks = 32;
@@ -3418,7 +3317,24 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                                         // Round 5: one more pass over the round-4
                                         // incumbent. Same block count (32), min_s 16,
                                         // max_s 768, round = 4 seed diversification.
-                                        let (mut candidate5, counts5, parent5) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+                                        let permuted5 = permute_current(&best_perm);
+                                        let etree5 = EliminationTree::from_pattern(&permuted5);
+                                        let post5 = etree5.postorder();
+                                        let mut candidate5: Vec<usize> =
+                                            post5.iter().map(|&j| best_perm[j]).collect();
+
+                                        let post_pattern5 = permute_current(&candidate5);
+                                        let post_etree5 = EliminationTree::from_pattern(&post_pattern5);
+                                        let counts5: Vec<u32> =
+                                            column_counts_gnp(&post_pattern5, &post_etree5)
+                                                .into_iter()
+                                                .map(|c| c as u32)
+                                                .collect();
+                                        let parent5: Vec<i32> = post_etree5
+                                            .parent
+                                            .iter()
+                                            .map(|p| p.map_or(-1, |j| j as i32))
+                                            .collect();
                                         let mut cfg5 = subtree_cfg_for(n, nnz);
                                         cfg5.round = 4;
                                         if n < 100_000 || best_flops != amd_flops {
@@ -3481,7 +3397,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // the promoted frontier while retaining the stronger search allocation.
     if (SUBTREE_MIN_N..=80_000).contains(&n) && nnz <= 250_000 {
         let incumbent_flops = score(&best_perm);
-        let (mut candidate, counts, parent) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+        let permuted = permute_current(&best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+
+        let post_pattern = permute_current(&candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
         let improved = rgreedy::subtree_refine(
             n,
             &pattern.col_ptr,
@@ -3505,7 +3436,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         || (n >= 10_000 && nnz <= 60_000)
                         || (n >= 10_000 && nnz <= 100_000 && best_flops < amd_flops))
                 {
-                    let (mut candidate2, counts2, parent2) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+                    let permuted2 = permute_current(&best_perm);
+                    let etree2 = EliminationTree::from_pattern(&permuted2);
+                    let post2 = etree2.postorder();
+                    let mut candidate2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
+                    let post_pattern2 = permute_current(&candidate2);
+                    let post_etree2 = EliminationTree::from_pattern(&post_pattern2);
+                    let counts2: Vec<u32> = column_counts_gnp(&post_pattern2, &post_etree2)
+                        .into_iter()
+                        .map(|c| c as u32)
+                        .collect();
+                    let parent2: Vec<i32> = post_etree2
+                        .parent
+                        .iter()
+                        .map(|p| p.map_or(-1, |j| j as i32))
+                        .collect();
                     let mut cfg2 = terminal_deep_subtree_cfg(n, nnz, best_flops, amd_flops);
                     cfg2.round = 6;
                     cfg2.min_s = 8;
@@ -3532,7 +3477,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                             if (n < 10_000 && nnz <= 100_000)
                                 || (n >= 10_000 && nnz <= 80_000 && best_flops < amd_flops)
                             {
-                                let (mut candidate3, counts3, parent3) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+                                let permuted3 = permute_current(&best_perm);
+                                let etree3 = EliminationTree::from_pattern(&permuted3);
+                                let post3 = etree3.postorder();
+                                let mut candidate3: Vec<usize> = post3.iter().map(|&j| best_perm[j]).collect();
+                                let post_pattern3 = permute_current(&candidate3);
+                                let post_etree3 = EliminationTree::from_pattern(&post_pattern3);
+                                let counts3: Vec<u32> = column_counts_gnp(&post_pattern3, &post_etree3)
+                                    .into_iter()
+                                    .map(|c| c as u32)
+                                    .collect();
+                                let parent3: Vec<i32> = post_etree3
+                                    .parent
+                                    .iter()
+                                    .map(|p| p.map_or(-1, |j| j as i32))
+                                    .collect();
                                 let mut cfg3 = terminal_deep_subtree_cfg(n, nnz, best_flops, amd_flops);
                                 cfg3.round = 7;
                                 cfg3.min_s = 8;
@@ -3571,7 +3530,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Large matrices are excluded: they own the local worst case, and an
     // additive pass there is what failed hidden validation in 0060.
     if best_flops < amd_flops && n < 10_000 && nnz <= 100_000 && n >= SUBTREE_MIN_N {
-        let (mut candidate, counts, parent) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+        let permuted = permute_current(&best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let mut candidate: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+        let post_pattern = permute_current(&candidate);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let counts: Vec<u32> = column_counts_gnp(&post_pattern, &post_etree)
+            .into_iter()
+            .map(|c| c as u32)
+            .collect();
+        let parent: Vec<i32> = post_etree
+            .parent
+            .iter()
+            .map(|p| p.map_or(-1, |j| j as i32))
+            .collect();
         let mut extra = SUBTREE_CFG;
         extra.min_s = 16;
         extra.max_s = 512;
@@ -4098,7 +4071,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
    // Terminal completion cleanup leaves every existing descent seed intact.
     // The exact scorer admits only a strict improvement over the final result.
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
-        let (pp, et_parent, counts) = symbolic_flat::analyze_sorted(&scoring_pat, &best_perm);
+        let pp = permute_current(&best_perm);
+        let et = EliminationTree::from_pattern(&pp);
+        let counts = column_counts_gnp(&pp, &et);
         // Reserve the independent candidate's 2M allowance from the existing
         // 8M total, only when it can still win before this terminal cleanup.
         let credits = if terminal_core_candidate.as_ref().map_or(false, |(f, _)| *f < best_flops) {
@@ -4106,7 +4081,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         } else { 8_000_000 };
         if let Some(candidate) = completion::refine_limited(
             n, &pattern.col_ptr, &pattern.row_idx,
-            &pp.col_ptr, &pp.row_idx, &et_parent, &counts, &best_perm, credits,
+            &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm, credits,
         ) {
             if is_bijection(&candidate, n) {
                 let f = score(&candidate);
@@ -4125,10 +4100,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Give a strictly winning independent candidate the same bounded
             // completion cleanup, without replacing any inherited search seed.
             if n >= 16 && n <= 30_000 && nnz <= 180_000 {
-                let (pp, et_parent, counts) = symbolic_flat::analyze_sorted(&scoring_pat, &p);
+                let pp = permute_current(&p);
+                let et = EliminationTree::from_pattern(&pp);
+                let counts = column_counts_gnp(&pp, &et);
                 if let Some(q) = completion::refine_limited(
                     n, &pattern.col_ptr, &pattern.row_idx,
-                    &pp.col_ptr, &pp.row_idx, &et_parent, &counts, &p, 2_000_000,
+                    &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &p, 2_000_000,
                 ) {
                     if is_bijection(&q, n) {
                         let qf = score(&q);
@@ -4163,7 +4140,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     if n >= 16 && n <= 30_000 && nnz <= 180_000 {
         let mut oversize_ledger: u64 = 0;
         for _ in 0..8 {
-            let (pp, et_parent, counts) = symbolic_flat::analyze_sorted(&scoring_pat, &best_perm);
+            let pp = permute_current(&best_perm);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
             // An oversize round pays before it runs; an ordinary one is free.
             let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
             let max_lnnz = if lnnz > peo_extract::MAX_LNNZ as u64 {
@@ -4175,7 +4154,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 peo_extract::MAX_LNNZ
             };
             let Some(candidates) = peo_extract::candidates_bounded(
-                n, &pp.col_ptr, &pp.row_idx, &et_parent, &counts, &best_perm,
+                n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
                 peo_extract::MAX_N, peo_extract::MAX_INPUT_NNZ, max_lnnz,
             ) else { break; };
             // Earlier terminal stages can change best_perm without updating
@@ -4196,7 +4175,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // is what stopped at the gate, so cost is what the ledger bounds.
         let mut ledger: u64 = 0;
         for _ in 0..PEO_LARGE_ROUNDS {
-            let (pp, et_parent, counts) = symbolic_flat::analyze_sorted(&scoring_pat, &best_perm);
+            let pp = permute_current(&best_perm);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
             let lnnz: u64 = counts.iter().map(|&c| c as u64).sum();
             if lnnz > PEO_LARGE_MAX_LNNZ as u64 { break; }
             // Pay for the round before running it. The chain works on a non-increasing
@@ -4205,7 +4186,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if ledger + cost > PEO_LARGE_LEDGER { break; }
             ledger += cost;
             let Some(candidates) = peo_extract::candidates_bounded(
-                n, &pp.col_ptr, &pp.row_idx, &et_parent, &counts, &best_perm,
+                n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
                 usize::MAX, usize::MAX, PEO_LARGE_MAX_LNNZ,
             ) else { break; };
             let incumbent_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
@@ -4277,7 +4258,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                     #[cfg(test)]
                     let _tprep = std::time::Instant::now();
-                    let (pp, et_parent, counts) = symbolic_flat::analyze_sorted(&scoring_pat, &cur);
+                    let pp = permute_current(&cur);
+                    let et = EliminationTree::from_pattern(&pp);
+                    let counts = column_counts_gnp(&pp, &et);
                     #[cfg(test)]
                     {
                         _alt_prof_prep += _tprep.elapsed().as_secs_f64();
@@ -4287,7 +4270,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     if ledger + cost > ledger_cap { break; }
                     ledger += cost;
                     let Some(cands) = peo_extract::candidates_bounded(
-                        n, &pp.col_ptr, &pp.row_idx, &et_parent, &counts, &cur,
+                        n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &cur,
                         usize::MAX, usize::MAX, PEO_ALT_MAX_LNNZ,
                     ) else { break; };
                     let inc: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
@@ -4377,7 +4360,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // budget-cut descent sits on the big-fill rows, where the round is
         // the most expensive and the completion is not minimal anyway).
         if descent_completed && cur_flops < entry_flops && n <= SUBTREE_CHAIN_MAX_N {
-            let (mut candidate_m, counts_m, parent_m) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+            let permuted_m = permute_current(&best_perm);
+            let etree_m = EliminationTree::from_pattern(&permuted_m);
+            let post_m = etree_m.postorder();
+            let mut candidate_m: Vec<usize> = post_m.iter().map(|&j| best_perm[j]).collect();
+            let post_pattern_m = permute_current(&candidate_m);
+            let post_etree_m = EliminationTree::from_pattern(&post_pattern_m);
+            let counts_m: Vec<u32> = column_counts_gnp(&post_pattern_m, &post_etree_m)
+                .into_iter()
+                .map(|c| c as u32)
+                .collect();
+            let parent_m: Vec<i32> = post_etree_m
+                .parent
+                .iter()
+                .map(|p| p.map_or(-1, |j| j as i32))
+                .collect();
             let mut cfg_m = subtree_cfg_for(n, nnz);
             cfg_m.round = 5;
             cfg_m.max_blocks = 32;
@@ -4420,7 +4417,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if k >= n {
                 break;
             }
-            let (counts, _, _) = symbolic_flat::analyze(&scoring_pat, &best_perm);
+            let pp = permute_current(&best_perm);
+            let et = EliminationTree::from_pattern(&pp);
+            let counts = column_counts_gnp(&pp, &et);
             let mut cnt = vec![0usize; n];
             for (pos, &v) in best_perm.iter().enumerate() {
                 cnt[v] = counts[pos];
@@ -4529,8 +4528,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Strict exact-score admit → structurally 0 worse. Gate n+nnz ≤ 400k.
     let best_flops_before_final = best_flops;
     if n >= SUBTREE_MIN_N && n + nnz <= FINAL_REFINE_MAX_WORK {
-        let (base_cand, counts, parent) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
-        let mut cur_flops: u64 = counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+        let permuted = permute_current(&best_perm);
+        let etree = EliminationTree::from_pattern(&permuted);
+        let post = etree.postorder();
+        let base_cand: Vec<usize> = post.iter().map(|&j| best_perm[j]).collect();
+        let post_pattern = permute_current(&base_cand);
+        let post_etree = EliminationTree::from_pattern(&post_pattern);
+        let raw_counts = column_counts_gnp(&post_pattern, &post_etree);
+        let mut cur_flops: u64 = raw_counts.iter().map(|&c| (c as u64) * (c as u64)).sum();
+        let counts: Vec<u32> = raw_counts.into_iter().map(|c| c as u32).collect();
+        let parent: Vec<i32> = post_etree.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
         for cfg in [
             subtree_cfg_for(n, nnz),
             terminal_deep_subtree_cfg(n, nnz, cur_flops, amd_flops),
@@ -4564,7 +4571,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // buys depth only where a strict gain already paid for the row.
         if cur_flops < best_flops_before_final {
             let before_rebuild = cur_flops;
-            let (base2, counts2, parent2) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+            let permuted2 = permute_current(&best_perm);
+            let etree2 = EliminationTree::from_pattern(&permuted2);
+            let post2 = etree2.postorder();
+            let base2: Vec<usize> = post2.iter().map(|&j| best_perm[j]).collect();
+            let post_pat2 = permute_current(&base2);
+            let post_et2 = EliminationTree::from_pattern(&post_pat2);
+            let raw2 = column_counts_gnp(&post_pat2, &post_et2);
+            let counts2: Vec<u32> = raw2.into_iter().map(|c| c as u32).collect();
+            let parent2: Vec<i32> = post_et2.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
             let mut cfg2 = subtree_cfg_for(n, nnz);
             cfg2.round = 1;
             cfg2.max_blocks = 32;
@@ -4599,7 +4614,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // (c7c1a8a) and the ungated copy (5f4e82b) both failed hidden
             // timing. lt_1k cannot see lee1_07 / lee4_09.
             if cur_flops < before_rebuild && n <= 1_000 {
-                let (base3, counts3, parent3) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
+                let permuted3 = permute_current(&best_perm);
+                let etree3 = EliminationTree::from_pattern(&permuted3);
+                let post3 = etree3.postorder();
+                let base3: Vec<usize> = post3.iter().map(|&j| best_perm[j]).collect();
+                let post_pat3 = permute_current(&base3);
+                let post_et3 = EliminationTree::from_pattern(&post_pat3);
+                let raw3 = column_counts_gnp(&post_pat3, &post_et3);
+                let counts3: Vec<u32> = raw3.into_iter().map(|c| c as u32).collect();
+                let parent3: Vec<i32> =
+                    post_et3.parent.iter().map(|p| p.map_or(-1, |j| j as i32)).collect();
                 let mut cfg3 = subtree_cfg_for(n, nnz);
                 cfg3.round = 1;
                 cfg3.max_blocks = 16;
@@ -4810,11 +4834,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // not retried.
     // iter143: density-split SmallScore (maxcsp 1.55s bomb from ungated 4x).
     // Completion leap n<=1000. Chimera-band same-tree ticket (not broad mid-n).
-    // Restarts 3 and 4 below are deterministic functions of (perm, fixed stream): when
-    // restart 2 returns its input unchanged, they would recompute restart 2 and return the
-    // same perm. Skip them then (bit-identical) and spend the two walks after the last
-    // stage instead, re-seeded (see the end of this function).
-    let mut terminal_bank: u8 = 0;
     if n >= 12 && n <= 1_000 {
         let mut cand = cutoff_plateau_refine(
             pattern,
@@ -4822,26 +4841,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             true,
         );
         if nnz <= 12_000 {
-            let before_restart_2 = cand.clone();
             cand = cutoff_plateau_refine(
                 pattern,
                 cutoff_paired_swap_refine(pattern, cand),
                 true,
             );
-            if cand == before_restart_2 {
-                terminal_bank = 2;
-            } else {
-                cand = cutoff_plateau_refine(
-                    pattern,
-                    cutoff_paired_swap_refine(pattern, cand),
-                    true,
-                );
-                cand = cutoff_plateau_refine(
-                    pattern,
-                    cutoff_paired_swap_refine(pattern, cand),
-                    true,
-                );
-            }
+            cand = cutoff_plateau_refine(
+                pattern,
+                cutoff_paired_swap_refine(pattern, cand),
+                true,
+            );
+            cand = cutoff_plateau_refine(
+                pattern,
+                cutoff_paired_swap_refine(pattern, cand),
+                true,
+            );
         }
         if is_bijection(&cand, n) {
             let f = score(&cand);
@@ -4857,10 +4871,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     let _tph = std::time::Instant::now();
     if n >= 16 && n <= 1_000 && nnz <= 20_000 {
         let before_comp = best_flops;
-        let (pp, et_parent, counts) = symbolic_flat::analyze_sorted(&scoring_pat, &best_perm);
+        let pp = permute_current(&best_perm);
+        let et = EliminationTree::from_pattern(&pp);
+        let counts = column_counts_gnp(&pp, &et);
         if let Some(candidate) = completion::refine_limited(
             n, &pattern.col_ptr, &pattern.row_idx,
-            &pp.col_ptr, &pp.row_idx, &et_parent, &counts, &best_perm, 4_000_000,
+            &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm, 4_000_000,
         ) {
             if is_bijection(&candidate, n) {
                 let f = score(&candidate);
@@ -5257,83 +5273,16 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Exact window descent follows the promoted terminal greedy search, so
     // every accepted replacement improves the final incumbent. The shared
     // ledger includes preparation, DP states, and elimination replay.
-    //
-    // ── iter43 seam (test-only): the class's only structural wall is `n`
-    //
-    // Every gt_10k row on dev that ties at AMD (ratio 1.0000) has `n` above
-    // `rgreedy::MAX_N = 12_000`, i.e. it is outside the class by the `n` gate
-    // alone (four of the five also pass the 150k factor key). `SSI_TERM_CLASS_N`
-    // re-points the limit at all three admission sites (exchange, followup,
-    // PEO extraction) so one binary measures that band; unset or a `cfg(not(test))`
-    // build reproduces the shipped `order()` exactly.
-    #[cfg(test)]
-    let class_n: usize = std::env::var("SSI_TERM_CLASS_N")
-        .ok()
-        .and_then(|v| v.trim().parse::<usize>().ok())
-        .unwrap_or_else(rgreedy::max_n_limit);
-    #[cfg(not(test))]
-    let class_n: usize = rgreedy::MAX_N;
-    let terminal_exchange = n >= 6 && n <= class_n && nnz <= 200_000
+    let terminal_exchange = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
         && nnz <= n.saturating_mul(16) && max_deg <= n / 2;
     #[cfg(test)]
     let terminal_exchange = terminal_exchange && probe::leader_tail::exchange_enabled();
     if terminal_exchange {
-        #[cfg(test)]
-        if std::env::var_os("SSI_CLASS_TRACE").is_some() {
-            eprintln!("CLASSTRACE	xchg	{n}	{nnz}	admitted");
-        }
-        // iter42 seam: the exchange's own ledger (the leader measured its
-        // 32M -> 64M step as paying; this re-points it so the next step is
-        // measurable in the same binary).
-        #[cfg(test)]
-        let exchange_ledger: i64 = std::env::var("SSI_EXCHANGE_LEDGER")
-            .ok()
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
-        #[cfg(not(test))]
-        let exchange_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
-        // iter53 MERGE — the `83a8f4f` device: on the crown `475be33` the class
-        // block's exchange window 8/4/3 -> 12/4/5 promoted remotely at hidden
-        // 0.841666 (−1.02e-4). The current frontier (`78c434c`, `7df69b9`) was
-        // diffed against `475be33` and carries none of it, so this is the one
-        // device of ours that is *validated on the hidden frame* and absent here.
-        // Test-only env seam: one binary prices both arms in-frame.
-        #[cfg(test)]
-        let exchange_width: usize = std::env::var("SSI_EXCHANGE_WIDTH")
-            .ok()
-            .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(12);
-        #[cfg(not(test))]
-        let exchange_width: usize = 12;
-        #[cfg(test)]
-        let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
-            .ok()
-            .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(5);
-        #[cfg(not(test))]
-        let exchange_sweeps: usize = 5;
-        #[cfg(test)]
-        let exchange_step: usize = std::env::var("SSI_EXCHANGE_STEP")
-            .ok()
-            .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(5);
-        #[cfg(not(test))]
-        let exchange_step: usize = 5;
         if let Some(candidate) = rgreedy::subset_window_descent_step(
-            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, exchange_width, exchange_sweeps,
-            exchange_step, exchange_ledger,
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 8, 4, 3, 64_000_000,
         ) {
-            #[cfg(test)]
-            if std::env::var_os("SSI_CLASS_TRACE").is_some() {
-                eprintln!("CLASSTRACE	xchg	{n}	{nnz}	candidate=1");
-            }
             if is_bijection(&candidate, n) && score(&candidate) < score(&best_perm) {
                 best_perm = candidate;
-            }
-        } else {
-            #[cfg(test)]
-            if std::env::var_os("SSI_CLASS_TRACE").is_some() {
-                eprintln!("CLASSTRACE	xchg	{n}	{nnz}	candidate=0");
             }
         }
     }
@@ -5344,73 +5293,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // additionally obeys its factor-nonzero limits before materializing fill.
     // Reject an expensive existing ledger before scoring again. Admission
     // below still requires the fresh exact score and factor-nonzero bound.
-    let terminal_followup = n >= 6 && n <= class_n && nnz <= 200_000
+    let terminal_followup = n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000
         && best_flops <= LADDER_FILL_BOUND;
     #[cfg(test)]
     let terminal_followup = terminal_followup && probe::terminal_followup::enabled();
     if terminal_followup {
-        // iter42 seam: the leader prices the *admission* key (factor-nnz
-        // 150k vs 300k) separately from the window allowance.
-        #[cfg(test)]
-        let followup_factor: u64 = std::env::var("SSI_FOLLOWUP_FACTOR")
-            .ok()
-            .and_then(|v| v.trim().parse::<u64>().ok())
-            .unwrap_or(150_000);
-        #[cfg(not(test))]
-        let followup_factor: u64 = 150_000;
-        #[cfg(test)]
-        let peo_rounds: usize = std::env::var("SSI_PEO_ROUNDS")
-            .ok()
-            .and_then(|v| v.trim().parse::<usize>().ok())
-            .unwrap_or(PRODUCTION_PEO_ROUNDS);
-        #[cfg(not(test))]
-        let peo_rounds: usize = PRODUCTION_PEO_ROUNDS;
-        #[cfg(test)]
-        let class_trace = std::env::var_os("SSI_CLASS_TRACE").is_some();
         let mut final_flops = score(&best_perm);
-        #[cfg(test)]
-        if class_trace {
-            eprintln!(
-                "CLASSTRACE	follow	{n}	{nnz}	flops={final_flops}	nnzl={}	key={followup_factor}",
-                score_workspace.borrow().nnz_l()
-            );
-        }
-        if final_flops <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= followup_factor {
+        if final_flops <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= 150_000 {
             // The same fixed window allowance also covers dense/hub patterns;
             // preparation and elimination are charged regardless of density.
             if nnz > n.saturating_mul(16) || max_deg > n / 2 {
-                #[cfg(test)]
-                let dense_window_ledger: i64 = std::env::var("SSI_EXCHANGE_LEDGER")
-                    .ok()
-                    .and_then(|v| v.trim().parse::<i64>().ok())
-                    .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
-                #[cfg(not(test))]
-                let dense_window_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
-                // iter54 seam (test-only): the dense/hub site is the *other*
-                // half of the class — it fires exactly on the rows the class
-                // block's gate excludes (`nnz > 16n || max_deg > n/2`) and it
-                // still calls the 8/4/3 shape the class block outgrew. The
-                // family curve (0234) prices 12/* on the class block only.
-                #[cfg(test)]
-                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (
-                    std::env::var("SSI_DENSE_W")
-                        .ok()
-                        .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(8),
-                    std::env::var("SSI_DENSE_S")
-                        .ok()
-                        .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(4),
-                    std::env::var("SSI_DENSE_T")
-                        .ok()
-                        .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(3),
-                );
-                #[cfg(not(test))]
-                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (8, 4, 3);
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
-                    dense_w, dense_s, dense_t, dense_window_ledger,
+                    8, 4, 3, 64_000_000,
                 ) {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
@@ -5418,17 +5313,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
-            for _ in 0..peo_rounds {
+            for _ in 0..2 {
                 let before = final_flops;
-                let (pp, et_parent, counts) = symbolic_flat::analyze_sorted(&scoring_pat, &best_perm);
+                let pp = permute_current(&best_perm);
+                let et = EliminationTree::from_pattern(&pp);
+                let counts = column_counts_gnp(&pp, &et);
                 if let Some(candidates) = peo_extract::candidates_bounded(
-                    n, &pp.col_ptr, &pp.row_idx, &et_parent, &counts, &best_perm,
-                    class_n, 200_000, 150_000,
+                    n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &best_perm,
+                    rgreedy::MAX_N, 200_000, 150_000,
                 ) {
-                    #[cfg(test)]
-                    if class_trace {
-                        eprintln!("CLASSTRACE	peo	{n}	{nnz}	cands={}", candidates.len());
-                    }
                     for candidate in candidates {
                         let f = score(&candidate);
                         if f < final_flops { best_perm = candidate; final_flops = f; }
@@ -5439,20 +5332,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // Wide spans solve only connected components of at most fourteen
             // vertices, preserving each component's slots and skipping larger
             // components. Narrow passes then refine the resulting incumbent.
-            // iter42 seam: the leader's own arm table prices the *window
-            // allowance* (small = 16M+16M+32M, full = 32M+32M+64M) separately
-            // from the factor bound; `SSI_FOLLOWUP_FULL_WINDOWS` re-points it so
-            // one binary measures both arms.
-            #[cfg(test)]
-            let span_windows: &[(usize, usize, usize, i64)] =
-                if std::env::var_os("SSI_FOLLOWUP_SMALL_WINDOWS").is_some() {
-                    &[(48, 4, 19, 16_000_000), (9, 4, 4, 16_000_000), (8, 4, 3, 32_000_000)]
-                } else {
-                    &PRODUCTION_SPAN_WINDOWS
-                };
-            #[cfg(not(test))]
-            let span_windows: &[(usize, usize, usize, i64)] = &PRODUCTION_SPAN_WINDOWS;
-            for &(width, sweeps, step, budget) in span_windows {
+            for (width, sweeps, step, budget) in [
+                (48, 4, 19, 16_000_000),
+                (9, 4, 4, 16_000_000),
+                (8, 4, 3, 32_000_000),
+            ] {
                 if let Some(candidate) = rgreedy::sparse_span_window_descent(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     width, sweeps, step, budget,
@@ -5461,244 +5345,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         let f = score(&candidate);
                         if f < final_flops { best_perm = candidate; final_flops = f; }
                     }
-                }
-            }
-            // iter43: the two further sparse-span passes (12/5 and 7/3) that
-            // were measured through last iteration's `SSI_SPAN_EXTRA` seam are
-            // now part of `PRODUCTION_SPAN_WINDOWS` itself, so they need no
-            // separate seam: the arm table's three widths (48/9/8) were a fixed
-            // schedule, not a fixpoint, and the appended widths are the
-            // measured residual (-3.0e-5 on the shipped point).
-            #[cfg(test)]
-            if class_trace {
-                eprintln!("CLASSTRACE	spans	{n}	{nnz}	final={final_flops}");
-            }
-        }
-    }
-    // ── iter42: the terminal four-stream round, re-admitted on the leader's own
-    //    exact factor-nnz key instead of this branch's structural + live-ratio
-    //    gates.
-    //
-    // The round is this branch's device (four `rgreedy` streams merged by a
-    // strict `(flops, source)` argmin, so its output is a pure function of the
-    // four specs and the thread count cannot change it). Its dose curve on our
-    // own tree is linear in the per-stream budget and lands hardest on rows it
-    // cannot move; three submissions carrying it died on the hidden 2.0 s cap.
-    // The public leader's own admission rule for its terminal kernels is an
-    // *exact symbolic factor-nonzero* bound (150_000) read off the scoring
-    // arena, which is what this round now obeys: a row is only walked if its
-    // incumbent's factor is small, i.e. if the pipeline's own elimination work
-    // on it is small. That is a property of the row's own state, not a window.
-    {
-        const FANOUT_MAX_N: usize = 12_000;
-        const FANOUT_SMALL_N: usize = 6_000;
-        const FANOUT_MIN_NNZ: usize = 30_000;
-        // Per-stream `rgreedy` budget of the shipped round; 0 disables it.
-        const FANOUT_BUDGET: i64 = 0;
-        // Exact factor-nonzero bound the round obeys (the leader's key).
-        const FANOUT_FACTOR_BOUND: u64 = 150_000;
-        const FANOUT_SEEDS: [u64; 4] = [
-            0x9E37_79B9_7F4A_7C15,
-            0xD1B5_4A32_D192_ED03,
-            0xA24B_AED4_963E_E407,
-            0x9FB2_1C65_1E5B_0B9C,
-        ];
-        #[cfg(test)]
-        let fanout_budget: i64 = std::env::var("SSI_FANOUT_BUDGET")
-            .ok()
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .unwrap_or(FANOUT_BUDGET);
-        #[cfg(not(test))]
-        let fanout_budget: i64 = FANOUT_BUDGET;
-        #[cfg(test)]
-        let factor_bound: u64 = std::env::var("SSI_FANOUT_FACTOR")
-            .ok()
-            .and_then(|v| v.trim().parse::<u64>().ok())
-            .unwrap_or(FANOUT_FACTOR_BOUND);
-        #[cfg(not(test))]
-        let factor_bound: u64 = FANOUT_FACTOR_BOUND;
-        let fanout_gate = fanout_budget > 0
-            && n <= FANOUT_MAX_N
-            && (n > FANOUT_SMALL_N || nnz > FANOUT_MIN_NNZ);
-        if fanout_gate {
-            // The leader's own idiom: re-score the current incumbent and read the
-            // arena's fresh symbolic factor count; no stale scalar admits a row.
-            let cur = score(&best_perm);
-            if cur <= LADDER_FILL_BOUND && score_workspace.borrow().nnz_l() <= factor_bound {
-                let specs = FANOUT_SEEDS.map(|rng| (rng, rgreedy::Params::DEFAULT, fanout_budget));
-                if let Some((cand, _)) = rgreedy::search_par_specs(
-                    n,
-                    &pattern.col_ptr,
-                    &pattern.row_idx,
-                    &best_perm,
-                    cur,
-                    specs,
-                ) {
-                    if is_bijection(&cand, n) {
-                        let f = score(&cand);
-                        if f < cur {
-                            best_perm = cand;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    // The two banked terminal walks, on the perm this function ships (12 <= n <= 1000,
-    // nnz <= 12k, restart 2 was a no-op). Walk 1 starts from the reverse-MCS PEO of the
-    // incumbent's own completion (never worse in flops) under the crown's stream; walk 2
-    // runs the alternate stream from walk 1's result. Same 512 + 1024 bounded SmallScore
-    // calls per walk as the two skipped restarts. Exact strict accept; nothing runs after.
-    if terminal_bank > 0 && n >= 12 && n <= 1_000 && nnz <= 12_000 {
-        let incumbent_small = SmallScore::new(pattern).flops(&best_perm);
-        let mut cur = best_perm.clone();
-        let mut cur_f = incumbent_small;
-        let pp = permute_pattern(&scoring_pat, &cur);
-        let et = EliminationTree::from_pattern(&pp);
-        let counts = column_counts_gnp(&pp, &et);
-        let seed = peo_extract::reverse_candidate_bounded(
-            n, &pp.col_ptr, &pp.row_idx, &et.parent, &counts, &cur,
-            1_000, 12_000, TERMINAL_SEED_MAX_LNNZ,
-        ).unwrap_or_else(|| cur.clone());
-        let (walk, f) = cutoff_plateau_refine_seeded(
-            pattern,
-            cutoff_paired_swap_refine_seeded(pattern, seed, TERMINAL_PAIRED_SEED),
-            true,
-            TERMINAL_PLATEAU_SEED,
-        );
-        if f < cur_f { cur = walk; cur_f = f; }
-        let (walk, f) = cutoff_plateau_refine_seeded(
-            pattern,
-            cutoff_paired_swap_refine_seeded(pattern, cur.clone(), TERMINAL_ALT_PAIRED_SEED),
-            true,
-            TERMINAL_ALT_PLATEAU_SEED,
-        );
-        if f < cur_f { cur = walk; cur_f = f; }
-        // best_flops can be stale here (subset_window_descent_step replaces the perm
-        // without updating it), so the incumbent is scored afresh.
-        if cur_f < incumbent_small && is_bijection(&cur, n) && score(&cur) < score(&best_perm) {
-            best_perm = cur;
-        }
-    }
-    // ── iter54 seam (test-only): THE EXCHANGE IS A MOVE, NOT A FIXPOINT ─────
-    // `22.win`'s exact window descent runs ONCE, before the terminal engine
-    // ladder, the follow-up PEO rounds, the fanout engine and the two banked
-    // walks — every one of which can hand a different incumbent to the tail.
-    // 0234 priced the move's *shape*; the question here is different and never
-    // asked: does the same exact move still pay on whatever the tail left, and
-    // on the displaced orderings the pipeline retains but no stage ever
-    // re-optimizes (`runner_up`)? Both arms are monotone by construction —
-    // install only on a strict decrease of the exact score.
-    #[cfg(test)]
-    let xchg_tail: usize = std::env::var("SSI_XCHG_TAIL")
-        .ok()
-        .and_then(|v| v.trim().parse().ok())
-        .unwrap_or(0);
-    #[cfg(not(test))]
-    let xchg_tail: usize = 0;
-    #[cfg(test)]
-    let xchg_pool: usize = std::env::var("SSI_XCHG_POOL")
-        .ok()
-        .and_then(|v| v.trim().parse().ok())
-        .unwrap_or(0);
-    #[cfg(not(test))]
-    let xchg_pool: usize = 0;
-    if (xchg_tail > 0 || xchg_pool > 0)
-        && n >= 6
-        && n <= class_n
-        && nnz <= 200_000
-        && nnz <= n.saturating_mul(16)
-        && max_deg <= n / 2
-    {
-        #[cfg(test)]
-        let (tw, ts, tt): (usize, usize, usize) = (
-            std::env::var("SSI_XCHG_TW")
-                .ok()
-                .and_then(|v| v.trim().parse().ok())
-                .unwrap_or(12),
-            std::env::var("SSI_XCHG_TS")
-                .ok()
-                .and_then(|v| v.trim().parse().ok())
-                .unwrap_or(4),
-            std::env::var("SSI_XCHG_TT")
-                .ok()
-                .and_then(|v| v.trim().parse().ok())
-                .unwrap_or(5),
-        );
-        #[cfg(not(test))]
-        let (tw, ts, tt): (usize, usize, usize) = (12, 4, 5);
-        #[cfg(test)]
-        let tail_ledger: i64 = std::env::var("SSI_XCHG_LEDGER")
-            .ok()
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
-        #[cfg(not(test))]
-        let tail_ledger: i64 = PRODUCTION_EXCHANGE_LEDGER;
-        let step = |seed: &[usize]| {
-            rgreedy::subset_window_descent_step(
-                n,
-                &pattern.col_ptr,
-                &pattern.row_idx,
-                seed,
-                tw,
-                ts,
-                tt,
-                tail_ledger,
-            )
-        };
-        let mut best_now = score(&best_perm);
-        #[cfg(test)]
-        let xchg_trace = std::env::var_os("SSI_XCHG_TRACE").is_some();
-        for _ in 0..xchg_tail {
-            let Some(candidate) = step(&best_perm) else { break };
-            if !is_bijection(&candidate, n) {
-                break;
-            }
-            let f = score(&candidate);
-            #[cfg(test)]
-            if xchg_trace {
-                eprintln!("XCHGTRACE\ttail\t{n}\t{best_now}\t{f}");
-            }
-            if f < best_now {
-                best_perm = candidate;
-                best_now = f;
-            } else {
-                break;
-            }
-        }
-        if xchg_pool > 0 {
-            let seeds: Vec<Vec<usize>> = runner_up
-                .borrow()
-                .iter()
-                .take(xchg_pool)
-                .map(|(_, p)| p.clone())
-                .collect();
-            for seed in seeds {
-                if seed.len() != n || !is_bijection(&seed, n) {
-                    continue;
-                }
-                let mut cur = seed;
-                let mut cur_f = score(&cur);
-                for _ in 0..xchg_tail.max(1) {
-                    let Some(candidate) = step(&cur) else { break };
-                    if !is_bijection(&candidate, n) {
-                        break;
-                    }
-                    let f = score(&candidate);
-                    if f < cur_f {
-                        cur = candidate;
-                        cur_f = f;
-                    } else {
-                        break;
-                    }
-                }
-                #[cfg(test)]
-                if xchg_trace {
-                    eprintln!("XCHGTRACE\tpool\t{n}\t{best_now}\t{cur_f}");
-                }
-                if cur_f < best_now {
-                    best_perm = cur;
-                    best_now = cur_f;
                 }
             }
         }
@@ -6979,7 +6625,10 @@ fn bfs_deepest(
 /// Predicted factorization flops `Σ_j c_j²` for `perm` on `pat`, via feral's
 /// pattern-pure symbolic building blocks — the exact quantity the grader ranks.
 fn flops_of(pat: &ScoringPattern, perm: &[usize]) -> u64 {
-    symbolic_flat::flops(pat, perm)
+    let permuted = permute_pattern(pat, perm);
+    let etree = EliminationTree::from_pattern(&permuted);
+    let counts = column_counts_gnp(&permuted, &etree);
+    counts.iter().map(|&c| (c as u64) * (c as u64)).sum()
 }
 
 /// Whether `perm` is a bijection of `0..n` (guards a candidate before scoring).
@@ -7025,21 +6674,6 @@ mod tests {
                 let j = (i+1..n).rev().find(|&j| perm[j] > perm[i]).unwrap();
                 perm.swap(i,j); perm[i+1..].reverse();
             }
-        }
-    }
-
-    #[test]
-    fn seeded_terminal_walks_reproduce_crown_streams() {
-        for (name, p) in crate::corpus::corpus().iter().take(40) {
-            if p.n < 12 || p.n > 1_000 { continue; }
-            let base = leader_order(p);
-            let a = cutoff_paired_swap_refine(p, base.clone());
-            let b = cutoff_paired_swap_refine_seeded(p, base.clone(), TERMINAL_PAIRED_SEED);
-            assert_eq!(a, b, "{name}");
-            let c = cutoff_plateau_refine(p, a.clone(), true);
-            let (d, df) = cutoff_plateau_refine_seeded(p, a, true, TERMINAL_PLATEAU_SEED);
-            assert_eq!(c, d, "{name}");
-            assert_eq!(df, SmallScore::new(p).flops(&c), "{name}");
         }
     }
 

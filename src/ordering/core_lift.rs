@@ -126,6 +126,183 @@ pub(crate) fn reduce_checked(
     )
 }
 
+/// Ost/Schulz/Strasser-style kernelized reduce (ALENEX 2021): the degree-bounded
+/// rule is extended with two FILL-BOUNDED rules, applied to a fixpoint under
+/// one shared pair-check ledger —
+///   simplicial: the live neighbourhood is already a clique (zero fill edges,
+///     any degree);
+///   almost-simplicial: exactly one neighbour pair is missing (one fill edge),
+///     degree <= `as_max_deg` so the classification work stays bounded.
+/// Every step is the SAME exact elimination `reduce_impl` performs (close the
+/// neighbourhood into a clique, charge `c_v = |live| + 1`), so the prefix term
+/// stays exact and the splice accounting is unchanged. As a portfolio member
+/// the candidate carries zero score risk: the caller scores it exactly and
+/// accepts only a strict improvement.
+#[inline]
+pub(crate) fn reduce_kernel(
+    sp: &ScoringPattern,
+    max_row_deg: usize,
+    as_max_deg: usize,
+    max_core_n: usize,
+    max_core_edges: usize,
+    max_pair_checks: u64,
+) -> Option<CoreLift> {
+    reduce_kernel_impl(sp, max_row_deg, as_max_deg, max_core_n, max_core_edges, max_pair_checks)
+}
+
+
+fn reduce_kernel_impl(
+    sp: &ScoringPattern,
+    max_row_deg: usize,
+    as_max_deg: usize,
+    max_core_n: usize,
+    max_core_edges: usize,
+    max_pair_checks: u64,
+) -> Option<CoreLift> {
+    let n = sp.n;
+    if n == 0 || n > u32::MAX as usize {
+        return None;
+    }
+
+    let mut nbrs: Vec<Vec<u32>> = Vec::with_capacity(n);
+    let mut deg: Vec<u32> = vec![0; n];
+    let mut edges: EdgeSet =
+        EdgeSet::with_capacity_and_hasher(sp.row_idx.len() / 2 + 16, Default::default());
+    for j in 0..n {
+        let s = sp.col_ptr[j];
+        let e = sp.col_ptr[j + 1];
+        let list: Vec<u32> = sp.row_idx[s..e]
+            .iter()
+            .map(|&x| u32::try_from(x).ok())
+            .collect::<Option<_>>()?;
+        deg[j] = u32::try_from(list.len()).ok()?;
+        for &w in &list {
+            if (w as usize) > j {
+                edges.insert(key(j as u32, w));
+            }
+        }
+        nbrs.push(list);
+    }
+
+    let mut alive = vec![true; n];
+    let mut prefix: Vec<usize> = Vec::new();
+    let mut prefix_flops: u64 = 0;
+    let mut pair_checks_left = max_pair_checks;
+
+    // Every vertex starts eligible; pop ascending (degree, index). Pendants
+    // and simplicial vertices therefore surface first, and every degree
+    // change re-pushes the touched vertex.
+    let mut heap: BinaryHeap<Reverse<(u32, u32)>> = BinaryHeap::new();
+    for v in 0..n {
+        heap.push(Reverse((deg[v], v as u32)));
+    }
+
+    let mut live: Vec<u32> = Vec::new();
+    while let Some(Reverse((d, v))) = heap.pop() {
+        let vu = v as usize;
+        if !alive[vu] || deg[vu] != d || d == 0 {
+            continue;
+        }
+        live.clear();
+        for &w in &nbrs[vu] {
+            let wu = w as usize;
+            if wu != vu && alive[wu] {
+                live.push(w);
+            }
+        }
+        live.sort_unstable();
+        live.dedup();
+        if live.len() != deg[vu] as usize {
+            return None;
+        }
+        let dl = live.len();
+        let mut admissible = dl <= max_row_deg;
+        if !admissible {
+            // Count missing neighbour pairs, early-exit at 2.
+            let mut missing = 0u32;
+            let mut checked = 0u64;
+            'outer: for i in 0..dl {
+                for j in (i + 1)..dl {
+                    checked += 1;
+                    if !edges.contains(&key(live[i], live[j])) {
+                        missing += 1;
+                        if missing >= 2 {
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+            pair_checks_left = pair_checks_left.checked_sub(checked)?;
+            admissible = missing == 0 || (missing == 1 && dl <= as_max_deg);
+        }
+        if !admissible {
+            continue;
+        }
+        let cv = dl as u64 + 1;
+        prefix_flops = prefix_flops.checked_add(cv.checked_mul(cv)?)?;
+        for i in 0..dl {
+            for j in (i + 1)..dl {
+                let (a, b) = (live[i], live[j]);
+                if edges.insert(key(a, b)) {
+                    nbrs[a as usize].push(b);
+                    nbrs[b as usize].push(a);
+                    deg[a as usize] = deg[a as usize].checked_add(1)?;
+                    deg[b as usize] = deg[b as usize].checked_add(1)?;
+                }
+            }
+        }
+        for &w in live.iter() {
+            edges.remove(&key(v, w));
+            deg[w as usize] = deg[w as usize].checked_sub(1)?;
+        }
+        alive[vu] = false;
+        deg[vu] = 0;
+        nbrs[vu] = Vec::new();
+        prefix.push(vu);
+        for &w in live.iter() {
+            heap.push(Reverse((deg[w as usize], w)));
+        }
+    }
+
+    let core_ids: Vec<usize> = (0..n).filter(|&v| alive[v]).collect();
+    let core_n = core_ids.len();
+    if core_n == 0 || core_n > max_core_n {
+        return None;
+    }
+    let mut pos_of: Vec<u32> = vec![u32::MAX; n];
+    for (k, &v) in core_ids.iter().enumerate() {
+        pos_of[v] = k as u32;
+    }
+    let mut core_col_ptr: Vec<usize> = Vec::with_capacity(core_n + 1);
+    let mut core_row_idx: Vec<usize> = Vec::new();
+    core_col_ptr.push(0);
+    let mut row: Vec<u32> = Vec::new();
+    let core_nnz_cap = max_core_edges.checked_mul(2)?;
+    for &v in core_ids.iter() {
+        row.clear();
+        for &w in &nbrs[v] {
+            let wu = w as usize;
+            if wu != v && alive[wu] {
+                row.push(pos_of[wu]);
+            }
+        }
+        row.sort_unstable();
+        row.dedup();
+        core_row_idx.extend(row.iter().map(|&x| x as usize));
+        core_col_ptr.push(core_row_idx.len());
+        if core_row_idx.len() > core_nnz_cap {
+            return None;
+        }
+    }
+
+    Some(CoreLift {
+        prefix,
+        core_ids,
+        core_col_ptr,
+        core_row_idx,
+        prefix_flops,
+    })
+}
 #[inline]
 fn reduce_impl<const CHECK_PAIRS: bool>(
     sp: &ScoringPattern,

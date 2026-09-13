@@ -1,0 +1,65 @@
+iter72 — every seam-addressable block is value-free AND wall-free on the cap rows (probe frame, min of 2, taskset -c 0-3)
+arm = the test-only kill switch; ratios identical to 4 dp in every arm and wall within +-0.02 s
+=== base ===
+secs	matrix	n	nnz	ratio
+1.2570	crudeoil_lee4_09	15904	101792	0.6171
+1.1371	procurement1large	14416	41068	0.5275
+1.0875	mpbp_48	28368	91016	0.4746
+1.0379	chimera_selby-c16-02	2031	10878	0.5368
+0.9842	chimera_selby-c16-01	2031	10964	0.6669
+0.9108	methanol400	23999	151728	0.6931
+matrices under 0.010s: 0/6
+=== SSI_NO_PART=0 ===
+secs	matrix	n	nnz	ratio
+1.2775	crudeoil_lee4_09	15904	101792	0.6171
+1.1120	procurement1large	14416	41068	0.5275
+1.0830	mpbp_48	28368	91016	0.4746
+1.0387	chimera_selby-c16-02	2031	10878	0.5368
+0.9911	chimera_selby-c16-01	2031	10964	0.6669
+0.8807	methanol400	23999	151728	0.6931
+matrices under 0.010s: 0/6
+=== SSI_NO_PART_EX=0 ===
+secs	matrix	n	nnz	ratio
+1.2478	crudeoil_lee4_09	15904	101792	0.6171
+1.1228	procurement1large	14416	41068	0.5275
+1.0841	mpbp_48	28368	91016	0.4746
+1.0316	chimera_selby-c16-02	2031	10878	0.5368
+0.9993	chimera_selby-c16-01	2031	10964	0.6669
+0.8922	methanol400	23999	151728	0.6931
+matrices under 0.010s: 0/6
+=== SSI_NO_CUSTOM=0 ===
+secs	matrix	n	nnz	ratio
+1.2516	crudeoil_lee4_09	15904	101792	0.6171
+1.1235	procurement1large	14416	41068	0.5275
+1.0885	mpbp_48	28368	91016	0.4746
+1.0705	chimera_selby-c16-02	2031	10878	0.5368
+0.9866	chimera_selby-c16-01	2031	10964	0.6669
+0.9079	methanol400	23999	151728	0.6931
+matrices under 0.010s: 0/6
+=== SSI_NO_MINFILL=0 ===
+secs	matrix	n	nnz	ratio
+1.2507	crudeoil_lee4_09	15904	101792	0.6171
+1.1169	procurement1large	14416	41068	0.5275
+1.0863	mpbp_48	28368	91016	0.4746
+1.0381	chimera_selby-c16-02	2031	10878	0.5368
+1.0101	chimera_selby-c16-01	2031	10964	0.6669
+0.8897	methanol400	23999	151728	0.6931
+matrices under 0.010s: 0/6
+=== SSI_PEO_ROUNDS=0 ===
+secs	matrix	n	nnz	ratio
+1.2448	crudeoil_lee4_09	15904	101792	0.6171
+1.0919	procurement1large	14416	41068	0.5276
+1.0758	mpbp_48	28368	91016	0.4746
+1.0419	chimera_selby-c16-02	2031	10878	0.5368
+1.0043	chimera_selby-c16-01	2031	10964	0.6669
+0.8754	methanol400	23999	151728	0.6931
+matrices under 0.010s: 0/6
+=== SSI_XCH_ALLOC=0 ===
+secs	matrix	n	nnz	ratio
+1.2482	crudeoil_lee4_09	15904	101792	0.6171
+1.1190	procurement1large	14416	41068	0.5275
+1.0847	mpbp_48	28368	91016	0.4746
+1.0334	chimera_selby-c16-02	2031	10878	0.5368
+0.9864	chimera_selby-c16-01	2031	10964	0.6669
+0.8767	methanol400	23999	151728	0.6931
+matrices under 0.010s: 0/6

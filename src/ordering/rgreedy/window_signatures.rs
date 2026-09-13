@@ -238,6 +238,14 @@ impl SignatureEngine {
             ChargeModel::UnionParity => union_cost,
             ChargeModel::SignatureTrue => signature_cost - solve_cost,
         };
+        #[cfg(test)]
+        let (cost, solve_cost) = {
+            let scale = super::window_dp::xch_charge_scale(k);
+            (
+                cost.saturating_mul(scale) / 100,
+                solve_cost.saturating_mul(scale) / 100,
+            )
+        };
         if !work.charge(cost) {
             return None;
         }

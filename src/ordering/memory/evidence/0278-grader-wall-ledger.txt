@@ -1,0 +1,115 @@
+iter78 — THE GRADER'S OWN WALL LEDGER, THE THREE PRODUCTION DELTAS OVER THE PROMOTED TREE,
+AND WHY A TREE OF THIS PROFILE IS KILLED (not "an accident")
+=========================================================================================
+
+Primary source (fetched this iteration, read-only, public artifacts of OUR OWN submissions):
+  gh api repos/Layr-Labs/matrices-fast/actions/runs/<id>/jobs      -> step timestamps
+  gh api repos/Layr-Labs/matrices-fast/actions/jobs/<job>/logs     -> the Benchmark step text
+The eval corpus itself is never touched (it is a private bucket object; the fetch script
+deliberately does not echo its prefix or digest). The Benchmark step is
+`exec ./target/trusted/release/matrices-fast --grader` with SSI_CORPUS_FILE pointing at the
+fetched eval.jsonl, so the step's wall is the hidden corpus's wall (two order() calls per
+row, src/main.rs:332-355) and its text is the grader's verdict.
+
+1. THE DAY'S 25 BENCHMARK VALIDATIONS (2026-09-13, all of them)
+---------------------------------------------------------------
+  run          submission   outcome          Benchmark step wall
+  34741938752  74f19b95     FAILED           113 s  (cap verdict)
+  34742855805  52c744da     promoted 0.841011 590 s
+  34743768882  edaf73a4     rejected 0.925818 269 s
+  34744825998  43c1ca7d     promoted 0.840782 634 s
+  34745155834  2efae39a     FAILED           102 s  (cap)
+  34745820338  9440dedb     FAILED            88 s  (cap)
+  34747841915  edd49e95     FAILED            86 s  (cap)
+  34750242705  b9549e8f     FAILED           114 s  (cap)
+  34751368998  cb949876     FAILED           109 s  (cap)
+  34751764803  393a167c     FAILED            84 s  (cap)
+  34754743328  6f117752     FAILED           112 s  (cap)
+  34755864356  b2f0b612     FAILED            87 s  (cap)
+  34758811726  c67ad490     FAILED            98 s  (cap)
+  34759024529  039c8e2d     rejected 0.840725 584 s
+  34759175290  e7edbb04     FAILED           117 s  (cap)   <- rival
+  34760241708  52669543     FAILED           115 s  (cap)   <- rival
+  34760946713  65cb40ec     FAILED           107 s  (cap)
+  34760961419  3ace1d4c     FAILED            83 s  (cap)   <- rival
+  34761378227  f9b2fe4e     rejected 0.840741 638 s      <- rival
+  34762823475  b08872bb     FAILED            90 s  (cap)   <- rival
+  34763291475  49f65842     FAILED           107 s  (cap)
+  34765600383  657b5db8     FAILED            85 s  (cap)
+  34766918005  bbf58495     promoted 0.840623 633 s
+  34774812625  2815e217     FAILED            86 s  (cap)
+  34776947559  628b5341     FAILED            86 s  (cap)
+
+Verdict text, verbatim, two different trees
+(34776947559 = the charge-shape + dense-rung tree, 34774812625 = the charge-shape tree):
+
+  RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed
+
+Facts:
+  * 19 of 25 validations died on the per-matrix TIME cap; each died after 83-117 s
+    (mean 98.4, sd 9.5) of a run whose completion takes 584-638 s => the first over-cap
+    row sits in the first sixth of the hidden corpus, for the rival's trees exactly as for
+    ours (their kills: 83, 90, 115, 117 s).
+  * The wall and the score are decoupled by 2.4x: the cheapest full-corpus pass of the day
+    is the rival's `edaf73a4` at 269 s and it scored 0.925818 (rejected, +9.5 % over AMD
+    parity of the leader) — i.e. a tree 10 % worse in score walks the whole hidden corpus
+    2.35x faster. Hidden wall is dominated by how much search a tree does, not by corpus size.
+  * One more validation landed while this iteration ran, and it is the sharpest datum of the
+    set: run 34778448493 (`5a31b978`, another competitor) has a Benchmark step of **5.5 s**
+    (19:44:40 -> 19:44:45) with the same verdict — killed on the FIRST hidden row(s), i.e.
+    the killer class is reachable from the front of the corpus and that tree is far slower
+    than ours on it. Today's tally is 20 cap-kills / 26 validations.
+
+2. THE THREE PRODUCTION DELTAS OVER THE PROMOTED TREE (verified from its own sources)
+-------------------------------------------------------------------------------------
+  git show origin/subs-bbf58495:src/ordering/rgreedy/window_dp.rs | grep -c xch_charge_scale
+  -> 0        (the promoted tree has NO charge discount at all)
+  git show origin/subs-bbf58495:src/ordering/rgreedy/window_dp.rs | grep PRODUCTION_XCH_ALLOC
+  -> const PRODUCTION_XCH_ALLOC: usize = 0            (this tree: 2)
+  git show origin/subs-bbf58495:src/ordering/mod.rs | grep SHIPPED_DENSE_LADDER
+  -> (absent; the promoted tree's ladder is the single 2e8 rung)
+So the tree that was killed twice today differs from the tree that completed the hidden
+corpus (633 s, promoted 0.840623) in exactly three production places: the k>=11 charge
+discount, `PRODUCTION_XCH_ALLOC` 0->2, and the dense-band ladder rung. Everything else in
+`src/ordering` that differs is `#[cfg(test)]`-gated (verified by reading the same diff).
+
+3. WHY A TREE OF THIS PROFILE IS KILLED, NOT "UNLUCKILY KILLED"
+---------------------------------------------------------------
+From this tree's own probe-frame per-row wall (evidence/0277-probe-dense-on.log, 300 rows,
+corpus order = corpus/dev/patterns.jsonl order, one call per row, 153.8 s total):
+
+  >= 1.30 s :   4 rows ( 1.3 %)   3.4 % of the corpus wall
+  >= 1.25 s :   5 rows ( 1.7 %)   4.3 %
+  >= 1.10 s :  23 rows ( 7.7 %)  17.9 %
+  >= 1.00 s :  34 rows (11.3 %)  25.3 %
+  >= 0.90 s :  44 rows (14.7 %)  31.4 %
+
+A row that reaches the hidden cap needs hidden >= 2.0 s; with the lane's own bracket
+f in (1.53, 1.5625] that is a local row >= 1.28-1.31 s (4 rows), and if the hidden corpus's
+rows are ~1.45x heavier per unit (see 4. below) the killable class is the >= 1.10 s class
+(23 rows, 17.9 % of the wall). The observed kill window — 83-117 s for every tree that is
+not pathological, i.e. 14-19 % of the corpus wall — is where the FIRST such row lands in a
+shuffled corpus; the one 5.5 s kill shows the same rule with a much slower tree in front of
+it. Reading: for a tree of this profile the kill is the *expected* outcome, not a per-bat
+accident — the hot class straddles the cap, so ~every submission dies and the few that
+complete are draws from the same distribution.
+
+4. THE CORPUS-LEVEL CALIBRATION (already in the record, restated with its receipts)
+-----------------------------------------------------------------------------------
+iter70's measurement: our own sandboxed run of the promoted tree takes 281.0 s on the dev
+corpus (2 calls per row, same shape as the grader), while the grader's run of the same tree
+took 633-634 s on the hidden corpus => corpus-level ratio 2.25-2.26, against the max-row
+ratio 1.53-1.56. The hidden corpus therefore carries ~1.45x more work per unit of host speed
+than dev, and our dev-frame "safe line" (max row 1.28 s) is optimistic: the hidden frame's
+own safe line for a dev row is ~0.88 s.
+
+5. THE LAYER'S OWN LAST THREE BATS (added after they resolved)
+--------------------------------------------------------------
+  34774812625  2815e217  FAILED   86 s   (charge shape, ALLOC 2)
+  34776947559  628b5341  FAILED   86 s   (charge shape, ALLOC 2, dense rung)
+  34779792660  5e7259a4  FAILED   86 s   (charge shape RETIRED, ALLOC 2, dense rung)
+    -> 20:11:06 -> 20:12:32 UTC, same verdict. Three different production profiles, one
+       identical kill position: the charge-shape retirement moved nothing, so that device is
+       excluded as the kill mechanism by measurement (its own A/B is in 0278-bigk-retired.txt).
+  And the bat submitted after that, `4d26ed3d` (ALLOC given back, dense rung kept), is the first
+  tree of this lineage whose production path differs from the promoted tree in ONE place.

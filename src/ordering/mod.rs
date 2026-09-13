@@ -372,9 +372,58 @@ const INDEP_FORCE_MIN_N: usize = 20_000;
 /// (`0197-probe-no-force-dev.log`), i.e. it buys dev value on the 10 rows it
 /// fires on — the same shape of dev-negative, hidden-positive trade the
 /// frontier's own step made.
+///
+/// `SSI_INDEP_FORCE_N` (test-only) re-points the *gate* itself so one binary
+/// can sweep the monotone predicate in the production frame. Unset it is the
+/// production constant, so a test run with only `SSI_INDEP_FORCE` set is
+/// bit-identical to the shipped `order()` on every row.
+#[cfg(test)]
+fn indep_force_min_n() -> usize {
+    std::env::var("SSI_INDEP_FORCE_N")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(INDEP_FORCE_MIN_N)
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+const fn indep_force_min_n() -> usize {
+    INDEP_FORCE_MIN_N
+}
+
 #[cfg(test)]
 fn indep_force_off() -> bool {
     std::env::var("SSI_INDEP_FORCE").is_err()
+}
+
+/// ── 0219: EARLY-ARBITRATION BAND for the held stage-1b lift (test-only) ─────
+/// The held `indep_deferred` lift is compared with the incumbent at 4b — i.e.
+/// *after* the subtree cascade has already been spent on whichever candidate
+/// the 1b gate picked. But the 1b gate is a structural proxy (`n`), and the
+/// cascade on the portfolio can overturn a lift that was better *before* the
+/// cascade ran. This switch moves that comparison forward to the top of the
+/// cascade: the held lift is handed the cascade whenever its exact value beats
+/// the incumbent's value after the cheap pre-cascade polish (2.descent +
+/// 3.search) by more than `-δ`. Zero added work — the cascade still runs once,
+/// on the winner of a measured comparison instead of on the gate's choice.
+/// Note the moving decision is *more* permissive than 4b (the pre-cascade
+/// incumbent is never better than the post-cascade one), so no adoption that
+/// 4b made today is lost.
+/// `SSI_INDEP_ARB` = band in per-mille (0 = strict). Unset = production.
+#[cfg(test)]
+fn indep_arb_band_permille() -> Option<u64> {
+    std::env::var("SSI_INDEP_ARB")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+fn indep_arb_band_permille() -> Option<u64> {
+    // Production keeps the 4b comparison (see the 0199/0197 receipts: what
+    // transfers on the hidden corpus is the adoption trajectory, and this
+    // switch changes *which candidate* receives the cascade).
+    None
 }
 
 #[cfg(not(test))]
@@ -441,9 +490,30 @@ pub(crate) mod force_audit {
     pub(crate) static TIE_WINDOW_OPENED: AtomicU64 = AtomicU64::new(0);
     pub(crate) static TIE_PASS_RUN: AtomicU64 = AtomicU64::new(0);
 
+    /// 0219: per-row records of the early-arbitration comparison —
+    /// `(n, lift_flops, incumbent_flops_after_cheap_stages)` — pushed at the
+    /// arbitration site and drained by the probe after each row, so the
+    /// *margin* that decides "hand the cascade to the lift" is measurable
+    /// instead of inferred from the two full-arm scores.
+    pub(crate) static ARB: std::sync::Mutex<Vec<(usize, u64, u64)>> =
+        std::sync::Mutex::new(Vec::new());
+
     #[inline]
-    pub(crate) fn note(force: bool, core_total: u64, exact: u64, incumbent: u64) {
-        SITES.fetch_add(1, Ordering::Relaxed);
+    pub(crate) fn note_arb(n: usize, lift: u64, incumbent: u64) {
+        if let Ok(mut v) = ARB.lock() {
+            v.push((n, lift, incumbent));
+        }
+    }
+
+    pub(crate) fn take_arb() -> Vec<(usize, u64, u64)> {
+        match ARB.lock() {
+            Ok(mut v) => std::mem::take(&mut *v),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn note(force: bool, core_total: u64, exact: u64, incumbent: u64) {        SITES.fetch_add(1, Ordering::Relaxed);
         if core_total != exact {
             CORE_TOTAL_MISMATCH.fetch_add(1, Ordering::Relaxed);
             let d = core_total.abs_diff(exact);
@@ -544,12 +614,25 @@ const LADDER_FILL_BOUND: u64 = 20_000_000_000;
 /// the ledger/PEO step is the leader's own arm (512M / four rounds, -3.9e-5);
 /// both were measured separately and then together, and no row regresses
 /// (every pass accepts only a strict exact decrease).
-const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 5] = [
+/// ── iter47: the span schedule, extended by four measured widths ─────────────
+/// The schedule is a schedule, not a fixpoint: 3 → 5 widths paid −3.0e-5 (iter43)
+/// and these four next widths measure **−4.9e-5 in-frame** (one binary, one
+/// session, 4-vCPU, production frame, 300 dev rows: 0.791635 → 0.791586, 14 rows
+/// better / 0 worse, worst `order()` 1.221 → 1.266 s, corpus +5.0 %).
+/// [evidence 0222-span-widths-extra-4cpu.log]
+/// Each pass accepts only a strict exact decrease, so appending a width cannot
+/// worsen any row; the price is wall time on class rows only (~+0.05 s/row on
+/// the rows the class admits), and every pass carries its own work ledger.
+const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
     (48, 4, 19, 32_000_000),
     (9, 4, 4, 32_000_000),
     (8, 4, 3, 64_000_000),
     (12, 4, 5, 64_000_000),
     (7, 4, 3, 64_000_000),
+    (10, 4, 4, 64_000_000),
+    (11, 4, 4, 64_000_000),
+    (14, 4, 5, 64_000_000),
+    (6, 4, 3, 64_000_000),
 ];
 const PRODUCTION_EXCHANGE_LEDGER: i64 = 536_870_912;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
@@ -2835,7 +2918,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // removed. The size gate is kept because it is an ordinary
                 // monotone predicate on `n`, not a window fitted around
                 // particular rows.
-                let force = !indep_force_off() && n >= INDEP_FORCE_MIN_N;
+                let force = !indep_force_off() && n >= indep_force_min_n();
                 #[cfg(test)]
                 force_audit::note(force, core_total, f, best_flops);
                 if force || f.saturating_mul(INDEP_IMMEDIATE_MARGIN.1) <= best_flops.saturating_mul(INDEP_IMMEDIATE_MARGIN.0) {
@@ -3127,6 +3210,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // 0.26-0.48 s on exactly the rows nearest the cap (cont6-qq, transswitch,
     // arki0013, nuclear104, gabriel10, unitcommit). It stays where it wins
     // (pooling_sppc1pq -0.45, pooling_sppc3pq -0.15, mpbp_35 -0.10, all n < 30k).
+    // ── 0219: EARLY ARBITRATION OF THE HELD STAGE-1B LIFT (test-only) ───────
+    // See `indep_arb_band_permille`. The held lift is handed the cascade here
+    // — after the cheap pre-cascade polish, before the chain — when its exact
+    // value beats the incumbent's; the winner of that comparison runs the
+    // chain exactly once, so this site adds no work.
+    if let Some(band) = indep_arb_band_permille() {
+        if let Some((f, cand)) = indep_deferred.take() {
+            #[cfg(test)]
+            force_audit::note_arb(n, f, best_flops);
+            if f.saturating_mul(1_000) <= best_flops.saturating_mul(1_000 + band) {
+                best_flops = f;
+                best_perm = cand;
+            }
+        }
+    }
     if (SUBTREE_MIN_N..=SUBTREE_CHAIN_MAX_N).contains(&n) && nnz <= 1_500_000 {
         let permuted = permute_current(&best_perm);
         let etree = EliminationTree::from_pattern(&permuted);

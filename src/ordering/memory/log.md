@@ -245,3 +245,65 @@ round, so note the round if you know it.
 2026-09-12 | iter37d 0203: the rung list's seed is position-indexed, so a re-ordered list [1e8,2e8,1e8,1e8] silently drops the shipped (2e8,0x9E37) pair -> 0.792282 (+1.7e-4); two different placements agree on 291/300 rows, so it is the PAIR SET that is load-bearing (crudeoil_lee2_06 0.7159 -> 0.7582), not the order — appended rungs are safe, edits at index 0 are replacements. [0203-R1, 0203-R2]
 2026-09-12 | iter38 0204: receipts first — cad51a0f (four-rung ladder alone) FAILED on the 2.0 s cap at 111.6 s of a 525 s step, 7bba8604 at 104 s (our kills: 103.8/104.0/104.5/107.1/111.6 s, all ~20 % into the corpus). Then the mechanism: the fill fence is blind to the corpus's heavy tail (acopf n=313 068 fill 3.5e7, gabriel10 1.4e9, faclay75 3.2e9 vs bound 2e10) and a cost key can't fix it because those giants run 1-3 candidate tasks per batch (FENCETRACE; 527-task queues exist only on n=30..120 rows) -> cost-keyed fence implemented and left OFF; per-row time is a ~1 s plateau from ~25 gates; static near-baseline stops cost +2.97e-3 dev; the four-rung ladder moves 10 rows of value (all at ratio <= 0.86 when it ran) but pays +0.099/+0.108/+0.073 s on arki0016/mpbp_15/mpbp_07 at ratio 0.91-0.96 with zero gain. Shipped the ladder behind a LIVE-ratio gate (`LADDER_RATIO_PCT=90`, anchor = post-first-batch incumbent): dev 0.792166 / 115.8 s vs the frontier's 0.792226 / 125.0 s, every row that made the ungated add dangerous now faster than the frontier; official sandboxed harness 300/300 OK 0.792166 / 0.924495; submitted 1a93d29e-315f-419b-8810-70c09ab5ec92. [0204](experiments/0204-live-ratio-ladder-gate.md)
 2026-09-12 | iter39 0205: the four-stream engine is ORPHANED — `rgreedy::search_par_specs` (strict `(flops, index)` argmin merge, so thread count cannot change the output) had no production caller while every shipped spend is a SEQUENTIAL single-stream call. Re-pricing the 0154 census's budget curve against today's tip gives 1x3e7 1 win/-2.8e-6, 1x3e8 6/-4.5e-5, 1x1.2e9 12/-9.0e-5, 1x2e9 14/-1.6e-4 (worst row 2.180 s = over the cap, the reason it was never shipped), and 4 seeds x 5e8 = -8.75e-5 for 14.5 s *sequentially*. Shipped as ONE terminal four-stream round at 2e9/stream, gated structurally (`n<=12_000 && (n>6_000 || nnz>30_000)` — the census envelope, 35 dev rows — and `best_flops <= LADDER_FILL_BOUND`, the fence's complement): dev probe control 0.792166 -> **0.791896 (-2.70e-4)**, worst order() 1.120 -> 1.565 s, corpus 115.4 -> 134.1 s; the 4x5e8 round reproduces the census's sequential four-seed value (-8.7e-5 vs -8.75e-5) for 7.2 s instead of 14.5 s, which is the determinism claim measured. The `[5e8,1e9,2e9]` escalation is DOMINATED (stacks on the rows that improve, worst dev row 2.051 s, and re-seeding resamples: 0.791949). Official sandboxed harness 300/300, **0.791896 / fill 0.924419**, buckets 0.887431/0.838452/0.685328; submitted f647df4d (deepseek-v4-flash / angelX). [0205-census-curve.log, 0205-FQ0..FQ3.log, 0205-FS2.log, 0205-harness-fanout2e9.log]
+
+2026-09-12 | iter45 | **the frame behind the "unreproducible 0.791635": the probe default is not the graded program**
+- Root cause of the iter44 audit object found: the two dev readings of the *same* source
+  (0.791635 in the record vs 0.791851 on rebuild) are two *frames*, not two programs.
+  `#[cfg(not(test))] indep_force_off() = false` means the **graded** build force-adopts the
+  stage-1b independent-set lift on every row with `n >= 20 000` (so the subtree stage polishes
+  the lift), while `#[cfg(test)]` defaults the seam to force-OFF unless `SSI_INDEP_FORCE` is set
+  (the deferred path: raw lift vs subtree-polished portfolio incumbent at 4b). Same binary, same
+  session, 300 rows: test default **0.791851** / worst 1.107 s vs `SSI_INDEP_FORCE=1`
+  **0.791635** / worst 1.160 s; the two tables differ on exactly the four largest-n rows
+  (crudeoil 0.7100/0.6919, gabriel09 0.8922/0.8976, gasprod 0.9199/0.9135, popdynm
+  0.9572/0.9489) — the same four rows and the same values the historical logs dispute. The
+  control arm `SSI_INDEP_FORCE_N=40000` (arm cannot fire) reproduces the test default to the
+  digit, so this is the gate, not a stale binary. [0218-frame-testdefault-300.log,
+  0218-frame-indepforce-300.log, 0218-forceN-40000.log]
+- Gate sweep in the production frame (new test-only seam `SSI_INDEP_FORCE_N`): 20000 (prod)
+  0.791635, 40000 (= arm off) 0.791851, 8000 **0.792744** — the gate is load-bearing; the
+  forced *raw*-lift trajectory is 1.1e-3 worse on the ~35 mid-size lift rows.
+  [0218-forceN-20000.log, 0218-forceN-8000.log]
+- The record's own next bats are dead in the graded frame: `SSI_EXCHANGE_LEDGER` 512M -> 1G
+  = 0.791634 (−1e-6) for +0.22 s peak; `SSI_PEO_ROUNDS` 4 -> 5 = 0.791638 (+3e-6) for
+  +0.15 s. No submission this iteration: nothing measured clears the 1-bip bar.
+  [0218-prod-ledger1G.log, 0218-prod-peo5.log]
+- Consequences recorded: (a) the submitted build's dev value is 0.791635, not 0.791851;
+  (b) any device touching rows with n >= 20 000 must be priced with `SSI_INDEP_FORCE=1`;
+  (c) open lead "a stage at 16:50 owned the four above-gate rows" is CLOSED — that stage is
+  the production force arm, present in the shipped build. [experiments/0218-production-frame-mirror.md]
+
+2026-09-12 | iter46 | **the stage-1b seed choice is a lottery — every cheap arbitration of it is priced and dead**
+- New test-only seam `SSI_INDEP_ARB` moves the held stage-1b lift's comparison from 4b (after the
+  subtree cascade) to the top of the cascade: the winner of a *cheap* comparison (2.descent +
+  3.search) gets the cascade. Zero added work; strictly more permissive than 4b, so no adoption
+  made today is lost. Same binary, one session, 4-vCPU: production `FORCE=1` **0.791635** (worst
+  1.250 s) vs gate+arbitration **0.792805** (1.288 s) vs arbitration-without-gate **0.792805**
+  (1.319 s, row-for-row identical). [+1.17e-3 = 14.8 dev bips worse — the family is dead]
+  [0219c-armP-production.log, 0219d-armA1-gate+arb.log, 0219e-armA2-arb-only.log]
+- It flips 10 rows: 8 gains totalling -1.43e-4 against two losses — `mpbp_35` (+1.21e-3) and
+  `chimera_lga-01` (+1.02e-4). `mpbp_35` has the LARGEST early lead of all 28 held rows
+  (lift/cheap incumbent 0.9221) and is the worst flip, so "trust a big early lead" is falsified.
+- Mechanism, measured: on `mpbp_35` the cascade ranks the lift better (L* 0.4013 < P* 0.4227) while
+  the end result is 21.7 % worse (0.3918 vs 0.3212) — the post-4b stages invert the ranking, so no
+  criterion evaluated before them can rank the two seeds. Only a second FULL trajectory ranks them
+  correctly, at ~2x on the 39 site rows (cap-fatal).
+- Predictor census (all measured, all fail to separate the 13 force-wins from the 6 defer-wins):
+  raw lead r (0.9122-0.9994 in both classes), arbitration margin m, portfolio headroom
+  (0.4054-0.9446), and — new instrument `LIFT`/`indep_first::last_lift` — the residual-core shape
+  (core_n/n 0.52-0.84, core fill 4.67-19.99 in both classes). **Lead 23 (core-shaped gate): dead.**
+  [0219-early-arbitration-table.txt, 0219f-arb-margins.log, 0219g-lift-shapes.log]
+- Prize recomputed from the two pure arms (A 0.793014 / C 0.791851): per-row oracle **0.791387**,
+  i.e. the *decision rule* alone is worth 2.48e-4 dev — an upper bound, not a design target.
+- No submission: nothing measured improves on 0.791635, and the largest dev lever measured this
+  iteration is negative. Page: [0219](experiments/0219-early-arbitration.md).
+- iter46b: **the official harness's 2 s cap is wall clock from spawn** (`src/watchdog.rs`
+  `CapConfig{time_cap: 2s}` + `run_capped` SIGKILLs the worker's process group), so `prlimit ->
+  bwrap -> candidate` setup and every host stall are charged to the row. Two consecutive full runs
+  on the current tree FAILED on two different rows — `edgecross10-030` (n=1053, nnz=4654, 44 rows
+  in) and `faclay75` (n=272878, 1.38M nnz, 74 rows in) — while the same rows measure < 0.400 s and
+  <= 0.826 s in the pinned probe frame and the corpus's slowest row is 1.2496 s. Host during both:
+  2.88 GiB of 4 GiB swap in use, 920 MB dirty, load 3.2/24. => `FAIL (capped)` on a fast row is an
+  environment artifact, not a candidate defect; it cannot be used as the local gate while the host
+  is in this state. [0219h-harness-cap-mechanism.txt, 0219h-harness-run.log, results.tsv:1789256564,
+  results.tsv:1789256667]

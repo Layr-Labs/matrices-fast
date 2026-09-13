@@ -141,6 +141,12 @@ fn probe_timing_and_score() {
             }
         }
         let mine = flops_of(&sp, &perm);
+        for (an, lift, inc) in super::force_audit::take_arb() {
+            println!("ARB\t{name}\t{an}\t{lift}\t{inc}");
+        }
+        if let Some((ln, core_n, core_nnz, x)) = super::indep_first::last_lift::take() {
+            println!("LIFT\t{name}\t{ln}\t{core_n}\t{core_nnz}\t{x}");
+        }
         println!("COUNTS\t{name}\t{n}\t{}\t{base}\t{mine}", pat.nnz());
         let ratio = mine as f64 / base as f64;
 

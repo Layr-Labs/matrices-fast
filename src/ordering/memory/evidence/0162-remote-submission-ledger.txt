@@ -1525,3 +1525,143 @@ next-lever   Untested structural axes inside the promoted class, in the order I 
              `n <= 12_000` gates under the factor key — rows they exclude currently receive no
              terminal kernel at all, and the key alone would keep them cheap if their factor is
              small; (c) the "watcher 4M" component the leader's arm table prices at ~2.2e-5.
+
+### iter44 — AUDIT CHECKPOINT: the board is OURS, and the promoted build's dev number does not reproduce
+board        `fe4f40c` (this branch, submitted 16:54) is **promoted**: hidden flop **0.841858**,
+             fill 0.944586, `-0.000519 (-0.06%)` against linson007's then-best 0.842377 — the
+             benchmark's current best is our build. `1b764d1` (iter42) failed on the cap,
+             `dad3e94` was *rejected* (+0.000311). [evidence/0213-board-newjordan.txt; live
+             `yukon benchmark list` for 8c3e7051]. The leader's public note states the promotion
+             floor is one relative basis point [0208-notes/note-07f0e8a2-…txt:35], so the next bat
+             must score hidden <= 0.841858*(1-1e-4) = **0.841774**.
+submitted    `yukon submission-note fe4f40c` returns the iter43 note verbatim (saved as
+             evidence/0213-fe4f40c-submission-note-fetched.txt; header-only diff vs
+             evidence/0209-submission-note.md), and the public submission branch's commit
+             `256152b` (= `origin/submissions/fe4f40cb-3983-4e1f-a427-a8ff2910d720`) has **zero**
+             diff against our commit `d0125f1` under `src/` — the promoted build is exactly that
+             source.
+contradiction The note's dev number for that source (**0.791635**, from 0209/0209b) does NOT
+             reproduce from the submitted source: the exact `d0125f1` file, 300 rows, 4-vCPU frame,
+             reads **0.791851** (evidence/0215), and the same file with only the (inert) iter43b/43c
+             test seams re-added reads 0.791851 as well (evidence/0214) — two separate builds, 0 of
+             300 rows differ. The four rows that carry the old reading's advantage are hard-pinned
+             in this session under EVERY reachable arm — ledger 128M/256M/512M/1G, PEO 3/4/5,
+             `SSI_TERM_CLASS_N` 12k/40k, embedded corpus vs `corpus/dev/patterns.jsonl`, with and
+             without `SSI_MARK_NOSCORE` — always `crudeoil_pooling_dt3` 0.7100,
+             `gasprod_sarawak81` 0.9199, `popdynm200` 0.9572, `gabriel09` 0.8922, where the record
+             has 0.6919 / 0.9135 / 0.9489 / 0.8976. All four have n = 21 688…30 660, i.e. ABOVE the
+             class's own n gate, so the 0.791635 reading describes a working-tree state that was
+             reverted before the submission commit. The note's "no-env production mirror,
+             byte-identical row-for-row" check therefore compared two builds of *different* source
+             revisions: rustc warning anchors move with every edit (0209: mod.rs:1144/5060,
+             0209b: 1153/5069, 0211: 1155/5071, 0212: 1158/5074, exact d0125f1: 1153/5069, HEAD+seams:
+             1161/5077).
+frame        Cross-session readings of ONE configuration span 0.791635 / 0.791788 / 0.791851 /
+             0.791962, while same-session, same-binary readings are exact (0214 vs 0215: 0/300 rows
+             differ; 0215 vs 0216 differ only by the env var). So dev deltas below ~2e-4 are only
+             admissible within a session: every cross-session increment in the iter43 chain
+             (0.791693 -> 0.791635), the C5/C6 ledger ladder and the recorded "next-bat ladder"
+             0.791766 are unverified at that resolution.
+in-frame A/B The one dose question that decides the promoted build's design, re-measured on the
+             exact promoted source in one session with one binary: ledger 512M (production)
+             **0.791851** vs 128M (seam) **0.791962**; 6 rows differ and the 128M arm is worse on
+             ALL six (transswitch0300p 0.9246/0.9319, crudeoil_lee4_06 0.4984/0.5021,
+             mpbp_15 0.7804/0.7835, powerflow0300p 0.9591/0.9598, mpbp_34, glider400)
+             [evidence/0215, evidence/0216]. The promoted ledger choice is validated in-frame, and
+             the iter43b/c "ledger-half" point that the record still lists as "the submission queued
+             behind fe4f40c" is a strictly worse candidate — NOT submitted.
+dead knob    The iteration's uncommitted `SSI_SPAN_MAX_WIDTH` seam (window_dp.rs, written 17:10)
+             measured 0.791792 with worst `order()` **30.165 s** and 205.7 s of test wall
+             [evidence/0212]: no dev value and a 15x cap breach on the dev corpus. The seam is
+             reverted here rather than shipped.
+state        Tree restored to the promoted source byte-for-byte (`git checkout d0125f1 --
+             src/ordering/mod.rs`; zero diff against the submitted commit `256152b`). No submission
+             this iteration: every other measured arm is worse than the promoted build, and shipping
+             the queued hedge would have been a self-regression against our own frontier.
+next         (a) price the next ledger step (512M -> 1G at both exact-window sites) in-frame, one
+             session, same binary, against the restored base, before any submit; (b) PEO 4 -> 5 the
+             same way; (c) the open lead is the four above-gate rows (n 21 688…30 660) that some
+             state present at 16:50 moved by up to 1.8e-2 and that nothing in the current tree
+             touches — find the stage that owns them before another class step.
+
+### iter45 — the dev-frame correction: the probe default is NOT the graded program
+finding      The two dev readings of the promoted source (record 0.791635 vs rebuild 0.791851)
+             are two FRAMES of one program, not two programs. `#[cfg(not(test))] indep_force_off()
+             -> false` makes the GRADED build force-adopt the stage-1b independent-set lift for
+             every row with n >= INDEP_FORCE_MIN_N (20 000) so the subtree stage polishes the
+             LIFT; the `#[cfg(test)]` default is force-OFF unless SSI_INDEP_FORCE is set, which
+             sends those rows down the deferred path (raw lift vs subtree-polished portfolio
+             incumbent at 4b). One binary, one session, 300 rows: test default 0.791851 / worst
+             1.107 s -> SSI_INDEP_FORCE=1 **0.791635** / worst 1.160 s.
+rows         Exactly the four largest-n dev rows differ, with the values the history disputes:
+             crudeoil_pooling_dt3 0.7100/0.6919 (33 883 414 flops), gabriel09 0.8922/0.8976,
+             gasprod_sarawak81 0.9199/0.9135, popdynm200 0.9572/0.9489 — i.e. 0209b (16:50) is the
+             PRODUCTION frame and 0215/0217 (17:2x-17:3x) are the TEST frame. Control: with the new
+             test-only seam SSI_INDEP_FORCE_N=40000 (arm cannot fire) the test default reproduces
+             to the digit, so the separation is the gate and not a stale binary. Value 2.16e-4 dev,
+             3 wins / 1 loss, all in the 0.40-weight gt_10k bucket.
+             [0218-frame-testdefault-300.log, 0218-frame-indepforce-300.log, 0218-forceN-40000.log]
+gate-sweep   Production frame, same binary, new seam SSI_INDEP_FORCE_N: 20000 (= production
+             constant) 0.791635; 40000 (= force can never fire) 0.791851; 8000 **0.792744**
+             (1.1e-3 worse — the forced raw-lift trajectory is wrong on the ~35 mid-size lift
+             rows). The gate stays at 20 000; lowering it is not a lever.
+             [0218-forceN-20000.log, 0218-forceN-8000.log]
+next-bats    Both bats the record nominated (lead 24) are dead in the graded frame:
+             SSI_EXCHANGE_LEDGER 512M -> 1G = 0.791634 (−1e-6 dev) for +0.22 s on the worst row;
+             SSI_PEO_ROUNDS 4 -> 5 = 0.791638 (+3e-6) for +0.15 s. No submission this iteration.
+             [0218-prod-ledger1G.log, 0218-prod-peo5.log]
+consequences (a) the submitted build's dev value is 0.791635; (b) every device whose value lands on
+             n >= 20 000 rows must be priced with SSI_INDEP_FORCE=1 (class-gated work ends at
+             n <= 12 000, so it is frame-invariant); (c) the open lead "a stage present at 16:50
+             owned the four above-gate rows" is closed — that stage is the production force arm.
+next         (a) price the symmetric deferred device: polish the deferred lift with the same subtree
+             cascade and compare like with like at 4b (needs the 5-deep inline cascade factored into
+             a callable polish; one extra pass on ~35 lift rows); (b) expose IndepLift::core_n from
+             indep_first::run and sweep a *core*-shaped monotone force predicate in the production
+             frame (n >= 20 000 is only a proxy for "the residual core is a mesh-like Schur
+             complement").
+
+iter46  2026-09-12  NO SUBMISSION — the last cheap capture of the 1b decision oracle is measured dead
+             Arms (one binary, one session, 4-vCPU, 300 dev rows): production FORCE=1 0.791635
+             (worst 1.250 s) | gate + early arbitration 0.792805 (1.288 s) | arbitration, no gate
+             0.792805 (1.319 s, row-for-row identical). Production reproduced exactly; the printed
+             exact aggregate the board promoted is unchanged (fe4f40c, hidden 0.841858).
+             [0219c-armP-production.log, 0219d-armA1-gate+arb.log, 0219e-armA2-arb-only.log]
+prize    Per-row oracle over the two pure arms (A force-everywhere 0.793014 / C never-force
+             0.791851) = **0.791387**: the decision rule alone is worth 2.48e-4 dev. It is an upper
+             bound, not a design target — the arbitration that tries to capture it pays 1.17e-3.
+             Production's own per-row damage: gabriel09 -3.68e-5, methanol200 -5.42e-5,
+             crudeoil_lee4_10 -4.61e-5, waterund14 -4.31e-5, popdynm25 -3.22e-5, pooling_digabel19
+             -2.33e-5, + five rows below -4e-6. [0219-early-arbitration-table.txt]
+closed   (a) lead 22's cheap form ("compare the two seeds before the cascade") — dead, +1.17e-3;
+             (b) lead 23 (core-shaped force gate) — dead, the residual-core shape (core_n/n
+             0.52-0.84, core fill 4.67-19.99) does not separate the 13 force-wins from the 6
+             defer-wins; (c) "trust a large early lead" — falsified by mpbp_35, which has the
+             largest early lead of all 28 held rows (lift/cheap 0.9221) and is the worst flip.
+mechanism On mpbp_35 the cascade ranks the lift BETTER (L* 0.4013 < P* 0.4227) while the end result
+             is 21.7 % worse (0.3918 vs 0.3212): the post-4b stages invert the ranking, so every
+             criterion evaluated before them is a coin flip weighted by mpbp_35-shaped rows. Only a
+             second FULL trajectory on the other seed ranks them, at ~2x on the 39 site rows
+             (cap-fatal). [0219-early-arbitration.md]
+instr    New (test-only, production compiles the None/`cfg(not(test))` path): `SSI_INDEP_ARB`
+             per-mille band at the top of the subtree chain; `force_audit::{note_arb,take_arb}` and
+             the probe `ARB` line (the arbitration's own margin per row); `indep_first::last_lift`
+             and the probe `LIFT` line (core_n, core_nnz, |X| per row). [mod.rs, index.md 0219]
+
+iter46b 2026-09-12  the local harness's cap is wall-clock from spawn (measured, trusted code)
+             Two full runs of `scripts/local-candidate-build.sh && cargo run --release` on the
+             current (production-identical) tree FAILED on two different rows:
+             results.tsv:1789256564 edgecross10-030 (n=1053, nnz=4654) and results.tsv:1789256667
+             faclay75 (n=272878, nnz=1379706). Both rows measure < 0.400 s and <= 0.826 s in the
+             pinned probe frame (SSI_PROBE_ONLY, taskset -c 0-3, production frame), and this tree's
+             slowest dev row is 1.2496 s. `src/watchdog.rs` `CapConfig{2 s, poll 10 ms}` +
+             `run_capped` SIGKILL the spawned process group, i.e. the budget covers prlimit ->
+             bwrap -> candidate setup and any host stall. Host: 2.88 GiB/4 GiB swap in use, 920 MB
+             dirty, load 3.2 on 24 cores.
+             Consequences: (a) a `FAIL (capped)` on a fast row is an environment artifact and must
+             not be read as a candidate defect (this also re-frames iter30's four-run flake);
+             (b) no local acceptance receipt exists for the current tree this iteration — the two
+             FAIL rows are the only harness receipts; (c) a remote kill on a row whose probe time is
+             far below 2 s is likewise not evidence about the candidate, while a kill on a row the
+             probe measures near 2 s still is.
+             [0219h-harness-cap-mechanism.txt, 0219h-harness-run.log, src/watchdog.rs:15-30,60-70]

@@ -1,0 +1,54 @@
+=== M0_512M_peo4_prod  (env: none)
+  crudeoil_pooling_dt3   ratio=0.7100
+  gabriel09              ratio=0.8922
+  gasprod_sarawak81      ratio=0.9199
+  popdynm200             ratio=0.9572
+#   (4/4 rows)
+=== M1_ledger128M  (env: SSI_EXCHANGE_LEDGER=134217728)
+  crudeoil_pooling_dt3   ratio=0.7100
+  gabriel09              ratio=0.8922
+  gasprod_sarawak81      ratio=0.9199
+  popdynm200             ratio=0.9572
+#   (4/4 rows)
+=== M2_ledger256M  (env: SSI_EXCHANGE_LEDGER=268435456)
+  crudeoil_pooling_dt3   ratio=0.7100
+  gabriel09              ratio=0.8922
+  gasprod_sarawak81      ratio=0.9199
+  popdynm200             ratio=0.9572
+#   (4/4 rows)
+=== M3_ledger1G  (env: SSI_EXCHANGE_LEDGER=1073741824)
+  crudeoil_pooling_dt3   ratio=0.7100
+  gabriel09              ratio=0.8922
+  gasprod_sarawak81      ratio=0.9199
+  popdynm200             ratio=0.9572
+#   (4/4 rows)
+=== M4_peo3  (env: SSI_PEO_ROUNDS=3)
+  crudeoil_pooling_dt3   ratio=0.7100
+  gabriel09              ratio=0.8922
+  gasprod_sarawak81      ratio=0.9199
+  popdynm200             ratio=0.9572
+#   (4/4 rows)
+=== M5_peo5  (env: SSI_PEO_ROUNDS=5)
+  crudeoil_pooling_dt3   ratio=0.7100
+  gabriel09              ratio=0.8922
+  gasprod_sarawak81      ratio=0.9199
+  popdynm200             ratio=0.9572
+#   (4/4 rows)
+=== M6_classn40k  (env: SSI_TERM_CLASS_N=40000)
+  crudeoil_pooling_dt3   ratio=0.7100
+  gabriel09              ratio=0.8922
+  gasprod_sarawak81      ratio=0.9199
+  popdynm200             ratio=0.9572
+#   (4/4 rows)
+=== M7_ondisk_corpus  (env: SSI_CORPUS_FILE=corpus/dev/patterns.jsonl)
+  crudeoil_pooling_dt3   ratio=0.7100
+  gabriel09              ratio=0.8922
+  gasprod_sarawak81      ratio=0.9199
+  popdynm200             ratio=0.9572
+#   (4/4 rows)
+=== M8_no_noscore  (env -u SSI_MARK_NOSCORE)
+  crudeoil_pooling_dt3   ratio=0.7100
+  gabriel09              ratio=0.8922
+  gasprod_sarawak81      ratio=0.9199
+  popdynm200             ratio=0.9572
+#   (4/4 rows)

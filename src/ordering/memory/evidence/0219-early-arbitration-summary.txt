@@ -1,0 +1,57 @@
+0219 — STAGE-1B SEED-CHOICE ARBITRATION: the last cheap capture of the decision oracle is measured and dead
+=========================================================================================================
+Frame: one binary, one session (back-to-back runs), taskset -c 0-3 (the grader's width),
+300 dev rows, production force gate ON (`SSI_INDEP_FORCE=1`, `SSI_INDEP_FORCE_N` unset = 20 000).
+
+THE PRIZE (recomputed from the two pure arms already on disk, not from the record's text)
+  A  force-everywhere   (0218-forceN-0.log)      0.793014
+  B  production gate    (0218-forceN-20000.log)  0.791635   <- shipped / currently promoted (hidden 0.841858)
+  C  never force        (0218-forceN-40000.log)  0.791851
+  oracle per-row min(A,C)                        0.791387   => the DECISION RULE alone is worth 2.48e-4 dev
+  rows where A != C: 19  (13 prefer force, 6 prefer defer); the other 20 site rows are bit-identical in both arms
+  production's per-row damage: gabriel09 -3.68e-5 (forced, should defer), waterund14 -4.31e-5,
+  methanol200 -5.42e-5, crudeoil_lee4_10 -4.61e-5, popdynm25 -3.22e-5, pooling_digabel19 -2.33e-5,
+  crudeoil_lee4_09 -3.71e-6, torsion50 -3.66e-6, graphpart -3.34e-6, glider400 -1.15e-6, wastewater05m1 -6.8e-7.
+
+THE DEVICE (new, test-only seam `SSI_INDEP_ARB`, per-mille band, unset = production)
+  Moves the held `indep_deferred` comparison from 4b (after the subtree cascade) to the top of the
+  cascade: the held lift is handed the cascade whenever its exact value beats the incumbent's value
+  after the cheap pre-cascade polish (2.descent + 3.search). Zero added work: the cascade still runs
+  once, on the winner. It is *more* permissive than 4b (the pre-cascade incumbent is never better),
+  so no adoption 4b makes today is lost.  [src/ordering/mod.rs:3159, mod.rs:399]
+
+ARMS (same binary, same session)
+  P   FORCE=1  (production)              0.791635   worst order() 1.250 s
+  A1  FORCE=1  ARB=0                     0.792805   worst 1.288 s    (+1.17e-3 = 14.8 dev bips WORSE)
+  A2  ARB=0, no gate                     0.792805   worst 1.319 s    row-for-row identical to A1
+  (0219f re-ran A2 in its own process: 0.792805 again, worst 1.419 s)          [0219c/d/e/f logs]
+  => the whole arbitration family is priced at +1.17e-3 and must not be shipped.
+
+WHAT IT FLIPS (P -> A1, 10 rows) and why it fails
+  8 rows it gains on: waterund14 .9765, methanol200 .9911, crudeoil_lee4_10 .9925, lee4_09 .9994,
+  torsion50 .9983, glider400 .9998, graphpart 1.0000, wastewater05m1 1.0039 (this last one is a LOSS)
+  2 rows it destroys:  mpbp_35 1.2199 (+1.21e-3 single-row score effect), chimera_lga-01 1.0446 (+1.02e-4)
+  net +1.17e-3. The 8 gains total -1.43e-4; the 2 losses total +1.31e-3.  [0219-summary of the per-row diff]
+
+PREDICTORS TESTED AND REJECTED (all measured, all cheap, none separates the 13 force-wins from the 6 defer-wins)
+  1. raw lead        r  = lift / raw portfolio              0.9122..0.9994 for BOTH classes
+  2. arbitration gap m  = lift / cheap portfolio            0.9221..1.0000 fires; class overlap
+       -> mpbp_35 has the LARGEST early lead of all 28 held rows (0.9221) and is the worst flip
+  3. portfolio headroom  portfolio / AMD                    0.4054..0.9446, overlapping
+  4. residual-core shape (new instrument, `LIFT` probe line; `indep_first::last_lift`):
+       core_n/n   0.52..0.84 both classes;  core fill (core_nnz/core_n) 4.67..19.99 both; nnz/n both
+       => lead 23 ("core-shaped gate") is dead on this corpus: mpbp_35 (cn/n .62, cfill 4.67) sits
+          inside the force-win cluster on every column.
+  [0219-early-arbitration-table.txt, 0219f-arb-margins.log, 0219g-lift-shapes.log]
+
+MECHANISM (why no pre-final arbitration can work here)
+  mpbp_35, the decisive row: raw lift 0.4323, cascade-on-lift L* = 0.4013, cascade-on-portfolio
+  P* = 0.4227, but the FINAL is 0.3918 with the lift seeded vs 0.3219 with the portfolio seeded.
+  So the cascade's own objective ranks the lift BETTER while the end result is 21.7 % worse: the
+  post-4b stages (5.terminal .. 22.win) invert the ranking the arbitration would use. Every cheap
+  signal is collected before those stages, so every cheap arbitration is a coin flip weighted by
+  mpbp_35-shaped rows. Only a second FULL trajectory (2.descent+3.search+cascade+all later stages)
+  on the other seed could rank them correctly - ~2x on the 39 site rows, which is cap-fatal.
+  Evidence the late stages own the effect: the 20 non-differing site rows end bit-identical under
+  either seed, and the phase partition puts 2.descent+3.search+4.subtree at 24 % of corpus time
+  while the late chain is the rest.  [0219-early-arbitration-table.txt, 0218 phase partition]

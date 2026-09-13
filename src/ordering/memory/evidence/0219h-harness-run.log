@@ -1,0 +1,253 @@
+local-candidate-build: building ssi-candidate-worker under bubblewrap (network denied)
+   Compiling proc-macro2 v1.0.106
+   Compiling crossbeam-utils v0.8.21
+   Compiling quote v1.0.46
+   Compiling autocfg v1.5.1
+   Compiling feral-ordering-core v0.2.1
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling paste v1.0.15
+   Compiling version_check v0.9.5
+   Compiling libm v0.2.16
+   Compiling zmij v1.0.21
+   Compiling rayon-core v1.13.0
+   Compiling bytemuck v1.25.0
+   Compiling serde v1.0.228
+   Compiling bitflags v2.13.0
+   Compiling serde_json v1.0.150
+   Compiling cfg-if v1.0.4
+   Compiling reborrow v0.5.5
+   Compiling either v1.16.0
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.2
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling raw-cpuid v11.6.0
+   Compiling pulp v0.22.3
+   Compiling feral-amd v0.2.1
+   Compiling feral-amf v0.2.1
+   Compiling feral-metis v0.2.1
+   Compiling num-traits v0.2.19
+   Compiling feral-kahip v0.2.1
+   Compiling feral-scotch v0.2.1
+   Compiling crossbeam-epoch v0.9.18
+   Compiling syn v2.0.118
+   Compiling crossbeam-deque v0.8.6
+   Compiling num-complex v0.4.6
+   Compiling rayon v1.12.0
+   Compiling serde_derive v1.0.228
+   Compiling feral v0.11.0
+   Compiling ssi-scoring v0.1.0 (/workspace/ssi-scoring)
+   Compiling ssi-worker-protocol v0.1.0 (/workspace/ssi-worker-protocol)
+   Compiling ssi-candidate-worker v0.1.0 (/workspace/candidate-worker)
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5306:9
+     |
+5306 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5307 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5308 | /         let shipped_ladder = || {
+5309 | |             if nnz < 3 * n {
+5310 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5311 | |             } else {
+...    |
+5314 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:397:29
+    |
+397 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `RELABEL_BUDGET` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:791:7
+    |
+791 | const RELABEL_BUDGET: usize = 300_000;
+    |       ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `RELABEL_MAX_RESTARTS` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:792:7
+    |
+792 | const RELABEL_MAX_RESTARTS: usize = 24;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:855:7
+    |
+855 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+
+warning: function `relabel_restarts` is never used
+    --> candidate-worker/src/../../src/ordering/mod.rs:1159:4
+     |
+1159 | fn relabel_restarts(budget: usize, cap: usize, nnz: usize) -> usize {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: function `paired_swap_refine` is never used
+    --> candidate-worker/src/../../src/ordering/mod.rs:1293:4
+     |
+1293 | fn paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `plateau_refine` is never used
+    --> candidate-worker/src/../../src/ordering/mod.rs:1316:4
+     |
+1316 | fn plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<usize> {
+     |    ^^^^^^^^^^^^^^
+
+warning: function `capture` is never used
+  --> candidate-worker/src/../../src/ordering/transplant_probe.rs:11:15
+   |
+11 | pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
+   |               ^^^^^^^
+
+warning: function `terminal_pass` is never used
+   --> candidate-worker/src/../../src/ordering/transplant_probe.rs:240:4
+    |
+240 | fn terminal_pass(
+    |    ^^^^^^^^^^^^^
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: function `candidates` is never used
+  --> candidate-worker/src/../../src/ordering/peo_extract.rs:63:15
+   |
+63 | pub(super) fn candidates(
+   |               ^^^^^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:189:15
+    |
+189 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:314:15
+    |
+314 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:136:4
+    |
+136 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:232:4
+    |
+232 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `order` is never used
+  --> candidate-worker/src/../../src/ordering/chordal_certificate.rs:32:15
+   |
+32 | pub(crate) fn order(n: usize, cp: &[usize], ri: &[usize]) -> Option<Vec<usize>> {
+   |               ^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:632:4
+    |
+632 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker") generated 19 warnings
+    Finished `release` profile [optimized] target(s) in 9.33s
+local-candidate-build: staged /home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/target/release/ssi-candidate-worker
+    Finished `release` profile [optimized] target(s) in 0.02s
+     Running `target/release/matrices-fast`
+matrix                              n     nnz(A)    flops(base)   flops(yours)    ratio      time
+slay06m                           357       1080           4025           4025    1.000  (capped)
+sssd25-08                         401       1200           5389           5389    1.000  (capped)
+rsyn0810m04m                     4772      13836         147553         113250    0.768  (capped)
+pooling_sppc3pq                 23173     893724     1153877333      325595394    0.282  (capped)
+sporttournament48                1131       6676         919582         594138    0.646  (capped)
+pooling_sppa9pq                  5030     120730       23971280       15130622    0.631  (capped)
+edgecross10-090                  1053       5204         126115         103179    0.818  (capped)
+maxcsp-ehi-85-297-71             2372     207996     1381768944     1110971341    0.804  (capped)
+st_bpaf1a                          30        120            623            580    0.931  (capped)
+risk2bpb                         1462       5396         118471          66041    0.557  (capped)
+qap                               255      43748        3802533        3650113    0.960  (capped)
+rsyn0830m04m                     7252      20752         212130         171656    0.809  (capped)
+lop97icx                         1073       2118          79286          64044    0.808  (capped)
+chain400                         1201       4796          16382          16382    1.000  (capped)
+mpbp_07                          9532      30810        1368477        1248947    0.913  (capped)
+sonetgr17                         440       2958          37814          30971    0.819  (capped)
+p_ball_30b_7p_2d_h               2207       7516          42456          42319    0.997  (capped)
+pinene200                       19995      97990        1358716        1134463    0.835  (capped)
+unitcommit_200_100_1_mod_8     146830     476332        3053940        2981835    0.976  (capped)
+ex8_3_9                           123        834          15050          11503    0.764  (capped)
+rsyn0820m02m                     2486       6932          38190          35631    0.933  (capped)
+p_ball_10b_5p_2d_m                293        964           6648           6547    0.985  (capped)
+pooling_adhya4tp                  170        936          26842          20581    0.767  (capped)
+squfl015-080persp                7295      21600          74520          74520    1.000  (capped)
+edgecross10-080                  1053       5940         170814         164639    0.964  (capped)
+clay0204hfsg                      590       1696           7198           6562    0.912  (capped)
+st_bsj2                            13         40            143            114    0.797  (capped)
+chimera_mgw-c8-439-onc8-002       440       3038          97870          86464    0.883  (capped)
+batchs201210m                    5188      17910         349298         303381    0.869  (capped)
+rsyn0815m04m                     5456      15756         184352         143458    0.778  (capped)
+syn40m                            560       1528           5007           4829    0.964  (capped)
+knp5-44                          2157      32604        3764003        3764003    1.000  (capped)
+ex1263a                            94        390           2098           2098    1.000  (capped)
+st_e41                              8         32             88             88    1.000  (capped)
+squfl025-030                     2305       6000          42305          42305    1.000  (capped)
+wastewater05m1                     98        536          11690           8036    0.687  (capped)
+cvxnonsep_psig20                   20        380           2870           2870    1.000  (capped)
+meanvar-orl400_05_e_8            4405     171604       21923414       21922611    1.000  (capped)
+st_e31                            301        744           4534           4257    0.939  (capped)
+pooling_sppc1pq                 14100     477680      812210652      136686008    0.168  (capped)
+pooling_haverly1pq                 31         96            412            403    0.978  (capped)
+graphpart_3g-0244-0244            128        672          33446          32534    0.973  (capped)
+graphpart_clique-20                80       1260          34885          27856    0.799  (capped)
+mpbp_48                         28368      91016       33835023       16144599    0.477  (capped)
+pooling_sppb5pq                 18529     674470      523815053      213571545    0.408  (capped)
+slay07m                           497       1512           5740           5740    1.000  (capped)
+nvs19                              24        200           1353            884    0.653  (capped)
+oil                              3270       8430          36313          34760    0.957  (capped)
+squfl015-060                     2775       7200          36400          36400    1.000  (capped)
+ndcc12persp                      1112       5522         299115         284793    0.952  (capped)
+kissing2                        20772     401024      156414018      156414018    1.000  (capped)
+nuclear25a                       1942      16030        1977163        1136191    0.575  (capped)
+clay0204m                         222        704           2330           2330    1.000  (capped)
+st_ph13                            23         68            207            178    0.860  (capped)
+edgecross10-030                  1053       4654         135854         100080    0.737  (capped)
+chain200                          601       2396           8182           8182    1.000  (capped)
+ex1223b                            25         66            178            178    1.000  (capped)
+slay09h                          2718       7488          36057          32385    0.898  (capped)
+ndcc12                            974       5982         345696         329556    0.953  (capped)
+kall_circlesrectangles_c6r39     1306       5378          75744          74610    0.985  (capped)
+squfl020-150                     9170      24000         135020         135020    1.000  (capped)
+autocorr_bern40-30                 43       1534          20034          20034    1.000  (capped)
+slay08m                           660       2016           7796           7796    1.000  (capped)
+chimera_mgw-c16-2031-01          2032      15900        3328073        2569662    0.772  (capped)
+forest                            713       2658          10614          10543    0.993  (capped)
+qspp_0_10_0_1_10_1                280      29636        1942907        1932414    0.995  (capped)
+st_ph1                             16         58            274            233    0.850  (capped)
+elf                               124        376           2733           2173    0.795  (capped)
+ex3_1_3                            18         36             90             83    0.922  (capped)
+cvxnonsep_normcon40r              162        322            645            645    1.000  (capped)
+demo7                             155        618           3579           3426    0.957  (capped)
+waternd2                          615       2580         155674          74817    0.481  (capped)
+prolog                             64        292           1245           1225    0.984  (capped)
+ex14_1_8                           11         30             80             80    1.000  (capped)
+
+RUN FAILED: faclay75: order() exceeded the 2.0s per-matrix cap and was killed (took ≥ 2.0s). Your ordering must return within 2s on every matrix. This matrix is n=272878, nnz=1379706, nnz/n≈5 — if it is dense, the cost is in order() itself; gate expensive paths by BOTH n and nnz.

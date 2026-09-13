@@ -676,7 +676,19 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 /// on near-cap rows (probability rising with added work), not a device label.
 /// A single FAILED receipt is therefore not evidence that a device is
 /// cap-unsafe. [origin/submissions/* constants + `yukon submissions`, iter55]
-const PRODUCTION_EXCHANGE_LEDGER: i64 = 2_147_483_648;
+/// iter55b: **4G, stacked with the 6th sweep.** The 2G step was receipted on the
+/// hidden frame (`43c1ca7d` -> **0.840782, −2.29e-4** for a dev −2.24e-4 official:
+/// the transfer of a *whole-class* device is ~**1.0**, unlike the band extension's
+/// 0.38). The next ledger step was priced in one binary/one session on the 25k
+/// tree (`0237-led4G-sweeps6-4cpu.log`): 4G + 6 sweeps **0.790252** vs 2G + 6
+/// sweeps 0.790368 = −1.16e-4, gt_10k 0.6825 -> 0.6822, worst `order()` 1.431 ->
+/// 1.550 s (`crudeoil_lee4_10`, the row the ledger device itself loads). The
+/// ceiling+ledger+6-sweep triple measured 0.790238 — *the same value* — but its
+/// marginal value sits in the 45k ceiling, the band device that transfers at 0.38
+/// and that loads `nd_netgen-3000` from 0.51 s to 1.34 s, so the triple is the
+/// worse trade at equal score. All of this step's value is in the higher-transfer
+/// (whole-class) device. [0237-triple-45k-2G-s6-4cpu.log, 0237-led4G-sweeps6-4cpu.log]
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 4_294_967_296;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
@@ -5273,7 +5285,56 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         .unwrap_or_else(rgreedy::max_n_limit);
     #[cfg(not(test))]
     let class_n: usize = rgreedy::MAX_N;
-    let terminal_exchange = n >= 6 && n <= class_n && nnz <= 200_000
+    // ── iter58 seam (test-only): the gate's `nnz` key — the last admission key
+    // on this block that has never been priced.
+    //
+    // The class gate's `n` ceiling WAS this lane's biggest measured win
+    // (12 000 -> 25 000, -9.4e-4 dev), and the *same* `nnz <= 200_000` literal
+    // gates four more sites (the pre-class exchange pair at ~4943/4960, the
+    // terminal draw's window at ~5068 — that one has its own seam — this
+    // block's exchange, and the follow-up block). Its complement is not empty:
+    // 14 of the 300 dev rows carry more than 200 000 off-diagonal nonzeros
+    // (13 of them gt_10k, i.e. the 40 %-weight bucket). Eight of the fourteen
+    // have n > 25 000, so the `n` clause hides them anyway; of the six that
+    // reach this key, five are dense/hub (`nnz > 16n || max_deg > n/2`:
+    // `pooling_sppc1pq`, `pooling_sppb5pq`, `pooling_sppc3pq`, `kissing2`,
+    // `maxcsp-ehi-85-297-71`) and therefore hit the follow-up block's own copy
+    // of the key, not this one. Exactly ONE dev row fails this key alone:
+    // `gams05` (n = 17 364, nnz 252 910, ratio 0.5274, 0.906 s against the
+    // 2 s cap) — it gets no class exchange today and would get the shipped
+    // 12/5/5 one.
+    //
+    // Every adoption inside this block and the follow-up is a STRICT flop
+    // decrease, so arming a row cannot worsen its ratio; the whole price is
+    // per-row seconds, on rows measured at 0.37-0.91 s.
+    // iter58 (0240, measured): the shipping value of this key, raised from
+    // 200 000 -> 300 000. One binary/one session, 300 dev rows, `taskset -c 0-3`,
+    // graded-closest frame (`SSI_MARK_NOSCORE=1`), 4G + 5 sweeps: control
+    // **0.790322 / worst 1.483 s** vs key lifted **0.790308 / worst 1.479 s**
+    // (-1.4e-5), i.e. exactly one dev row is armed — `gams05`, ratio
+    // 0.5274 -> 0.5262 (-0.23 %) at 0.895 -> 1.312 s. The same run with the
+    // *follow-up* key lifted as well (`SSI_FOLLOW_NNZ`) changes **0 of 5** rows
+    // (the five dense rows above the key are gated inside the block by
+    // `nnz_l <= followup_factor`, so that copy of the key does not bind), hence
+    // it stays at 200 000.
+    // Every adoption inside the class block is a strict flop decrease, so the
+    // only price of this key is the per-row seconds above.
+    // [0239-sweeps5-noscore-4cpu.log, 0240-classnnz-{control,A,B}-4cpu.log]
+    #[cfg(test)]
+    let class_nnz: usize = std::env::var("SSI_CLASS_NNZ")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(200_000);
+    #[cfg(not(test))]
+    let class_nnz: usize = 200_000;
+    #[cfg(test)]
+    let follow_nnz: usize = std::env::var("SSI_FOLLOW_NNZ")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(200_000);
+    #[cfg(not(test))]
+    let follow_nnz: usize = 200_000;
+    let terminal_exchange = n >= 6 && n <= class_n && nnz <= class_nnz
         && nnz <= n.saturating_mul(16) && max_deg <= n / 2;
     #[cfg(test)]
     let terminal_exchange = terminal_exchange && probe::leader_tail::exchange_enabled();
@@ -5305,6 +5366,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             .unwrap_or(12);
         #[cfg(not(test))]
         let exchange_width: usize = 12;
+        // iter55: the sweeps axis was **dead at a 1G allowance** (0234 family curve:
+        // 6 and 8 sweeps measured identical to 5) and is **live at 2G**: 2G + 6 sweeps
+        // priced 0.790425 -> **0.790368** (−5.7e-5) in one binary/one session on the
+        // shipped 25k tree, worst `order()` 1.397 -> 1.431 s. The allowance, not the
+        // sweep count, was the binding axis; the two are ordered, so re-price the
+        // sweep count whenever the ledger moves. [0237-led2G-sweeps6-4cpu.log]
+        // iter57: the sweep curve at the 4G allowance, graded-closest frame, one
+        // binary/session, 300/300 rows: 3/4/5/6 sweeps -> 0.790596/0.790470/0.790322/
+        // 0.790254 at worst `order()` 1.384/1.431/1.473/1.536 s. The value/time slope
+        // is ~-1.15e-3 score per second of worst row, and the sixth sweep is DEAD on
+        // the binding row itself: `crudeoil_lee4_10` reads 1.473 s / 0.6080 at 5 sweeps
+        // and 1.536 s / 0.6080 at 6. Our own receipts bracket the remote cap line
+        // between worst 1.397 s (43c1ca7d promoted, 2G+5) and 1.536 s (9440dedb FAILED,
+        // 4G+6), so this ships the 4G allowance with five sweeps: the failed tree's
+        // value minus its one dead sweep. [0239-sweeps{3,4,5}-noscore-4cpu.log,
+        // 0238-noscore-4cpu.log, 0239-board-receipt.txt]
         #[cfg(test)]
         let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
             .ok()
@@ -5344,7 +5421,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // additionally obeys its factor-nonzero limits before materializing fill.
     // Reject an expensive existing ledger before scoring again. Admission
     // below still requires the fresh exact score and factor-nonzero bound.
-    let terminal_followup = n >= 6 && n <= class_n && nnz <= 200_000
+    let terminal_followup = n >= 6 && n <= class_n && nnz <= follow_nnz
         && best_flops <= LADDER_FILL_BOUND;
     #[cfg(test)]
     let terminal_followup = terminal_followup && probe::terminal_followup::enabled();

@@ -1,0 +1,96 @@
+TRUE-FRAME (SSI_MARK_NOSCORE) exposure: top 14 rows of the production tree, 4 vCPU
+row                              true_s  probe_s overhead       nnz    ratio xchg_saved
+crudeoil_lee4_10                  1.536    1.562    0.026    120632   0.6080     0.441
+chimera_selby-c16-02              1.449    1.463    0.014     10878   0.5368     0.210
+crudeoil_lee4_09                  1.437    1.432   -0.005    101792   0.6122     0.432
+chimera_selby-c16-01              1.409    1.394   -0.015     10964   0.6669     0.199
+ringpack_30_2                     1.366    1.304   -0.061    121458   0.2311     0.132
+crudeoil_pooling_ct3              1.311    1.317    0.006     11426   0.6262     0.089
+arki0016                          1.284    1.220   -0.064     37208   0.9508     0.181
+pinene200                         1.261    1.289    0.029     97990   0.8336     0.176
+gasprod_sarawak81                 1.238    1.274    0.036     75636   0.9118     0.208
+crudeoil_lee4_06                  1.182    1.179   -0.003     55492   0.4952     0.272
+procurement1large                 1.175    1.102   -0.073     41068   0.5275     0.378
+popdynm200                        1.116    1.125    0.009    105584   0.9364     0.298
+transswitch0300p                  1.109    1.114    0.005     48446   0.9224     0.263
+chp_shorttermplan2d               1.101    1.109    0.008     52108   0.5025     0.264
+
+true corpus wall 151.13 s ; rows >=1.0 s: 25 ; >=0.9: 36 ; >=0.8: 53
+probe-frame wall 151.31 s ; rows >=1.0: 25
+
+rows named by the record (probe_s / true_s / overhead / xchg_saved / ratio):
+nd_netgen-3000-1-1-b-b-ns_7      0.509   0.479   0.030    -0.007   0.9599
+nd_netgen-2000-3-4-b-a-ns_7      1.091   1.060   0.030     0.192   0.9424
+kissing2                         0.414   0.373   0.041     0.026   1.0000
+gams05                           0.936   0.888   0.048    -0.011   0.5274
+emfl100_5_5                      1.049   1.022   0.027     0.157   1.0000
+gasprod_sarawak81                1.274   1.238   0.036     0.208   0.9118
+acopf_case9241pegase_qcqp        1.065   0.620   0.445     0.001   0.9737
+gabriel10                        0.979   0.730   0.248     0.019   0.9285
+faclay75                         0.796   0.556   0.240     0.001   0.9405
+unitcommit_200_100_1_mod_8       0.593   0.412   0.180     0.005   0.9764
+cont6-qq                         0.398   0.285   0.113     0.002   0.6962
+crudeoil_lee4_10                 1.562   1.536   0.026     0.441   0.6080
+chimera_selby-c16-02             1.463   1.449   0.014     0.210   0.5368
+supplychainr1_053050             0.860   0.858   0.002     0.125   1.0000
+emfl050_5_5                      0.420   0.402   0.018     0.044   1.0000
+
+exchange(12/5/5 + 4G ledger + 6 sweeps) true wall delta, corpus: 14.22 s (9.4% of true wall)
+rows where the exchange costs the most (saved if OFF):
+  crudeoil_lee4_10             true   1.536 -> off   1.096  xchg   0.441  nnz 120632
+  crudeoil_lee4_09             true   1.437 -> off   1.005  xchg   0.432  nnz 101792
+  procurement1large            true   1.175 -> off   0.797  xchg   0.378  nnz 41068
+  catmix400                    true   0.764 -> off   0.406  xchg   0.358  nnz 11192
+  methanol400                  true   0.965 -> off   0.609  xchg   0.356  nnz 151728
+  crudeoil_pooling_dt2         true   1.056 -> off   0.709  xchg   0.347  nnz 75910
+  popdynm200                   true   1.116 -> off   0.818  xchg   0.298  nnz 105584
+  gabriel09                    true   1.012 -> off   0.725  xchg   0.287  nnz 89702
+  crudeoil_lee4_06             true   1.182 -> off   0.910  xchg   0.272  nnz 55492
+  chp_shorttermplan2d          true   1.101 -> off   0.837  xchg   0.264  nnz 52108
+rows >= 0.80 s : probe-frame  50  true-frame  53  only-in-probe  3  only-in-true  6
+rows >= 1.00 s : probe-frame  25  true-frame  25  only-in-probe  2  only-in-true  2
+   probe-only: ['acopf_case9241pegase_qcqp', 'mpbp_07']
+   true-only : ['gabriel09', 'rsyn0840m04m']
+rows >= 1.20 s : probe-frame   9  true-frame   9  only-in-probe  0  only-in-true  0
+rows >= 1.35 s : probe-frame   4  true-frame   5  only-in-probe  0  only-in-true  1
+   probe-only: []
+   true-only : ['ringpack_30_2']
+
+largest rank shifts between frames (probe rank -> true rank):
+  acopf_case9241pegase_qcqp     17 ->  98
+  faclay75                      52 -> 115
+  unitcommit_200_100_1_mod_8   106 -> 160
+  cont6-qq                     166 -> 219
+  gabriel10                     27 ->  74
+  nuclear25a                    62 ->  32
+  emfl100_3_3                  172 -> 144
+  transswitch2736spr           120 -> 146
+  transswitch2383wpr            98 -> 122
+  rsyn0840m02m                  66 ->  89
+
+true-frame rows >= 1.0 s, sorted (true_s, probe_s, ratio):
+  crudeoil_lee4_10                 1.536   1.562
+  chimera_selby-c16-02             1.449   1.463
+  crudeoil_lee4_09                 1.437   1.432
+  chimera_selby-c16-01             1.409   1.394
+  ringpack_30_2                    1.366   1.304
+  crudeoil_pooling_ct3             1.311   1.317
+  arki0016                         1.284   1.220
+  pinene200                        1.261   1.289
+  gasprod_sarawak81                1.238   1.274
+  crudeoil_lee4_06                 1.182   1.179
+  procurement1large                1.175   1.102
+  popdynm200                       1.116   1.125
+  transswitch0300p                 1.109   1.114
+  chp_shorttermplan2d              1.101   1.109
+  chp_partload                     1.095   1.057
+  crudeoil_lee2_06                 1.083   1.051
+  powerflow0300p                   1.072   1.057
+  nuclear10a                       1.070   1.085
+  nd_netgen-2000-3-4-b-a-ns_7      1.060   1.091
+  crudeoil_pooling_dt2             1.056   1.072
+  mpbp_35                          1.041   1.044
+  rsyn0805m03m                     1.041   1.019
+  emfl100_5_5                      1.022   1.049
+  gabriel09                        1.012   1.000
+  rsyn0840m04m                     1.003   0.982

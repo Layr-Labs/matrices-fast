@@ -1,0 +1,38 @@
+plateau=1 vs control: 300 rows, 27 ratio regressions, 0 improvements, 273 unchanged
+regression n values: [98, 440, 514, 1053, 1053, 1120, 1131, 1649, 1746, 1908, 2031, 2032, 2092, 2486, 2508, 2644, 2670, 2868, 3054, 3097, 3183, 4772, 4952, 7252, 8508, 9532, 10017]
+max regression n = 10017 ; all regressions below n<=3000? False
+
+ threshold T | rows>=T | wall delta (s) | value-losing rows >=T | score-visible loss
+       500 |     178 |         -14.2 |                     25 | worst +0.0108 (edgecross10-030)
+      1000 |     153 |         -11.9 |                     24 | worst +0.0108 (edgecross10-030)
+      1500 |     119 |          -9.0 |                     20 | worst +0.0070 (pooling_sppa0pq)
+      2000 |     112 |          -8.1 |                     17 | worst +0.0048 (chimera_selby-c16-01)
+      2500 |      97 |          -6.7 |                     13 | worst +0.0018 (rsyn0810m02hfsg)
+      2670 |      94 |          -6.5 |                     11 | worst +0.0018 (rsyn0810m02hfsg)
+      2700 |      93 |          -6.4 |                     10 | worst +0.0012 (edgecross14-156)
+      3000 |      89 |          -6.1 |                      9 | worst +0.0012 (edgecross14-156)
+      4000 |      81 |          -5.4 |                      6 | worst +0.0007 (rsyn0830m04m)
+      5000 |      70 |          -4.2 |                      4 | worst +0.0007 (rsyn0830m04m)
+      6000 |      60 |          -3.3 |                      4 | worst +0.0007 (rsyn0830m04m)
+      8000 |      51 |          -2.5 |                      3 | worst +0.0007 (mpbp_07)
+     10000 |      45 |          -2.1 |                      1 | worst +0.0001 (glider400)
+
+ top savings on rows with n>=3000 (plateau1 - control):
+  -0.220  dratio +0.0000  sfacloc2_3_80                n=4799   nz=20600   1.069 -> 0.849 s
+  -0.196  dratio +0.0000  crudeoil_lee4_06             n=10429  nz=55492   1.318 -> 1.122 s
+  -0.195  dratio +0.0000  powerflow0118p               n=5065   nz=18730   1.054 -> 0.859 s
+  -0.176  dratio +0.0000  waste                        n=4825   nz=21504   0.916 -> 0.740 s
+  -0.158  dratio +0.0000  arki0002                     n=4432   nz=11248   0.667 -> 0.509 s
+  -0.153  dratio +0.0000  gasprod_sarawak81            n=22536  nz=75636   1.085 -> 0.933 s
+  -0.150  dratio +0.0000  sfacloc2_4_80                n=5067   nz=21424   0.957 -> 0.807 s
+  -0.142  dratio +0.0000  crudeoil_pooling_dt3         n=30660  nz=152210  0.876 -> 0.734 s
+  -0.135  dratio +0.0000  syn40m04m                    n=4960   nz=13792   0.799 -> 0.663 s
+  -0.133  dratio +0.0000  gasprod_sarawak16            n=4596   nz=15316   0.937 -> 0.803 s
+  -0.128  dratio +0.0000  chp_partload                 n=5211   nz=16740   1.117 -> 0.989 s
+  -0.128  dratio +0.0000  ringpack_20_3                n=6709   nz=45220   0.634 -> 0.506 s
+  -0.124  dratio +0.0000  crudeoil_lee1_07             n=3670   nz=19322   1.013 -> 0.889 s
+  -0.123  dratio +0.0007  rsyn0815m02hfsg              n=3054   nz=7968    0.715 -> 0.592 s
+  -0.121  dratio +0.0000  rsyn0820m04m                 n=6028   nz=17372   0.844 -> 0.723 s
+  -0.121  dratio +0.0000  ringpack_30_2                n=17999  nz=121458  1.279 -> 1.158 s
+
+ rows with n>=3000 and ratio regression: 9

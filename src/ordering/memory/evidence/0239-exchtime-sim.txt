@@ -1,0 +1,12 @@
+# 0239 equal-TIME exchange scheduling, simulated exactly from the sweep-curve logs
+# (each row's (time, ratio) at k=3/4/5 sweeps is a measured point, so a per-row rule that
+#  assigns k(row) can be scored EXACTLY without a rebuild.)
+# rule: k = clamp(round(T / per_sweep_cost), 3, 5), per_sweep_cost = (t5 - t3)/2
+# all-5 baseline: 0.790323, worst 1.473 s
+# T=0.02 s -> 0.790550 (+2.27e-4)  worst 1.370 s   k-hist {3:75, 4:11, 5:214}
+# T=0.03 s -> 0.790552 (+2.29e-4)  worst 1.370 s   k-hist {3:54, 4:14, 5:232}
+# T=0.04 s -> 0.790549 (+2.26e-4)  worst 1.370 s   k-hist {3:39, 4:13, 5:248}
+# T=0.06 s -> 0.790545 (+2.22e-4)  worst 1.370 s   k-hist {3:27, 4:4, 5:269}
+# => equal-time scheduling is just another point on the SAME line: the measured value/time
+#    slope is invariant to how the sweeps are distributed across rows. No scheduling rule on
+#    this actuator beats flat work allocation; only a cheaper unit of search moves the line.

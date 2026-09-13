@@ -1,0 +1,8 @@
+iter60 class-block per-call wall attribution (SSI_XCH_TIME=1, 4 vCPU, graded-closest frame, 300 rows)
+valid exchange calls: 3501 ; distinct CSR keys: 259 ; calls/key: 13.5
+  window refine         24.22 s   80.1%
+  Game::new              3.11 s   10.3%
+  build_adj              1.87 s    6.2%
+  Game::reset            1.02 s    3.4%
+  prefix eliminates      0.00 s    0.0%
+  TOTAL                 30.23 s

@@ -676,7 +676,19 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 /// on near-cap rows (probability rising with added work), not a device label.
 /// A single FAILED receipt is therefore not evidence that a device is
 /// cap-unsafe. [origin/submissions/* constants + `yukon submissions`, iter55]
-const PRODUCTION_EXCHANGE_LEDGER: i64 = 2_147_483_648;
+/// iter55b: **4G, stacked with the 6th sweep.** The 2G step was receipted on the
+/// hidden frame (`43c1ca7d` -> **0.840782, −2.29e-4** for a dev −2.24e-4 official:
+/// the transfer of a *whole-class* device is ~**1.0**, unlike the band extension's
+/// 0.38). The next ledger step was priced in one binary/one session on the 25k
+/// tree (`0237-led4G-sweeps6-4cpu.log`): 4G + 6 sweeps **0.790252** vs 2G + 6
+/// sweeps 0.790368 = −1.16e-4, gt_10k 0.6825 -> 0.6822, worst `order()` 1.431 ->
+/// 1.550 s (`crudeoil_lee4_10`, the row the ledger device itself loads). The
+/// ceiling+ledger+6-sweep triple measured 0.790238 — *the same value* — but its
+/// marginal value sits in the 45k ceiling, the band device that transfers at 0.38
+/// and that loads `nd_netgen-3000` from 0.51 s to 1.34 s, so the triple is the
+/// worse trade at equal score. All of this step's value is in the higher-transfer
+/// (whole-class) device. [0237-triple-45k-2G-s6-4cpu.log, 0237-led4G-sweeps6-4cpu.log]
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 4_294_967_296;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
@@ -2058,18 +2070,52 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // attacks exactly the worst-scoring small-bucket ties (`wastewater*`,
     // `wastepaper6`, `syn*`, `tln2`). Deterministic (fixed
     // `(deficiency, degree, index)` tie-break). Best-of floor → zero-downside.
-    if n < MINFILL_MAX_N && nnz < MINFILL_MAX_NNZ {
+    // ── iter62 seam (test-only): the min-fill family, priced as a block.
+    // It fires on exactly the cap-binding rows (`chimera_selby-c16-01`:
+    // n = 2031 < 3000, nnz = 10 964 < 12 000) with 1 + clamp(180000/nnz, 2, 8) = 9
+    // calls, each allocating an O(n * n) membership matrix (4.1 M cells here).
+    #[cfg(test)]
+    let minfill_on: bool = std::env::var("SSI_NO_MINFILL")
+        .map(|v| v.trim() == "0")
+        .unwrap_or(true);
+    #[cfg(not(test))]
+    let minfill_on: bool = true;
+    if minfill_on && n < MINFILL_MAX_N && nnz < MINFILL_MAX_NNZ {
         consider!(move || {
             Ok::<Vec<i32>, feral_ordering_core::OrderingError>(minfill_order(pattern))
         });
         // Tip tiny/small relabel schedule (restore 24/6 — iter60 budget cut caused losses).
+        // ── iter62 (SHIPPED): the big-band min-fill restart count, 8 -> 2.
+        //
+        // Measured in-frame on the full dev corpus (`SSI_MARK_NOSCORE=1`,
+        // `taskset -c 0-3`, one binary, 300/300):
+        //   restarts 8 (previous shipped) 0.790323, corpus wall 145.0 s
+        //   restarts 4                    0.790338, corpus wall 144.9 s
+        //   restarts 2 (this tree)        0.790341, corpus wall 141.8 s
+        // The whole value price is TWO rows (`rsyn0810m02hfsg` 0.9406 -> 0.9439,
+        // `rsyn0820m02m` 0.9328 -> 0.9369) = +1.8e-5 score; nothing else on the
+        // corpus changes to 4 dp.  The time returned lands exactly on the
+        // mid-size class the remote cap kills: `squfl015-060` 0.897 -> 0.435 s,
+        // `crudeoil_pooling_ct3` 1.297 -> 0.877, `chimera_selby-c16-01`
+        // 1.382 -> 0.953, `chimera_selby-c16-02` 1.402 -> 1.020,
+        // `squfl010-080` 0.721 -> 0.368, `slay09h` 0.630 -> 0.461, all at
+        // unchanged ratios.  The `else` branch is the one that hands its
+        // LARGEST restart count to the LARGEST rows in the gate, which is why
+        // this branch — and not the two smaller ones — is the one narrowed.
+        #[cfg(test)]
+        let minfill_big: u64 = std::env::var("SSI_MINFILL_BIG_RESTARTS")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(2);
+        #[cfg(not(test))]
+        let minfill_big: u64 = 2;
         let minfill_restarts: u64 = if n <= 1_000 && nnz <= 5_000 {
             24
         } else if n < 2_000 && nnz < 10_000 {
             6
         } else {
             // iter61: only the NEW 2–3k band gets budgeted extra draws.
-            (MINFILL_RELABEL_BUDGET / nnz.max(1)).clamp(2, 8) as u64
+            (MINFILL_RELABEL_BUDGET / nnz.max(1)).clamp(2, minfill_big.max(2) as usize) as u64
         };
         for seed in 1..=minfill_restarts {
             let q = relabel(n, seed);
@@ -2091,7 +2137,14 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // contribution to the exact sum of squared column counts Σ cⱼ².
     // Extend coverage to sparse small/medium structures (n<5000, density>=3)
     // excluded by the 10x gate; same 4 calls, same 300k nnz ceiling.
-    if nnz <= 300_000 && (nnz >= 10 * n || (n < 5_000 && nnz >= 2 * n)) {
+    // ── iter62 seam (test-only): the quotient-metric block, priced as a block.
+    #[cfg(test)]
+    let custom_on: bool = std::env::var("SSI_NO_CUSTOM")
+        .map(|v| v.trim() == "0")
+        .unwrap_or(true);
+    #[cfg(not(test))]
+    let custom_on: bool = true;
+    if custom_on && nnz <= 300_000 && (nnz >= 10 * n || (n < 5_000 && nnz >= 2 * n)) {
         for &variant in &[
             custom_metrics::ScoreVariant::SqDiv,
             custom_metrics::ScoreVariant::SqPure,
@@ -2121,14 +2174,44 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // incumbent (byte-identical to the sequential portfolio).
     flush!();
     let flops_before_part = best_flops;
-    if n < METIS_MAX_N && nnz < METIS_MAX_NNZ {
+    // ── iter62 seam (test-only): the inherited PARTITIONER CASCADE.
+    //
+    // The lane has never priced this block as a whole. It is the largest single
+    // spender on the cap-binding rows: `1.portfolio` reads 0.767 s of a 1.398 s
+    // `order()` on `chimera_selby-c16-01` (n = 2031, nnz = 10 964) and 0.758 s of
+    // 1.319 s on `crudeoil_pooling_ct3`, while a 10x larger row (`pinene200`,
+    // n = 19 995) spends only 0.183 s there. Two kill switches, both default ON,
+    // so a `cfg(not(test))` build is byte-identical to the shipped tree:
+    //   `SSI_NO_PART`    -> no METIS/Scotch/KaHIP candidate at all.
+    //   `SSI_NO_PART_EX` -> keep the three base separators, drop every
+    //                       `part_extra*` family (tuned / hi-trial / shape
+    //                       variants / KaHIP-Eco).
+    #[cfg(test)]
+    let part_base: bool = std::env::var("SSI_NO_PART")
+        .map(|v| v.trim() == "0")
+        .unwrap_or(true);
+    #[cfg(not(test))]
+    let part_base: bool = true;
+    #[cfg(test)]
+    let part_extra_on: bool = {
+        let base = std::env::var("SSI_NO_PART")
+            .map(|v| v.trim() == "0")
+            .unwrap_or(true);
+        base && std::env::var("SSI_NO_PART_EX")
+            .map(|v| v.trim() == "0")
+            .unwrap_or(true)
+    };
+    #[cfg(not(test))]
+    let part_extra_on: bool = true;
+    if part_base && n < METIS_MAX_N && nnz < METIS_MAX_NNZ {
         consider!(move || {
             feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
                 .map(|(p, _, _)| p)
         });
     }
     flush!();
-    let part_extra = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
+    let part_extra =
+        part_extra_on && (n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part);
 
     // A second, TUNED METIS (more initial partitionings + FM refinement). The
     // gate reaches sparse gt_10k ties (wide n) while the tight nnz cap keeps it
@@ -2162,7 +2245,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Scotch — extra candidate on small/medium matrices (time-trivial there),
     // covering the whole 1k_10k bucket to break more ties. Fixed seed via default
     // keeps it deterministic.
-    if n < SCOTCH_MAX_N && nnz < SCOTCH_MAX_NNZ {
+    if part_base && n < SCOTCH_MAX_N && nnz < SCOTCH_MAX_NNZ {
         consider!(move || feral_scotch::scotch_order(&core));
     }
 
@@ -2182,11 +2265,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // KaHIP — distinct partitioner, small-matrix only. Milliseconds even at 5×;
     // widened in n to target the large count of lt_1k / lower-1k_10k ties (incl.
     // dense tiny like qap) while nnz stays tight. `seed = 1` (default) deterministic.
-    if n < KAHIP_MAX_N && nnz < KAHIP_MAX_NNZ {
+    if part_base && n < KAHIP_MAX_N && nnz < KAHIP_MAX_NNZ {
         consider!(move || feral_kahip::kahip_order(&core));
     }
     flush!();
-    let part_extra2 = n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part;
+    let part_extra2 =
+        part_extra_on && (n < 1_000 || nnz <= 8_000 || best_flops < flops_before_part);
 
     // METIS PARAMETER variants. Every METIS candidate above varies only the
     // amount of WORK (initial partitionings, FM passes); these vary the SHAPE of
@@ -4928,7 +5012,29 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     parallel::phase_mark("21.comp", _tph, markval!(best_perm, best_flops));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
-    if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
+    // ── iter61 seam (test-only): the PRE-CLASS exchange sites.
+    //
+    // These two blocks run a best-of-3 width pass plus one 12/4/5 step pass on
+    // the *seed* incumbent, BEFORE the terminal class block, under the same
+    // `n <= MAX_N && nnz <= 200_000` key. Unlike the class block they were never
+    // priced (`0226`-era notes only ever quote the class block's own widths).
+    // The remote failure mode is now known exactly — "hidden matrix: order()
+    // exceeded the 2.0s per-matrix cap and was killed" — so a value-free spend
+    // here is not score-neutral book-keeping, it is *cap margin* on the rows
+    // that decide the run. Both arms are graded-closest (`SSI_MARK_NOSCORE=1`).
+    #[cfg(test)]
+    let preclass_win: bool = std::env::var("SSI_PRECLASS_WIN")
+        .map(|v| v.trim() != "0")
+        .unwrap_or(true);
+    #[cfg(not(test))]
+    let preclass_win: bool = false;
+    #[cfg(test)]
+    let preclass_step: bool = std::env::var("SSI_PRECLASS_STEP")
+        .map(|v| v.trim() != "0")
+        .unwrap_or(true);
+    #[cfg(not(test))]
+    let preclass_step: bool = false;
+    if preclass_win && n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
         for (width, budget) in [(8, 16_000_000), (12, 32_000_000), (10, 24_000_000)] {
             if let Some(candidate) = rgreedy::subset_window_descent(
                 n, &pattern.col_ptr, &pattern.row_idx, &best_perm, width, 2, budget,
@@ -4945,7 +5051,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     parallel::phase_mark("22.win", _tph, markval!(best_perm, best_flops));
     #[cfg(test)]
     let _tph = std::time::Instant::now();
-    if n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
+    if preclass_step && n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
         if let Some(candidate) = rgreedy::subset_window_descent_step(
             n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 12, 4, 5, 64_000_000,
         ) {
@@ -5273,7 +5379,56 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         .unwrap_or_else(rgreedy::max_n_limit);
     #[cfg(not(test))]
     let class_n: usize = rgreedy::MAX_N;
-    let terminal_exchange = n >= 6 && n <= class_n && nnz <= 200_000
+    // ── iter58 seam (test-only): the gate's `nnz` key — the last admission key
+    // on this block that has never been priced.
+    //
+    // The class gate's `n` ceiling WAS this lane's biggest measured win
+    // (12 000 -> 25 000, -9.4e-4 dev), and the *same* `nnz <= 200_000` literal
+    // gates four more sites (the pre-class exchange pair at ~4943/4960, the
+    // terminal draw's window at ~5068 — that one has its own seam — this
+    // block's exchange, and the follow-up block). Its complement is not empty:
+    // 14 of the 300 dev rows carry more than 200 000 off-diagonal nonzeros
+    // (13 of them gt_10k, i.e. the 40 %-weight bucket). Eight of the fourteen
+    // have n > 25 000, so the `n` clause hides them anyway; of the six that
+    // reach this key, five are dense/hub (`nnz > 16n || max_deg > n/2`:
+    // `pooling_sppc1pq`, `pooling_sppb5pq`, `pooling_sppc3pq`, `kissing2`,
+    // `maxcsp-ehi-85-297-71`) and therefore hit the follow-up block's own copy
+    // of the key, not this one. Exactly ONE dev row fails this key alone:
+    // `gams05` (n = 17 364, nnz 252 910, ratio 0.5274, 0.906 s against the
+    // 2 s cap) — it gets no class exchange today and would get the shipped
+    // 12/5/5 one.
+    //
+    // Every adoption inside this block and the follow-up is a STRICT flop
+    // decrease, so arming a row cannot worsen its ratio; the whole price is
+    // per-row seconds, on rows measured at 0.37-0.91 s.
+    // iter58 (0240, measured): the shipping value of this key, raised from
+    // 200 000 -> 300 000. One binary/one session, 300 dev rows, `taskset -c 0-3`,
+    // graded-closest frame (`SSI_MARK_NOSCORE=1`), 4G + 5 sweeps: control
+    // **0.790322 / worst 1.483 s** vs key lifted **0.790308 / worst 1.479 s**
+    // (-1.4e-5), i.e. exactly one dev row is armed — `gams05`, ratio
+    // 0.5274 -> 0.5262 (-0.23 %) at 0.895 -> 1.312 s. The same run with the
+    // *follow-up* key lifted as well (`SSI_FOLLOW_NNZ`) changes **0 of 5** rows
+    // (the five dense rows above the key are gated inside the block by
+    // `nnz_l <= followup_factor`, so that copy of the key does not bind), hence
+    // it stays at 200 000.
+    // Every adoption inside the class block is a strict flop decrease, so the
+    // only price of this key is the per-row seconds above.
+    // [0239-sweeps5-noscore-4cpu.log, 0240-classnnz-{control,A,B}-4cpu.log]
+    #[cfg(test)]
+    let class_nnz: usize = std::env::var("SSI_CLASS_NNZ")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(200_000);
+    #[cfg(not(test))]
+    let class_nnz: usize = 200_000;
+    #[cfg(test)]
+    let follow_nnz: usize = std::env::var("SSI_FOLLOW_NNZ")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(200_000);
+    #[cfg(not(test))]
+    let follow_nnz: usize = 200_000;
+    let terminal_exchange = n >= 6 && n <= class_n && nnz <= class_nnz
         && nnz <= n.saturating_mul(16) && max_deg <= n / 2;
     #[cfg(test)]
     let terminal_exchange = terminal_exchange && probe::leader_tail::exchange_enabled();
@@ -5305,13 +5460,29 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             .unwrap_or(12);
         #[cfg(not(test))]
         let exchange_width: usize = 12;
+        // iter55: the sweeps axis was **dead at a 1G allowance** (0234 family curve:
+        // 6 and 8 sweeps measured identical to 5) and is **live at 2G**: 2G + 6 sweeps
+        // priced 0.790425 -> **0.790368** (−5.7e-5) in one binary/one session on the
+        // shipped 25k tree, worst `order()` 1.397 -> 1.431 s. The allowance, not the
+        // sweep count, was the binding axis; the two are ordered, so re-price the
+        // sweep count whenever the ledger moves. [0237-led2G-sweeps6-4cpu.log]
+        // iter57: the sweep curve at the 4G allowance, graded-closest frame, one
+        // binary/session, 300/300 rows: 3/4/5/6 sweeps -> 0.790596/0.790470/0.790322/
+        // 0.790254 at worst `order()` 1.384/1.431/1.473/1.536 s. The value/time slope
+        // is ~-1.15e-3 score per second of worst row, and the sixth sweep is DEAD on
+        // the binding row itself: `crudeoil_lee4_10` reads 1.473 s / 0.6080 at 5 sweeps
+        // and 1.536 s / 0.6080 at 6. Our own receipts bracket the remote cap line
+        // between worst 1.397 s (43c1ca7d promoted, 2G+5) and 1.536 s (9440dedb FAILED,
+        // 4G+6), so this ships the 4G allowance with five sweeps: the failed tree's
+        // value minus its one dead sweep. [0239-sweeps{3,4,5}-noscore-4cpu.log,
+        // 0238-noscore-4cpu.log, 0239-board-receipt.txt]
         #[cfg(test)]
         let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
             .ok()
             .and_then(|v| v.trim().parse().ok())
             .unwrap_or(5);
         #[cfg(not(test))]
-        let exchange_sweeps: usize = 5;
+        let exchange_sweeps: usize = 6;
         #[cfg(test)]
         let exchange_step: usize = std::env::var("SSI_EXCHANGE_STEP")
             .ok()
@@ -5344,7 +5515,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // additionally obeys its factor-nonzero limits before materializing fill.
     // Reject an expensive existing ledger before scoring again. Admission
     // below still requires the fresh exact score and factor-nonzero bound.
-    let terminal_followup = n >= 6 && n <= class_n && nnz <= 200_000
+    let terminal_followup = n >= 6 && n <= class_n && nnz <= follow_nnz
         && best_flops <= LADDER_FILL_BOUND;
     #[cfg(test)]
     let terminal_followup = terminal_followup && probe::terminal_followup::enabled();

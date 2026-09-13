@@ -40,8 +40,7 @@
 
 mod window_dp;
 mod window_signatures;
-pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step,
-    sparse_span_window_descent};
+pub(crate) use window_dp::{subset_window_descent, subset_window_descent_step};
 
 fn rank_product(value: u64, value_power: usize, len: usize, len_power: usize) -> [u64; 6] {
     fn mul(words: &mut [u64; 6], factor: u64) {
@@ -85,16 +84,7 @@ pub(crate) fn rank_alpha_three_quarters_cmp(
 /// bytes (two bitset adjacency copies) = ~`n²/4` bytes; at 4000 that is 4 MB,
 /// far inside the 4 GiB worker cap. The SHIPPED gate at the call site is much
 /// lower and is chosen for TIME, not memory.
-///
-/// iter54: `12_000` -> `25_000` — the band extension of the one device that is
-/// validated on the hidden frame (the terminal class-block exchange). The 0220
-/// arm (`SSI_TERM_CLASS_N`) measured the class *gate* inert precisely because
-/// this limit refuses inside `Game::build_adj`; the limit itself is the variable
-/// that had never been moved. Memory is ~156 MB per `Game` at 25_000 (two bitset
-/// copies), far inside the 4 GiB worker cap; the cost is TIME, measured on the
-/// band in `0235-armMAXN25k-4cpu.log`. See the note at
-/// `PRODUCTION_EXCHANGE_LEDGER` for the receipt.
-pub(crate) const MAX_N: usize = 25_000;
+pub(crate) const MAX_N: usize = 12_000;
 
 /// Pivot selection switches from a linear scan over the live set to degree
 /// buckets above this `n`. Swept on the full small tier at the shipped budget:
@@ -1412,7 +1402,7 @@ pub(crate) fn search_par_default_seeds(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn search_par_specs(
+fn search_par_specs(
     n: usize,
     col_ptr: &[usize],
     row_idx: &[usize],

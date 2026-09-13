@@ -1,9 +1,3 @@
-[0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
-compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
-keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->
-0.792439** (-1.75 relative bip). Isolated on purpose: it is also the single
-candidate being tested against the 2 s cap.
-
 [0145: second colour class + metric passes on lifted cores; acceptance after subtree](experiments/0145-second-colour-class-metric-cores.md):
 v9 on 691aad4 **0.798268 -> 0.795608** failed hidden timing (fe871f1).
 v11 on 4d6d3d0 probe **0.795871**, worst **1.026 s**; x-sets n≤12k so
@@ -279,13 +273,3 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0090: transplant verification reservation](experiments/0090-transplant-verification-reservation-screen.md) — 100k reservation retains partial donor gains, 26 winners / 0.93139 dev bips; below screen.
 - [0091: residual-core exact minimum fill](experiments/0091-residual-core-exact-minimum-fill.md) — a second OBJECTIVE on the cores the reduction already builds, 18.28998 dev bips, 6 wins / 0 losses; and the call-site work counter that priced it after a 300-row A/B could not.
 - [0094: light-tier α grid {10,5,2.5,1}](experiments/0094-light-alpha-grid.md) — aa5b471 dev 0.812247 → **0.811892** (−3.55 bips, all 1k_10k); ports the e7988e5 pattern atop relabelled lotteries (disjoint mid-α draws); 71 tests, worst 0.484 s.
-
-- [0218: the probe default is not the graded program](experiments/0218-production-frame-mirror.md) — the stage-1b force gate is ON in production and OFF in the probe default; the 0.791635/0.791851 "unreproducible" pair is one program in two frames (2.16e-4 on the four largest dev rows), the gate is load-bearing (8000 costs 1.1e-3), and the record's ledger-1G/PEO-5 bats are dead in the graded frame.
-
-- [0219: the stage-1b seed choice is a lottery](experiments/0219-early-arbitration.md) — moving the held lift's comparison from after the subtree cascade to before it (zero added work) is measured at +1.17e-3: 8 gains worth -1.43e-4 against two losses worth +1.31e-3, because the post-4b stages invert the cascade's own ranking, and no cheap observable (raw lead, arbitration margin, portfolio headroom, residual-core shape) separates the 13 force-wins from the 6 defer-wins.
-
-- [0219h: the harness cap is wall clock from spawn](evidence/0219h-harness-cap-mechanism.txt) — two full local-harness runs on the current tree died `FAIL (capped)` on rows the pinned probe measures at < 0.400 s and 0.826 s (slowest corpus row 1.2496 s); the trusted watchdog charges spawn + sandbox setup + host stalls to the row's 2 s, so local cap receipts must be read against the row's probe time.
-
-- [0230: span schedule 9 → 13 widths + exchange-site ledger 512M → 1G](experiments/0230-span13-ledger1g.md) — four-arm in-frame sweep: shipped **0.791498** → **0.791437** (−0.61 bip, 17 rows better / 0 worse); the ledger's knee is 1G (2G buys 5e-6 more), `SSI_PEO_ROUNDS=5` is rejected; official local 300/300 at 0.791437 / 0.924075, submitted `6279dc68`.
-
-- [0231: the order-equivalence frame (schedule axis of determinism)](experiments/0231-order-equivalence-frame.md) — new test-only probe compares parallel / forced-sequential / parallel runs of the same row element-wise: **0 divergences on 300 dev + 14 peak + 33 structural rows**, which kills parallel-order nondeterminism as the explanation of the two parity FAILs; also records the silent dev-corpus fallback trap for `SSI_CORPUS_FILE=/tmp/...` inside the probe sandbox (fixed by `probe-sandbox-corpora.sh`).

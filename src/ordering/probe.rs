@@ -148,6 +148,13 @@ fn probe_timing_and_score() {
             println!("LIFT\t{name}\t{ln}\t{core_n}\t{core_nnz}\t{x}");
         }
         println!("COUNTS\t{name}\t{n}\t{}\t{base}\t{mine}", pat.nnz());
+        // iter72: the buffer-restore axis (see `rgreedy::copy_stats`).
+        let cs = rgreedy::copy_stats::take();
+        println!(
+            "COPYSTATS\t{name}\tsecs={secs:.3}\tasm_calls={}\tasm_words={}\tasm_ms={:.1}\trst_calls={}\trst_words={}\trst_ms={:.1}\trst_tail_ms={:.1}\telims={}\tfullclear_words={}\tsparse_words={}\tsparse_clears={}",
+            cs[0], cs[1], cs[2] as f64 / 1e6, cs[3], cs[4], cs[5] as f64 / 1e6,
+            cs[6] as f64 / 1e6, cs[7], cs[8], cs[9], cs[10]
+        );
         if std::env::var_os("SSI_XCH_TIME").is_some() {
             let ((win, dp, elim), c, hist) = rgreedy::xch_split::take();
             println!(

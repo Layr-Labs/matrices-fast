@@ -5046,16 +5046,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // exceeded the 2.0s per-matrix cap and was killed" — so a value-free spend
     // here is not score-neutral book-keeping, it is *cap margin* on the rows
     // that decide the run. Both arms are graded-closest (`SSI_MARK_NOSCORE=1`).
+    // iter75 CORRECTION: the test arm's unset default now equals the production
+    // value (see `memory/evidence/0275-probe-code-frame.txt`) — it used to
+    // default to `true` while production compiles `false`, so every probe run
+    // that did not set this seam measured a tree with the retired pre-class
+    // pair LIVE. Set `SSI_PRECLASS_WIN=1` / `SSI_PRECLASS_STEP=1` to price the
+    // pre-class pair; unset or `0` is production.
     #[cfg(test)]
     let preclass_win: bool = std::env::var("SSI_PRECLASS_WIN")
-        .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_win: bool = false;
     #[cfg(test)]
     let preclass_step: bool = std::env::var("SSI_PRECLASS_STEP")
-        .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_step: bool = false;
     if preclass_win && n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
@@ -5514,11 +5520,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // 4G+6), so this ships the 4G allowance with five sweeps: the failed tree's
         // value minus its one dead sweep. [0239-sweeps{3,4,5}-noscore-4cpu.log,
         // 0238-noscore-4cpu.log, 0239-board-receipt.txt]
+        // iter75 CORRECTION: the unset default now equals the production value
+        // (12, one full cycle of the walk's block offsets with
+        // `gcd(step=5, width=12) = 1`). It used to default to the iter57-era 6,
+        // so probe runs that did not set this seam measured a *shallower*
+        // schedule than the shipped worker — which is exactly how the charge
+        // shape was mis-priced at −1.75e-5 instead of its true −5.1e-5 dev
+        // (`memory/evidence/0275-probe-code-frame.txt`).
         #[cfg(test)]
         let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
             .ok()
             .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(6);
+            .unwrap_or(12);
+        // iter74: the second sweep cycle (20) was built and run; it is cap-dead
+        // rather than value-dead — see `memory/evidence/0274-true-frame*`. The
+        // shipped count stays at 12 (one full cycle of the walk's block offsets,
+        // `gcd(exchange_step=5, exchange_width=12) = 1`).
         #[cfg(not(test))]
         let exchange_sweeps: usize = 12;
         #[cfg(test)]

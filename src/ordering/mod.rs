@@ -626,7 +626,7 @@ const LADDER_FILL_BOUND: u64 = 20_000_000_000;
 /// Each pass accepts only a strict exact decrease, so appending a width cannot
 /// worsen any row; the price is wall time on class rows only (~+0.05 s/row on
 /// the rows the class admits), and every pass carries its own work ledger.
-const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
+const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 11] = [
     (48, 4, 19, 32_000_000),
     (9, 4, 4, 32_000_000),
     (8, 4, 3, 64_000_000),
@@ -636,6 +636,8 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
     (11, 4, 4, 64_000_000),
     (14, 4, 5, 64_000_000),
     (6, 4, 3, 64_000_000),
+    (13, 4, 4, 64_000_000),
+    (15, 4, 5, 64_000_000),
 ];
 /// iter54: the class-block exchange ledger 512M -> 1G and its sweep count
 /// 4 -> 5. Both halves were priced in one binary/one session on the merged
@@ -676,7 +678,7 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 /// on near-cap rows (probability rising with added work), not a device label.
 /// A single FAILED receipt is therefore not evidence that a device is
 /// cap-unsafe. [origin/submissions/* constants + `yukon submissions`, iter55]
-const PRODUCTION_EXCHANGE_LEDGER: i64 = 2_147_483_648;
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 4_294_967_296;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.

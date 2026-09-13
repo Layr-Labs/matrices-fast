@@ -676,3 +676,35 @@ round, so note the round if you know it.
   rows, no small-row regressions; and the added time is spent on the movers themselves
   (`chimera_selby-c16-02` +0.040 s, `crudeoil_lee4_06` +0.069 s) while the dense rows the ledger is
   shared with are untouched (`graphpart_clique-70` +0.001 s, `qapw` −0.004 s).
+
+## iter54b — the band extension: `rgreedy::MAX_N` 12 000 → 25 000, shipped as `52c744da`
+
+- **The variable that had never been moved.** `rgreedy::MAX_N` is the ceiling `Game::build_adj` and
+  `WindowDp`'s `MAX_DIMENSION` both refuse above; the 0220 arm (`SSI_TERM_CLASS_N` 12 000 → 22 000) moved
+  the *class gate* and measured it inert, which was read as "the 12 k–22 k band has no value". It proved
+  only that the gate alone does nothing. Moving the ceiling itself, one binary/one session/300 dev rows:
+  shipped 0.791694 → L55 0.791616 → **`MAX_N=25_000` 0.790679** (gt_10k bucket 0.6857 → **0.6833**,
+  worst row unchanged 1.358 → 1.397 s, **14 rows better / 0 worse**, every mover in the new band:
+  `chp_shorttermplan2d` −2.37 %, `methanol400` −2.33 %, `popdynm200` −2.14 %, `gabriel09` −1.95 %,
+  `edgecross24-115` −1.33 %, `crudeoil_lee4_10` −0.91 %, `gasprod_sarawak81` −0.88 %, `nuclear10a`
+  −0.84 %, `crudeoil_lee4_09` −0.75 %, `procurement1large` −0.70 %, …).
+  [0235-armMAXN25k-4cpu.log]
+- **Attribution, in-frame, band rows only.** With the class-block exchange disabled by the
+  `MAX_WIDTH=14` guard (`SSI_EXCHANGE_WIDTH=16` ⇒ the call returns `None`) **every** band gain vanishes
+  → the value is the exchange, not the two pre-class sites or the sparse-span schedule the same ceiling
+  re-enables. `SSI_PEO_ROUNDS=0` changes no band row by more than 0.05 % (neither value nor cost).
+  [target/scratch/band_*.txt]
+- **Cost is per-call setup at large `n`, not per-sweep.** A reduced band allowance (`SSI_BAND_SWEEPS=2`,
+  built and measured) retains only 82 % of the value and saves +6.5 s → +6.3 s of added band time;
+  the rule was discarded. Dense/hub band rows are untouched by the exchange's own gates
+  (`kissing2` 0.405→0.388 s, `gams05` 0.958→0.931, `pooling_sppc3pq` 0.757→0.742, `graphpart_clique-70`
+  0.316→0.321). Memory ~156 MB/`Game` at n=25 000, inside the 4 GiB cap (not enforced locally).
+  [0235-armMAXN25k-band2-4cpu.log]
+- **Official local receipt:** production build, repo harness, **300/300 OK, 0.790636 / 0.923475**,
+  buckets 0.8873 / 0.8373 / **0.6831** (`results.tsv:1789280906`) — **−8.4e-4 vs the promoted tree's own
+  official 0.791478**. Submitted **`52c744da-29ee-4432-8510-8a72e4813f54`** (`validating`).
+  [0235-official-run-band25k.log, 0235b-submission-note.md, 0235b-submission.txt]
+- **Next if rejected:** bound the exchange's *per-call setup* on band rows (not its sweeps), and re-price
+  the two pre-class exchange sites (4904/4921) that the same ceiling re-enables; the dead band rows
+  (`emfl100_5_5` +0.645 s, `supplychainr1_053050` +0.442 s, ratio stays 1.0000) are pure waste that a
+  cheaper call shape could remove.

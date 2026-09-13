@@ -649,7 +649,34 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 /// spent on the rows that move (`chimera_selby-c16-02` +0.040 s,
 /// `crudeoil_lee4_06` +0.069 s), not on the dense rows this ledger is shared
 /// with (`graphpart_clique-70` +0.001 s, `qapw` -0.004 s).
-const PRODUCTION_EXCHANGE_LEDGER: i64 = 1_073_741_824;
+/// iter55: **2G — the ledger is a *second-order* device: its marginal value is a
+/// function of the `n` ceiling, not of the ledger.** Priced in one binary/one
+/// session on the 25 000-ceiling tree (`0237-led-{1G,2G,4G}-4cpu.log`, 300 dev
+/// rows, `taskset -c 0-3`): 1G (shipped) **0.790679** / gt_10k 0.6833 →
+/// 2G **0.790425 (−2.54e-4)** / 0.6826 → 4G 0.790322 (−3.57e-4) / 0.6824.
+/// The same 512M→1G step was worth −4.7e-5 on the 12 000-ceiling tree
+/// (`0235-armL1G-4cpu.log`), so raising the ceiling **multiplied the ledger's
+/// marginal value by ~5x**: the ledger only binds where the ceiling now admits
+/// rows, and it binds *there*. The 1G→2G step moves 12 rows, every one of them
+/// in the 10 429 ≤ n ≤ 23 999 band (`crudeoil_lee4_10` −0.79 %, `methanol400`
+/// −1.55 %, `crudeoil_lee4_09` −0.64 %, `gabriel09` −0.50 % …) and the
+/// corpus-wide worst `order()` is **unchanged** (1.396 → 1.397 s) — the added
+/// time is 0.05-0.15 s on movers that sit 0.6-0.8 s under the cap. The 2G→4G
+/// step is NOT free: it moves only two rows (`crudeoil_lee4_09/10`) for
+/// −1.03e-4 and pushes `crudeoil_lee4_10` to 1.506 s, i.e. it loads the one row
+/// class the hidden cap lottery kills, so it is deliberately NOT shipped.
+///
+/// Record: the three submissions that raised this constant to 1G all FAILED and
+/// the three before them (512M) promoted, which read as a 3-for-3 device kill;
+/// it is not. `52c744da` (1G + 5 sweeps + `rgreedy::MAX_N` 12 000 -> 25 000,
+/// i.e. *strictly more* work at this site) **PROMOTED at hidden 0.841011
+/// (−3.55e-4)**. `MAX_N` can only change rows with n > 12 000, so any row that
+/// could have killed `74f19b95` with n <= 12 000 runs bit-identically in both
+/// trees and the verdicts still differ ⇒ the hidden verdict is a cap *lottery*
+/// on near-cap rows (probability rising with added work), not a device label.
+/// A single FAILED receipt is therefore not evidence that a device is
+/// cap-unsafe. [origin/submissions/* constants + `yukon submissions`, iter55]
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 2_147_483_648;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
@@ -5243,7 +5270,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     let class_n: usize = std::env::var("SSI_TERM_CLASS_N")
         .ok()
         .and_then(|v| v.trim().parse::<usize>().ok())
-        .unwrap_or(rgreedy::MAX_N);
+        .unwrap_or_else(rgreedy::max_n_limit);
     #[cfg(not(test))]
     let class_n: usize = rgreedy::MAX_N;
     let terminal_exchange = n >= 6 && n <= class_n && nnz <= 200_000

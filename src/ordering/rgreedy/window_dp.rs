@@ -4,7 +4,14 @@ use super::window_signatures::{ChargeModel, SignatureEngine};
 use super::{Game, TripleWork};
 
 const MAX_WIDTH: usize = 14;
-const MAX_DIMENSION: usize = super::MAX_N;
+/// The dimension ceiling this DP obeys. It *is* `rgreedy::MAX_N` in
+/// production; in test builds it follows the same `SSI_MAX_N` seam, so one
+/// binary can price a ceiling curve (the DP refuses any `n` above it, which is
+/// exactly how the 0220 class-gate arm was measured inert).
+#[inline(always)]
+fn max_dimension() -> usize {
+    super::max_n_limit()
+}
 
 #[cfg(test)]
 #[derive(Clone, Default)]
@@ -282,7 +289,7 @@ fn subset_window_descent_config(
     max_span: usize,
 ) -> Option<Vec<usize>> {
     if n < 2
-        || n > MAX_DIMENSION
+        || n > max_dimension()
         || !(2..=max_span).contains(&width)
         || offset_step >= width
         || sweeps == 0
@@ -446,7 +453,7 @@ mod tests {
     #[ignore]
     fn probe_next_windows() {
         for (name, pattern) in crate::corpus::corpus() {
-            if pattern.n < 6 || pattern.n > MAX_DIMENSION || pattern.nnz() > 200_000 {
+            if pattern.n < 6 || pattern.n > max_dimension() || pattern.nnz() > 200_000 {
                 continue;
             }
 
@@ -486,7 +493,7 @@ mod tests {
     #[ignore]
     fn probe_window_offsets() {
         for (name, pattern) in crate::corpus::corpus() {
-            if pattern.n < 6 || pattern.n > MAX_DIMENSION || pattern.nnz() > 200_000 {
+            if pattern.n < 6 || pattern.n > max_dimension() || pattern.nnz() > 200_000 {
                 continue;
             }
             let incumbent = crate::ordering::order(&pattern);
@@ -695,7 +702,7 @@ mod tests {
     fn probe_window_dp_candidates() {
         let configs = [(8, 2, 16_000_000), (10, 2, 24_000_000), (12, 2, 32_000_000)];
         for (name, pattern) in crate::corpus::corpus() {
-            if pattern.n > MAX_DIMENSION || pattern.nnz() > 200_000 {
+            if pattern.n > max_dimension() || pattern.nnz() > 200_000 {
                 continue;
             }
             let incumbent = crate::ordering::order(&pattern);

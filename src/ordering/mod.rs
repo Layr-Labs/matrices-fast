@@ -676,6 +676,41 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 /// on near-cap rows (probability rising with added work), not a device label.
 /// A single FAILED receipt is therefore not evidence that a device is
 /// cap-unsafe. [origin/submissions/* constants + `yukon submissions`, iter55]
+/// ── iter57: the allowance ladder is CLOSED at 2 GiB ─────────────────────────
+/// 3 GiB and 4 GiB have now both been submitted and both cap-killed on the
+/// hidden corpus (`65cb40ec` and `3ace1d4c` at 3 GiB, 2026-09-13; five 4 GiB
+/// kills in the same day's public record), while every 2 GiB tree completes.
+/// The 3 GiB step is worth ~9.8e-5 dev on three rows and the graded-frame
+/// instrument prices its worst row at 1.100 s against the 1.010 s of 2 GiB and
+/// the 1.397 s of a tree that passed — i.e. the kill is not the corpus peak but
+/// the row the allowance itself loads, and no local instrument sees that row.
+/// Do not spend this constant again without a device that REMOVES the loaded
+/// work class.
+/// (historical note, superseded)
+/// `PRODUCTION_EXCHANGE_LEDGER` 2G -> 4G was submitted as `c67ad490` and the
+/// grader returned `hidden matrix: order() exceeded the 2.0s per-matrix cap`
+/// (benchmark run 34758812127 family). In-frame it is worth -1.5e-4 dev on three
+/// rows and it moves two more through the shared engine, and an interleaved
+/// min-of-3 A/B over six class rows showed no systematic cost -- but it touches
+/// every class row, and the hidden row it kills is not on dev. This is the
+/// `0237` lesson repeating: a device whose value sits on the rows the cap lottery
+/// owns must not be bought with added work. Reverted to 2G; the ceiling step that
+/// rode with it is re-priced on its own below.
+/// (historical note, superseded)
+/// `0237` priced this step at −1.03e-4 dev on the 25 000 tree and deliberately
+/// did NOT ship it: it moves only `crudeoil_lee4_09/10` and loads exactly the one
+/// row class the hidden cap lottery kills (`crudeoil_lee4_10` 1.396 → 1.506 s
+/// there). Both halves of that trade changed in iter56: the shared kernel takes
+/// ~0.1–0.15 s OFF every class row (nine of the eleven adjacency builds at
+/// n = 17 809 are gone — `3n⌈n/64⌉ ≈ 14.9 M` word-ops each, ~1.1 GB of traffic),
+/// which is the same order as this step's added work, and the step is re-priced
+/// on THIS tree rather than inherited: in-frame, 300 dev rows, ledger 2G vs 4G
+/// with everything else fixed, the step moves exactly three rows — `crudeoil_lee4_10`
+/// **−1.10 %**, `crudeoil_lee4_09` **−0.59 %**, `nuclear10a` −0.001 % — worth
+/// **−1.5e-4 dev** (weight-0.40 bucket), and an interleaved min-of-3 timing A/B
+/// over six class rows (including the corpus's slowest, `chimera_selby-c16-02`)
+/// reads **−1.19 s total, no row systematically worse**; the added work is bounded
+/// by the same fixed allowance on every row it touches, never by wall clock.
 const PRODUCTION_EXCHANGE_LEDGER: i64 = 2_147_483_648;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
@@ -5277,6 +5312,33 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         && nnz <= n.saturating_mul(16) && max_deg <= n / 2;
     #[cfg(test)]
     let terminal_exchange = terminal_exchange && probe::leader_tail::exchange_enabled();
+    // ── iter56: ONE shared exact-kernel engine per order() call ──────────────
+    // The class sites below (the exchange, its dense/hub twin, and the nine
+    // sparse-span passes) each used to build their own `Game`: `build_adj`
+    // allocates and zeroes `n·⌈n/64⌉` words and scans the pattern, then
+    // `Game::new` copies that whole array and popcounts it for `deg0`. The
+    // pattern is immutable and the same for all of them, and a `Game` that has
+    // been `reset()` is byte-identical to a freshly built one (the sweep loop
+    // resets before its first use), so the setup is paid ONCE here and every
+    // site reuses it. The work ledgers are untouched — each pass still charges
+    // its own `setup` term, so which windows a budget funds does not move; only
+    // the redundant allocation/copy/popcount goes away. That redundancy is what
+    // priced the class's `n` ceiling (eleven setups at `n = 33 155` are ~4.1 GB
+    // of traffic, the whole measured cost of the 45 000-ceiling arm).
+    // Gated on the EXCHANGE's own key, not on the union of the class keys: the
+    // dense/hub twin and the spans below fall back to their per-site kernels when
+    // this is `None`, which is exactly the frontier's behaviour on those rows. A
+    // union gate would build a kernel for dense/hub rows whose fill key then
+    // rejects every site — a fresh `n·⌈n/64⌉` allocation on a row that built
+    // nothing before, which is the one place this refactor could add work.
+    let class_engine_gate = terminal_exchange;
+    let class_pristine: Option<Vec<u64>> = if class_engine_gate {
+        rgreedy::Game::build_adj(n, &pattern.col_ptr, &pattern.row_idx)
+    } else {
+        None
+    };
+    let mut class_game: Option<rgreedy::Game<'_>> =
+        class_pristine.as_deref().and_then(|p| rgreedy::Game::new(n, p));
     if terminal_exchange {
         #[cfg(test)]
         if std::env::var_os("SSI_CLASS_TRACE").is_some() {
@@ -5319,10 +5381,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             .unwrap_or(5);
         #[cfg(not(test))]
         let exchange_step: usize = 5;
-        if let Some(candidate) = rgreedy::subset_window_descent_step(
-            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, exchange_width, exchange_sweeps,
-            exchange_step, exchange_ledger,
-        ) {
+        let exchange_candidate = match class_game.as_mut() {
+            Some(game) => rgreedy::subset_window_descent_step_with_game(
+                game, n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
+                exchange_width, exchange_sweeps, exchange_step, exchange_ledger,
+            ),
+            None => rgreedy::subset_window_descent_step(
+                n, &pattern.col_ptr, &pattern.row_idx, &best_perm, exchange_width,
+                exchange_sweeps, exchange_step, exchange_ledger,
+            ),
+        };
+        if let Some(candidate) = exchange_candidate {
             #[cfg(test)]
             if std::env::var_os("SSI_CLASS_TRACE").is_some() {
                 eprintln!("CLASSTRACE	xchg	{n}	{nnz}	candidate=1");
@@ -5408,10 +5477,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 );
                 #[cfg(not(test))]
                 let (dense_w, dense_s, dense_t): (usize, usize, usize) = (8, 4, 3);
-                if let Some(candidate) = rgreedy::subset_window_descent_step(
-                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
-                    dense_w, dense_s, dense_t, dense_window_ledger,
-                ) {
+                let dense_candidate = match class_game.as_mut() {
+                    Some(game) => rgreedy::subset_window_descent_step_with_game(
+                        game, n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
+                        dense_w, dense_s, dense_t, dense_window_ledger,
+                    ),
+                    None => rgreedy::subset_window_descent_step(
+                        n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
+                        dense_w, dense_s, dense_t, dense_window_ledger,
+                    ),
+                };
+                if let Some(candidate) = dense_candidate {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
                         if f < final_flops { best_perm = candidate; final_flops = f; }
@@ -5453,10 +5529,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             #[cfg(not(test))]
             let span_windows: &[(usize, usize, usize, i64)] = &PRODUCTION_SPAN_WINDOWS;
             for &(width, sweeps, step, budget) in span_windows {
-                if let Some(candidate) = rgreedy::sparse_span_window_descent(
-                    n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
-                    width, sweeps, step, budget,
-                ) {
+                let span_candidate = match class_game.as_mut() {
+                    Some(game) => rgreedy::sparse_span_window_descent_with_game(
+                        game, n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
+                        width, sweeps, step, budget,
+                    ),
+                    None => rgreedy::sparse_span_window_descent(
+                        n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
+                        width, sweeps, step, budget,
+                    ),
+                };
+                if let Some(candidate) = span_candidate {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
                         if f < final_flops { best_perm = candidate; final_flops = f; }

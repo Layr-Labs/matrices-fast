@@ -4335,3 +4335,176 @@ fn probe_floor_battery() {
         println!("{line}");
     }
 }
+
+/// GIANT-TIER RELABEL HEADROOM.
+///
+/// The heavy-tier relabelled-AMF lottery stops at `HEAVY_RELABEL_AMF_DENSE_MAX_NNZ`
+/// = 700 000, and on dev the rows above that ceiling are exactly the ones with
+/// the worst `gt_10k` ratios (`unitcommit_200_100_1_mod_8` 0.9764, `acopf_case9241pegase_qcqp`
+/// 0.9737, `transswitch2383wpr` 0.9785 — a row 0.3 s under the cap). This probe
+/// asks the only question that matters before widening that gate: does a
+/// relabelled AMD/AMF pass on a giant row ever beat the shipped incumbent, and
+/// what does one pass cost there?
+///
+/// Test-only; compiled into no shipped binary. `SSI_PROBE_MIN_N` re-points the
+/// size filter (default 100 000).
+#[test]
+#[ignore]
+fn probe_giant_relabel() {
+    let corpus = crate::corpus::corpus();
+    let min_n: usize = std::env::var("SSI_PROBE_MIN_N")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(100_000);
+    let seeds: Vec<u64> = std::env::var("SSI_PROBE_SEEDS")
+        .ok()
+        .map(|v| v.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+        .unwrap_or_else(|| vec![1, 2, 3, 4, 5, 6, 7, 8]);
+    println!("\nrow\tn\tnnz\tcur_s\tcur_r\tkind\tseed\tshape\tpass_s\tratio\tbest_r");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n < min_n || n == 0 {
+            continue;
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        let t0 = Instant::now();
+        let cur = order(pat);
+        let cur_s = t0.elapsed().as_secs_f64();
+        let cur_f = flops_of(&sp, &cur);
+        let mut best_r = cur_f as f64 / base as f64;
+        println!(
+            "{name}\t{n}\t{nnz}\t{cur_s:.3}\t{best_r:.4}\tcur\t-\t-\t-\t-\t{best_r:.4}"
+        );
+        for &seed in &seeds {
+            let q = super::relabel(n, seed);
+            let b = permute_pattern(&sp, &q);
+            let bcp: Vec<i32> = b.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = b.row_idx.iter().map(|&x| x as i32).collect();
+            let Some(bcore) = feral_ordering_core::CscPattern::new(n, &bcp, &bri) else {
+                continue;
+            };
+            for (shape, is_amf, alpha) in [
+                ("amf5", true, 5.0f64),
+                ("amf25", true, 2.5),
+                ("amfnd", true, -1.0),
+                ("amd", false, 10.0),
+                ("amdna", false, 10.0),
+            ] {
+                let t = Instant::now();
+                let produced: Option<Vec<i32>> = if is_amf {
+                    let o = feral_amf::AmfOptions { dense_alpha: alpha, ..Default::default() };
+                    feral_amf::amf_order_opts(&bcore, &o).ok().map(|(p, ..)| p)
+                } else {
+                    let o = feral_amd::AmdOptions {
+                        aggressive: shape == "amd",
+                        dense_alpha: 10.0,
+                    };
+                    feral_amd::amd_order_opts(&bcore, &o).ok().map(|(p, ..)| p)
+                };
+                let pass_s = t.elapsed().as_secs_f64();
+                let Some(p) = produced else { continue };
+                let cand: Vec<usize> = p.iter().map(|&x| q[x as usize] as usize).collect();
+                if !super::is_bijection(&cand, n) {
+                    continue;
+                }
+                let f = flops_of(&sp, &cand);
+                let r = f as f64 / base as f64;
+                if r < best_r {
+                    best_r = r;
+                }
+                println!(
+                    "{name}\t{n}\t{nnz}\t{cur_s:.3}\t{:.4}\t{shape}\t{seed}\t{shape}\t{pass_s:.3}\t{r:.4}\t{best_r:.4}",
+                    cur_f as f64 / base as f64
+                );
+            }
+        }
+        println!("BEST\t{name}\t{best_r:.4}\t{:.6}", cur_f as f64 / base as f64);
+    }
+}
+
+/// GRADED-FRAME ROW TIMER.
+///
+/// Every timing this base records elsewhere is taken in the test binary, where
+/// the `#[cfg(test)]` phase marks, the `SSI_*` seams and the shared
+/// `ScoreWorkspace` frame differ from the shipped worker. The cap, however, is
+/// charged on a CHILD PROCESS running `order()` once (`src/watchdog.rs`), and the
+/// grader runs each matrix twice in fresh processes. This probe reproduces that
+/// frame exactly: it stages each pattern with the same `ssi_worker_protocol`
+/// writer the harness uses, spawns the PRODUCTION `ssi-candidate-worker` binary
+/// once per row, and times the wait.
+///
+/// `SSI_GRADED_ROWS=a,b,c` restricts to named rows; `SSI_GRADED_TOP=k` restricts
+/// to the k slowest rows the marked frame knows about. Test-only: never compiled
+/// into a shipped binary.
+#[test]
+#[ignore]
+fn probe_graded_frame() {
+    let corpus = crate::corpus::corpus();
+    let worker = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../target/release/ssi-candidate-worker");
+    if !worker.is_file() {
+        println!("SKIP probe_graded_frame: build the production worker first \
+                  (bash scripts/local-candidate-build.sh)");
+        return;
+    }
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_GRADED_ROWS")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let dir = std::env::temp_dir().join(format!("ssi-graded-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create graded-frame scratch");
+    let mut rows: Vec<(f64, String, usize, usize)> = Vec::new();
+    for (name, pat) in &corpus {
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let pat_file = dir.join(format!("{name}.pat"));
+        let out_file = dir.join(format!("{name}.out"));
+        let _ = std::fs::remove_file(&out_file);
+        if ssi_worker_protocol::write_pattern(&pat_file, pat).is_err() {
+            continue;
+        }
+        let mut secs = f64::MAX;
+        for _ in 0..2 {
+            let _ = std::fs::remove_file(&out_file);
+            let t0 = Instant::now();
+            let status = std::process::Command::new(&worker)
+                .arg(&pat_file)
+                .arg(&out_file)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+            let elapsed = t0.elapsed().as_secs_f64();
+            if status.map(|s| s.success()).unwrap_or(false) && elapsed < secs {
+                secs = elapsed;
+            }
+        }
+        let _ = std::fs::remove_file(&pat_file);
+        let _ = std::fs::remove_file(&out_file);
+        if secs.is_finite() {
+            rows.push((secs, name.clone(), pat.n, pat.nnz()));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    println!("\n--- PRODUCTION-FRAME per-row wall clock, slowest first (TSV) ---");
+    println!("secs\tmatrix\tn\tnnz");
+    for (secs, name, n, nnz) in rows.iter().take(25) {
+        println!("{secs:.4}\t{name}\t{n}\t{nnz}");
+    }
+    if let Some(first) = rows.first() {
+        println!("WORST production-frame row = {:.4} s ({})", first.0, first.1);
+    }
+}

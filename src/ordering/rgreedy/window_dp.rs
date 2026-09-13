@@ -276,6 +276,86 @@ pub(crate) fn sparse_span_window_descent(
         offset_step, budget, ChargeModel::SignatureTrue, 64)
 }
 
+/// ═══ SHARED-ENGINE ENTRY POINTS (iter56) ════════════════════════════════════
+///
+/// Every class site used to build its OWN `Game` — `Game::build_adj` (allocation
+/// + zeroing of `n·⌈n/64⌉` words, then an `O(nnz)` bit-set scan) followed by
+/// `Game::new` (a second full `n·⌈n/64⌉` word copy plus a popcount pass over it).
+/// A class row runs the exchange, its dense/hub twin and nine sparse-span passes,
+/// so it paid that quadratic setup up to ELEVEN times on the same immutable
+/// pattern. The bill is what prices the `n` ceiling: at `n = 33 155`
+/// (`nd_netgen-3000-1-1-b-b-ns_7`) one setup is `3n⌈n/64⌉ ≈ 51.6 M` word-ops
+/// (≈ 413 MB of traffic) and eleven of them are ≈ 4.1 GB, which is the whole
+/// measured `+0.83 s` of the 45 000 ceiling arm.
+///
+/// `Game::new` returns a game that is only usable after `reset()` (the sweep loop
+/// calls `reset()` first thing), and `reset()` restores exactly the state a fresh
+/// `Game::new` leaves behind. So one shared `Game`, reset at the head of every
+/// sweep as before, is **bit-identical** to one `Game` per site — the work-ledger
+/// arithmetic is untouched (the `setup` charge is still paid per pass), only the
+/// redundant allocation/copy/popcount disappears. The `*_with_game` entry points
+/// below are that shared path; the plain ones remain as thin wrappers so probes
+/// and unit tests keep their own-local-Game semantics.
+pub(crate) fn subset_window_descent_step_with_game(
+    game: &mut Game<'_>,
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    offset_step: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    subset_window_descent_body(
+        game, n, col_ptr, row_idx, seed, width, sweeps, offset_step, budget,
+        ChargeModel::SignatureTrue, MAX_WIDTH,
+    )
+}
+
+pub(crate) fn sparse_span_window_descent_with_game(
+    game: &mut Game<'_>,
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    offset_step: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    subset_window_descent_body(
+        game, n, col_ptr, row_idx, seed, width, sweeps, offset_step, budget,
+        ChargeModel::SignatureTrue, 64,
+    )
+}
+
+/// Can this pass do ANY work at all with `budget`? The body charges
+/// `n + 1 + nnz + 2n` up front, then the `setup` term, then
+/// `2n⌈n/64⌉ + 8n` before the first sweep; if that per-sweep charge cannot be
+/// met the pass returns `None` (nothing was changed yet), so refusing it earlier
+/// is bit-identical and skips a `Game` setup that could only be thrown away.
+/// All arithmetic saturates, so an oversized row simply fails the test.
+pub(crate) fn window_pass_affordable(n: usize, nnz: usize, budget: i64) -> bool {
+    if budget <= 0 || n == 0 {
+        return false;
+    }
+    let words = n.div_ceil(64);
+    let head = (n as u64).saturating_add(1).saturating_add(nnz as u64).saturating_add(2 * n as u64);
+    let setup = (3u64)
+        .saturating_mul(n as u64)
+        .saturating_mul(words as u64)
+        .saturating_add(2u64.saturating_mul(nnz as u64))
+        .saturating_add(16u64.saturating_mul(n as u64))
+        .saturating_add(words as u64);
+    let per_sweep = 2u64
+        .saturating_mul(n as u64)
+        .saturating_mul(words as u64)
+        .saturating_add(8u64.saturating_mul(n as u64));
+    let need = head.saturating_add(setup).saturating_add(per_sweep);
+    need <= budget as u64
+}
+
 fn subset_window_descent_config(
     n: usize,
     col_ptr: &[usize],
@@ -297,6 +377,104 @@ fn subset_window_descent_config(
         || seed.len() != n
         || col_ptr.len() != n + 1
     {
+        return None;
+    }
+    // Nothing this pass could do would survive: refuse before paying for the
+    // adjacency build (bit-identical to running it and failing the first sweep's
+    // charge, because no window has been refined yet). The structural checks a
+    // malformed pattern would trip must come FIRST: `build_adj` indexes
+    // `col_ptr[v..v+1]` and would otherwise panic on input the body rejects.
+    if !window_descent_precheck(n, col_ptr, row_idx, seed, width, sweeps, offset_step, budget, max_span)
+    {
+        return None;
+    }
+    if !window_pass_affordable(n, row_idx.len(), budget) {
+        return None;
+    }
+    let pristine = Game::build_adj(n, col_ptr, row_idx)?;
+    let mut game = Game::new(n, &pristine)?;
+    subset_window_descent_body(
+        &mut game, n, col_ptr, row_idx, seed, width, sweeps, offset_step, budget,
+        charge_model, max_span,
+    )
+}
+
+/// The cheap, allocation-free half of the body's guards: everything the body
+/// checks about its INPUT (shape, ordering, permutation validity) and nothing it
+/// checks about its budget. Split out so the local-`Game` wrapper can reject a
+/// malformed pattern before `Game::build_adj` touches `col_ptr`.
+#[allow(clippy::too_many_arguments)]
+fn window_descent_precheck(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    offset_step: usize,
+    budget: i64,
+    max_span: usize,
+) -> bool {
+    if n < 2
+        || n > max_dimension()
+        || !(2..=max_span).contains(&width)
+        || offset_step >= width
+        || sweeps == 0
+        || budget <= 0
+        || seed.len() != n
+        || col_ptr.len() != n + 1
+    {
+        return false;
+    }
+    if col_ptr.first().copied() != Some(0)
+        || col_ptr.last().copied() != Some(row_idx.len())
+        || col_ptr.windows(2).any(|p| p[0] > p[1])
+        || row_idx.iter().any(|&v| v >= n)
+    {
+        return false;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return false;
+        }
+        seen[v] = true;
+    }
+    true
+}
+
+fn subset_window_descent_body(
+    game: &mut Game<'_>,
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    width: usize,
+    sweeps: usize,
+    offset_step: usize,
+    budget: i64,
+    charge_model: ChargeModel,
+    max_span: usize,
+) -> Option<Vec<usize>> {
+    if n < 2
+        || n > max_dimension()
+        || !(2..=max_span).contains(&width)
+        || offset_step >= width
+        || sweeps == 0
+        || budget <= 0
+        || seed.len() != n
+        || col_ptr.len() != n + 1
+    {
+        return None;
+    }
+    if !window_pass_affordable(n, row_idx.len(), budget) {
+        return None;
+    }
+    // The caller-owned kernel must be the one for THIS dimension: every
+    // adjacency read below is `game.adj[v · game.w + u/64]`, so a mismatched
+    // `Game` would silently index another graph. Production always pairs them;
+    // this makes a future mis-wiring a refusal instead of a wrong answer.
+    if game.n != n || game.w != n.div_ceil(64) {
         return None;
     }
     #[cfg(test)]
@@ -325,8 +503,7 @@ fn subset_window_descent_config(
     if !work.charge(setup) {
         return None;
     }
-    let pristine = Game::build_adj(n, col_ptr, row_idx)?;
-    let mut game = Game::new(n, &pristine)?;
+    let game = &mut *game;
     let mut engine = None;
     let mut current = seed.to_vec();
     let mut changed = false;
@@ -337,7 +514,7 @@ fn subset_window_descent_config(
         game.reset();
         let offset = (sweep * offset_step) % width;
         for &v in current.iter().take(offset.min(n)) {
-            if !work.eliminate(&mut game, v) {
+            if !work.eliminate(game, v) {
                 return changed.then_some(current);
             }
         }
@@ -345,7 +522,7 @@ fn subset_window_descent_config(
         while start + 1 < n {
             let end = (start + width).min(n);
             match refine_window(
-                &game,
+                game,
                 &mut current[start..end],
                 &mut work,
                 &mut engine,
@@ -356,7 +533,7 @@ fn subset_window_descent_config(
             }
             if end < n {
                 for &v in &current[start..end] {
-                    if !work.eliminate(&mut game, v) {
+                    if !work.eliminate(game, v) {
                         return changed.then_some(current);
                     }
                 }

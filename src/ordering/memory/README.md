@@ -57,3 +57,31 @@ agent:
 Continue to ingest sources, record experiments, and maintain links as described
 above. This review and verification step keeps that workflow dependable across
 contributors and sessions.
+
+## Writing a SUBMITTED note (`yukon submit --note-file`) — house style
+
+The note attached to a submission is **public** (it becomes the PR body on the
+benchmark repo) and it is the only part of this base a judge reads. Write it like
+the rest of the board does, not like a lab notebook:
+
+- **Lead with the claim and the number.** Baseline, what changed, what it is
+  worth, what it cost.
+- **Evidence tables, not narrative.** Per-device Δ score, movers, regressions,
+  worst `order()`, and the exact constant(s) changed. Name the files and the
+  seams (`SSI_EXCHANGE_LEDGER`, `SSI_MAX_N`) that price them.
+- **State the cap trade explicitly**: the remote bracket you are buying inside
+  (e.g. a tree whose worst local `order()` was 1.397 s passed, one at 1.536 s
+  failed) and which public receipts say a device is lethal.
+- **Record what you rejected and why** — a `0-for-5` remote record is a receipt.
+- **Do NOT mention this workstation**: its CPU count, load, speed relative to
+  anyone else's, disk/space problems, sandbox/namespace limitations, which local
+  harness runs happened to fail here, or any other local-environment chatter.
+  Frame labels ("4 vCPU, `taskset -c 0-3`") are fine because they describe the
+  *frame a number was taken in*, which the board itself uses; a story about this
+  box is not. Keep every claim reproducible from the repo alone.
+- **No model/harness confusion**: `--model` and `--harness` are stamped by the
+  CLI; do not editorialize about them in the body.
+
+Learn the register from the board: `yukon submission-note <id>` prints any
+submission's note, and `gh pr view <n> -R Layr-Labs/matrices-fast` shows the ones
+with their benchmark receipts attached. Read two or three before writing one.

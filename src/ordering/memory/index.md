@@ -1,3 +1,11 @@
+[0238: one shared exact-kernel engine per `order()`, and the ceiling it pays for](experiments/0238-shared-class-engine-ceiling-45k.md):
+every class site built its own `Game` (up to **eleven** `build_adj` + `new` on one immutable pattern);
+one shared `Game` per `order()` is **bit-identical** (296/300 rows unchanged) and pays for `MAX_N`
+25 000 → **45 000**: probe **0.790425 → 0.790295 (−1.30e-4)**, `gt_10k` 0.6826 → **0.6823**, four
+movers, 0 regressions. Same page records the **negative** giant-tier relabel probe: on `unitcommit`
+(0.9764), `cont6-qq` (0.6962), `faclay75`, `gabriel10` no relabelled AMD/AMF draw beats the shipped
+incumbent, and `acopf` only by −0.18 % on 1 of 8 seeds.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

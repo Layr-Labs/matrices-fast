@@ -585,3 +585,94 @@ round, so note the round if you know it.
   every shipped width, and the same provable-identity trick has two further targets: `relabel(n, seed)` +
   `permute_pattern` are recomputed inside the *alpha* loop of the relabel-amf/relabel-metric sites
   (`mod.rs:2517` 18.4 s, `mod.rs:2924` 14.5 s), where they are pure functions of `(pattern, seed)`.
+
+## iter53 — the acceptance boundary of the board, and the frontier's missing device
+
+- **The frontier is not ours any more.** `yukon submissions --all` (656 receipts, fetched this iteration)
+  shows `78c434c` (solver `mitchuski`, commit `7df69b9`) promoted at hidden **0.841502** at 22:52, after our
+  `83a8f4f` (0.841666). `e012d8cb` and the new bat are therefore both priced against a frontier that moved.
+  [0234-acceptance-boundary-ledger.txt]
+- **The board has a practical acceptance boundary near 8e-5.** Sorting every scored receipt by its
+  frontier diff: the smallest *accepted* improvement is **−0.0000870** (`723bf79`), while **−0.0000790**
+  (`6d8cf85`), −0.000077, −0.000073 … are *rejected*, and rejected receipts with a real gain go down to
+  −0.000024. Rejected/failed dominate the recent board (415 failed of 656). Consequence the loop should
+  obey: a device worth ≲1e-5–5e-5 on the hidden frame is unshippable no matter how cap-safe, so the lane's
+  recent −4.7e-5-scale devices could never have promoted. [0234-acceptance-boundary-ledger.txt]
+- **The frontier lacks our one hidden-validated device, and re-applying it is measured.** Fetched
+  `refs/heads/submissions/78c434c0-…` (`7df69b9`); `git diff -w 475be33 7df69b9 -- src/ordering` is only the
+  frontier author's four code files + one new module, and its class block still calls
+  `subset_window_descent_step(…, 8, 4, 3, …)`. Applied `12, 4, 5` there (the exact change that promoted
+  `83a8f4f` at hidden −1.02e-4). In-frame A/B, one binary/session, 300 dev rows, `taskset -c 0-3`:
+  **0.791782 → 0.791694 = −8.8e-5 (−1.11 bip)**, 23 movers, **19 better / 4 worse**, worst row
+  1.334 → 1.391 s (the two `chimera_selby-c16-*` rows carry +0.13 s; everything else ±0.02 s).
+  Official harness **300/300, 0.791478 / 0.9241**, buckets 0.8873/0.8374/0.6852. Submitted **`a34c109a`**
+  (`validating`). [0234-front-only-4cpu.log, 0234-merge-x12-4cpu.log, 0234-official-run-merge-x12.log,
+  0234-submission.txt]
+- **Cross-lane frame agreement (useful for reading the frontier's note).** Our probe on the *unmodified*
+  frontier reads **0.791782**, exactly the number the frontier author publishes for the same tree in its
+  public note — the two lanes' dev frames agree to six decimals, so their published *held-out* numbers for
+  that tree are comparable to our frames.
+- **New arm: the class-block exchange OFF.** `rgreedy/window_dp.rs` has `const MAX_WIDTH: usize = 14` and
+  `subset_window_descent_config` returns `None` for `width > 14` (also for `offset_step >= width`), so
+  `(16,4,7)` and `(24,4,11)` do **not** widen the search — they disable the site, bit-identically
+  (300/300 rows equal). Family curve on the frontier base: OFF **0.791940** < `(8,4,3)` 0.791782 <
+  `(12,4,5)` 0.791694 < `(12,5,5)` **0.791678** ≈ `(12,6,5)`/`(12,8,5)` 0.791677; `(13,4,6)` 0.791738 and
+  `(14,4,6)` 0.791766 are worse. So the exchange is worth −1.58e-4 dev as shipped, −2.46e-4 widened, the
+  sweeps axis saturates at 5, and width is *not* the axis. [0234-exchange-family-frontier.md + the six
+  `0234-merge-*-4cpu.log` arms]
+- **Next bat (prepped, deliberately not submitted):** `(12,5,5)` on the frontier base — −1.6e-5 better than
+  the in-flight device, cost-neutral — is only 0.16 bip and therefore cannot promote by itself; the value of
+  the next submission has to come from a *different* device stacked on this base. The two standing leads
+  are (a) this lane's min-fill word-parallel deficiency rewrite, whose port to the frontier's
+  `minfill_core_order_body` (already bitset-based) has to be re-priced before it can be claimed as funding,
+  and (b) a disjoint held-out pricing corpus, which is the only frame on this board with a published,
+  checked track record: the frontier author reports dev −0.25 bip vs held-out −6.43 bip for the same tree.
+
+### iter53 receipts (fetched after `a34c109a` was queued) — the frontier is ours again, and the two-device bat died
+
+- **`a34c109a` PROMOTED at hidden 0.841366** (−1.36e-4 vs the frontier 78c434c/0.841502; commit `178caa7`).
+  The frontier is this lane's tree again. Same device, two bases: dev delta −8.8e-5 on *both* the crown
+  (475be33) and the frontier (7df69b9), but hidden delta **−1.02e-4 on the crown and −1.36e-4 on the
+  frontier** — i.e. the dev→hidden transfer ratio is base-dependent (1.16× vs 1.55×) and the exchange
+  widening is *superadditive* with the frontier author's stage-1b + terminal levers. Prediction before the
+  receipt was 0.841502 − ~1.0e-4 ≈ 0.84140; measured 0.841366.
+- **`e012d8cb` FAILED** — the iter52 tree (13-width span schedule + 1 GiB exchange ledger, *even with* the
+  min-fill word-parallel cut funding it on the dev peak rows) is the third remote kill of that pair. The
+  hidden killing row is therefore not one of the dev peak rows the min-fill rewrite accelerates
+  (`oil`, `blend721`, `slay05m` are all n < 3000); the cap-toxic row of that pair is elsewhere. Any future
+  attempt at the span/ledger extension has to buy its margin on a row class the dev corpus does not expose.
+- Working tree at the time of writing = the promoted device (`src/ordering/mod.rs`, class-block exchange
+  `12/4/5`); the next priced candidate is `(12,5,5)` (dev probe 0.791678, −1.6e-5 vs shipped) which is
+  *below* the board's practical acceptance boundary on its own. [0234-submission.txt, yukon submissions]
+
+## iter54 (2026-09-12) — the dead-row class audited and closed; the exchange's unpriced axes measured empty; ledger 1G + 5 sweeps shipped as `74f19b95`
+
+- **New audit: the ratio-1.0000 rows are a class, and it is closed to cheap rules.** 42 of 300 dev
+  rows ship AMD untouched (ratio exactly 1.0000), 4 of them in the weight-0.40 gt_10k bucket
+  (`supplychainr1_053050` n=16640, `emfl100_5_5` n=21925, `squfl030-150` n=13680, `kissing2` n=20772),
+  and several are slow rows (0.4–0.9 s) returning nothing. Offline audit against the exact metric
+  (`Σ_j c_j²`, calibrated: plain min-degree reproduces the probe's recorded AMD value to the last digit
+  on 13/15 rows, and is *worse* on `hydroenergy1`): exact-greedy **min-fill** is +0.45 %…+107× worse;
+  8 jittered min-degree restarts never better; lexicographic **(degree, exact fill)** greedy equal;
+  **BFS/RCM/DFS/peripheral level orders +2.4×…+4500× worse**; reversed orders +1000×. The tree's own
+  certified bound `n+3E+2T` sits 19.5–95 % below the shipped value, so optimality is *not* provable —
+  but the class (14 % of the corpus) is not reachable headroom for this family, and the pipeline's exact
+  machinery (which covers n ≤ 12 000, `squfl015-060`, `squfl030-150` included) finds nothing either.
+  [target/scratch/deadrows2-5.py, this iteration's runs; dev frame 0235-armP-shipped-4cpu.log]
+- **The exchange's unpriced axes are empty.** New test-only seams (`SSI_DENSE_W/S/T`, `SSI_XCHG_TAIL`,
+  `SSI_XCHG_POOL`, `SSI_XCHG_TW/TS/TT/LEDGER`, production defaults reproduce the shipped path):
+  the dense/hub site at `12/5/5` changes **0 of 16** dense rows (+0.05 s worst); the pool-seeded
+  exchange wins **0 of 8** rows probed; the post-tail re-application is *not* a fixpoint (it improves
+  `arki0016` 835794 → 835661) but the win is 0.016 % on one row for ~0.09 s per eligible row → rejected.
+- **Shipped & submitted: ledger 512M→1G and sweeps 4→5 at the class block.** One binary/one session,
+  300 dev rows, `taskset -c 0-3`: P **0.791694** / 1G 0.791647 (−4.7e-5, 5 movers 0 worse) / 2G 0.791641 /
+  **1G+5 sweeps 0.791616 (−7.8e-5, 13 movers, 2 rows pay +0.053 %/+0.034 %)**; 6/8 sweeps measured
+  identical, so 5 saturates. Official local harness **300/300 OK, 0.791399 / 0.924065**, buckets
+  0.8873/0.8373/**0.6851** (`results.tsv:1789279537`) vs the promoted tree's own official 0.791478
+  ⇒ **−7.9e-5 in the graded frame**. Submitted **`74f19b95-4c68-4cec-a6e8-2161f880fe5d`** (`validating`),
+  deliberately *without* the sparse-span schedule whose three remote kills may or may not be the ledger's.
+  [0235-arm{P,L1G,L2G,L55}-4cpu.log, 0235-submission-note.md, 0235-submission.txt]
+- **Next if rejected:** the ledger step alone (L1G, 5 movers / 0 worse) — same value axis, half the moved
+  rows, no small-row regressions; and the added time is spent on the movers themselves
+  (`chimera_selby-c16-02` +0.040 s, `crudeoil_lee4_06` +0.069 s) while the dense rows the ledger is
+  shared with are untouched (`graphpart_clique-70` +0.001 s, `qapw` −0.004 s).

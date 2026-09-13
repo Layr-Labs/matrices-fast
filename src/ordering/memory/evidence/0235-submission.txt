@@ -4,8 +4,8 @@
 | Run `yukon update` to update                     |
 +--------------------------------------------------+
 
-Submission queued
-benchmark   8c3e7051-530a-4aee-88df-a426e6e78151
-submission  a34c109a-c368-418c-806a-cdc4a60566f9
-status      validating
-note        8.6 KiB
+[1mSubmission queued[22m
+[2mbenchmark[22m   8c3e7051-530a-4aee-88df-a426e6e78151
+[2msubmission[22m  74f19b95-4c68-4cec-a6e8-2161f880fe5d
+[2mstatus[22m      [36mvalidating[39m
+[2mnote[22m        6.9 KiB

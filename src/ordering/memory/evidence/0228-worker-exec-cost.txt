@@ -1,0 +1,14 @@
+iter49 — candidate worker process startup cost (graded frame's per-row fixed charge), taskset -c 0-3
+
+target/release/ssi-candidate-worker /nonexistent /tmp/nope.bin  (fails after arg parse):
+  draw1: 0.00 s
+  draw2: 0.00 s
+  draw3: 0.00 s
+  /bin/true baseline: 0.00 s
+
+host at measurement: load 1.02/1.18/3.43, swap in use 2486 MiB, dirty 1772 kB
+
+Local cap kills on this tree (results.tsv / yukon logs):
+  attempt1 FAIL clay0204m n=222 nnz=704; attempt2 FAIL graphpart_clique-70 n=280 nnz=14910; attempt3 OK 300/300.
+  Pinned probe times for those rows in this binary: 0.3070 s (clay0204m), 0.3210 s (graphpart_clique-70).
+  => a >=2 s kill of a <=0.321 s row is not explicable by worker process startup (measured ~0.00 s above).

@@ -1,0 +1,6 @@
+rows seen 0
+total site gen_s = 0.00 s over 0 sites
+
+site                   gen_s     calls
+
+rows with the largest SITES total_s (producer time, summed over sites):

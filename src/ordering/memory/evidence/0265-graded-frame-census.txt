@@ -1,0 +1,78 @@
+iter65 — THE GRADED-FRAME PER-ROW WALL CENSUS (the frame the 2 s cap is charged in)
+==================================================================================
+Why this instrument exists
+--------------------------
+Every wall/cap number in this lane's record came from one of two places:
+  (a) the probe frame (`cargo test --release`, `target/probe/release/deps/...`), which is a
+      *different binary* — the whole `SSI_*` seam layer and every timing instrument in this
+      candidate is `#[cfg(test)]`-gated (src/ordering/mod.rs:5441 `#[cfg(test)] let class_nnz`,
+      :5466 `#[cfg(test)] let exchange_ledger`, window_dp.rs:100 `#[cfg(test)] struct WorkReport`),
+      so in the production binary they are compiled out; or
+  (b) the official local run, which prints `(capped)` instead of a time (src/main.rs:417).
+The cap is charged per matrix, on wall clock, on a *child process*
+(src/watchdog.rs:85 `let start = Instant::now()` … :111 `start.elapsed() > cfg.time_cap`),
+and the grader runs each matrix twice in fresh processes (src/main.rs:339), so a per-row wall
+census of the production worker is the only honest cap instrument.
+
+Method (reproducible)
+---------------------
+  1. `corpus/dev/patterns.jsonl` -> 300 raw pattern files
+     (`.scratch/widthcensus/extract.py`, the `ssi-worker-protocol` layout: n, col_ptr, row_idx).
+  2. One run per row of the *production* worker `target/release/ssi-candidate-worker`,
+     `taskset -c 0-3`, `/usr/bin/time -f "%e %P"` (`.scratch/widthcensus/census.sh`).
+  3. Per-row wall + CPU% -> `.scratch/widthcensus/census<tag>.tsv`.
+The census is single-run per row: row-to-row jitter is ~0.02-0.05 s, so only deltas above that
+are read as signal; the *max* row and the *ordering* are stable across repeats.
+
+Census 1 — shipped tree (`2_147_483_648` ledger, MAX_N 45 000), production frame, 4 cores
+---------------------------------------------------------------------------------------------
+corpus sum of per-row worker wall = 123.2 s; bucket means: lt_1k 0.266 s (147 rows),
+1k_10k 0.518 s (108), gt_10k 0.625 s (45).
+CPU% (user+sys over wall): min 0, median 167, p90 228, max 276 — i.e. the candidate is already
+parallel (PAR_MAX_THREADS = 4), not single-threaded. Width response on the binding row
+`crudeoil_lee4_10`: wall 1.24 s @1 core, 1.06 @2 cores, 0.74 @4 cores (216% CPU).
+THE GRADED-FRAME WORST ROWS (row, wall, cpu%, n, nnz):
+  procurement1large        1.01  191%   14416    55484
+  nd_netgen-3000-1-1-b-b-ns_7 0.99 160%  33155   123155
+  crudeoil_lee4_09         0.99  202%   15904   117696
+  mpbp_48                  0.96  186%   28368   119384
+  methanol400              0.91  166%   23999   175727
+  crudeoil_pooling_dt3     0.91  157%   30660   182870
+  crudeoil_pooling_dt2     0.91  188%   18742    94652
+  crudeoil_lee4_06         0.91  200%   10429    65921
+  (the probe frame's own worst row, `crudeoil_lee4_10`, reads 0.74 s here and 1.269 s there —
+   the probe frame overstates the graded frame by a median factor 0.85, range 0.23-1.38, over
+   all 300 rows: .scratch/widthcensus/census4cpu.tsv vs 0264-ceil45000-2G-4cpu.log:816.)
+The GIANTS are cheap: faclay75 (n 272 878, nnz 1.65 M) 0.15 s, acopf_case9241pegase_qcqp
+(n 313 068) 0.14 s, unitcommit_200_100_1_mod_8 0.38 s — all ~100% CPU (single serial family).
+The wall is spent on mid-size rows (n 1k-35k), which sit at 0.85-1.01 s *flat* — a saturated
+internal work budget, not the row's size.
+
+Census 2 — the LEDGER LADDER in the graded frame (one constant, one build per arm)
+----------------------------------------------------------------------------------
+ledger        corpus sum   max row (name)
+0 (family off)   114.4 s    0.840 s  procurement1large
+2 GiB (shipped)  123.2 s   1.010 s  procurement1large
+3 GiB            124.2 s   1.100 s  crudeoil_lee4_09
+4 GiB            127.2 s   1.250 s  methanol400
+d(2->3 GiB): +1.1 s corpus, +0.09 s max; d(3->4 GiB): +3.0 s corpus, +0.15 s max.
+75 rows move >0.02 s on 2->4 GiB; the movers are not the value movers:
+  methanol400 +0.34, crudeoil_lee4_09 +0.24, crudeoil_pooling_dt3 +0.19, crudeoil_lee4_10 +0.17,
+  tls6 (n=413) +0.12, nuclear10a +0.11, squfl015-060 +0.10, waste +0.10, popdynm200 +0.10 …
+and the *value* of the 2->3 GiB step (official ratio tables, production frame) is exactly THREE
+rows: crudeoil_lee4_10 0.6150->0.6110, crudeoil_lee4_09 0.6170->0.6140, mpbp_48 0.4750->0.4740
+(= -8.2e-5 score). The biggest wall coster of that step, `methanol400` (+0.17 s), gains nothing.
+=> CAP MODEL (first quantitative one this lane has): the only same-day pass/fail pair is
+2 GiB + 25 000 (43c1ca7d, promoted) vs 4 GiB + 25 000 (edd49e95, cap-killed); their local
+graded-frame maxima are 1.010 s and 1.250 s, so the hidden frame's slowdown factor f obeys
+1.60 < f <= 1.98. Every 0.1 s of local max is 0.16-0.20 s of hidden wall.
+
+Census 3 — the exchange family's whole graded-frame price (ledger 0 arm)
+-----------------------------------------------------------------------
+The family (the class block at mod.rs:5517 + the dense/hub site at 5606; the pre-class pair
+5061/5079 is `preclass_win = false`/`preclass_step = false` and the tail site 5833 is
+`xchg_tail = 0` in production, so both are dead code) costs 8.8 s of corpus wall and 0.16-0.39 s
+of each of the twenty slowest rows; its value is 1.48e-3 dev (official 0.7918 vs 0.790325).
+By bucket: lt_1k 0.21 s / zero ratio change on all 147 rows; 1k_10k 3.80 s; gt_10k 4.77 s.
+By density: the 29 rows with nnz > 16n change ZERO ratios with the family off and cost ~0
+(-0.16 s) — the dense/hub half of the class is currently dead weight, not a cost.

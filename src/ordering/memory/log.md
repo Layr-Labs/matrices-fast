@@ -708,3 +708,448 @@ round, so note the round if you know it.
   the two pre-class exchange sites (4904/4921) that the same ceiling re-enables; the dead band rows
   (`emfl100_5_5` +0.645 s, `supplychainr1_053050` +0.442 s, ratio stays 1.0000) are pure waste that a
   cheaper call shape could remove.
+
+## iter55 (2026-09-13) — the ceiling extension promoted; the remote FAIL is a lottery, not a device; the ledger is a *second-order* device and 1G→2G is the largest dev device left
+
+- **Promoted: `52c744da` at hidden 0.841011 (−3.55e-4)** — `rgreedy::MAX_N` 12 000 → 25 000, the
+  band extension of the class-block exchange. The frontier is this lane's again. Its dev probe arm was
+  −9.4e-4 (0.791616 → 0.790679), i.e. the band device transferred at **0.38**, the weakest transfer of
+  the recent promotions (1.16-1.55 for the shape/exchange devices). [0235-armMAXN25k-4cpu.log,
+  `yukon submissions` receipt]
+- **The "1G ledger is the killer" reading is REFUTED.** Fetched every recent submission tree
+  (`origin/submissions/*`: `git show <ref>:src/ordering/{mod,rgreedy}.rs`) and joined it to the board
+  status: `6279dc68` (spans 13 + 1G) FAILED, `e012d8cb` (spans 26/18/4/32 + 1G + min-fill cut)
+  FAILED, `74f19b95` (1G + 5 sweeps, neither other suspect) FAILED; `83a8f4fc`, `e07fe7ae`, `a34c109a`
+  (512M) promoted — a clean-looking 3-for-3 kill. But `52c744da` = the *same* 1G + 5 sweeps **plus**
+  MAX_N 12 000 → 25 000 (strictly more work at that site) **PROMOTED**. MAX_N can only change rows with
+  n > 12 000, so any hidden row with n ≤ 12 000 runs bit-identically in `74f19b95` and `52c744da` and
+  the verdicts still differ ⇒ the verdict is a per-row **cap lottery** on near-cap hidden rows
+  (probability rising with added work), not a device label. Consequence for policy: a single FAILED
+  receipt is not evidence a device is cap-unsafe; the iters 51-54 per-device blacklisting over-read two
+  receipts. [origin/submissions/* + `yukon submissions`, this iteration]
+- **The ledger is a *second-order* device: its marginal value is a function of the ceiling.** One
+  binary/one session/300 dev rows/`taskset -c 0-3`, on the shipped 25k tree
+  (`0237-led-{1073741824,2147483648,4294967296}-4cpu.log`): 1G **0.790679** / gt_10k 0.6833 →
+  **2G 0.790425 (−2.54e-4)** / 0.6826 → 4G 0.790322 (−3.57e-4) / 0.6824. The *same* 512M→1G step was
+  worth −4.7e-5 on the 12k tree (`0235-armL1G-4cpu.log`) ⇒ raising the ceiling multiplied the ledger's
+  marginal value by ~5× (a work allowance only binds on rows the ceiling admits). The 1G→2G step moves
+  **12/300 rows, all with 10 429 ≤ n ≤ 23 999** (`methanol400` −1.55 %, `crudeoil_lee4_10` −0.79 %,
+  `crudeoil_lee4_09` −0.64 %, `gabriel09` −0.50 %, …), costs 0.05-0.15 s on those movers (0.6-0.8 s
+  under the cap) and leaves the corpus-wide worst `order()` **unchanged** (1.396 → 1.397 s). 4G is not
+  free: 2 movers, +0.16 s, `crudeoil_lee4_10` → 1.506 s ⇒ NOT shipped.
+- **Shipped & submitted: 2G.** Official local harness **300/300 OK, 0.790412 / 0.923338**
+  (`results.tsv:1789283745`), buckets 0.8873/0.8373/**0.6826** vs the promoted tree's own official
+  0.790636 ⇒ **−2.24e-4 in the graded frame**. Submitted **`43c1ca7d-d57f-41fe-8b65-472b18dc53bb`**
+  (`validating`). [0237-official-run-led2G.log, 0237-submission-note.md]
+- **New instrument: a ceiling curve in one binary.** `rgreedy::max_n_limit()` (test-only `SSI_MAX_N`
+  seam; `#[cfg(not(test))]` returns the constant) is read by every `n`-gate in `rgreedy` and by
+  `WindowDp`'s dimension check, so a ceiling curve costs one build instead of one per point. The
+  control arm reproduces the shipped number exactly (0.790679), which is the seam's own verification.
+- **Killed, with numbers (do not re-open):**
+  - *The ceiling above 25 000 is spent.* `SSI_MAX_N` 25 000/30 000/45 000 → 0.790679 / 0.790657 /
+    0.790610; the 25k→45k step buys −6.9e-5 for **4 movers** and its cost is the DP's O(n²/64)
+    per-call setup: `nd_netgen-3000-1-1-b-b-ns_7` (n = 33 155) 0.51 → **1.34 s** (+0.83 s) for
+    −0.16 %. [0237-ceilcur-{25000,30000,45000}-4cpu.log]
+  - *The ladder draw above its gate buys nothing.* `SSI_TERM_FULL_N` 25 000 / 45 000 on the 45k tree:
+    0.790611 / 0.790611 — **zero** value while the worst row climbs 1.465 → 1.519 → 1.628 s. The band's
+    responsiveness is specific to the *exact window* exchange, not to added search in general.
+    [0237-ladd-{25000,45000}-ceil45k-4cpu.log]
+  - *The gated-out big-row families are worse, not better.* `probe_large` on the five largest rows:
+    AMF-5 / AMF-ND / METIS all land above the shipped ratio (`gabriel10` 0.9285 vs 1.0275/1.0275/4.4925;
+    `cont6-qq` 0.6962 vs 0.9145). The remaining large-row `n` caps are not value levers.
+    [0237-probe-large-ceilcur.log]
+  - *The class gate's `nnz <= 200_000` gap is empty.* Against the dense/hub rule (`nnz > 16n ||
+    max_deg > n/2`) it contains exactly two dev rows (`gams05`, `nuclear104`).
+- **The joint arms (measured, not shipped — the next bat's menu):** 2G + 6 sweeps **0.790368**
+  (−5.7e-5: the sweeps axis *re-opens* at 2G, it was dead at 1G), 2G + 45k ceiling **0.790295**
+  (−1.30e-4: the ceiling's value *doubles* at 2G — the interaction is mutual), triple
+  (45k + 2G + 6 sweeps) **0.790238 = −4.41e-4 vs shipped**, worst row 1.533 s.
+  [0237-{joint-ceil45k-led2G,led2G-sweeps6,triple-45k-2G-s6}-4cpu.log]
+- **Deep experiment:** `1789281592961-145005` ended in `setup_error` before any rollout
+  (`snapshot requires a regular file <= 16777216 bytes: corpus/dev/patterns.jsonl`) — no patch, no
+  candidate, the dead-band-row hypothesis remains untested. Harness-side limit, not a candidate
+  finding.
+
+## iter55b (2026-09-13) — the ledger step receipted; the whole-class device transfers ~1.0, the band device 0.38; 4G + 6th sweep shipped as `9440dedb`
+
+- **Receipt: `43c1ca7d` PROMOTED at hidden 0.840782 (−2.29e-4)** for a dev −2.24e-4 official
+  (0.790636 → 0.790412) ⇒ **transfer ≈ 1.02** for the ledger device, against **0.38** for the band
+  extension (`52c744da`: dev −9.4e-4 probe → hidden −3.55e-4) and 1.16/1.55 for the exchange-shape
+  merges. Device classes on this board are ordered by *transfer*, not by dev delta: value spread
+  across the whole admitted class transfers ~1:1; value confined to a newly admitted band does not.
+  **Choose the next device by transfer-weighted value, not by dev score.** [receipt in
+  `yukon submissions`; this iteration]
+- **The interaction surface priced:** 2G/5 sweeps 0.790425 (the receipted tree) → 2G/6 **0.790368**
+  (sweeps were dead at 1G, live at 2G) → 4G/5 0.790322 → **4G/6 0.790252** (this submission) →
+  triple (45k ceiling + 2G + 6 sweeps) 0.790238. The triple is refused at statistically the same
+  score: its margin is the 45k ceiling, the 0.38-transfer band device whose O(n²/64) setup loads
+  `nd_netgen-3000` 0.51 → 1.34 s for −0.16 %. [0237-led{s2,s6,4G,4Gs6}-4cpu.log,
+  0237-triple-45k-2G-s6-4cpu.log]
+- **Shipped & submitted: `9440dedb-0159-49f1-a98a-1c350bf3c736`** (2G → 4G + 5 → 6 sweeps). Official
+  local harness **300/300 OK, 0.790246 / 0.923232**, buckets 0.8873 / 0.8373 / **0.6822**
+  (`results.tsv:1789285172`) = **−1.66e-4 in the graded frame** against the frontier tree's own
+  official 0.790412; worst `order()` 1.397 → 1.550 s at 4 vCPU, carried entirely by
+  `crudeoil_lee4_10` (the row the ledger device already loads). [0237-official-run-led4G-s6.log,
+  0237b-submission-note.md]
+- Standing rule from the two receipts: **a FAILED receipt is not a device kill** (see iter55), and a
+  *rejected* receipt is a transfer-bar reading — the bar has been ~8e-5 hidden, so a candidate needs
+  ≳1e-4 transfer-weighted before it is worth a slot.
+
+## iter56 (2026-09-13) — frame audit of the instruments the cap reasoning runs on: the probe's phase map is not the graded frame, and the per-site census is gone from the tree
+
+- **The probe's per-phase rescan is a test-only frame that hits the biggest-`nnz(L)` rows hardest.**
+  `SSI_MARK_NOSCORE=1` (the seam the source itself calls "the closest local view of the graded frame") vs the
+  default PHASES run, same binary/session/4 vCPU, whole corpus, ratios bit-identical on 300/300:
+  corpus wall 151.31 → **151.13 s** (0.11 %) but the *per-row* deltas are up to **0.445 s**:
+  `acopf_case9241pegase_qcqp` (n=313 068, nnz=1 292 408) 1.065 → **0.620 s (−42 %)**,
+  `gabriel10` −0.248, `faclay75` −0.240, `unitcommit_200_100_1_mod_8` −0.180, `cont6-qq` −0.113; 111/300 rows
+  move > 10 ms and ranks shift by up to 81 places (acopf 17 → 98). The ≥1.0 s set changes membership at both
+  ends (`acopf`, `mpbp_07` leave; `gabriel09`, `rsyn0840m04m` enter). [0238-markframe-diff.txt, 0238-trueframe-tables.txt]
+- **True-frame exposure of the tree that is in flight (`9440dedb`), 4 vCPU**: worst `crudeoil_lee4_10` **1.536 s**
+  (77 % of the 2 s cap), 25 rows ≥ 1.0 s, 9 ≥ 1.2 s, 5 ≥ 1.35 s, corpus wall 151.13 s. [0238-trueframe-tables.txt]
+  New: the *whole-class exchange* (12/5/5 + 4G ledger + 6 sweeps) is the single largest cap consumer on the
+  binding rows — `SSI_EXCHANGE_WIDTH=16` (OFF, same frame) drops the worst row **1.536 → 1.239 s** and the wall
+  151.13 → 138.41 s (**−14.22 s, 9.4 %**) for 1.67e-3 dev score (0.790252 → 0.791922): −0.441 s on
+  `crudeoil_lee4_10`, −0.432 `crudeoil_lee4_09`, −0.378 `procurement1large`, −0.358 `catmix400`. [0238-exchange-off-noscore-4cpu.log]
+- **Instrument losses / tooling traps (record them, do not re-derive):**
+  - `SSI_SITESTATS` is **dead in this tree**: 0 `SITE` lines from a whitelisted run because the per-site producer
+    census (finding of iter52, `0233-sites-dev300.log`) is not in `src/ordering` (`grep -rn SITESTATS` → nothing;
+    `parallel::sites` gone; last commit carrying it: `883d272`/`a33fb71`). A follow-up that plans to re-run the
+    site census will silently produce nothing.
+  - **11 seams whitelisted by `target/probe-sandbox.sh` no longer exist in the source** (`SSI_ALT_MAX_N` :76,
+    `SSI_PORTSTATS` :81, `SSI_SITESTATS` :84, `SSI_ENGINE_FANOUT(_ALL)` :42-43, `SSI_SPAN_WINDOWS_EXTRA` :73,
+    `SSI_SPAN_WINDOWS_NEXT`, `SSI_INDEP_PARITY`, `SSI_PARITY_TRACE`, `SSI_LADDER_STRIDE`, `SSI_TIE_FORCE`):
+    an arm run through that runner with any of them silently measures the **base** configuration — the same
+    trap shape as the 0231 `SSI_CORPUS_FILE` incident. No post-rebase evidence file names a dead seam
+    (0222/0226/0230/0233 all predate), so the record is not corrupted by it.
+  - The **PHASES ratio column is not an incumbent trajectory**: the `13p.*` marks carry *counters* in the ratio
+    field (`13p.ledger 2499757.0000/0.0000`), 434 ratio *increases* occur across marks, and on 277/300 rows the
+    shipped `final` ratio is strictly better than the minimum printed at any phase mark. Any device that keys on
+    "when did the incumbent last improve" cannot be read from this instrument. [0238-postconv-summary.txt]
+  - The mark map also covers less wall than it looks: marked phases sum to 111.90 s of the 151.31 s probe wall
+    (**39.40 s outside every mark**, 30 % of it on the 25 rows ≥ 1.0 s, 53 % on `gasprod_sarawak81`), against the
+    40.39 s single largest phase `1.portfolio`. [0238-postconv-summary.txt]
+
+## iter57 (2026-09-14) — the class-block exchange has ONE value/time line: measured sweep curve, its per-row attribution, and the cap line our own receipts bracket
+
+- **The bat in flight that died first**: `9440dedb` (4G allowance + 6 sweeps, official dev 0.790246) **FAILED**
+  remotely (9/13 2:40 AM); the frontier is still this lane's `43c1ca7d` (hidden 0.840782, 2G + 5 sweeps, official
+  dev 0.790412). [0239-board-receipt.txt]
+- **The remote cap line is now bracketed in local seconds**: worst `order()` 1.397 s promoted vs **1.536 s failed**
+  (graded-closest frame, `SSI_MARK_NOSCORE=1`, `taskset -c 0-3`).
+- **Sweep curve at the 4G allowance, one binary/session, 300/300 rows, graded-closest frame**: 3/4/5/6 sweeps →
+  **0.790596 / 0.790470 / 0.790322 / 0.790254** at worst `order()` **1.384 / 1.431 / 1.473 / 1.536 s**. The tree's
+  value/time slope is **≈ −1.15e-3 score per second of worst row** (~−6.9e-5 per sweep for +0.05 s).
+  [0239-sweeps{3,4,5}-noscore-4cpu.log, 0238-noscore-4cpu.log]
+- **Per-row attribution of the sixth sweep**: −6.89e-5 over 12 rows, led by `transswitch0300p` −2.8e-5 (1.067 s,
+  ~0.35 s of headroom), `crudeoil_lee4_09` −1.3e-5 (+0.099 s); meanwhile the **binding row pays and gains nothing**:
+  `crudeoil_lee4_10` 1.473 s/0.6080 → **1.536 s/0.6080**; same dead spend on `chimera_selby-c16-02`, `ringpack_30_2`
+  (0.2311 constant from sweep 3), `popdynm200`, `nuclear10a`, `powerflow0300p`, `nd_netgen`, `chp_partload`.
+  [0239-sweep-curve-movers.txt]
+- **New negative result — equal-TIME scheduling does not beat flat allocation**: simulated exactly from those logs
+  (each row's (time, ratio) at k=3/4/5 is a measured point), a per-row sweep count chosen to equalize exchange time
+  gives 0.790545–0.790552 at worst 1.370 s — i.e. **the same 1.15e-3 per second**. The line is invariant to how the
+  work is distributed across rows; only a cheaper unit of search moves it. [0239-exchtime-sim.txt]
+- **Phase + batch decomposition of the twelve exposed rows (new instrument work)**: marked wall 7.66 s of a 15.60 s
+  `order()` total; `1.portfolio` = 5.43 s of that (0.477 s on the binding row, 0.767 s on `chimera_selby-c16-02`);
+  the largest unmarked interval is the class exchange itself (0.407 s on the binding row). Task census through the
+  single `run_candidates` site: 84–575 candidate tasks per row in 5–7 batches, the largest batch 515 tasks
+  (0.68 s of thread-summed produce), the heaviest 24–25 tasks at ~2.0 s. [0239-phase-binding.txt, 0239-partrace-binding.txt]
+- **Bat in flight**: `edd49e95-bc03-4c5c-87b8-57483e03bb1f` (`validating`) — 4G allowance with **five** sweeps,
+  official receipt **0.790309 / 0.923267**, buckets 0.8873/0.8373/0.6823, 300/300, no FAIL; dev −1.03e-4 vs the
+  receipted frontier tree at worst `order()` 1.473 s (−0.063 s vs the failed tree). It is between the two receipted
+  points, so its verdict *locates* the cap line for every later device. [0239-official-run-led4G-s5.log]
+
+## iter58 (2026-09-13) — the gate's `nnz` admission key: 200 000 → 300 000, shipped as `75117ca9`
+
+- **The key that was never priced.** The class block's gate reads `n >= 6 && n <= class_n &&
+  nnz <= 200_000 && nnz <= 16n && max_deg <= n/2`, and the *same* `nnz <= 200_000` literal appears at four
+  more sites (pre-class exchange pair ~4943/4960, the terminal draw's window ~5068 — that one already had a
+  seam — the follow-up block ~5375, and the four-stream round ~5637). Only the `n` clause had ever been moved
+  (and it was the lane's biggest win). Census of `corpus/dev/patterns.jsonl` (off-diagonal nonzeros, column
+  degrees after dropping the diagonal): **14 of 300 dev rows carry > 200 000 nonzeros, 13 of them in the
+  40 %-weight `gt_10k` bucket**; eight of the fourteen have `n > 25 000` so the `n` clause hides them anyway;
+  five of the six reachable ones are dense/hub (`nnz > 16n || max_deg > n/2`) and therefore hit the
+  *follow-up* copy, not this one; **exactly one row fails this key alone: `gams05`** (n = 17 364,
+  nnz = 252 910, ratio 0.5274).
+- **Priced in-frame, one binary/one session, 300 rows, `taskset -c 0-3`, graded-closest frame
+  (`SSI_MARK_NOSCORE=1`)**: control **0.790322 / worst 1.483 s** → class key lifted **0.790308 /
+  1.479 s** (−1.4e-5): `gams05` 0.895 s / 0.5274 → **1.312 s / 0.5262** (−0.23 % relative, +0.41 s of its
+  own time). Buckets 0.8873/0.8373/**0.6823**; worst row unchanged. New test-only seams `SSI_CLASS_NNZ` /
+  `SSI_FOLLOW_NNZ` (defaults = the shipping values). [0240-classnnz-{control,A}-4cpu.log]
+- **The follow-up copy of the key is inert — measured null, not assumed.** With both keys lifted
+  (arm B) all five dense rows above the key read the *same ratios to four decimals* as control
+  (`pooling_sppc3pq` 0.2822, `pooling_sppb5pq` 0.4077, `pooling_sppc1pq` 0.1683, `kissing2` 1.0000,
+  `maxcsp-ehi-85-297-71` 0.8040) at the same times ±0.03 s: those rows are not bound by `nnz`, they are
+  gated *inside* the block by `nnz_l <= followup_factor`. So only the class copy ships.
+  [0240-classnnz-B-4cpu.log]
+- **The `nnz` axis is now spent.** The next rows above the key are `nuclear104` (257 806) and
+  `transswitch2383wpr` (277 562) — both `n = 39 098 / 59 853 > class_n` — and `transswitch2736spr` (331 010)
+  is already above the new value, so 300 000 admits nothing more on dev than 10 000 000 does.
+- **Safety property worth recording**: every adoption inside the class block and the follow-up is a *strict
+  flop decrease*, so an admission-key widening cannot worsen any row's ratio on any corpus; the entire price
+  is per-row seconds, bounded by the block's own 4 GiB ledger, on rows of a single structural class
+  (`n <= 25 000`, `200k < nnz <= 300k`, `nnz <= 16n`, `maxdeg <= n/2`).
+- **Official local sandboxed harness**: `bash scripts/local-candidate-build.sh && cargo run --release` →
+  **300/300 OK, 0.790296 / 0.923238**, buckets 0.8873/0.8373/0.6823 (`results.tsv:1789289499`) vs the same
+  tree's own official 0.790309 [`results.tsv:1789288143`] ⇒ **−1.3e-5 in the graded frame**, matching the
+  in-frame −1.4e-5. [0240-official-run-classnnz300k.log]
+- **Submitted** `75117ca9-ff1a-4164-95ea-37998c57b5ca` (`validating`), claimed 0.790296, note 6.8 KiB.
+  [0240-submission.txt, 0240-submission-note.md]
+- **Corpus class census (new instrument, reusable)**: the `max_deg > n/2` clause excludes 34 dev rows, 29 of
+  them `lt_1k` — and they are dominated by *tiny near-complete* graphs (n = 8…156, `maxdeg/n` 0.53–0.99,
+  e.g. `st_e41` n=8 d/n=0.62, `autocorr_bern40-30` n=43 d/n=0.98): the hub class is the tiny-saturated class,
+  which is why the 12/5/5 dense-site probe of iter54 saw 0 of 16 movers and why the recorded dead-row class
+  (ratio exactly 1.0000) is dominated by it. The density clause (`nnz > 16n`) excludes 11 further reachable
+  rows, 6 of them `lt_1k`, all already inside the same dense/hub site.
+
+## iter60 (2026-09-13) — free wall on the class block: exact-content pristine memo; the ledger priced row by row
+
+- **Shipped bat**: `692548e3-63a6-47ce-abf2-b1810cef8858` (validating) = 4 GiB exchange ledger + 5 sweeps + class key reverted to 200 000 + **pristine-adjacency memo**. Official sandboxed local receipt **300/300 OK, 0.790309 / 0.923267**, buckets 0.887274/0.837322/0.682326, results.tsv:1789291655 — *bit-identical at 6 significant digits* to the same tree's own earlier receipt (`edd49e95`, results.tsv:1789288143), which is the proof the device is semantically neutral. Vs the promoted frontier tree's own official 0.790412 that is −1.03e-4 in the graded frame. [0260-official-run-memo.log, 0260-submission-note.md]
+- **New instrument**: `SSI_XCH_TIME` (test-only) attributes the class block per call: window refine 24.4 s (80.3 %), `Game::new` 3.1 s (10.3 %), `build_adj` 1.9 s (6.2 %), `Game::reset()` 1.0 s (3.4 %), prefix 0.0 s, over 3 501 valid calls and 259 distinct CSR keys = **93 % of entries re-derive an identical bitset** (12–14 entries per large-`n` row). Kills the undo-log-reset lead (≤ 0.014 s on the binding row) and prices the per-call setup for the first time. [0260-xch-phase-attribution.txt, 0260-xchkey-4cpu.log]
+- **Device**: `rgreedy::pristine_memo` — up to two `Rc<Pristine>` images per thread keyed on **full CSR content compared element-wise** (never a pointer, never a hash). Hit = bit-identical rebuild ⇒ identical `Game`, sweeps and ordering; peak memory unchanged (shared, not copied). Test-only `SSI_NO_PRISTINE_MEMO` prices the rebuild arm in one binary.
+- **Measured, two order-reversed A/B pairs, one binary/session/`taskset -c 0-3`**: 0 of 300 ratios differ in either pair; corpus wall 148.5→147.8 s and 148.6→147.2 s; reproducible per-row savings `nd_netgen-2000-3-4-b-a-ns_7` −0.258/−0.257, `emfl100_5_5` −0.269/−0.182, `gasprod_sarawak81` −0.255/−0.181, `pinene200` −0.236/−0.177, `supplychainr1_053050` −0.159/−0.142, `faclay30` −0.158/−0.131, `ringpack_30_2` −0.041/−0.248, binding row `crudeoil_lee4_10` −0.038/−0.026. Mid-size rows swing ±0.1 s in both directions (noise), so only the hit rows carry the claim. [0260-pristine-memo-diff.txt, 0260-pristine-memo-pair2.txt]
+- **The 4 GiB ledger priced row by row for the first time** (identical-output rows, in-frame): 2 G→4 G moves 137 rows, **improves 3** (crudeoil_lee4_10 −0.0067, crudeoil_lee4_09 −0.0036, gams05 −0.0006 = the whole −1.1e-4), and the other 134 pay **+2.9 s of corpus wall with unchanged ratios**, led by crudeoil_lee4_10 +0.188, arki0016 +0.167, gams05 +0.166, crudeoil_lee4_09 +0.156. So the ledger is a 3-row value device with a 137-row price: the next device to test is an **in-band plateau stop** (stop spending after a sweep that accepts nothing), which is value-neutral on the 134 wasters by construction and would return their seconds. [0260-ledger-step-diff.txt, 0260-ledger2G-memo-on-4cpu.log]
+- **Reverted**: the class block's `nnz ≤ 300 000` key (`75117ca9`, failed remotely) → 200 000. It armed exactly one dev row for −1.4e-5 and cost that row +0.44 s (0.895 → 1.331 s). The 300 000 value survives only in the test seam default history, not in production.
+
+## iter60b — the idle-sweep stop: a wall device that only fires where the ledger does not bind
+
+- **Second bat in flight**: `b9549e8f-6db5-417d-93de-72556a6ee16d` (validating) = the `692548e3` tree (memo) **plus** an in-band, `n`-gated idle-sweep stop. Official sandboxed local receipt **300/300 OK, 0.790310 / 0.923267**, buckets 0.887274/0.837322/**0.682329** — i.e. **+1e-6** vs the same tree without the hunk (`results.tsv:1789291655`), matching the +7e-7 simulation; vs the promoted frontier's own 0.790412 that is **−1.02e-4**. [0260-official-run-pgate.log, 0260b-submission-note.md]
+- **Device**: in `subset_window_descent_config`'s sweep loop, stop once a sweep accepts nothing (`idle_sweeps >= 1`), armed only for `n >= 10_000`. Seams `SSI_XCH_PLATEAU` / `SSI_XCH_PLATEAU_N`. Inputs: the row's `n`, the sweep index, the search's own accept flag — no clock, no randomness, no identity.
+- **Ungated, it is a big wall device with a real value price**: 152.2 → 135.5 s corpus wall (**−16.7 s**) for **+1.90e-4** score (27 rows lose ratio, worst `edgecross10-030` +0.0108; all 27 at `n <= 10 017`). Gate census (simulation calibrated to reproduce two measured SCOREs to 1e-6): T=0/+1.90e-4/−16.7 s, T=2000/+3.9e-5/−8.1 s, T=5000/+5.4e-6/−4.2 s, **T=10000/+7e-7/−2.1 s**, T=12000/0/−1.4 s. [0260-plateau-gate-census.txt, 0260-plateau-gate-sim.txt, 0260-plateau-diff.txt]
+- **Mechanism why the saving dies above the gate**: a sweep costs `2n⌈n/64⌉ + 8n` charged units plus the window work, so on large `n` the ledger truncates the loop inside a sweep and a *complete* no-change sweep never happens — the rule can only pay where the ledger does not bind, which is exactly where the schedule's value lives. That also kills the follow-up "reserve-gate the second 2 GiB" idea as a *sweep-level* device (it would have to be a ledger-level reserve instead).
+- **Gated pair (adjacent runs, one binary)**: corpus 144.1 → 143.9 s; the 45 rows with `n >= 10 000` move −0.40 s with **1** ratio change (`glider400` +1e-4); reproducible ≈0.05–0.10 s savings on `faclay30` −0.099/−0.108, `emfl100_5_5` −0.084/−0.091, `mpbp_35` −0.083/−0.094, `ringpack_30_2` −0.056/−0.121, `supplychainr1_053050` −0.055/−0.102, `nd_netgen-2000-3-4-b-a-ns_7` −0.046/−0.090 — all with ratio exactly unchanged in both pairs. **Noise caveat recorded**: the first pair's control ran 8 s slow corpus-wide and read −2.1 s / −0.095 s on the binding row; the second pair reads −0.40 s / −0.003 s, so magnitudes above ~0.05 s are not separable from this box's drift. [0260-pgate-diff.txt, 0260-plateau-bigrows.txt]
+
+## iter60c — two negative results with mechanisms: the ledger reserve, and the 2 GiB sweep curve
+
+- **`692548e3` FAILED remotely** (watcher notify, 9/13). The pristine memo's reproducible 0.18-0.27 s on the six multi-entry large rows and 0.03 s on the binding row did **not** cover the 4 GiB ledger's cost on the hidden frame, so the hidden killer's shape is not one of the rows the memo accelerates (i.e. not a 12-14-entry row). The 4 GiB ledger is now the common factor in **four** remote failures (`9440dedb`, `edd49e95`, `75117ca9`, `692548e3`) against the one clean pass at 2 GiB (`43c1ca7d`, hidden 0.840782). [0260-submission.txt, results.tsv]
+- **Ledger reserve REJECTED by measurement.** Starting the exchange on half the ledger and releasing the withheld half after the first sweep that accepts a change gives a score **bit-identical** to the unreserved 4 GiB arm (0 of 300 ratios differ, 0.790323 both) — but **+3.1 s of corpus wall** (145.2 → 148.3 s); on the 119 rows whose ratio is identical at 2 GiB and 4 GiB it is +1.5 s *worse* than both. Mechanism: every "waster" row accepts *internal* window improvements that never reach the score, so the reserve is always released and then spent — the released budget is spent, not saved. The signal "this call's spend pays" is not observable inside the call; only the caller knows whether the candidate was adopted. Kept at `PRODUCTION_XCH_RESERVE_PCT = 0`, seam `SSI_XCH_RESERVE`. [0260-reserve-diff.txt, 0260-reserve-{off,50}-4cpu.log]
+- **The 2 GiB sweep curve saturates and turns over**: in-frame one binary/session, 2 GiB + 5/6/7 sweeps → 0.790418 / **0.790371** / 0.790381 at worst `order()` 1.405 / 1.442 / 1.481 s. So the sixth sweep at 2 GiB is worth only −5.4e-5 (vs −6.8e-5 at 4 GiB) and the seventh *loses* value. Consequence: **on this base the only >=1 bip value device is the 2 GiB -> 4 GiB ledger step**, and the sweep axis cannot reach the 1 bip bar safely — the lane's cap problem and its value problem are the same device. [0260-led2G-s6-4cpu.log, 0260-led2G-s7-4cpu.log, 0260-ledger2G-memo-on-4cpu.log]
+- Standing structure note: `xchg_tail`/`xchg_pool` (the tail/pool exchange loop, mod.rs ~5670) are **0 in production**, so the 12-14 entries per large row come from the fixed sites (pre-class pair, class block, dense/hub copy, sparse span), not from a tail loop. [file:src/ordering/mod.rs:5681] [file:src/ordering/mod.rs:5686]
+
+2026-09-13 | iter61 | **the hidden failure mode is a fetched receipt, and the two never-priced pre-class exchange sites pay for the sixth sweep**
+- **The remote frame is no longer inferred.** `yukon submissions`/the API carry a `rejectionReason`; the
+  failing submissions point at public Actions runs whose job logs are fetchable
+  (`gh api /repos/Layr-Labs/matrices-fast/actions/jobs/<id>/logs`). Five logs are now in evidence
+  (`0270-remote-log-*.log`). Facts, all receipts: (a) the kill is exactly *per-matrix* —
+  `RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed`, first over-cap row
+  aborts the run, hidden path redacted (no name, no census) [0270-remote-log-edd49e95.log:1116];
+  (b) the grader runs **every matrix twice** (`run_once("a")`/`run_once("b")`, identical permutation
+  required) so the 2 s cap is charged to each run, inside a hard **4 GiB RLIMIT_AS** worker
+  [file:src/main.rs:339-348, file:src/sandbox.rs:40] — clock-driven budgets are a determinism-gate hazard,
+  not merely non-reproducible; (c) the hidden corpus **rotates daily** from a private bucket
+  (`eval/current.txt` -> dated prefix, checksummed) [file:.github/scripts/fetch-eval-corpus.sh];
+  (d) timing: promoted 2G+5 finished the hidden corpus in **634.7 s**, the 4G trees died at **85.8 s
+  (4G+5) / 87.7 s (4G+6) / 114.3 s (4G+5+plateau)**, i.e. the killer row is early and the plateau tree got
+  further; (e) **two "failures" never ran the benchmark**: `75117ca9` = candidate-branch push failure,
+  `692548e3` (Pristine memo) = workflow-dispatch Server Error — the memo tree is *untested* remotely, and
+  the record's earlier reading of its failure is retracted. [0261-submission-note.md §1]
+- **Pre-class exchange sites priced for the first time** (new seams `SSI_PRECLASS_WIN`/`SSI_PRECLASS_STEP`,
+  defaults = shipping; runner whitelist extended). In-frame, one binary/session, 300 rows, `taskset -c 0-3`,
+  graded-closest (`SSI_MARK_NOSCORE=1`): control **0.790323 / worst 1.4245 s `crudeoil_lee4_10` / 145.0 s**
+  -> both sites retired **0.790354 / worst 1.3686 s `chimera_selby-c16-02` / 140.8 s**. The pair is worth
+  **-3.1e-5 for +0.055 s on the binding row**: value density **5.6e-4 per worst-row second**, the worst
+  measured anywhere here (ledger step 1.18e-3/s, sixth sweep 1.08e-3/s, class block 12/5/5 5.6e-3/s).
+  Retiring it *raises* `chimera_selby-c16-01` by 0.054 s (incumbent-dependence again).
+  [0261-prexch-{control,off}-4cpu.log]
+- **The binding rows are not the big ones**: slowest at 4 vCPU are `crudeoil_lee4_10` (n=17 809) 1.42 s,
+  `chimera_selby-c16-02` (**n=2 031**) 1.40 s, `crudeoil_lee4_09` 1.35, `crudeoil_pooling_ct3` (n=2 644) 1.29,
+  `chimera_selby-c16-01` (n=2 031) 1.29. The sixth sweep's cost lands on those small rows at **unchanged
+  ratios** (c16-01 1.292 -> 1.400 s, c16-02 1.401 -> 1.434, `crudeoil_lee4_10` 0.6080 fixed), while its
+  -6.8e-5 comes from `transswitch0300p` (-2.8e-5) and `crudeoil_lee4_09` (-1.3e-5). The plateau stop cannot
+  help them (gate `n >= 10 000`; below it is not value-free).
+- **Rejected (measured):** lifting the class `nnz` key 200 000 -> 300 000 is the worst density in the build —
+  `gams05` +0.414 s (0.883 -> 1.297 s) for -1.4e-5 = **3.4e-5/s**; not shipped, and the 300 000 that
+  `75117ca9` claimed is not in this tree's production path. [0261-stack-4G6-noprexch-nnz10M-4cpu.log]
+- **Bat submitted**: `393a167c-ad54-43e0-8b51-1aa2e493214e` (validating) = 4 GiB allowance + **6 sweeps** +
+  both pre-class sites retired. Official local sandboxed harness 300/300, no FAIL,
+  **0.790279 / 0.923241** (`results.tsv:1789295008`) vs the frontier tree's own official 0.790412 =
+  **-1.33e-4 dev (1.6 bips)**. Cap profile is ≈ the failed 4G+5 tree's: honest bet, stated as such in the note.
+  [0261-official-run-4G6-noprexch.log, 0261-submission.txt]
+
+## iter62 (2026-09-13) — the portfolio's inherited family groups priced as blocks for the first time; the min-fill big-band restart clamp 8→2 shipped as bat `6f117752`
+
+- **New instrument use (existing `probe_census`, re-used):** on the 12 exposed rows, *every*
+  isolated portfolio family is far worse than the shipped value (`mpbp_34` best isolated 0.4605
+  vs shipped 0.2880, `nuclear25a` 0.6825 vs 0.5750, `crudeoil_lee4_10` 0.7271 vs 0.6080,
+  `chimera_selby-c16-02` 0.5803 vs 0.5370) and the best isolated candidate is usually also the
+  cheapest (0.000–0.025 s): on the binding rows the terminal chain, not the portfolio, is the
+  value producer. `minfill` in isolation reads ratio **40.03** on `chimera_selby-c16-01`.
+  [0262-census-panel-binding.txt]
+- **Group prices (in-frame, 300/300, one binary, `SSI_MARK_NOSCORE=1`, `taskset -c 0-3`):**
+  all-on **0.790323** / 0.8873/0.8373/0.6824 — min-fill off **0.790610** — partitioner cascade
+  off **0.791746** (gt_10k 0.6824→**0.6852**) — all three off **0.792031**. Neither group is
+  dead weight, so "delete the inherited families" is NOT a valid device (a first attempt at that
+  claim was retracted this iteration: the two arms of that run had not received their seams — the
+  documented live-seam trap, caught by the arms' own identical logs).
+  [0262-groups-{ON,noMIN,noPART}-4cpu.log]
+- **Where the min-fill bill lands:** `1.portfolio` on `chimera_selby-c16-01` is 0.759 s with the
+  family and **0.239 s** without it (+0.535 s of that row's own `order()`), 0.745→0.246 on
+  `crudeoil_pooling_ct3`, 0.689→0.141 on `squfl015-060` — at **unchanged ratios**; the
+  partitioners are the cost only on `mpbp_35` (0.221→0.097) and there they *pay* (OFF loses
+  +0.067 on that row).
+- **The device:** `minfill_restarts`' third arm (`else`, i.e. n ≥ 2000 or nnz ≥ 10 000) hands the
+  LARGEST restart count to the LARGEST rows in the gate; its clamp top 8→4→2 reads
+  **0.790323 / 0.790338 / 0.790341** at corpus walls **145.0 / 144.9 / 141.8 s**. The whole value
+  price of 2 is TWO rows (`rsyn0810m02hfsg` 0.9406→0.9439, `rsyn0820m02m` 0.9328→0.9369); the
+  seconds returned land on `squfl015-060` 0.897→0.435, `crudeoil_pooling_ct3` 1.297→0.877,
+  `chimera_selby-c16-01` 1.382→0.953, `chimera_selby-c16-02` 1.402→1.020, `squfl010-080`
+  0.721→0.368, `slay09h` 0.630→0.461, `p_ball_30b_7p_2d_h` 0.729→0.538 — the class the remote cap
+  has been killing. Value rows and cost rows are interleaved in (n, nnz) (`multiplants_stg1`
+  736/3594 pays +0.0244 while `multiplants_stg1b` 814/3992 costs 0.222 s for nothing), which is
+  why the **restart count**, not a gate, is the right dial. [0262-minfill-big-restarts-ab.txt,
+  0262-minfill-big{8,4,2}-4cpu.log]
+- **Shipped & submitted: bat `6f117752-c7fd-438e-aa13-7e939264d24d`** (validating) = the tree
+  already in flight (4 GiB + six sweeps + pre-class pair retired) **plus** that clamp 8→2.
+  Official local sandboxed harness **300/300 OK, no FAIL, 0.790297 / 0.923247**
+  (`results.tsv:1789299130`) versus the same tree without the device at **0.790279**
+  (`results.tsv:1789295008`) — a deliberate **+1.8e-5 dev price for 0.38–0.53 s of the
+  mid-size cap class**, stated as such in the public note.
+  [0262-official-run-mf2.log, 0262-submission-note.md, 0262-submission.txt]
+- **Receipt taken at submission time (this iteration):** the tree already in flight,
+  `393a167` (4 GiB + six sweeps + pre-class pair retired), is **failed** on the board —
+  the fourth 4 GiB tree to die (`edd49e95` 4G+5, `9440dedb` 4G+6, `b9549e8f` memo+idle-stop,
+  now `393a167`), while the only promotion of the day (`43c1ca7d`, hidden 0.840782) carries the
+  2 GiB allowance. The confound must be stated: the hidden corpus **rotates daily**, so the
+  four failures are four different corpora, not four samples of one law. [yukon submissions]
+- **The ledger priced again on the shipped tree (in-frame, 300 rows, one binary):** 4 GiB
+  **0.790323** at worst 1.430 s versus 2 GiB **0.790426** at worst 1.431 s — the 4 GiB step is
+  worth 1.03e-4 of dev score and **does not move the dev worst row at all**, i.e. the ledger's
+  value and the ledger's cost are both invisible on the peak-row set the lane has been pricing
+  against. [0262-ledger-{4G,2G}-mf2-4cpu.log]
+
+## iter64 (2026-09-13) — the scorer's own Jacobian, the graded frame vs the probe frame, and the ceiling bought with the allowance the cap can afford
+
+- **New instrument: the score Jacobian.** `ssi-scoring/src/aggregate.rs` is the frozen definition —
+  per-bucket geomeans of the flop ratio combined as `Σ w_b·g_b / Σ w_b`, `BUCKET_WEIGHTS =
+  [0.30, 0.30, 0.40]`, bucket edges 1 000 / 10 000 — so one row's *marginal* value per unit
+  relative improvement is `w_b · g_b / N_b`: lt_1k 1.81e-3 (147 rows), 1k_10k 2.33e-3 (108),
+  gt_10k **6.07e-3 (45 rows)** = 3.35x an lt_1k row. **Verified against a measured device**: the
+  2 GiB → 4 GiB allowance step moves exactly two rows (`crudeoil_lee4_10` 0.6147→0.6080,
+  `crudeoil_lee4_09` 0.6171→0.6135) and the Jacobian predicts **−1.0197e-4** against a measured
+  **−1.0300e-4**. [0264-jacobian.py output folded into evidence: 0262-ledger-{2G,4G}-mf2-4cpu.log]
+- **New instrument, and it is a trap: the probe frame is not the graded program.** Diffing
+  `SSI_MARK_NOSCORE=1` probe output row-by-row against the *production* binary's own per-row table
+  on the **same constants**: **170 of 300 rows differ**, several by >1e-3 (`gabriel09` 0.8695 vs
+  0.8970; `crudeoil_pooling_dt3` 0.7056 vs 0.6910; `crudeoil_lee1_07` 0.7388 vs 0.7470). Every
+  shipped delta below was therefore re-measured in the production frame. [0264-official-run-*]
+- **Negative receipt — a budget allocated by the scorer's bucket is inert, not free.** Allowance
+  2 GiB below `n = 10 000` and 4 GiB above: **0 of 300 ratios change** (identical score, twice),
+  i.e. the allowance's whole value is in the top bucket and it is *inert* below it (all 300 rows
+  keep their 4 GiB-vs-2 GiB ratios to 4 dp). The bucket-allocation device was therefore not
+  shipped; the finding is that the allowance axis has no free wall below the top bucket.
+  [0264-arm{C2,C2r,B}-4cpu.log, 0264-arm{A}-control-4cpu.log]
+- **Negative receipt — the sweep axis is dead at 2 GiB, alive at 4 GiB.** With the small side
+  fixed at 2 GiB/6 sweeps: top-bucket sweeps **6/7/8/12 → 0.790273 / 0.790263 / 0.790246 /
+  0.790224** (score reproducible to the last digit across repeats: 8 sweeps read 0.790246 twice,
+  12 read 0.790224 twice), and 5 sweeps *below* the boundary costs +4e-6. The raise is free on the
+  binding row (`crudeoil_lee4_10` 0.6080 at 6 and at 12 — the plateau stop makes the extra sweeps
+  inert there) and it loads the rows it improves (`crudeoil_lee4_06` 1.154→1.385 s,
+  `procurement1large` 1.038→1.287 s). Not shipped: at 2 GiB the axis is saturated
+  (5/6/7 → 0.790418/0.790371/0.790381 in the record). [0264-arm{E,G,G2,H,H2}-4cpu.log]
+- **Negative receipt — the exchange width is already at its optimum**: 12/13/14/16 priced
+  0.791694 / 0.791738 / 0.791766 / 0.791940 (0234 merge curve, re-read this iteration). Cutting
+  the width to 8 *below* `n = 10 000` costs **+1.6e-4** (0.790402 vs 0.790246), so the width axis
+  is strongly value-live below the boundary and is left alone. [0234-merge-x1[2346]-*.log,
+  0264-armW-4cpu.log]
+- **Ceiling curve, probe frame, 2 GiB allowance, one binary/session**: 25 000 / 36 000 / 45 000 →
+  **0.790389 / 0.790309 / 0.790266** at worst `order()` **1.254 / 1.251 / 1.269 s**. Movers at 36k:
+  `crudeoil_pooling_dt3` 0.7100→0.7056, `mpbp_48` 0.4772→0.4746, `nd_netgen-3000-1-1-b-b-ns_7`
+  0.9599→0.9584; at 45k one more: `arki0013` 0.4021→0.3993. **Every second the ceiling costs lands
+  on the rows it improves** (+0.28…+0.54 s), which end at 1.02–1.18 s — below the corpus peak.
+  Memory at the new top is ~`n²/4` bytes per `Game` (506 MB at 45 000), and the sandboxed run
+  enforces the same 4 GiB `RLIMIT_AS` the grader does, so the 300-row run is the memory check.
+  [0264-ceil{25000,36000,45000}-2G-4cpu.log]
+- **Production-frame arm matrix (all 300/300 OK, sandboxed, `taskset -c 0-3`; the 24-core run of
+  the shipped tree reads bit-identically 0.790325, so the production frame is core-count
+  invariant):**
+
+  | tree | official score | tiebreak | vs frontier 0.790412 |
+  |---|---|---|---|
+  | 2 GiB + 25 000 | 0.790413 | 0.923327 | 0.0 (the frontier tree's own knobs) |
+  | **2 GiB + 45 000 (SHIPPED)** | **0.790325** | 0.923161 | **−1.10 bip** |
+  | 3 GiB + 45 000 (prepped) | 0.790243 | 0.923082 | −2.14 bip |
+  | 4 GiB + 25 000 (previous ship, remote FAILED) | 0.790297 | 0.923247 | −1.45 bip |
+  | 4 GiB + 45 000 | 0.790175 | 0.923023 | −3.00 bip |
+
+  [results.tsv:1789304149 / 1789304888 / 1789305238 / 1789299130 / 1789304464]
+- **The remote discriminator, now on one corpus day.** The hidden corpus rotates *daily* from a
+  dated prefix, so the 2:16 AM – 6:33 AM submissions share it. Inside that window: `43c1ca7d`
+  (**2 GiB**, promoted, hidden 0.840782) and then `9440dedb` (4G+6, cap-killed 85.8 s),
+  `edd49e95` (4G+5, killed 87.7 s), `b9549e8f` (4G+memo+plateau, killed 114.3 s), `393a167c`
+  (4G+6+pre-class off) and `6f117752` (4G+6+pre-class off+min-fill clamp) — **every tree carrying
+  the 4 GiB allowance failed; the 2 GiB tree finished the corpus in 634.7 s.** `edd49e95` differs
+  from the promoted tree by the allowance alone. Hence: the allowance ships at 2 GiB and the value
+  is bought on the ceiling. [0270-remote-log-{9440dedb,edd49e95,b9549e8f,43c1ca7d}.log, this
+  iteration's `yukon submissions`]
+- **Shipped & submitted: bat `039c8e2d-05e2-4ca9-8e80-30cfbfa4bbad`** (validating) = the tree in
+  the workspace + `rgreedy::MAX_N` 25 000 → **45 000** + the allowance back to **2 GiB**. Official
+  local sandboxed harness **300/300 OK, no FAIL, 0.790325 / 0.923161** (`results.tsv:1789304888`,
+  and the bit-identical 24-core run), buckets 0.887274 / 0.837472 / **0.682253**. Probe-frame cap
+  margin: worst row **1.269 s** versus **1.397 s** for the tree that passed remotely and 1.421 s
+  for the tree that just failed — 0.13 s more margin than the last promoted tree.
+  [0264-official-run-2G-ceil45k-final.log, 0264-submission-note.md, 0264-submission.txt]
+- **Tests**: `cargo test --release -p ssi-candidate-worker` → **126 passed, 0 failed** (55 ignored).
+  `cargo test --release` fails only on `watchdog::tests::timeout_kills_spawned_grandchildren`,
+  which lives in the trusted harness (`src/watchdog.rs`, outside `src/ordering`) and is an
+  environment property of this box.
+- **Deliberately not shipped, priced and waiting**: 4 GiB + 45 000 = **0.790175** (−3.00 bip) and
+  3 GiB + 45 000 = **0.790243** (−2.14 bip). If the remote cap record changes, the ladder is
+  already measured.
+
+## iter65 — the graded frame gets an instrument, and the exchange family gets a gate
+
+- **New instrument: the per-row wall census of the production worker.** Every wall/cap number in
+  this record came from the probe frame or from `(capped)`. The probe frame is a *different
+  binary*: the entire `SSI_*` seam layer and every timer in this candidate is `#[cfg(test)]`-gated
+  (`mod.rs:5441`, `:5466`, `window_dp.rs:100`), so the graded worker compiles them out — which is
+  also why an env-seam bisect of the production binary is inert by construction (it is not a dead
+  code path, it is absent code). Method: one `target/release/ssi-candidate-worker` run per dev row
+  under `taskset -c 0-3` with `/usr/bin/time -f "%e %P"`, 300 rows, per-row wall + CPU%.
+  [.scratch/widthcensus/census{4cpu,led0,L3G,L4G,gate,gate3G}.tsv, extract.py, census.sh]
+- **The graded frame's worst row is not the probe's worst row.** Census on the shipped tree:
+  worst **1.010 s `procurement1large`**, then `nd_netgen-3000-1-1-b-b-ns_7` 0.99, `crudeoil_lee4_09`
+  0.99, `mpbp_48` 0.96, `methanol400` 0.91. The probe's own worst row, `crudeoil_lee4_10`, is
+  **0.74 s** in the graded frame (1.269 s in the probe) — the probe inflates the graded wall by a
+  median factor 1.18, up to 1.9x, so every cap decision taken on it was taken in the wrong frame.
+  Corpus means: lt_1k 0.266 s (147 rows), 1k_10k 0.518 s, gt_10k 0.625 s; the *giants* are cheap
+  (`faclay75` n=272 878 -> 0.15 s, `acopf…313 068` -> 0.14 s, both ~100 % CPU) — the wall is a
+  saturated work budget on mid-size rows, flat at 0.85-1.01 s. Median CPU% 167, p90 228: the
+  candidate is already parallel (`PAR_MAX_THREADS = 4`), so "use the idle cores" is not virgin
+  ground, and the width response of the binding row is 1.24 s @1 core / 1.06 @2 / 0.74 @4.
+  [0265-graded-frame-census.txt, .scratch/widthcensus/census4cpu.tsv]
+- **The ledger ladder, priced in the graded frame for the first time**: family off 114.4 s / 0.840 s
+  max -> 2 GiB 123.2 s / 1.010 -> **3 GiB 124.2 s / 1.100** -> 4 GiB 127.2 s / 1.250. The step's
+  *value* (official ratio tables, production frame) is exactly three rows at 2->3 GiB
+  (`crudeoil_lee4_10` 0.6150->0.6110, `crudeoil_lee4_09` 0.6170->0.6140, `mpbp_48`
+  0.4750->0.4740 = -8.2e-5) while its biggest *wall* coster, `methanol400` (+0.17 s), gains
+  nothing. With the only same-day pass/fail pair (2 GiB + 25 000 promoted vs 4 GiB + 25 000
+  cap-killed) the hidden frame's slowdown factor is bracketed at **1.60 < f <= 1.98** — the first
+  quantitative hidden-frame model in this lane. [0265-graded-frame-census.txt,
+  0264-official-3G-45k.log, 0264-official-run-2G-ceil45k-final.log]
+- **The exchange family's whole graded-frame price**: 8.8 s corpus wall, 0.16-0.39 s on each of the
+  twenty slowest rows, 0.21 s on lt_1k and **zero ratio change on all 147 lt_1k rows**; on the 29
+  rows with `nnz > 16n` it changes zero ratios and costs ~0 — the dense/hub half of the class is
+  dead weight, not a cost. Value if compiled out: 0.7918 vs 0.790325 (family worth 1.48e-3 dev).
+  [0265-official-run-ledger0.log]
+- **SHIPPED: the anchor gate + the 3 GiB rung.** `best_flops < amd_flops` now admits the family at
+  the class block (`mod.rs:5469`) and the follow-up site (`:5558`). `amd_flops` is captured at the
+  AMD seed (`mod.rs:1768`) and every adoption is a strict exact decrease, so on a row still at the
+  anchor no family has adopted anything and skipping is outcome-neutral. Two receipts: with the
+  family compiled out, **not one** of the 300 dev rows ends at the anchor while ending below it
+  with the family on; and the official A/B gate-on vs gate-off at fixed 3 GiB reads **0 of 300 rows
+  differing**, score/tiebreak identical to six digits (`results.tsv:1789307153` = `:1789305238` =
+  0.790243 / 0.923082). Returned wall: 123.2 -> 121.1 s corpus, `emfl100_5_5` -0.28, `chain400`
+  -0.24, `supplychainr1_053050` -0.19, `chain200` -0.15 … and every row that gets faster is
+  anchor-tied (ratio 1.0000) while **no** row that gets slower is. [0265-anchor-gate-ab.txt,
+  0265-official-run-gate3G.log]
+  Submitted as bat **`65cb40ec-8d12-43fe-b082-abd926395409`** (validating): official local sandboxed
+  harness **300/300 OK, no FAIL, 0.790243 / 0.923082** (buckets 0.8873 / 0.8375 / 0.6820) —
+  -1.70 bip against the promoted tree's own dev point (0.790413). [0265-submission-note.md]
+- **The deep experiment's record, closed**: `stop_reason = setup_error`, `model_phase_entered =
+  false`, no patch, no candidate — the 16 MiB snapshot cap cannot hold the 103.9 MB dev corpus, so
+  the 45 000-ceiling hypothesis never rolled out. Re-driving it needs a staged subset (the 45 rows
+  with n > 25 000), not the whole corpus. [0265-deep-experiment-receipt.txt]
+
+2026-09-13 iter66 | 0.790243 (unmoved; no device shipped) | **the class block's wall is a per-call budget, and its value is delivered by the first funded sweep** — built the first instrument that reads the exchange's *true* Σc² per sweep out of the eliminations it already performs (free; instrument reverted, tree unchanged), then priced three devices in the production frame: (a) staged 25%-then-rest spend **REJECTED** (mpbp_48 +0.145 s, chimera c16-01/02 +0.190/+0.200 s), (b) true-Σc² trajectory stop **inert** (trajectory improves every sweep until the charge aborts the call: methanol400 0.9494 → 0.9286 of the seed's flops, then 2 sweeps and out), (c) region-walk rotation **REJECTED on score**: −0.58 s over the ten crown rows but official 0.7907 / 0.9233 vs the shipped tree's 0.790243 / 0.923082 (+4.6e-4 dev). New exact fact: `methanol400` runs 2 of its 6 sweeps and its official ratio is 0.693 at **2, 3 and 4 GiB** while its graded wall is 0.91 / 1.08 / 1.25 s — the ledger's dead zone is 0.34 s of cap margin per row above 2 GiB, and the "waster" is not a row that gains nothing but a row whose gain is already banked by the first funded windows. [0266-class-walk-instrument.txt, 0266-official-run-rot.log, 0266-pair-{staged,trueidle,sweeps1,rotation}-crown.txt, 0264-official-{3G,4G}-45k.log]
+2026-09-13 iter66b | board receipt | `65cb40ec` (3 GiB + anchor gate) **failed** on the hidden cap, `039c8e2d` (2 GiB + 45 000 ceiling) **rejected at hidden 0.840725 / −5.7e-5** (sub-1-bip floor); frontier unchanged at `43c1ca7d` 0.840782. Both 2 GiB trees completed the hidden corpus, so with the 3 GiB census max 1.100 s killed and the 2 GiB max 1.010 s passing twice the hidden slowdown is now bracketed **f ∈ (1.818, 1.980]** and the graded-frame corpus max is a calibrated survival predictor with its line between 1.010 and 1.100 s. Value is the binding constraint at the 2 GiB rung (hidden transfer of the ceiling = 0.57 bip < the 1 bip floor); the 3 GiB rung (+2.3 bip dev) is cap-dead until some device returns ≥0.09 s on the max row at zero score cost. [0266-class-walk-instrument.txt]

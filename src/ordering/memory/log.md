@@ -449,3 +449,45 @@ round, so note the round if you know it.
 - Next: price `1.portfolio` **per variant** (cost + win) — the only spender whose removal buys margin
   on the rows where the cap binds, i.e. the only currency that can re-open the >10k band (40 % of the
   weight, geomean 0.6849) that every added-work device since 0176 has been killed for.
+
+2026-09-12 | iter50 | **parity removed from production (submitted), + the first per-block portfolio census and an OOD cap map**
+- Remote receipts fetched: `41baf1c` (parity alone) **failed**, `ab5adbb` (parity + exchange 12/4/5)
+  **failed**, frontier still ours (`e07fe7a` 0.841768). The parity pass is therefore the only delta
+  between a tree that promoted and two that died; production now ships the **raw** 4b rule
+  (`indep_parity_on()` is `false` in both frames, `SSI_INDEP_PARITY=1` re-enables the device for A/B),
+  so the probe frame and the graded frame agree on this seam by construction. [yukon submissions]
+- Official local receipt on the resulting tree (300/300, no cap failure): **0.791498 / 0.924102**,
+  buckets 0.8873/0.8374/0.6852 vs the promoted tree's 0.791586/0.924134 = **-8.8e-5 (-1.11 bips)**;
+  crate suite 123 passed / 0 failed / 55 ignored. Submitted as **83a8f4fc** (validating).
+  [0229-yukon-run-xchg12-parityoff.log, 0229-submission.txt, results.tsv]
+- Operational: a long run launched with `nohup ... &` is killed by the tool's process-group cleanup
+  (the first harness attempt printed 9 rows and stopped); long runs must be foreground.
+  [0229b-attempt1-bg-killed-by-tool-pgroup.log]
+- **New instrument — `parallel::stats` + `portstats_line` (test-only)**: per-block generator vs
+  exact-scorer attribution and producer counts inside `1.portfolio`, printed for 12 block
+  boundaries under `SSI_PORTSTATS=1`. First measurements: generation is **12-25x** the scoring cost
+  (chimera_selby-c16-02 gen 2.84 s vs score 0.125 s CPU; lee4_10 1.52 vs 0.117), the candidate count
+  is an **n-window schedule** (574 producers at n=2031/2644, 85 at n=17809, 2-8 above n=240k), and
+  93-99 % of scored candidates never lower the running minimum — but the tail is *not* dead on dev
+  (5 wins per 547 on n=2031) while it is **zero wins for 193 producers / 1.66 s CPU on arki0016**.
+  [0229-blockstats-peakrows-4cpu.log, 0229-portstats-peakrows-4cpu.log]
+- **OOD cap map of the current tree** (`/tmp/ood`, 27 structural rows, 4 vCPU): **7 rows exceed the
+  2 s cap** — kkt_b200x200+400 11.08 s, ba_m6_n40000 6.57 s, kkt_b100x300+300 4.21 s,
+  rand_d8_n60000 3.62 s, rand_d6_n300000 3.57 s, rand_d40_n20000 2.30 s, kkt_b40x200+200 (n=8200)
+  2.19 s. Dev's 1.25 s peak is a fitted property, not a bound. [0229-ood-capmap-4cpu.log]
+- Attribution of the over-cap rows: kkt_b200x200+400 = `1.portfolio` 4.46 + `1b.indep` 1.94 +
+  `9.reduce` 3.43 s (4 portfolio producers, 6.27 s of generator CPU in the first batch alone);
+  kkt_b40x200+200 = portfolio 0.83 + indep 0.80 + reduce 0.16, and its final flush spends 2.08 s of
+  CPU on 26 producers for **zero** minimum improvements. [0229-kkt40400-phases-4cpu.log, 0229-kkt8200-phases-4cpu.log]
+- Density is not the killer: fixed-n sweep n=8000-9950, nnz/n 10→28 stays ≤1.44 s and the producer
+  count *falls* 81→16 with density (the candidate cache key includes the dense-deferred set, so
+  α-variants collapse). [0229-density-scale-4cpu.log]
+- In-band A/B of the in-flight device (12/4/5 vs 8/4/3) over the 18-row scale corpus: max |Δt| =
+  0.035 s, wider window better on all 6 rows whose flops move, no regression.
+  [0229-scale-xchg12-4cpu.log, 0229-scale-xchg8-4cpu.log]
+- **Parity priced on structural rows (the kill mechanism, measured)**: same binary/session, `/tmp/ood`
+  in-band rows — `ood_grid3d_16` (n=4096) 1.0842 → **1.3165 s (+0.232 s, +21 %)** with the pass, value
+  0.7341 → 0.7292; `ood_kkt_b40x200+200` 2.0067 → 2.1174 (already over the cap);
+  `ood_grid2d_40` 0.7574 → 0.9191 s **and its ratio gets worse (0.7754 → 0.7763)** — a second
+  entry-dependence instance on a non-dev structure. 3 rows fired the rule.
+  [0229-ood-parity-off-4cpu.log, 0229-ood-parity-on-4cpu.log]

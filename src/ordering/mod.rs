@@ -650,7 +650,7 @@ const LADDER_FILL_BOUND: u64 = 20_000_000_000;
 /// Each pass accepts only a strict exact decrease, so appending a width cannot
 /// worsen any row; the price is wall time on class rows only (~+0.05 s/row on
 /// the rows the class admits), and every pass carries its own work ledger.
-const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
+const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 13] = [
     (48, 4, 19, 32_000_000),
     (9, 4, 4, 32_000_000),
     (8, 4, 3, 64_000_000),
@@ -660,22 +660,33 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
     (11, 4, 4, 64_000_000),
     (14, 4, 5, 64_000_000),
     (6, 4, 3, 64_000_000),
-];
-const PRODUCTION_EXCHANGE_LEDGER: i64 = 536_870_912;
-const PRODUCTION_PEO_ROUNDS: usize = 4;
-
-/// ── iter47b (test-only seam): the NEXT sparse-span widths ───────────────────
-/// The shipped schedule is a schedule, not a fixpoint — four appended widths paid
-/// −4.9e-5 in-frame (0222). This is the next candidate group, priced by appending
-/// it to the shipped nine (`SSI_SPAN_WINDOWS_EXTRA`). Every pass accepts only a
-/// strict exact decrease, so the measurement is purely "residual value, and what
-/// does it cost"; nothing here ships until that measurement says so.
-#[cfg(test)]
-const SPAN_WINDOWS_EXTRA: [(usize, usize, usize, i64); 4] = [
     (13, 4, 6, 64_000_000),
     (16, 4, 6, 64_000_000),
     (5, 4, 3, 64_000_000),
     (24, 4, 11, 32_000_000),
+];
+/// ── iter49: the ledger step (the class's work allowance at both exact-window
+/// sites) ─────────────────────────────────────────────────────────────────────
+/// 512M → 1G at both `subset_window_descent_step` sites was priced for the first
+/// time in the 0230 four-arm sweep (one binary, one session, 4 vCPU, production
+/// frame, 300 dev rows): 0.791498 → **0.791451** (−4.7e-5) alone, while
+/// 512M → 2G is saturated (0.791446, a further −5e-6), so 1G is the knee. Both
+/// sites charge a *work* ledger, so this is bounded work per row, not a schedule:
+/// the worst dev row moves 1.389 → 1.457 s alone and 1.430 s together with the
+/// span group ([evidence 0230-armL-4cpu.log, 0230-armXL-4cpu.log]).
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 1_073_741_824;
+const PRODUCTION_PEO_ROUNDS: usize = 4;
+
+/// ── iter49: the NEXT sparse-span widths, measured and parked ────────────────
+/// The 13-width schedule above is the shipped point (0230). The next group is the
+/// same kind of measurement: append it to the shipped list behind a test-only
+/// seam so one binary prices it in-frame, and ship it only if the receipt says so.
+#[cfg(test)]
+const SPAN_WINDOWS_NEXT: [(usize, usize, usize, i64); 4] = [
+    (26, 4, 12, 32_000_000),
+    (18, 4, 7, 64_000_000),
+    (4, 4, 2, 32_000_000),
+    (32, 4, 15, 32_000_000),
 ];
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
@@ -1611,6 +1622,12 @@ fn flush_batch<'a>(
     if *best_flops > fill_bound && tasks.len() > fill_cap {
         tasks.truncate(fill_cap);
     }
+    #[cfg(test)]
+    {
+        parallel::stats::BATCH_TASKS
+            .fetch_add(tasks.len() as u64, std::sync::atomic::Ordering::Relaxed);
+        parallel::stats::BATCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
     let results = parallel::run_candidates(tasks, sp, n, nnz, *best_flops, true);
     tasks.clear();
     for r in results {
@@ -1638,6 +1655,22 @@ fn flush_batch<'a>(
     }
 }
 
+/// 0229: one test-only attribution line per (row, stage) of the candidate
+/// portfolio — generator work vs exact scoring work, how many scores were paid,
+/// how many of them lowered the running minimum, and how many duplicates the
+/// batch memo served. Printed only when `SSI_PORTSTATS` is set.
+#[cfg(test)]
+fn portstats_line(stage: &str, n: usize, nnz: usize, queued: usize) {
+    if std::env::var_os("SSI_PORTSTATS").is_none() {
+        return;
+    }
+    let [gen_s, score_s, produced, scored, memo, stale_s, win_s, stale, wins, tasks, batches] =
+        parallel::stats::snap();
+    println!(
+        "PORTSTATS\t{stage}\tn={n}\tnnz={nnz}\tqueued={queued}\tgen_s={gen_s:.4}\tscore_s={score_s:.4}\tproduced={produced}\tscored={scored}\tmemo={memo}\tstale_s={stale_s:.4}\twin_s={win_s:.4}\tstale={stale}\twins={wins}\ttasks={tasks}\tbatches={batches}"
+    );
+}
+
 fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Wall clock for the test-only ladder/gate instrumentation below (the
     // shipped ladder is NOT clock-conditioned: see the 0176 window docs at the
@@ -1645,6 +1678,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // because the probe scores 300 rows in one process.
     #[cfg(test)]
     let t_pipeline = std::time::Instant::now();
+    #[cfg(test)]
+    parallel::stats::reset();
     let mut terminal_core_candidate: Option<(u64, Vec<usize>)> = None;
     let n = pattern.n;
     if n == 0 {
@@ -1726,6 +1761,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         return best_perm;
     }
     let amd_flops = best_flops;
+    #[cfg(test)]
+    portstats_line("floor", n, pattern.nnz(), 0);
 
     // Candidate set gated purely by (n, nnz) so both required runs agree.
     let nnz = pattern.nnz();
@@ -2278,6 +2315,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         consider!(move || feral_kahip::kahip_order_full(&core, &kahip_eco).map(|(p, _, _)| p));
     }
 
+    #[cfg(test)]
+    portstats_line("core", n, nnz, tasks.len());
+
     // ── PORTED CANDIDATE FAMILIES (SSI challenge) ──────────────────────────
     // Queued AFTER the partitioner cascade on purpose: the cascade's gates
     // (`part_extra`, `part_extra2`) compare a base separator against the
@@ -2285,6 +2325,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // raised that bar enough to silence KaHIP-Eco/METIS variants on the mpbp
     // family (mpbp_34 0.3158 -> 0.4062 measured). Here they only compete in
     // the final best-of and seed the relabel batch's runner-up ledger.
+    #[cfg(test)]
+    portstats_line("ported", n, nnz, tasks.len());
+
     // ── QUOTIENT-METRIC FAMILY on the light tier (ported from the SSI challenge)
     // Every `custom_metrics::ScoreVariant` is one AMD/AMF-class elimination walk
     // under a different pivot score.
@@ -2375,6 +2418,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    #[cfg(test)]
+    portstats_line("qmetric", n, nnz, tasks.len());
+
     // ── RELABELLED QUOTIENT-METRIC MULTISTART (new lotteries, same 0005 form) ──
     // AMD and AMF are relabelled because their quotient-graph walks read the
     // vertex numbering (hash-bucket insertion order); `order_variant` is the same
@@ -2434,6 +2480,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    #[cfg(test)]
+    portstats_line("qmultistart", n, nnz, tasks.len());
+
     // ── SUB-10k RELABELLED LOTTERIES (0096: hidden-gt preservation by structure)
     // The 0096 bundle (hub-free lotteries on all n) won dev +1.28 with a gt_10k
     // redistribution cost and graded hidden-worse: extra draws reshuffle the
@@ -2487,6 +2536,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    #[cfg(test)]
+    portstats_line("sub10k", n, nnz, tasks.len());
+
     // ── SUB-10k LOTTERY FOLLOW-UPS (0096 follow-ups / gdonninelli)
     // Remaining α rungs the promoted 0096 note listed but did not ship:
     // DegDivNvSqrtWf@{2.5,1}, DegPlusDegme@{2.5,1}, SqPure@1, SqDiv@1,
@@ -2529,6 +2581,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    #[cfg(test)]
+    portstats_line("sub10k-followup", n, nnz, tasks.len());
+
     // ── EXTRA AMF α VALUES (win D) ──────────────────────────────────────────
     // See `D_MAX_NNZ` / `D_WIDE_*`. Pure additions under the best-of floor.
     if heavy_arm_enabled() && n < AMF_MAX_N && nnz < AMF_MAX_NNZ {
@@ -2549,6 +2604,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             });
         }
     }
+
+    #[cfg(test)]
+    portstats_line("amf-extra", n, nnz, tasks.len());
 
     // ── HEAVY-TIER QUOTIENT-GRAPH PIVOT METRICS ─────────────────────────────
     // See the `HEAVY_METRIC_*` constants. The dead window and the low-band
@@ -2647,6 +2705,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
 
+    #[cfg(test)]
+    portstats_line("heavy-qmetric", n, nnz, tasks.len());
+
     // ── HEAVY-TIER no-dense AMD on sparse heavies ───────────────────────────
     // See `HEAVY_AMDND_*`. One AMD-speed pass; the ROBUST block stops at 150k.
     if heavy_arm_enabled()
@@ -2659,6 +2720,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             consider!(move || feral_amd::amd_order_opts(&core, &amd_heavy_nodense).map(|(p, ..)| p));
         }
     }
+
+    #[cfg(test)]
+    portstats_line("heavy-nodense-amd", n, nnz, tasks.len());
 
     // ── METIS SHAPE VARIANTS on the dense mid band ──────────────────────────
     // The cascade above runs METIS shape variants only below 60k nnz and only
@@ -2753,6 +2817,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         });
     }
 
+    #[cfg(test)]
+    portstats_line("metis-shapes", n, nnz, tasks.len());
+
     // ── RELABELLED-AMF MULTI-START: the same lottery on a DIFFERENT objective ──
     //
     // The loop above is a randomized-restart minimum DEGREE. AMF (approximate
@@ -2839,6 +2906,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     }
 
 
+    #[cfg(test)]
+    portstats_line("relabel-amf", n, nnz, tasks.len());
+
     // ── HEAVY-TIER RELABELLED-AMF MULTISTART (see the `HEAVY_RELABEL_AMF_*` consts)
     if heavy_arm_enabled() && nnz > RELABEL_AMF_MAX_NNZ {
         let sparse = (HEAVY_RELABEL_AMF_SPARSE_MIN_NNZ..HEAVY_RELABEL_AMF_SPARSE_MAX_NNZ).contains(&nnz)
@@ -2919,6 +2989,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     flush!();
     drop(generator_cache);
+    #[cfg(test)]
+    portstats_line("heavy-relabel-amf", n, nnz, tasks.len());
     #[cfg(test)]
     parallel::phase_mark("1.portfolio", _tph, markval!(best_perm, best_flops));
     #[cfg(test)]
@@ -5652,7 +5724,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // allowance* (small = 16M+16M+32M, full = 32M+32M+64M) separately
             // from the factor bound; `SSI_FOLLOWUP_FULL_WINDOWS` re-points it so
             // one binary measures both arms.
-            // iter47b seam (test-only): append the next candidate width group to
+            // iter49 seam (test-only): append the next candidate width group to
             // the shipped schedule so one binary prices it in-frame; unset, and in
             // any `cfg(not(test))` build, the shipped list is used verbatim.
             #[cfg(test)]
@@ -5663,8 +5735,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     } else {
                         PRODUCTION_SPAN_WINDOWS.to_vec()
                     };
-                if std::env::var_os("SSI_SPAN_WINDOWS_EXTRA").is_some() {
-                    v.extend_from_slice(&SPAN_WINDOWS_EXTRA);
+                if std::env::var_os("SSI_SPAN_WINDOWS_NEXT").is_some() {
+                    v.extend_from_slice(&SPAN_WINDOWS_NEXT);
                 }
                 v
             };

@@ -1,6 +1,0 @@
-b9549e8     newjordan  [31mfailed[39m      n/a       n/a                                                            n/a                 416e372  9/13/26, 4:46 AM 
-393a167     newjordan  [31mfailed[39m      n/a       n/a                                                            n/a                 e2c7ba2  9/13/26, 5:23 AM 
-6f11775     newjordan  [31mfailed[39m      n/a       n/a                                                            n/a                 d54059b  9/13/26, 6:33 AM 
-039c8e2     newjordan  [31mrejected[39m    0.840725  {"geomean_fill_ratio":0.944078,"geomean_flop_ratio":0.840725}  [32m-0.000057 (-0.01%)[39m  04fd8eb  9/13/26, 8:08 AM 
-65cb40e     newjordan  [31mfailed[39m      n/a       n/a                                                            n/a                 dafcc0b  9/13/26, 8:49 AM 
-49f6584     newjordan  [36mvalidating[39m  n/a       n/a                                                            n/a                 -        9/13/26, 9:38 AM 

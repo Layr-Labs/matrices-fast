@@ -24,57 +24,6 @@ pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
 // (facility/transswitch class at ratio≈1) that tip's below-anchor gate skips.
 const TRANSPLANT_LEDGER: u64 = 1_000_000;
 
-/// ── 0198: the `sparse_large_tie` widening is RESTORED ──────────────────────
-/// The window (`n` 15k-120k, `nnz` 40k-500k, `nnz <= 6n`, near-AMD tie) was
-/// the inherited code's only *addition* in this shape: it opened the terminal
-/// donor pass on rows the tip's below-anchor gate skipped, fitted to the
-/// "facility/transswitch class at ratio~1" (`iter647a`). 0196 removed it on the
-/// strength of a 327-row measurement (300 dev rows + a 27-row structural stress
-/// corpus: grid 2D/3D, uniform random sparse at fixed average degree,
-/// block-angular KKT, geometric, scale-free, banded) that shows the removal is
-/// flop-inert:
-///
-///   dev:  16 rows match the window, 2 of them are opened by it ALONE, and
-///         disabling it changes **0 of 300** flop counts (identical COUNTS,
-///         SCORE 0.792442 either way) — the donor pass finds no strict
-///         improvement on either row. Corpus `order()` time did not fall
-///         (112.79 s -> 115.63 s, i.e. noise): two rows is below resolution.
-///   OOD:  3 rows match the window, **0** are opened by it alone.
-///
-/// The remote receipts then contradicted the "cost without value" reading in
-/// the only currency that matters — the 2 s per-matrix cap. Three hidden runs
-/// of this tree, one variable apart, are on the board (`yukon submissions`,
-/// 2026-09-12, benchmark `8c3e7051`):
-///
-///   `2d067ddb` (0195) widening **on**, draw off, chain = the frontier's own
-///             4e6 gate/allowance  -> **completed**, hidden 0.842857 (= the
-///             frontier, 0.00 %).
-///   `465b0b07` (0196) widening **off**, everything else identical from 0195
-///             -> **failed**: "hidden matrix: order() exceeded the 2.0s
-///             per-matrix cap and was killed", 103.8 s into the Benchmark step.
-///   `91aa5f4b` (0197) widening off + this draw -> **failed**, same reason,
-///             107.1 s into the step.
-///
-/// A pure removal of a ledger-bounded pass cannot *add* time through its own
-/// cost, and the pass changes no flop count on the 327 rows we can measure, so
-/// the removal's only remaining channel is the permutation it would have
-/// adopted: on a hidden row inside the window, `transplant_pass` accepts a
-/// donor splice that scores strictly better than the incumbent, and that
-/// permutation is cheaper for every later stage (subtree chain, MINL). The
-/// window is therefore *protective* on heavy, near-AMD hidden rows, and it is
-/// restored. `SSI_NO_SPARSE_LARGE_TIE` is the test-only seam that removes it
-/// again so one binary can A/B the two arms.
-#[cfg(test)]
-fn sparse_large_tie_on() -> bool {
-    std::env::var("SSI_NO_SPARSE_LARGE_TIE").is_err()
-}
-
-#[cfg(not(test))]
-#[inline(always)]
-fn sparse_large_tie_on() -> bool {
-    true
-}
-
 pub(super) fn refine_with_donors(
     sp: &ScoringPattern,
     incumbent: &[usize],
@@ -90,23 +39,12 @@ pub(super) fn refine_with_donors(
     let mut ws = scoring_ws::ScoreWorkspace::new(n, nnz);
     let inc_f = ws.flops(sp, incumbent);
     let below = amd_flops > 0 && inc_f < amd_flops;
-    // Sparse-large near-AMD ties: tip skipped these (inc_f >= amd). Open them.
-    let sparse_large_tie = sparse_large_tie_on()
-        && (15_000..120_000).contains(&n)
-        && (40_000..500_000).contains(&nnz)
-        && nnz <= 6 * n
-        && amd_flops > 0
-        && inc_f.saturating_mul(100) <= amd_flops.saturating_mul(101);
-    #[cfg(test)]
-    if sparse_large_tie {
-        super::force_audit::TIE_WINDOW_OPENED
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if !below {
-            super::force_audit::TIE_PASS_RUN
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        }
-    }
-    if !below && !sparse_large_tie {
+    // 0157: the `sparse_large_tie` opening (two-sided n and nnz windows plus a
+    // 1% ratio band, commented after the facility/transswitch dev families)
+    // is removed — the identity-fitted-window class 0150 removed at stage 1b.
+    // Its earlier failure-window verdict is void (the control could not
+    // re-grade the promoted tree); the deletion is strict work-removal.
+    if !below {
         return None;
     }
     let donor_perms: Vec<&[usize]> = donors.iter().map(|(_, p)| p.as_slice()).collect();

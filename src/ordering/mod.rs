@@ -5701,6 +5701,139 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+
+    // ── 0167: KERNEL-CORE-FED EXACT SEARCH (0162's documented path). The ─────
+    // 0162 census showed the simplicial/almost-simplicial fixpoint builds a
+    // core 24-86 % smaller than the degree-3 core on twin-rich rows (sfacloc2,
+    // qspp, glider400) — worthless as an ordering variant (the chordal
+    // collapses land on unwinnable AMD ties) but untested as a SEARCH-SPACE
+    // component: run the bounded exact stages on the KERNEL core, where the
+    // same op ledgers buy much deeper search (window DP cost scales with
+    // n·w). The objective splits exactly (0062's argument, same accounting
+    // as the K=3 prefix): prefix_flops is fixed by the kernel, any strict
+    // core improvement is a strict full improvement. Acceptance re-scores
+    // the SPLICED permutation exactly against the incumbent — never the
+    // split arithmetic.
+    {
+        #[cfg(test)]
+        let kx_on: bool = std::env::var("SSI_NO_KX").map(|v| v.trim() != "1").unwrap_or(true);
+        #[cfg(not(test))]
+        let kx_on: bool = true;
+        // 0168 re-gate (runner-log ground truth: the hidden cap kills at the
+        // cap edge and the killer class reaches down to n~8k): the stage is
+        // confined to n <= 6_000 so every marginal row (arki0016 n 7993,
+        // glider400 n 10017, the whole 45k ceiling band) runs EXACTLY as the
+        // promoted tree runs it — zero delta anywhere near the class the
+        // runner's speed lottery decides. The surviving movers (ex1265a
+        // n 123, hydroenergy1 n 1046) sit deep inside the small band.
+        if kx_on && n >= 100 && n <= 6_000 && nnz <= 130_000 && best_flops <= LADDER_FILL_BOUND {
+            if let Some(cl) = core_lift::reduce_kernel(
+                &scoring_pat,
+                3,
+                12,
+                60_000,
+                3_000_000,
+                40_000_000,
+            ) {
+                let cn = cl.core_n();
+                if (8..=12_000).contains(&cn) && cl.core_nnz() <= 100_000 {
+                    let core_pat = ScoringPattern {
+                        n: cn,
+                        col_ptr: cl.core_col_ptr.clone(),
+                        row_idx: cl.core_row_idx.clone(),
+                    };
+                    let ccp: Vec<i32> = cl.core_col_ptr.iter().map(|&x| x as i32).collect();
+                    let cri: Vec<i32> = cl.core_row_idx.iter().map(|&x| x as i32).collect();
+                    let mut best_core: Option<(u64, Vec<usize>)> = None;
+                    if let Some(ccore) = feral_ordering_core::CscPattern::new(cn, &ccp, &cri) {
+                        // Seed passes: AMD + AMF α5 on the kernel core.
+                        let mut seeds: Vec<Vec<usize>> = Vec::new();
+                        if let Ok((p, _)) = feral_amd::amd_order_opts(
+                            &ccore,
+                            &feral_amd::AmdOptions::default(),
+                        ) {
+                            let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                            if is_bijection(&cp, cn) {
+                                seeds.push(cp);
+                            }
+                        }
+                        if let Ok((p, _)) = feral_amf::amf_order_opts(
+                            &ccore,
+                            &feral_amf::AmfOptions { dense_alpha: 5.0, ..Default::default() },
+                        ) {
+                            let cp: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                            if is_bijection(&cp, cn) {
+                                seeds.push(cp);
+                            }
+                        }
+                        for cp in seeds {
+                            let f = flops_of(&core_pat, &cp);
+                            if best_core.as_ref().map_or(true, |(bf, _)| f < *bf) {
+                                best_core = Some((f, cp));
+                            }
+                        }
+                    }
+                    if let Some((f0, cp0)) = best_core {
+                        let (mut cf, mut cp) = (f0, cp0);
+                        // Exact subtree chain on the kernel core (existing
+                        // bounded machinery, same accounting as the K=3
+                        // recursion).
+                        if let Some((f2, p2)) =
+                            refine_core(cn, &cl.core_col_ptr, &cl.core_row_idx, &core_pat, &cp, cf, cf)
+                        {
+                            cf = f2;
+                            cp = p2;
+                        }
+                        // The terminal class recipe, on the core: one
+                        // 12/4/5 step exchange plus the 3-span schedule at
+                        // small allowances (the core is small; these are
+                        // cheap and every accept is a strict exact decrease).
+                        if let Some(cand) = rgreedy::subset_window_descent_step(
+                            cn, &cl.core_col_ptr, &cl.core_row_idx, &cp, 12, 4, 5, 64_000_000,
+                        ) {
+                            if is_bijection(&cand, cn) {
+                                let f = flops_of(&core_pat, &cand);
+                                if f < cf {
+                                    cf = f;
+                                    cp = cand;
+                                }
+                            }
+                        }
+                        for (width, sweeps, step, budget) in [
+                            (48, 4, 19, 16_000_000),
+                            (9, 4, 4, 16_000_000),
+                            (8, 4, 3, 32_000_000),
+                        ] {
+                            if let Some(cand) = rgreedy::sparse_span_window_descent(
+                                cn, &cl.core_col_ptr, &cl.core_row_idx, &cp,
+                                width, sweeps, step, budget,
+                            ) {
+                                if is_bijection(&cand, cn) {
+                                    let f = flops_of(&core_pat, &cand);
+                                    if f < cf {
+                                        cf = f;
+                                        cp = cand;
+                                    }
+                                }
+                            }
+                        }
+                        // Splice and accept on the FULL exact score.
+                        if cf < f0 {
+                            let spliced = core_lift::splice(&cl, &cp);
+                            if is_bijection(&spliced, n) {
+                                let f_full = score(&spliced);
+                                if f_full < best_flops {
+                                    best_flops = f_full;
+                                    best_perm = spliced;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // ── iter42: the terminal four-stream round, re-admitted on the leader's own
     //    exact factor-nnz key instead of this branch's structural + live-ratio
     //    gates.

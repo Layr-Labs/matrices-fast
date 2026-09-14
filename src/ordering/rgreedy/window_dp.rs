@@ -119,6 +119,20 @@ fn max_dimension() -> usize {
     super::max_n_limit()
 }
 
+/// Test-only control for matched old/new timing from one compiled artifact.
+/// Production always elides the provably redundant first image restoration.
+#[inline(always)]
+fn elide_first_reset() -> bool {
+    #[cfg(test)]
+    {
+        std::env::var_os("SSI_RESTORE_FIRST_IMAGE").is_none()
+    }
+    #[cfg(not(test))]
+    {
+        true
+    }
+}
+
 #[cfg(test)]
 #[derive(Clone, Default)]
 struct WorkStats {
@@ -624,7 +638,11 @@ fn subset_window_descent_config(
         }
         #[cfg(test)]
         let t_reset = std::time::Instant::now();
-        game.reset();
+        if sweep == 0 && elide_first_reset() {
+            game.initialize_fresh();
+        } else {
+            game.reset();
+        }
         #[cfg(test)]
         {
             report.reset_ns += t_reset.elapsed().as_nanos();

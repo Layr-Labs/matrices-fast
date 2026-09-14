@@ -684,7 +684,24 @@ impl<'a> Game<'a> {
         })
     }
 
+    /// Restore the pristine image and initialize a new run.
     fn reset(&mut self) {
+        self.restore_pristine_image();
+        self.initialize_run();
+    }
+
+    /// Initialize a newly constructed game without restoring its image.
+    ///
+    /// Both [`Game::assemble`] and [`Game::new_sparse`] leave `adj` equal to
+    /// the pristine graph. Exact-window search calls this only before the
+    /// first sweep, before any elimination can mutate that image. Keep the
+    /// legacy reset charge in [`Game::initialize_run`] so operation budgets and
+    /// therefore every later search decision remain identical to [`Game::reset`].
+    fn initialize_fresh(&mut self) {
+        self.initialize_run();
+    }
+
+    fn restore_pristine_image(&mut self) {
         if let Some(adj0) = self.adj0 {
             self.adj.copy_from_slice(&adj0[..self.n * self.w]);
         } else {
@@ -699,6 +716,9 @@ impl<'a> Game<'a> {
                 }
             }
         }
+    }
+
+    fn initialize_run(&mut self) {
         self.bhead.fill(-1);
         self.livelist.clear();
         self.deg.copy_from_slice(&self.deg0);
@@ -1091,6 +1111,39 @@ mod game_cpu_tests {
         let row_idx = vec![0, 1, 1, 2, 0, 0, 2, 0, 1];
         let p = Pattern { n: 3, col_ptr, row_idx };
         check_sparse_sequence(&p, &[2, 0, 1]);
+    }
+
+    #[test]
+    fn fresh_initialization_matches_full_reset_state() {
+        let cases = [
+            Pattern::from_edges(7, &[(0, 1), (1, 2), (3, 4), (4, 5), (3, 5)]),
+            blocked_pattern(SCAN_MAX_N),
+            blocked_pattern(SCAN_MAX_N + 1),
+        ];
+        for p in &cases {
+            let adj = Game::build_adj(p.n, &p.col_ptr, &p.row_idx).unwrap();
+            let mut fresh = Game::new(p.n, &adj).unwrap();
+            let mut restored = Game::new(p.n, &adj).unwrap();
+            fresh.initialize_fresh();
+            restored.reset();
+            same_state(&fresh, &restored);
+
+            let mut sparse_fresh = Game::new_sparse(p.n, &p.col_ptr, &p.row_idx).unwrap();
+            let mut sparse_restored = Game::new_sparse(p.n, &p.col_ptr, &p.row_idx).unwrap();
+            sparse_fresh.initialize_fresh();
+            sparse_restored.reset();
+            same_runtime_state(&sparse_fresh, &sparse_restored);
+        }
+
+        // Duplicate and symmetric entries exercise the idempotent sparse
+        // construction path directly rather than Pattern::from_edges.
+        let col_ptr = vec![0, 4, 7, 9];
+        let row_idx = vec![0, 1, 1, 2, 0, 0, 2, 0, 1];
+        let mut fresh = Game::new_sparse(3, &col_ptr, &row_idx).unwrap();
+        let mut restored = Game::new_sparse(3, &col_ptr, &row_idx).unwrap();
+        fresh.initialize_fresh();
+        restored.reset();
+        same_runtime_state(&fresh, &restored);
     }
 
     fn check_sequence(p: &Pattern, nelim: usize, order: &[usize]) -> GameCpuStats {

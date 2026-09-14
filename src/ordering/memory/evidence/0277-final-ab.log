@@ -1,0 +1,68 @@
+
+running 1 test
+test ordering::probe::probe_slow_row_stage ... STAGED	slay06m	357	1080	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/slay06m.bin
+STAGED	pinene200	19995	97990	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pinene200.bin
+STAGED	mpbp_48	28368	91016	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/mpbp_48.bin
+STAGED	transswitch0300p	11659	48446	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/transswitch0300p.bin
+STAGED	watercontamination0303r	1310	37028	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/watercontamination0303r.bin
+STAGED	meanvar-orl400_05_e_7	5205	174804	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/meanvar-orl400_05_e_7.bin
+STAGED	pooling_rt2tp	118	654	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pooling_rt2tp.bin
+STAGED	waterund14	333	2204	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/waterund14.bin
+STAGED	procurement1large	14416	41068	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/procurement1large.bin
+STAGED	powerflow0300p	11251	41918	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/powerflow0300p.bin
+STAGED	chp_shorttermplan2d	16364	52108	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chp_shorttermplan2d.bin
+STAGED	ringpack_30_2	17999	121458	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/ringpack_30_2.bin
+STAGED	gabriel09	21688	89702	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/gabriel09.bin
+STAGED	nuclear10a	17493	163816	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/nuclear10a.bin
+STAGED	methanol400	23999	151728	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/methanol400.bin
+STAGED	pooling_sppa9tp	5040	121302	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pooling_sppa9tp.bin
+STAGED	chimera_lga-01	1120	6400	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_lga-01.bin
+STAGED	crudeoil_lee4_09	15904	101792	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/crudeoil_lee4_09.bin
+STAGED	popdynm200	22407	105584	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/popdynm200.bin
+STAGED	squfl030-150	13680	36000	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/squfl030-150.bin
+STAGED_TOTAL	20
+WALL	arm	matrix	min	median	max	ratio
+WALL	crown	slay06m	0.9804	1.0210	1.0210	1.000000000
+WALL	cand	slay06m	1.0245	1.0710	1.0710	1.000000000
+WALL	crown	pinene200	3.6376	4.3313	4.3313	0.833587740
+WALL	cand	pinene200	3.3849	3.4795	3.4795	0.833587740
+WALL	crown	mpbp_48	4.0235	4.2046	4.2046	0.474586466
+WALL	cand	mpbp_48	3.8718	3.9603	3.9603	0.474586466
+WALL	crown	transswitch0300p	3.7962	3.8065	3.8065	0.926445893
+WALL	cand	transswitch0300p	3.6765	3.7386	3.7386	0.926445893
+WALL	crown	watercontamination0303r	0.4287	0.4391	0.4391	1.000000000
+WALL	cand	watercontamination0303r	0.4073	0.4250	0.4250	1.000000000
+WALL	crown	meanvar-orl400_05_e_7	0.7247	0.8191	0.8191	0.999835775
+WALL	cand	meanvar-orl400_05_e_7	0.6982	0.7511	0.7511	0.999835775
+WALL	crown	pooling_rt2tp	1.0499	1.1329	1.1329	0.986385296
+WALL	cand	pooling_rt2tp	1.1467	1.2578	1.2578	0.986385296
+WALL	crown	waterund14	1.4118	1.5840	1.5840	0.360048682
+WALL	cand	waterund14	1.4627	1.5216	1.5216	0.360048682
+WALL	crown	procurement1large	3.5538	4.4912	4.4912	0.527457383
+WALL	cand	procurement1large	3.4059	3.4437	3.4437	0.527457383
+WALL	crown	powerflow0300p	3.5860	3.7307	3.7307	0.951815691
+WALL	cand	powerflow0300p	3.1041	3.1697	3.1697	0.951815691
+WALL	crown	chp_shorttermplan2d	3.6237	3.7252	3.7252	0.502533747
+WALL	cand	chp_shorttermplan2d	3.1518	3.5422	3.5422	0.502533747
+WALL	crown	ringpack_30_2	4.0382	4.2671	4.2671	0.231087490
+WALL	cand	ringpack_30_2	3.8218	4.3265	4.3265	0.231087490
+WALL	crown	gabriel09	3.1744	3.7731	3.7731	0.896773350
+WALL	cand	gabriel09	2.8457	2.9726	2.9726	0.896773350
+WALL	crown	nuclear10a	3.5678	3.6469	3.6469	0.670600260
+WALL	cand	nuclear10a	3.3270	3.4151	3.4151	0.670600260
+WALL	crown	methanol400	2.7715	2.8599	2.8599	0.693062664
+WALL	cand	methanol400	2.4643	2.5309	2.5309	0.693062664
+WALL	crown	pooling_sppa9tp	2.5125	2.7049	2.7049	0.161338075
+WALL	cand	pooling_sppa9tp	2.5914	2.6720	2.6720	0.161338075
+WALL	crown	chimera_lga-01	2.1165	2.1830	2.1830	0.740586720
+WALL	cand	chimera_lga-01	2.2840	2.3747	2.3747	0.736724554
+WALL	crown	crudeoil_lee4_09	4.4351	4.9968	4.9968	0.617148810
+WALL	cand	crudeoil_lee4_09	4.0994	4.1187	4.1187	0.617148810
+WALL	crown	popdynm200	4.0928	4.1194	4.1194	0.932430201
+WALL	cand	popdynm200	3.9323	3.9942	3.9942	0.932430201
+WALL	crown	squfl030-150	1.5491	1.5543	1.5543	1.000000000
+WALL	cand	squfl030-150	1.5289	1.5403	1.5403	1.000000000
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 223.32s
+

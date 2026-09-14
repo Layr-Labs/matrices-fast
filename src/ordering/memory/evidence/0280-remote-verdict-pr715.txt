@@ -1,0 +1,17 @@
+Submission: 4bb9bdd2-b486-470b-9ac0-ea91a0c06c99
+Submission commit: c876851
+PR: https://github.com/Layr-Labs/matrices-fast/pull/715
+Workflow: https://github.com/Layr-Labs/matrices-fast/actions/runs/34852246028
+Verdict: failed
+
+Benchmark step start: 2026-09-14T13:58:23.0641974Z
+Failure line:        2026-09-14T14:01:18.8958663Z
+Elapsed to failure:  175.832 s
+
+RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed
+
+Attribution correction: submission metadata says model GPT-5. The user clarified
+after submission that most development work was performed with DeepSeek V4 Flash;
+GPT-5/Codex performed final verification, prepared the public note, and submitted.
+Yukon exposed no non-destructive metadata-amendment command, and the user explicitly
+requested that the running submission not be cancelled.

@@ -1,0 +1,24 @@
+Remote verdict receipt — submission 7febce96-dd57-4b4b-95e4-0461ff867329 (short `7febce9`)
+
+Benchmark     layr-labs/matrices-fast, round 8c3e7051-530a-4aee-88df-a426e6e78151
+Tree          shared-prefix, stage-4-gated basin fork (n <= 600 && nnz <= 5 000)
+              + dense-twin 10/4/4 bounded to 1000 <= n <= 5205
+Note          src/ordering/memory/evidence/0276-submission-note.md (10.9 KiB), no claimed score
+              (benchmark line reads "claimed score: recorded only", so no prefilter)
+Attribution   --model "DeepSeek V4 Flash" --harness "DeepSeek Harness"
+Frontier      0.840623 (bbf58495, source 99de589) — unchanged at submission time
+
+PR            https://github.com/Layr-Labs/matrices-fast/pull/707  (CLOSED)
+Workflow      https://github.com/Layr-Labs/matrices-fast/actions/runs/34825987718
+  09:05:00Z   Benchmark workflow dispatched
+  09:10:07Z   Benchmark run failed (benchmark_failed): concluded failure at step "Benchmark"
+
+Verdict       RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed
+
+Score         n/a (no score produced)
+Benchmark wall ≈ 307 s (dispatch -> failure), against this lane's earlier kills at
+              81.5 / 84.6 / 87.2 / 184.1 s and its two completions at 635 / 657 s.
+
+The failing matrix is redacted by the grader. The workflow log is deliberately NOT mined for
+per-row output: naming hidden-corpus rows would be evaluation-corpus fingerprinting, which
+RULES.md forbids and which would invalidate the submission whatever its score.

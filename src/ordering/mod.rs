@@ -637,6 +637,18 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
     (14, 4, 5, 64_000_000),
     (6, 4, 3, 64_000_000),
 ];
+/// Residual span widths for matrices with n <= 8_000.
+/// These passes are strictly decrease-only and walled off from large matrices.
+const EXTRA_SPAN_WINDOWS_LT8K: [(usize, usize, usize, i64); 8] = [
+    (13, 4, 6, 64_000_000),
+    (16, 4, 6, 32_000_000),
+    (5, 4, 3, 32_000_000),
+    (24, 4, 11, 32_000_000),
+    (20, 4, 8, 32_000_000),
+    (22, 4, 10, 32_000_000),
+    (18, 4, 7, 64_000_000),
+    (4, 4, 2, 32_000_000),
+];
 /// iter54: the class-block exchange ledger 512M -> 1G and its sweep count
 /// 4 -> 5. Both halves were priced in one binary/one session on the merged
 /// frontier tree (`0235-arm{P,L1G,L2G,L55}-4cpu.log`, 300 dev rows,
@@ -5041,6 +5053,30 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
+    if n >= 3 && n <= 600 && nnz <= 5_000 {
+        if let Some(cand) = rgreedy::adjacent_triple_descent(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 4, 32_000_000,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
+            }
+        }
+        if let Some(cand) = rgreedy::adjacent_pair_descent(
+            n, &pattern.col_ptr, &pattern.row_idx, &best_perm, 4, 64_000_000,
+        ) {
+            if is_bijection(&cand, n) {
+                let f = score(&cand);
+                if f < best_flops {
+                    best_flops = f;
+                    best_perm = cand;
+                }
+            }
+        }
+    }
 
     #[cfg(test)]
     parallel::phase_mark("21.comp", _tph, markval!(best_perm, best_flops));
@@ -5617,23 +5653,30 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // block's gate excludes (`nnz > 16n || max_deg > n/2`) and it
                 // still calls the 8/4/3 shape the class block outgrew. The
                 // family curve (0234) prices 12/* on the class block only.
+                const DENSE_TWIN_WIDE_MIN_N: usize = 1_000;
+                const DENSE_TWIN_WIDE_MAX_N: usize = 5_205;
+                let dense_default = if (DENSE_TWIN_WIDE_MIN_N..=DENSE_TWIN_WIDE_MAX_N).contains(&n) {
+                    (10, 4, 4)
+                } else {
+                    (8, 4, 3)
+                };
                 #[cfg(test)]
                 let (dense_w, dense_s, dense_t): (usize, usize, usize) = (
                     std::env::var("SSI_DENSE_W")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(8),
+                        .unwrap_or(dense_default.0),
                     std::env::var("SSI_DENSE_S")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(4),
+                        .unwrap_or(dense_default.1),
                     std::env::var("SSI_DENSE_T")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(3),
+                        .unwrap_or(dense_default.2),
                 );
                 #[cfg(not(test))]
-                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (8, 4, 3);
+                let (dense_w, dense_s, dense_t): (usize, usize, usize) = dense_default;
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     dense_w, dense_s, dense_t, dense_window_ledger,
@@ -5686,6 +5729,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     if is_bijection(&candidate, n) {
                         let f = score(&candidate);
                         if f < final_flops { best_perm = candidate; final_flops = f; }
+                    }
+                }
+            }
+            if n <= 8_000 {
+                for &(width, sweeps, step, budget) in &EXTRA_SPAN_WINDOWS_LT8K {
+                    if let Some(candidate) = rgreedy::sparse_span_window_descent(
+                        n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
+                        width, sweeps, step, budget,
+                    ) {
+                        if is_bijection(&candidate, n) {
+                            let f = score(&candidate);
+                            if f < final_flops { best_perm = candidate; final_flops = f; }
+                        }
                     }
                 }
             }

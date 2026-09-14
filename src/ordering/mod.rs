@@ -712,17 +712,7 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 // measured −1.03e-4), and that is exactly the pair of rows that sits closest to
 // the cap. So the allowance ships at 2 GiB and the value is bought back on the
 // ceiling, which is wall-cheap where the allowance is wall-expensive.
-/// Resource law for the terminal exact exchange.  The worker grants 4 GiB of
-/// address space; sparse-pristine construction retains one mutable bit image,
-/// so that image may consume at most one quarter of the frame.  The input must
-/// also remain structurally sparse (at most sixteen directed CSR entries per
-/// vertex), and the deterministic work account is sixteen charge units per
-/// word in the admitted image envelope.  These powers-of-two limits are tied
-/// to the worker contract and representation, not to a corpus row boundary.
-const PRODUCTION_EXCHANGE_IMAGE_WORDS: usize = 1 << 27; // 1 GiB of u64 words
-const PRODUCTION_EXCHANGE_SPARSE_FACTOR: usize = 16;
-const PRODUCTION_EXCHANGE_LEDGER: i64 =
-    (PRODUCTION_EXCHANGE_IMAGE_WORDS * PRODUCTION_EXCHANGE_SPARSE_FACTOR) as i64;
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 2147483648;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
@@ -5454,7 +5444,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         .and_then(|v| v.trim().parse::<usize>().ok())
         .unwrap_or(200_000);
     #[cfg(not(test))]
-    let class_nnz: usize = usize::MAX;
+    let class_nnz: usize = 200_000;
     #[cfg(test)]
     let follow_nnz: usize = std::env::var("SSI_FOLLOW_NNZ")
         .ok()
@@ -5476,14 +5466,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // skipping the rest of the family is outcome-neutral by construction.
     // [0265-official-run-ledger0.log, 0265-graded-frame-census.txt]
     let past_anchor = best_flops < amd_flops;
-    let image_words = n.checked_mul(n.div_ceil(64));
-    let terminal_exchange = past_anchor
-        && n >= 6
-        && n <= class_n
-        && nnz <= class_nnz
-        && image_words.is_some_and(|words| words <= PRODUCTION_EXCHANGE_IMAGE_WORDS)
-        && nnz <= n.saturating_mul(PRODUCTION_EXCHANGE_SPARSE_FACTOR)
-        && max_deg <= n / 2;
+    let terminal_exchange = past_anchor && n >= 6 && n <= class_n && nnz <= class_nnz
+        && nnz <= n.saturating_mul(16) && max_deg <= n / 2;
     #[cfg(test)]
     let terminal_exchange = terminal_exchange && probe::leader_tail::exchange_enabled();
     if terminal_exchange {

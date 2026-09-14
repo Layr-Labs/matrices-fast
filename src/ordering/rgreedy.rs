@@ -117,8 +117,8 @@ pub(crate) fn rank_alpha_three_quarters_cmp(
 /// ~`n²/4` bytes per `Game` (2 · n · ⌈n/64⌉ · 8 = 506 MB at 45 000, versus 156 MB
 /// at 25 000) — the graded 4 GiB `RLIMIT_AS` is enforced by the local runner too,
 /// so the sandboxed 300-row run is the memory check. [0264-ceil{25000,36000,45000}-2G-4cpu.log]
-/// General implementation guard.  Production terminal admission is tighter:
-/// its one-GiB adjacency-image law binds near 92k vertices.  Keeping this guard
+/// General implementation guard. Production terminal admission is tighter:
+/// its one-GiB adjacency-image law binds near 92k vertices. Keeping this guard
 /// at the next power of two makes it a representation safety ceiling rather
 /// than a corpus-selected admission boundary.
 pub(crate) const MAX_N: usize = 1 << 17;
@@ -314,10 +314,19 @@ impl Pristine {
             + (self.col_ptr.len() + self.row_idx.len()) * std::mem::size_of::<usize>()
     }
 
-    pub(crate) fn game(&self) -> Option<Game<'_>> {
+    pub(crate) fn game_reset_first(&self) -> Option<Game<'_>> {
         match &self.dense {
             Some((adj0, deg0)) => {
-                Game::new_with_degrees(self.n, &adj0[..], deg0.as_ref().clone())
+                #[cfg(test)]
+                let eager = std::env::var_os("SSI_XCH_EAGER_ADJ").is_some();
+                #[cfg(not(test))]
+                let eager = false;
+                Game::new_reset_first_with_degrees(
+                    self.n,
+                    &adj0[..],
+                    deg0.as_ref().clone(),
+                    eager,
+                )
             }
             None => Game::new_sparse(self.n, &self.col_ptr, &self.row_idx),
         }
@@ -551,7 +560,7 @@ impl<'a> Game<'a> {
                 .map(|word| word.count_ones())
                 .sum();
         }
-        Game::assemble(n, adj0, deg0)
+        Game::assemble(n, adj0, deg0, true)
     }
 
     /// Same game as [`Game::new`] when `deg0` is the degree vector of `adj0`,
@@ -568,17 +577,42 @@ impl<'a> Game<'a> {
         if adj0.len() < n * n.div_ceil(64) {
             return None;
         }
-        Game::assemble(n, adj0, deg0)
+        Game::assemble(n, adj0, deg0, true)
     }
 
-    fn assemble(n: usize, adj0: &'a [u64], deg0: Vec<u32>) -> Option<Game<'a>> {
+    /// Variant for a caller that guarantees [`Game::reset`] is the first
+    /// operation that can read the mutable adjacency. A recycled buffer may
+    /// contain arbitrary words; `reset` overwrites all of them.
+    fn new_reset_first_with_degrees(
+        n: usize,
+        adj0: &'a [u64],
+        deg0: Vec<u32>,
+        eager: bool,
+    ) -> Option<Game<'a>> {
+        if n == 0 || n > max_n_limit() || deg0.len() != n {
+            return None;
+        }
+        if adj0.len() < n * n.div_ceil(64) {
+            return None;
+        }
+        Game::assemble(n, adj0, deg0, eager)
+    }
+
+    fn assemble(
+        n: usize,
+        adj0: &'a [u64],
+        deg0: Vec<u32>,
+        initialize_adj: bool,
+    ) -> Option<Game<'a>> {
         let w = n.div_ceil(64);
         // iter69: reuse a recycled bitset buffer instead of `adj0[..n*w].to_vec()`.
         // `resize` + `copy_from_slice` leaves the buffer bit-identical to a fresh
         // allocation; `Drop for Game` returns it to the thread-local pool.
         let mut adj = adj_pool_take(n * w);
         adj.resize(n * w, 0);
-        adj.copy_from_slice(&adj0[..n * w]);
+        if initialize_adj {
+            adj.copy_from_slice(&adj0[..n * w]);
+        }
         Some(Game {
             n,
             w,

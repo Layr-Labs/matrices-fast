@@ -626,7 +626,7 @@ const LADDER_FILL_BOUND: u64 = 20_000_000_000;
 /// Each pass accepts only a strict exact decrease, so appending a width cannot
 /// worsen any row; the price is wall time on class rows only (~+0.05 s/row on
 /// the rows the class admits), and every pass carries its own work ledger.
-const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
+const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 17] = [
     (48, 4, 19, 32_000_000),
     (9, 4, 4, 32_000_000),
     (8, 4, 3, 64_000_000),
@@ -636,6 +636,14 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
     (11, 4, 4, 64_000_000),
     (14, 4, 5, 64_000_000),
     (6, 4, 3, 64_000_000),
+    (13, 4, 6, 64_000_000),
+    (16, 4, 6, 64_000_000),
+    (5, 4, 3, 64_000_000),
+    (24, 4, 11, 32_000_000),
+    (26, 4, 12, 32_000_000),
+    (18, 4, 7, 64_000_000),
+    (4, 4, 2, 32_000_000),
+    (32, 4, 15, 32_000_000),
 ];
 /// iter54: the class-block exchange ledger 512M -> 1G and its sweep count
 /// 4 -> 5. Both halves were priced in one binary/one session on the merged
@@ -716,13 +724,12 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 /// address space; sparse-pristine construction retains one mutable bit image,
 /// so that image may consume at most one quarter of the frame.  The input must
 /// also remain structurally sparse (at most sixteen directed CSR entries per
-/// vertex), and the deterministic work account is sixteen charge units per
-/// word in the admitted image envelope.  These powers-of-two limits are tied
-/// to the worker contract and representation, not to a corpus row boundary.
+/// vertex). These powers-of-two admission limits are tied to the worker
+/// contract and representation, not to a corpus row boundary. The independent
+/// 2.5-GiB deterministic work account is the exact-base value/cap screen point.
 const PRODUCTION_EXCHANGE_IMAGE_WORDS: usize = 1 << 27; // 1 GiB of u64 words
 const PRODUCTION_EXCHANGE_SPARSE_FACTOR: usize = 16;
-const PRODUCTION_EXCHANGE_LEDGER: i64 =
-    (PRODUCTION_EXCHANGE_IMAGE_WORDS * PRODUCTION_EXCHANGE_SPARSE_FACTOR) as i64;
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 2_684_354_560; // 2.5 GiB charge units
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.

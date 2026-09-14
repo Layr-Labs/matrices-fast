@@ -3,7 +3,26 @@
 use super::window_signatures::{ChargeModel, SignatureEngine};
 use super::{Game, TripleWork};
 
+/// iter85: **PRICED** — and it points the other way from the wall.
+///
+/// The dial was unpriced until this run. Two production builds, official
+/// sandboxed harness, same session, 300/300 dev rows:
+///   * ceiling 14 (production) — `f02eb0d7` tree (fork@600 + chain-displaced
+///     registration): **0.790017**, corpus wall 4 m 50 s.
+///   * ceiling 10 — same tree, `PRODUCTION_XCH_MAX_K = 10`: **0.791309**
+///     (lt_1k 0.8870, 1k_10k 0.8385, gt_10k 0.6842), corpus wall **253.3 s**.
+///
+/// So dropping the `k >= 11` components buys −0.12 s/row of corpus wall but
+/// costs **+1.29e-3 dev** — 12× the entire 1e-4 promotion bar, concentrated in
+/// `gt_10k`. The wide components are not the DP's waste; they are its value
+/// core, so the ceiling is not a usable fence for the cap. The two dials stay
+/// separate: `MAX_WIDTH` is the *validation* bound (`2..=MAX_WIDTH` must still
+/// admit the production `exchange_width = 12` call — an early draft that
+/// lowered `MAX_WIDTH` itself made the whole production exchange return `None`,
+/// which the `sparse_spans_match_original_descent_within_exact_width_limit`
+/// test catches).
 const MAX_WIDTH: usize = 14;
+const PRODUCTION_XCH_MAX_K: usize = 14;
 /// Stop the sweep loop once a sweep accepts **no** change, for rows at or above
 /// [`PRODUCTION_XCH_PLATEAU_MIN_N`]. Measured (`0260-plateau-*`): on `n >= 10 000`
 /// this is wall-free value-wise — 45 rows move, 44 keep their ratio exactly and
@@ -93,7 +112,112 @@ fn xch_plateau_min_n() -> usize {
 /// which components are offered to it changes. Determinism is preserved: the
 /// walk is a stable sort of a deterministic enumeration (ties broken by the
 /// component's bit mask).
+/// iter78: **reverted to the promoted tree's value (0).**
+///
+/// This is one of only three production deltas this tree ever carried over the board's
+/// promoted tree (`bbf58495`): the charge discount (retired above), the dense-band ladder
+/// rung, and this admission policy. Its measured worth was -6e-6 dev with a one-row effect
+/// (iter72/iter74), and it was the only one of the three still present in every bat killed
+/// after 15:52 UTC (`2815e217`, `628b5341`, `5e7259a4` all died at the same 86 s mark with
+/// this at 2, while `bbf58495` completed the hidden corpus in 633 s with it absent), so it is
+/// given back: the cap's margin on the hot class is under 0.1 s and 6e-6 dev is not worth a
+/// 5 % corpus-wall bet. [memory/evidence/0278-bat-composition.txt]
 const PRODUCTION_XCH_ALLOC: usize = 0;
+
+/// Component-width ceiling of the exact window DP — the dial nobody has priced.
+///
+/// `refine_window` admits a live component only when `2 <= |C| <= MAX_WIDTH`
+/// and `solve_component` then enumerates all `2^|C|` subsets of it. The *cost*
+/// of a call therefore scales with `2^k` summed over its admitted components,
+/// and the width histogram (`xch_split`) shows that on the cap-critical rows
+/// the `k >= 9` bucket is ~8-12 % of the component *calls* and ~88 % of the
+/// `2^k·k` DP steps. This seam lets one binary price a ceiling: it is a pure
+/// admission filter whose only effect is which components are attempted.
+/// Production keeps `MAX_WIDTH`.
+
+/// Charge shape the exchange's ledger quotes (the `#[cfg(not(test))]` arm of
+/// [`xch_charge_scale`]): 100 % of the modelled price for every component of
+/// width — the discount is retired (iter78).
+///
+/// iter75 shipped `75 % for every `k >= 11``: the seam had been priced in iter72 on
+/// a probe whose env-unset defaults were *not* the production program (6 sweeps
+/// and the pre-class pair live, see `memory/evidence/0275-probe-code-frame.txt`),
+/// which quoted only −17.5 u-dev for this device. Re-measured in the
+/// production-identical probe frame (`SSI_EXCHANGE_SWEEPS=12`,
+/// `SSI_PRECLASS_WIN=0`, `SSI_PRECLASS_STEP=0`, `SSI_MARK_NOSCORE=1`, 300/300
+/// dev rows, one binary) the discount read **−5.1e-5 dev** (0.790254 → 0.790203)
+/// in the probe frame — but only **−5.0e-6 dev** in the worker frame, because the
+/// probe's movers do not survive the graded code path
+/// [memory/evidence/0275-worker-frame-measurements.txt].
+///
+/// iter78: **retired.** Every bat that carried it (`2815e217`, `628b5341`) was
+/// killed on the hidden per-matrix time cap; the promoted tree that completed the
+/// hidden corpus (`bbf58495`) has no discount, and the discount is one of only
+/// three production deltas over that tree (the dense-band ladder rung, this, and
+/// the inert `XCH_ALLOC` admission seam). Its whole measured value is 5e-6 dev
+/// against a per-row wall price plus the shared-ledger displacement it causes, so
+/// it is the cheapest thing on the tree to give back. Priced corpus-wide, both
+/// arms, in the production-identical probe frame: [.scratch/iter78/probe-bigk-ab.log,
+/// memory/evidence/0278-bigk-retired.txt]
+const PRODUCTION_XCH_BIGK_MIN: usize = 11;
+const PRODUCTION_XCH_BIGK_PCT: usize = 100;
+
+/// Test-only seam: scale the *charged* price of a width-`k` component.
+///
+/// The ledger is a fixed precharge budget, so the price it quotes decides which
+/// components a call can attempt. `SSI_XCH_BIGK_MIN` / `SSI_XCH_BIGK_PCT` quote
+/// `PCT` % of the modelled price for every component of width `>= MIN`; unset
+/// falls back to the production point above.
+#[inline]
+pub(super) fn xch_charge_scale(k: usize) -> usize {
+    #[cfg(test)]
+    {
+        use std::sync::OnceLock;
+        static CFG: OnceLock<(usize, usize)> = OnceLock::new();
+        let &(min_k, pct) = CFG.get_or_init(|| {
+            (
+                std::env::var("SSI_XCH_BIGK_MIN")
+                    .ok()
+                    .and_then(|v| v.trim().parse::<usize>().ok())
+                    .unwrap_or(PRODUCTION_XCH_BIGK_MIN),
+                std::env::var("SSI_XCH_BIGK_PCT")
+                    .ok()
+                    .and_then(|v| v.trim().parse::<usize>().ok())
+                    .unwrap_or(PRODUCTION_XCH_BIGK_PCT)
+                    .clamp(1, 100),
+            )
+        });
+        if k >= min_k {
+            pct
+        } else {
+            100
+        }
+    }
+    #[cfg(not(test))]
+    {
+        if k >= PRODUCTION_XCH_BIGK_MIN {
+            PRODUCTION_XCH_BIGK_PCT
+        } else {
+            100
+        }
+    }
+}
+
+#[inline]
+fn xch_component_ceiling() -> usize {
+    #[cfg(test)]
+    {
+        std::env::var("SSI_XCH_MAX_K")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(PRODUCTION_XCH_MAX_K)
+            .clamp(2, MAX_WIDTH)
+    }
+    #[cfg(not(test))]
+    {
+        PRODUCTION_XCH_MAX_K
+    }
+}
 
 #[inline]
 fn xch_alloc() -> usize {
@@ -278,6 +402,13 @@ fn solve_component(
             .saturating_add(6usize.saturating_mul(game.w))
             .saturating_add(24),
     );
+    // iter75: the charge shape is SHIPPED, so the multiplier is live in the
+    // graded build too (it used to be `#[cfg(test)]`-only, which made every
+    // production charge exactly 100 % — the device was probe-only by
+    // construction). `xch_charge_scale` returns 100 for `k < 11`, so the
+    // narrow components keep the modelled price and only the wide ones are
+    // discounted.
+    let cost = cost.saturating_mul(xch_charge_scale(k)) / 100;
     if !work.charge(cost) {
         #[cfg(test)]
         WORK_STATS.with(|cell| cell.borrow_mut().refused_components += 1);
@@ -408,7 +539,7 @@ fn refine_window(
         // small components. Leave oversized components in their original
         // positions; their elimination cannot affect another component here.
         let size = component.count_ones();
-        if size < 2 || size as usize > MAX_WIDTH {
+        if size < 2 || size as usize > xch_component_ceiling() {
             continue;
         }
         comps.push((size, component));

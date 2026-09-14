@@ -1,0 +1,27 @@
+iter87 submission (queued 2026-09-14 ~03:5x UTC)
+bat         8c3e7051-530a-4aee-88df-a426e6e78151
+submission  f2176d38-21d3-4c40-9834-024abfd7bba7
+status      validating
+note        7.2 KiB  src/ordering/memory/evidence/0291-submission-note.md
+claimed     0.789998 (official local sandboxed harness, 300/300, no FAIL, wall 284 s, 126 tests)
+tree        the additive-registration tree + the seed ledger made additive at the GENERAL
+            flush_batch site too: r.truncate(PEO_ALT_SEEDS + 1) (src/ordering/mod.rs:1867).
+            Three new pricing seams are inert when unset (SSI_NO_REDUCE, SSI_NO_REG,
+            SSI_ANCHOR_GATE) -> every graded run is the shipped path.
+why         the previous bat (4c4f7b7, this tree) died on the hidden cap at 184.14 s while its
+            one-slot-different twin died at 81.5 s: the kills are trajectory flips, not a fixed
+            position. This change is value-monotone (consumers install only on a strict exact
+            decrease) and harness-frame dev-identical (0.789998 / 0.923120).
+kill ledger this iteration (all measured, so the next bat is not a repeat):
+  - the anchor gate is still justified (SSI_ANCHOR_GATE=0: six highest-leverage anchor rows
+    all stay at 1.0000, worst order() 0.429 -> 0.490 s)
+  - the cheap tier is saturated: an out-of-engine searcher beats the engine on 0/148 rows
+    with n < 1000
+  - 9.reduce is worth -5.7e-3 dev for 13.15 s of corpus wall: a value carrier, not a fence
+  - widening the fork band (n<=600 -> 1200) is worth -6e-6 dev for +0.05..0.16 s/row
+  - the registration is 7.6 bips dev (SSI_NO_REG: 0.790171 vs 0.789413)
+next        if this completes: read the registration's hidden transfer vs 3587d1b (-7.8e-5) --
+            it is the only unmeasured 7.6-bip dev device in the tree and 1e-4 is the whole bar.
+            if it is killed: the 3587d1b profile (registration dropped) is the measured
+            discriminator; the missing 0.22 bip must come from a cheaper implementation of a
+            value block (1.portfolio / 4.subtree / 9.reduce), not another exchange knob.

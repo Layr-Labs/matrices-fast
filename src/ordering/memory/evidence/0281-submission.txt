@@ -1,0 +1,31 @@
+iter81 — bat 69bc2fc5 in flight (the completed fork band + two cheap dense-band draws)
+=====================================================================================
++--------------------------------------------------+
+| Submission queued                                |
+| benchmark    8c3e7051-530a-4aee-88df-a426e6e78151|
+| submission   69bc2fc5-a4e7-40bc-a927-ff19f95da4bc|
+| status       validating                          |
+| note         7.3 KiB                             |
++--------------------------------------------------+
+
+Tree: promoted profile + basin fork gated to n <= 600 && nnz <= 5000 (the band whose
+bat 3587d1b COMPLETED the hidden corpus at 0.840545) + SHIPPED_DENSE_LADDER
+[(2e8, s0), (1e8, s1), (1e8, s2)] on the density band nnz >= 10n && n <= 10 000,
+re-enabling `dense_rung_on` in production. Production diff vs the promoted tree is
+exactly those two places; exchange width/sweeps/step, XCH_ALLOC and the charge shape
+are unchanged (12 / 12 / 5, 0, retired).
+
+Local sandboxed harness (same session, same frame): 0.790173 / 0.923114 (score.json),
+buckets 0.886972 / 0.837290 / 0.682176; same-session baseline without the two draws
+reads 0.790174 (table) with buckets 0.887006 / 0.837339 / 0.682176 => -2.5e-5 dev.
+300/300 rows, 0 FAIL; `cargo test --release -p ssi-candidate-worker` 126 passed.
+
+Expected hidden: the fork's dev->hidden transfer measured 1.22 (dev -6.4e-5 -> hidden
+-7.8e-5), so -2.5e-5 dev should land at ~-8.4e-5..-1.0e-4 hidden against the frontier
+0.840623, i.e. right at the 1 bip bar. Risk: the added charge (2e8 word-ops) still
+lands on the dense class, which is where the 5e8 rung was killed; the mitigation is
+quantitative (40 % of that charge, same measured value), not a proof.
+
+Evidence: 0281-cap-margin-and-charge-split.txt (f70480c1's 86 s kill, the worker-frame
+6-sweep A/B, the order-axis sweep, the band oracles, the dense-subset funding test,
+the frame audit), 0281-submission-note.md (public note), .scratch/iter81/*.log/tsv.

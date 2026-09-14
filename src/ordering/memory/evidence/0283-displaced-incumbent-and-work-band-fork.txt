@@ -1,0 +1,98 @@
+iter83 — THE DISPLACED INCUMBENT: THE LARGEST DEVICE MEASURED IN THIS LANE, AND THE WORK-BAND FORK
+====================================================================================================
+
+0. THE BATS
+   * `351f3ddb` (the first bat of this pass): tree = promoted profile + fork band widened to
+     `nnz <= 6 000` + head-light second lineage outside `(600, 5000)` + the displaced-incumbent
+     registration + the dense rung retired. Local worker frame 0.789974 (lt 0.886977 / mid 0.837241
+     / gt 0.681771), 300 rows 0 FAIL, 126 unit tests pass. RESOLVED **failed**: run 34793644189,
+     Benchmark step 00:47:56.805 -> 00:49:23.285 = **86.48 s**, verdict = the per-matrix cap string
+     [.scratch/iter83/remote/job-34793644189.log:1123/1137]. Fifth kill at the same ~86 s mark
+     (85.21 / 85.99 / 86.19 / 86.20 / 86.48); the only completed run is still 3587d1b at 635 s.
+   * `f02eb0d7` (this bat): the same tree MINUS the band extension and the head-light second lineage,
+     i.e. promoted profile + fork@(600,5000) + the displaced-incumbent registration + rung retired.
+     Local worker frame **0.790017** (lt 0.886977 / mid 0.837385 / gt 0.681771), 300 rows 0 FAIL,
+     run wall 4m50s. Submitted `validating`, note 5.1 KiB.
+     [.scratch/iter83/cand83b-rerun.log, 0284-submission-note.md]
+
+1. THE DEVICE: REGISTER THE CHAIN-DISPLACED INCUMBENT (one snapshot, one push)
+   `4.subtree` installs strictly improved orderings DIRECTLY (`best_flops = f; best_perm = perm`), so
+   the ordering it displaces never reaches `runner_up` — the one ledger read by the `13.alt` PEO_ALT
+   seeds, the `14.transplant` donors and the terminal exchange's seed pool. Snapshot before the chain,
+   push after it, only when the chain installed something; dedup/truncate to `PEO_ALT_SEEDS` as the
+   ledger already does. Every consumer accepts only a strict exact decrease. [src/ordering/mod.rs]
+
+   PROBE-FRAME DECOMPOSITION, one session, 4 cores, production seams, full 300-row corpus:
+     A path, rung ON (pre-this-pass tree) ......... 0.790234   worst row 1.370 s
+     A path, rung retired, no registration ........ 0.790260   worst row 1.377 s
+     A path, rung retired, REGISTRATION ON ........ 0.789521   worst row 1.384 s   <- -7.39e-4
+     full fork + band + head-light + registration . 0.789389   worst row 1.364 s
+   [.scratch/iter83/{Aonly,donoronly-full,nodonor-full,CAND-full}.log]
+
+   * The registration is *cheap*: corpus wall 151.7 -> 152.8 s (+1.1 s); worst per-row delta
+     +0.146 s (`popdynm200` 1.075 -> 1.221); rows with delta > 0.05 s: 3 (+0.26 s total).
+   * Its movers are LARGE, non-forked rows: `crudeoil_pooling_dt3` (n=30660) 0.7056 -> 0.6449
+     (-8.6 %), `arki0013` 0.3993 -> 0.3919, `crudeoil_lee4_09` 0.6171 -> 0.6100, `chp_partload`
+     0.7328 -> 0.7318, `mpbp_15` 0.7772 -> 0.7727, `rsyn0815m04m`, `rsyn0840m04m`, `nuclear10a`,
+     `gabriel09`, `nd_netgen-3000`, `popdynm25`; 19 rows change their ratio (29 rows in the
+     full arm). Total ln gain over the 29 movers 0.1738.
+   * It is a NULL on the cheap band: on the 15 rows the chain-off lineage wins, no ratio moves
+     (one row +0.06 %). So it is additive to the fork, not a substitute.
+   * It costs the in-gate rows nothing: 118 of the 119 rows in the fork band keep their shipped
+     ratios exactly.
+
+2. THE WORK-BAND FORK (measured, value real, killed by the cap)
+   Band `nnz <= 6 000` (n unbounded) vs the shipped `n <= 600 && nnz <= 5000`: 50 newly forked rows
+   whose FIRST-lineage wall is 0.03..0.879 s on dev (below the forked cost of the shipped band's own
+   rows, `st_bsj2` 0.886 s). Value in the probe frame +4.4e-5 (`edgecross10-080` 0.9638 -> 0.9476 is
+   3.9e-5 of it), and with the second lineage head-light outside `(600, 5000)` the combined band +
+   head-light arm is worth -1.3e-4 on top of the registration. The bat carrying it was killed at
+   86.48 s, so the band is NOT shippable at this margin even though its probe/worker numbers are
+   better than the shipped band's.
+   Head-light evidence: with the min-fill / custom-metric / partitioner families dropped in the
+   SECOND lineage only, 6 of 10 measured chain-off wins survive exactly (`edgecross10-080` 0.9476,
+   `gasprod_sarawak16` 0.9046, `crudeoil_lee1_07` 0.7343, `rsyn0840m02m` 0.9413, `sonet24v5`
+   0.5934, `waterund14` 0.3516) and the losses are `chimera_mgw-c8-439-onc8-001`, `gancns`,
+   `multiplants_mtg1b`, `nuclear25a`; the lineage's own wall falls 15-35 % on those rows
+   (`multiplants_mtg1b` 0.748 -> 0.483 s). Inside `(600, 5000)` the head must stay whole.
+
+3. FRAME FACTS (source-read, this pass)
+   * `src/watchdog.rs::run_capped` + `src/main.rs`: `order()` runs in a child process, the 2.0 s cap
+     is that child's WALL CLOCK polled every 10 ms, and the harness calls it TWICE per matrix
+     (`run_once("a")` / `run_once("b")`, byte-identical required). The sandbox spawn happens inside
+     the same child budget, so the ordering budget per call is 2.0 s minus the sandbox/exec cost.
+     [src/watchdog.rs:111, src/main.rs:74/295/759]
+   * `target/probe-sandbox.sh` did not forward `SSI_SUBTREE_BUDGET_PCT` (whitelist omission) and, as
+     first written this pass, not `SSI_NO_CHAIN_DONOR` either: three seam A/Bs came back
+     byte-identical and one "isolation" run was void. After forwarding, the arms separate
+     (chain-off vs chain-on on a 15-row subset: 0.703672 vs 0.709451; donor on vs off on
+     `crudeoil_pooling_dt3`: 0.6449 vs 0.7056). **Verify the seam reaches the sandbox before
+     believing a seam-priced device.**
+   * `gasprod_sarawak16` sits AT the 2 s line in the local harness frame: one run of the donor-only
+     tree died on it ("took >= 2.0s", `.scratch/iter83/cand83b.log`) and an immediate re-run of the
+     identical binary scored 300/300 (`cand83b-rerun.log`). Its work is identical in both runs, so
+     that failure is (at least partly) load, and the heavy-row margin in the harness frame is ~0.
+
+4. NEGATIVES (new this pass)
+   * The third budget point of the subtree chain (p=50) adds EXACTLY ZERO value inside the cheap
+     band: over the 119 rows the shipped gate forks there are 0 rows where the half-budget lineage
+     beats both the full-budget and the zero-budget lineages (and it *loses* on 16 rows corpus-wide,
+     worst `crudeoil_lee2_06` -0.074 in ln). A three-arm fork is not worth its wall.
+   * `SSI_NO_BASIN_FORK=1 SSI_SUBTREE_BUDGET_PCT=0` is the pure chain-off arm; with the fork also
+     enabled the same seam command measures a different program (both lineages chain-off) — the
+     first "Z arm" of this pass was void for that reason.
+   * The dense rung's value is real (-2.6e-5 probe, matching iter82) and its retirement costs
+     exactly that: 0.790234 -> 0.790260.
+
+5. NEXT ACTIONS (for the next iteration)
+   * The registration's value concentrates on LARGE rows; find out which consumer pays
+     (`SSI_XCHG_POOL=0` disables the exchange seed pool, so one probe run splits the value between
+     the pool, the PEO_ALT seeds and the transplant donors). If the pool is the payer, its wall is
+     the cap risk and the next bat should register the displaced incumbent into the cheap consumers
+     only.
+   * `CHAIN_LINEAGE` is a thread-local set per lineage thread; the fork's nested calls inherit it.
+     A device that gives the SECOND lineage its own displaced-incumbent snapshot (rather than the
+     first lineage's) is unmeasured.
+   * The frontier bar needs >= 1e-4 hidden. Bat 3587d1b (fork@600 alone) measured -7.8e-5 hidden with
+     a dev->hidden transfer of 1.22; this registration's dev value is 7x the fork's, so a *completed*
+     run with it should cross the bar even at a 3-4x probe over-report.

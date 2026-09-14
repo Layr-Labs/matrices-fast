@@ -604,6 +604,10 @@ const SWEEP_EXTRA_MAX_NNZ: usize = 150_000;
 /// is already installed before the first batch, so a truncation can only drop
 /// extra candidates, never the baseline.
 const LADDER_FILL_BOUND: u64 = 20_000_000_000;
+/// Terminal reduce-core lift: the independent-set lift on the exact degree-<=3 residual core, run
+/// ONCE after every stage, spliced and accepted only on a strict decrease of the full exact score.
+/// Its own ledger, charged inside `indep_first::run` before any work starts.
+const TERMINAL_CORE_LIFT_LEDGER: u64 = 500_000;
 /// ── iter42 production constants (single source of truth) ────────────────────
 /// The terminal exact-kernel extension this branch ships is a *window/ledger*
 /// extension of the promoted terminal class: the sparse-span sweep allowance,
@@ -3794,6 +3798,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // replacement (core minfill/refine already paid). Residual-core (B): open
     // a third mid band for cheap from-scratch K=2 only (not nested).
     let mut core_path_improved = false;
+    let mut saved_cl3: Option<core_lift::CoreLift> = None;
     if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
         let flops_before_core = best_flops;
         // Order a core with the given AMF alphas + AMD, one pass after another,
@@ -4118,6 +4123,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     }
                 }
             }
+            // Kept for the terminal reduce-core lift, so the reduction is paid once.
+            saved_cl3 = Some(cl3);
         }
 
         // Extra depths: bounded, sequential, in a fixed order, only where the
@@ -5748,6 +5755,38 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                         let f = score(&cand);
                         if f < cur {
                             best_perm = cand;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Terminal reduce-core lift (0208): the residual core after exact degree-<=3 elimination is a
+    // different, denser graph than the raw pattern, and the independent-set lift orders it far better
+    // than the minimum-degree family does on some rows. Run once, last, on the pattern (not the
+    // incumbent), spliced through the same exact objective split; strict accept on the full score, so
+    // no downstream stage can re-roll the result.
+    if n >= REDUCE_MIN_N && nnz <= REDUCE_MAX_NNZ {
+        if let Some(cl3) = saved_cl3.as_ref() {
+            let cn = cl3.core_n();
+            if cn >= INDEP_MIN_N && cn < n && cl3.core_nnz() <= REDUCE_MAX_CORE_NNZ {
+                let core_pat = ScoringPattern {
+                    n: cn,
+                    col_ptr: cl3.core_col_ptr.clone(),
+                    row_idx: cl3.core_row_idx.clone(),
+                };
+                let lifted_core = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    indep_first::run_narrow(&core_pat, TERMINAL_CORE_LIFT_LEDGER, u64::MAX)
+                }));
+                if let Ok(Some((_, cpl))) = lifted_core {
+                    if is_bijection(&cpl, cn) {
+                        let cand = core_lift::splice(cl3, &cpl);
+                        if is_bijection(&cand, n) {
+                            let f_cand = score(&cand);
+                            let f_inc = score(&best_perm);
+                            if f_cand < f_inc {
+                                best_perm = cand;
+                            }
                         }
                     }
                 }

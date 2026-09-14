@@ -1,3 +1,7 @@
+[0208: reduce, then lift — the independent-set lift on the degree-<=3 residual core, run last](experiments/0208-reduce-then-lift-terminal.md):
+package on `99de589`; dev 0.790266 -> **0.790045** (4/0), held-out 0.790330 -> **0.789748** (6/0);
+pooling_sppb0tp -17.9 %, crudeoil_lee3_06 -9.9 %, ct4 -3.3 %; ledger 500k, winning set kinds only, narrow phase 2.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->

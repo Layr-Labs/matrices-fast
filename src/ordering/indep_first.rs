@@ -423,6 +423,16 @@ struct LiftedCore {
 /// alone: a set whose predicted pairs or core would exceed the allowance is
 /// skipped, never started.
 pub(crate) fn run(sp: &ScoringPattern, ledger: u64, incumbent: u64) -> Option<(u64, Vec<usize>)> {
+    run_mode(sp, ledger, incumbent, COMPETITIVE_MARGIN)
+}
+
+/// Terminal reduce-core call: the same envelope, but the expensive phase-2 passes run only on cores
+/// within 5 % of the best phase-1 AMD total instead of within 50 %.
+pub(crate) fn run_narrow(sp: &ScoringPattern, ledger: u64, incumbent: u64) -> Option<(u64, Vec<usize>)> {
+    run_mode(sp, ledger, incumbent, (21, 20))
+}
+
+fn run_mode(sp: &ScoringPattern, ledger: u64, incumbent: u64, competitive: (u64, u64)) -> Option<(u64, Vec<usize>)> {
     use super::custom_metrics::ScoreVariant as V;
     let n = sp.n;
     let nnz = sp.row_idx.len();
@@ -471,8 +481,12 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64, incumbent: u64) -> Option<(u
     // moved gams05 / gabriel09 on the 180a tip. On giant-dense KKTs
     // (pooling_sppc3pq) they add ~0.12 s of lift+AMD and crowd METIS off
     // the winning core — skip them there.
+    // Terminal reduce-core call: only the set kinds that ever win there (census 2026-09-13:
+    // ginf, sc_inf, sc_15, sc_9 carried all ten wins; the cap-k and sc_5 sets never did).
+    let terminal = competitive == (21, 20);
     let mut candidates: Vec<Vec<bool>> = vec![g_inf.clone()];
-    if n <= 20_000 || nnz <= 400_000 {
+    if terminal {
+    } else if n <= 20_000 || nnz <= 400_000 {
         let dense_input = nnz >= 12 * n;
         let extra_caps: &[usize] = if dense_input {
             &[20, 15, 9, 7, 5, 3]
@@ -492,7 +506,9 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64, incumbent: u64) -> Option<(u
         candidates.push(greedy_independent_set_excluding(sp, usize::MAX, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 15, &g_inf));
         candidates.push(greedy_independent_set_excluding(sp, 9, &g_inf));
-        candidates.push(greedy_independent_set_excluding(sp, 5, &g_inf));
+        if !terminal {
+            candidates.push(greedy_independent_set_excluding(sp, 5, &g_inf));
+        }
     }
     let mut admitted: Vec<Vec<bool>> = Vec::new();
     let mut seen_sizes: Vec<(usize, u64)> = Vec::new();
@@ -561,7 +577,7 @@ pub(crate) fn run(sp: &ScoringPattern, ledger: u64, incumbent: u64) -> Option<(u
     // Phase 2: the expensive passes on competitive cores, one flat task list.
     let mut tasks: Vec<(usize, Pass)> = Vec::new();
     for (i, (lc, amd_total, _)) in cores.iter().enumerate() {
-        if amd_total.saturating_mul(COMPETITIVE_MARGIN.1) > best_amd.saturating_mul(COMPETITIVE_MARGIN.0) {
+        if amd_total.saturating_mul(competitive.1) > best_amd.saturating_mul(competitive.0) {
             continue;
         }
         let cn = lc.il.core_n();
@@ -666,6 +682,7 @@ fn second_level(lc: &LiftedCore, ledger: u64) -> Option<(u64, Vec<usize>)> {
     }
     if cn2 <= METRIC_CORE_MAX_N && cnnz2 <= METRIC_CORE_MAX_NNZ {
         tasks.push(Pass::Metric(V::DegDivNvSqrtWf));
+        tasks.push(Pass::Metric(V::DegPlusDegme));
     }
     let results = par_map(tasks.len(), |t| -> Option<(u64, Vec<usize>)> {
         let pass = tasks[t];

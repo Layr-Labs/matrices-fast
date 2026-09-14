@@ -93,7 +93,20 @@ fn xch_plateau_min_n() -> usize {
 /// which components are offered to it changes. Determinism is preserved: the
 /// walk is a stable sort of a deterministic enumeration (ties broken by the
 /// component's bit mask).
-const PRODUCTION_XCH_ALLOC: usize = 0;
+/// ── iter68d: SHIPPED AS 1, "skip the unfunded component" ────────────────────
+/// Policy 0 ends the window walk at the first component the precharged ledger
+/// cannot fund, abandoning the cheap components behind it; policy 1 skips that
+/// component and keeps walking in position order. The precharge itself is kept,
+/// so the ledger still bounds the window's spend and policy 1 can only spend
+/// what policy 0 already budgeted — it changes *which* components get the
+/// budget, never how much there is. Measured this session on the crown tree
+/// (one binary, one session, all 300 dev rows, graded-closest
+/// `SSI_MARK_NOSCORE=1` frame): **score 0.790236 -> 0.790230, 299 of 300 rows
+/// bit-identical, one mover** (`crudeoil_lee1_07` 0.745866999 -> 0.744049962,
+/// dln -2.44e-3) — strictly monotone, no regression anywhere. Worker frame
+/// (one process per row, min of 3, 13 rows including the mover): no systematic
+/// wall change; the rows that move are inside the same budget. [0278d]
+const PRODUCTION_XCH_ALLOC: usize = 1;
 
 #[inline]
 fn xch_alloc() -> usize {
@@ -215,6 +228,36 @@ pub(crate) mod split {
     pub(crate) static K9_10: AtomicU64 = AtomicU64::new(0);
     pub(crate) static K11_12: AtomicU64 = AtomicU64::new(0);
     pub(crate) static K13_14: AtomicU64 = AtomicU64::new(0);
+    /// iter72 coarse attribution of the sweep loop, one timestamp per *phase*
+    /// (not per window), so the timer itself cannot be the measurement:
+    /// `DP_CALL_NS` = all `refine_window` calls, `ELIM_CALL_NS` = all
+    /// interleaved `work.eliminate` replays, `PREFIX_CALL_NS` = the per-sweep
+    /// prefix eliminations, `RESET_CALL_NS` = every `Game::reset`.
+    pub(crate) static DP_CALL_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static ELIM_CALL_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static PREFIX_CALL_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static RESET_CALL_NS: AtomicU64 = AtomicU64::new(0);
+    /// Sweep-level counters: how many sweeps ran at all, and how many left the
+    /// permutation unchanged (`IDLE`), i.e. the fixpoint signal.
+    pub(crate) static SWEEPS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static IDLE_SWEEPS: AtomicU64 = AtomicU64::new(0);
+    /// Of the `refine_window` calls, how many returned `Some(true)` (accepted a
+    /// change) and how many returned `None` (the ledger refused a component).
+    pub(crate) static WINDOWS_CHANGED: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static WINDOWS_REFUSED: AtomicU64 = AtomicU64::new(0);
+    /// `solve_component` / engine calls that actually reached the DP body.
+    pub(crate) static DP_SOLVES: AtomicU64 = AtomicU64::new(0);
+    /// Enumerated components that were in admission range and offered to the DP.
+    pub(crate) static COMPS_OFFERED: AtomicU64 = AtomicU64::new(0);
+    /// iter72 `solve_component` internals: time spent in its heap allocations
+    /// (`ALLOC_NS`), in the `inside`/`components` precompute (`PRECOMP_NS`), in
+    /// the `unions`/`widths` sweep (`UNION_NS`) and in the `best`/`path` DP
+    /// (`DPBODY_NS`), plus the total bytes requested by those allocations.
+    pub(crate) static SOLVE_ALLOC_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static SOLVE_PRECOMP_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static SOLVE_UNION_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static SOLVE_DPBODY_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static SOLVE_ALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
 
     #[inline]
     pub(crate) fn add(c: &AtomicU64, ns: u128) {
@@ -263,6 +306,48 @@ pub(crate) mod split {
         ];
         (times, counts, hist)
     }
+
+    /// iter72 coarse split: `(dp_call, elim_call, prefix_call, reset_call)` in
+    /// seconds, then `(sweeps, idle_sweeps, windows_changed, windows_refused,
+    /// dp_solves, comps_offered)`.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn take_coarse() -> ([f64; 4], [u64; 6]) {
+        let s = |c: &AtomicU64| c.swap(0, Ordering::Relaxed) as f64 / 1e9;
+        let n = |c: &AtomicU64| c.swap(0, Ordering::Relaxed);
+        (
+            [
+                s(&DP_CALL_NS),
+                s(&ELIM_CALL_NS),
+                s(&PREFIX_CALL_NS),
+                s(&RESET_CALL_NS),
+            ],
+            [
+                n(&SWEEPS),
+                n(&IDLE_SWEEPS),
+                n(&WINDOWS_CHANGED),
+                n(&WINDOWS_REFUSED),
+                n(&DP_SOLVES),
+                n(&COMPS_OFFERED),
+            ],
+        )
+    }
+
+    /// iter72 `solve_component` internals: `(alloc, precomp, union, dpbody)`
+    /// seconds and the total allocated bytes.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn take_solve() -> ([f64; 4], u64) {
+        let s = |c: &AtomicU64| c.swap(0, Ordering::Relaxed) as f64 / 1e9;
+        let b = SOLVE_ALLOC_BYTES.swap(0, Ordering::Relaxed);
+        (
+            [
+                s(&SOLVE_ALLOC_NS),
+                s(&SOLVE_PRECOMP_NS),
+                s(&SOLVE_UNION_NS),
+                s(&SOLVE_DPBODY_NS),
+            ],
+            b,
+        )
+    }
 }
 
 fn solve_component(
@@ -285,7 +370,46 @@ fn solve_component(
     }
     #[cfg(test)]
     WORK_STATS.with(|cell| cell.borrow_mut().components[k] += 1);
+    #[cfg(test)]
+    let t_alloc = std::time::Instant::now();
     let mut inside = vec![0u16; k];
+    let mut components = vec![0u16; states * k];
+    // ── iter72 (0281): why the union table must stay a GLOBAL-ID bitset ──────
+    //
+    // The obvious optimisation is to keep `unions[mask]` as a k-bit mask over
+    // the window's own positions instead of a global-ID bitset of `game.w`
+    // words — that is what `SignatureEngine::run_dp` does, and it cuts the table
+    // from `2^k * n/64` words to ONE word per state. It is WRONG, and it was
+    // measured wrong rather than argued wrong: a window is NOT closed under
+    // "neighbours of its vertices". An isolated window vertex has all of its
+    // neighbours outside the window, and those boundary members are invisible to
+    // a window-local image. `SSI_UNION_DIAG` on `transswitch0300p`, k=2, window
+    // `[4806, 10363]`, `inside = [0, 0]`: the single-vertex component `{4806}`
+    // has width 4 (one internal boundary, two external neighbours, the pivot),
+    // while the window-local form reads 2. 26 of 53 measured dev rows changed
+    // their returned flop record under it (`0281`).
+    //
+    // The signature kernel uses the local image legitimately because it carries
+    // the external boundary separately, through a per-component `hist`
+    // histogram and its zeta transform (`run_dp`) — not because the window is
+    // closed. So the global bitset stays, and the width stays
+    // `|union_global| - |mask| + 1`.
+    let mut unions = vec![0u64; states * game.w];
+    let mut widths = vec![0u64; states];
+    let mut best = vec![u64::MAX; states];
+    let mut path = vec![u64::MAX; states];
+    #[cfg(test)]
+    {
+        split::add(&split::SOLVE_ALLOC_NS, t_alloc.elapsed().as_nanos());
+        split::add(
+            &split::SOLVE_ALLOC_BYTES,
+            ((2 * k + 2 * states + states * k) * std::mem::size_of::<u16>()
+                + states * game.w * 8
+                + 2 * states * 8) as u128,
+        );
+    }
+    #[cfg(test)]
+    let t_pre = std::time::Instant::now();
     for (i, &v) in vertices.iter().enumerate() {
         for (j, &u) in vertices.iter().enumerate() {
             if game.adj[v * game.w + u / 64] & (1u64 << (u % 64)) != 0 {
@@ -293,9 +417,10 @@ fn solve_component(
             }
         }
     }
-    let mut components = vec![0u16; states * k];
-    let mut unions = vec![0u64; states * game.w];
-    let mut widths = vec![0u64; states];
+    #[cfg(test)]
+    split::add(&split::SOLVE_PRECOMP_NS, t_pre.elapsed().as_nanos());
+    #[cfg(test)]
+    let t_union = std::time::Instant::now();
     for mask in 1..states {
         let v = mask.trailing_zeros() as usize;
         let bit = 1usize << v;
@@ -328,11 +453,13 @@ fn solve_component(
             widths[mask] = boundary - mask.count_ones() as u64 + 1;
         }
     }
+    #[cfg(test)]
+    split::add(&split::SOLVE_UNION_NS, t_union.elapsed().as_nanos());
 
     // A pivot sees the boundary of its eliminated-prefix component. Other
     // eliminated components cannot touch it, so no fill graph replay is needed.
-    let mut best = vec![u64::MAX; states];
-    let mut path = vec![u64::MAX; states];
+    #[cfg(test)]
+    let t_body = std::time::Instant::now();
     best[0] = 0;
     path[0] = 0;
     for mask in 0..states - 1 {
@@ -365,6 +492,8 @@ fn solve_component(
     } else {
         vertices.to_vec()
     };
+    #[cfg(test)]
+    split::add(&split::SOLVE_DPBODY_NS, t_body.elapsed().as_nanos());
     Some((order, best[states - 1], incumbent))
 }
 
@@ -433,12 +562,25 @@ fn refine_window(
         // elsewhere) even though it moved 30 340 of 37 009 component calls off
         // the dense-union path, so the `2^k * w` scratch is NOT the exchange's
         // DP wall. Kept at the shipped floor.
-        let use_engine = vertices.len() >= 5 && signature_cost < union_cost;
+        #[cfg(test)]
+        let engine_floor: usize = std::env::var("SSI_ENGINE_FLOOR")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(5);
+        #[cfg(not(test))]
+        let engine_floor: usize = 5;
+        let use_engine = vertices.len() >= engine_floor && signature_cost < union_cost;
+        #[cfg(test)]
+        split::bump(&split::COMPS_OFFERED);
         let solution = if use_engine {
             let engine = engine.get_or_insert_with(|| SignatureEngine::new(game.n));
             engine.set_charge_model(charge_model);
+            #[cfg(test)]
+            split::bump(&split::DP_SOLVES);
             engine.solve_component(game, &vertices, work)
         } else {
+            #[cfg(test)]
+            split::bump(&split::DP_SOLVES);
             solve_component(game, &vertices, work)
         };
         #[cfg(test)]
@@ -608,7 +750,7 @@ fn subset_window_descent_config(
     }
     #[cfg(test)]
     let t_new = std::time::Instant::now();
-    let mut game = pristine.game()?;
+    let mut game = pristine.game_reset_first()?;
     #[cfg(test)]
     {
         report.new_ns += t_new.elapsed().as_nanos();
@@ -623,12 +765,15 @@ fn subset_window_descent_config(
             return changed.then_some(current);
         }
         #[cfg(test)]
+        split::bump(&split::SWEEPS);
+        #[cfg(test)]
         let t_reset = std::time::Instant::now();
         game.reset();
         #[cfg(test)]
         {
             report.reset_ns += t_reset.elapsed().as_nanos();
             report.resets += 1;
+            split::add(&split::RESET_CALL_NS, t_reset.elapsed().as_nanos());
         }
         let offset = (sweep * offset_step) % width;
         for &v in current.iter().take(offset.min(n)) {
@@ -641,14 +786,13 @@ fn subset_window_descent_config(
             {
                 report.prefix_ns += t_prefix.elapsed().as_nanos();
                 report.prefixes += 1;
+                split::add(&split::PREFIX_CALL_NS, t_prefix.elapsed().as_nanos());
             }
         }
         let mut start = offset;
         let mut sweep_changed = false;
         while start + 1 < n {
             let end = (start + width).min(n);
-            #[cfg(test)]
-            let t_refine = std::time::Instant::now();
             #[cfg(test)]
             let t_refine = std::time::Instant::now();
             let outcome = refine_window(
@@ -664,6 +808,12 @@ fn subset_window_descent_config(
                 report.refine_ns += e;
                 split::add(&split::WIN_NS, e);
                 split::bump(&split::WINDOWS);
+                split::add(&split::DP_CALL_NS, e);
+                match outcome {
+                    Some(true) => split::bump(&split::WINDOWS_CHANGED),
+                    Some(false) => {}
+                    None => split::bump(&split::WINDOWS_REFUSED),
+                }
             }
             match outcome {
                 Some(improved) => {
@@ -684,6 +834,7 @@ fn subset_window_descent_config(
                         let e = t_elim.elapsed().as_nanos();
                         report.refine_ns += e;
                         split::add(&split::ELIM_NS, e);
+                        split::add(&split::ELIM_CALL_NS, e);
                     }
                 }
             }
@@ -698,6 +849,8 @@ fn subset_window_descent_config(
             }
         } else {
             idle_sweeps += 1;
+            #[cfg(test)]
+            split::bump(&split::IDLE_SWEEPS);
         }
         if plateau > 0 && idle_sweeps >= plateau {
             break;

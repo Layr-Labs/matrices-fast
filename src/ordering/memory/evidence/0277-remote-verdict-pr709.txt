@@ -1,0 +1,30 @@
+# Remote verdict — submission 5d0bd3e6 (iter67 tree, commit ffea664)
+
+submission  5d0bd3e6-46e0-4cfb-b74d-d75d1c0ac3ba
+PR          https://github.com/Layr-Labs/matrices-fast/pull/709
+run         34831582451
+dispatched  2026-09-14T10:07:44Z (PR created) / 10:11:12Z (Benchmark step start)
+failed      2026-09-14T10:12:35.16Z
+
+RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed
+
+## Benchmark step wall (from the run log, not the dispatch window)
+
+  10:11:12.045Z  Benchmark step starts (bwrap exec ./target/trusted/release/matrices-fast --grader)
+  10:12:35.159Z  RUN FAILED: ... exceeded the 2.0s per-matrix cap and was killed
+  => 83.1 s of benchmark wall
+
+## Comparison with this lane's other kills (Benchmark-step wall, same frame)
+
+  fe17562d / 873f23f0 / e1e6c7f2 / e4302dab   whole-pipeline fork     81.5-184.1 s
+  7febce96                                    shared-prefix fork      85.5 s
+  5d0bd3e6                                    this tree (no fork)     83.1 s
+
+## Reading
+
+The 12-sweep crown with no added value device completes a whole hidden corpus (0.840623 promoted,
+and the peer completions in the same window). Every tree of this lane that adds *any* work to the
+slow rows dies at 81-85 s, whether the added work is a duplicated pipeline, a shared-prefix fork,
+or one extra 10-wide twin sweep. The kill time is now within ~3 % across four structurally
+different trees, so the binding row is not one this lane has ever moved: it is a row the 12-sweep
+schedule already sits on top of, and the corpus window has no margin for a value device at all.

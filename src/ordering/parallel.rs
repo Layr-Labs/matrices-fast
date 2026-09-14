@@ -77,6 +77,7 @@ pub(crate) type CandFn<'a> =
 /// A deferred candidate producer that already returns a `usize` permutation
 /// (the post-hoc phases build these directly rather than through the feral
 /// `i32` ordering API).
+#[allow(dead_code)]
 pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
 
 /// One candidate's outcome. `flops == None` means the producer panicked,
@@ -186,6 +187,7 @@ pub(crate) fn run_candidates(
 
 /// Same as [`run_candidates`] for producers that already speak `Vec<usize>`,
 /// with the drop-early optimisation on (only the argmin is ever needed).
+#[allow(dead_code)]
 pub(crate) fn run_perms(
     tasks: &[PermFn<'_>],
     sp: &ScoringPattern,
@@ -311,6 +313,7 @@ fn run_generic(
 /// reproducing the running-minimum semantics of a sequential `if f < best`
 /// loop exactly: install the EARLIEST task index attaining the strict minimum
 /// below `best_flops`, and return whether anything was installed.
+#[allow(dead_code)]
 pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
     let mut win: Option<(usize, u64)> = None;
     for (i, r) in results.iter().enumerate() {

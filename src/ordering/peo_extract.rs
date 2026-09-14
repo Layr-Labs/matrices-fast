@@ -60,6 +60,7 @@ impl std::ops::Index<usize> for Completion {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn candidates(
     n: usize,
     cp: &[usize],

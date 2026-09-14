@@ -879,7 +879,9 @@ const KAHIP_MAX_NNZ: usize = 50_000;
 /// 1.019 s worst case measured on the previous revision — a revision that passed
 /// the grader. So this ships a worst case no larger than one already known to
 /// clear the 2 s cap in the real environment.
+#[allow(dead_code)]
 const RELABEL_BUDGET: usize = 300_000;
+#[allow(dead_code)]
 const RELABEL_MAX_RESTARTS: usize = 24;
 
 /// nnz ceiling for the relabelled-**AMF** multi-start (see the loop at the end of
@@ -943,6 +945,7 @@ const SUBTREE_MIN_N: usize = 24;
 /// iter108: terminal subtree refine on the *shipped* incumbent (Xo1otl family).
 /// Gate on n+nnz so heavy rows stay out; 400k is where per-row tail → 0.
 const FINAL_REFINE_MAX_WORK: usize = 400_000;
+#[allow(dead_code)]
 const SUBTREE_MAX_N: usize = 250_000;
 
 const MID_MAX_S: usize = 128;
@@ -1232,6 +1235,7 @@ fn relabel_budget_and_cap(n: usize) -> (usize, usize) {
     }
 }
 
+#[allow(dead_code)]
 fn relabel_restarts(budget: usize, cap: usize, nnz: usize) -> usize {
     if nnz == 0 {
         return 0;
@@ -1366,6 +1370,9 @@ fn forest_certificate(p: &Pattern) -> Option<Vec<usize>> {
 }
 
 // Coordinated four-vertex moves: intermediate single swaps need not improve.
+// Legacy non-cutoff variant retained for reference; the pipeline uses
+// `cutoff_paired_swap_refine`.
+#[allow(dead_code)]
 fn paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
     let n = best.len();
     if n < 4 { return best; }
@@ -1389,6 +1396,9 @@ fn paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
 }
 
 // Walk score-neutral permutations, retaining strict-best output separately.
+// Legacy non-cutoff variant retained for reference; the pipeline uses
+// `cutoff_plateau_refine`.
+#[allow(dead_code)]
 fn plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<usize> {
     let n=start.len();
     if n<2 { return start; }
@@ -5311,8 +5321,8 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         /// the pipeline's slowest in-window rows (frontier max there 1.017 s),
         /// and the rung that used to live here was worth 0.14 bips.
         const SHIPPED_WIDE_LADDER: [(i64, u64); 0] = [];
-        /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
-        /// rows, all of them in-window). Structural, never per-matrix.
+        // `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+        // rows, all of them in-window). Structural, never per-matrix.
         let shipped_ladder = || {
             if nnz < 3 * n {
                 SHIPPED_SPARSE_LADDER.to_vec()

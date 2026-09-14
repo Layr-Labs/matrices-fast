@@ -131,6 +131,7 @@ fn filled_graph(pat: &ScoringPattern, perm: &[usize], max_lnnz: usize) -> Option
 /// Exact clique check on sorted adjacency for the completion-lattice
 /// descent, budgeted. Fail-closed: a blown budget reports "not a clique",
 /// which merely skips the candidate edge (the completion stays chordal).
+#[allow(dead_code)]
 fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
     let k = c.len();
     if k <= 1 {
@@ -227,6 +228,7 @@ fn minl_mcs_peo(n: usize, adj: &[Vec<u32>]) -> Vec<usize> {
 /// too-large common neighborhood. Pure extraction of the original inline
 /// MINL-scan body — behavior is byte-identical, only factored out so
 /// Component B can reuse it without duplicating the pair logic.
+#[allow(dead_code)]
 fn minl_try_delete_edge(
     adj: &mut [Vec<u32>],
     u: u32,

@@ -29,6 +29,7 @@ impl Workspace {
 /// symmetry; pointer bounds, vertex bounds and duplicate entries are checked.
 /// Adjacency lists need not be sorted. Ties are deterministic for the input:
 /// initial vertex IDs are ascending, and updated MCS buckets are LIFO.
+#[allow(dead_code)]
 pub(crate) fn order(n: usize, cp: &[usize], ri: &[usize]) -> Option<Vec<usize>> {
     order_bounded(n, cp, ri, usize::MAX)
 }

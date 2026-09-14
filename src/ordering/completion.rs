@@ -9,6 +9,7 @@ use super::minl_watch::watcher_minimalize;
 /// Reconstruct the incumbent completion from its elimination-tree children,
 /// remove only certified redundant fill edges, and extract a new ordering.
 /// Limits depend on graph structure, never matrix identity or elapsed time.
+#[allow(dead_code)]
 pub(super) fn refine(
     n: usize,
     original_cp: &[usize],

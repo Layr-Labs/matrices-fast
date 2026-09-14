@@ -8,6 +8,7 @@ thread_local! {
     static DONORS: RefCell<Option<Vec<Vec<usize>>>> = RefCell::new(None);
 }
 
+#[allow(dead_code)]
 pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
     DONORS.with(|cell| {
         if let Some(donors) = cell.borrow_mut().as_mut() {
@@ -237,6 +238,7 @@ fn blocks(parent: &[i32], min_s: usize, max_s: usize) -> Vec<(usize, usize)> {
 // Same scorer and eight retained donors as production. The policy difference
 // is whether a donor is allowed to consume the verification allowance, and
 // whether exhaustion discards or verifies the partial block winners.
+#[allow(dead_code)]
 fn terminal_pass(
     sp: &ScoringPattern, incumbent: &[usize], donors: &[Vec<usize>],
     inc_f: u64, cap: u64, reserve: bool,

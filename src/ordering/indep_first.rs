@@ -722,6 +722,7 @@ pub(crate) mod last_lift {
     }
 }
 
+#[allow(dead_code)]
 fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
     let n = sp.n;
     let nnz = sp.row_idx.len();

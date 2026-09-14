@@ -655,7 +655,7 @@ impl<'a> Game<'a> {
                 self.adj[base + vw] &= !vbit;
                 self.deg[u] - 1
             } else {
-                let mut d = 0u32;
+                let d: u32;
                 if sparse_words {
                     let mut added = 0u32;
                     for &k in &self.nonzero_words {

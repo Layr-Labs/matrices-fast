@@ -289,3 +289,29 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0230: span schedule 9 → 13 widths + exchange-site ledger 512M → 1G](experiments/0230-span13-ledger1g.md) — four-arm in-frame sweep: shipped **0.791498** → **0.791437** (−0.61 bip, 17 rows better / 0 worse); the ledger's knee is 1G (2G buys 5e-6 more), `SSI_PEO_ROUNDS=5` is rejected; official local 300/300 at 0.791437 / 0.924075, submitted `6279dc68`.
 
 - [0231: the order-equivalence frame (schedule axis of determinism)](experiments/0231-order-equivalence-frame.md) — new test-only probe compares parallel / forced-sequential / parallel runs of the same row element-wise: **0 divergences on 300 dev + 14 peak + 33 structural rows**, which kills parallel-order nondeterminism as the explanation of the two parity FAILs; also records the silent dev-corpus fallback trap for `SSI_CORPUS_FILE=/tmp/...` inside the probe sandbox (fixed by `probe-sandbox-corpora.sh`).
+
+## This lane (the `f9b2fe4e` line) — synced into the frontier tree 2026-09-14
+
+- [NEXT-PROMPT.md — the handoff brief for the next session](NEXT-PROMPT.md): read after this index.
+  State of the tree, the measurement frames and their trap, the cap bracket, the ranked next steps,
+  and the rules of the road (benchmark before shipping, never copy another lane's notes).
+  **NOTE: written against `f9b2fe4e`; the tree has since been re-synced to the frontier `bbf5849`,
+  so its "tree on disk" section is historical.**
+
+- [0238: one shared exact-kernel engine per `order()`](experiments/0238-shared-class-engine-ceiling-45k.md):
+  the class used to build its kernel up to **eleven** times per row; one shared `Game` per `order()`
+  is output-preserving and pays for `MAX_N` 25 000 → **45 000** (probe 0.790425 → 0.790295). Also
+  records the negative giant-tier relabel probe.
+
+- [0239: public-board receipts](experiments/0239-public-board-receipts.md): facts only, each with its
+  submission id — the cap bracket (1.397 s passed / 1.536 s failed), the allowance record (**2 GiB
+  completes; 3 GiB and 4 GiB are cap-killed**), the ceiling's remote pass at hidden 0.840725, and the
+  frame warning that the `#[cfg(test)]` probe frame is not the graded program.
+
+- [0271: basin fork on the cheap tier, and the exchange's width *band*](experiments/0271-basin-fork-and-width-band.md):
+  three shipped devices — `EXCHANGE_WIDE_MAX_N` 10 000 (14/5/14 below it, 12/5/12 above; −5.94e-5 dev),
+  the dense/hub twin's shape 8/4/3 → **10/4/4** (−2.21e-5 dev), and a **second pipeline lineage with the
+  `4.subtree` cascade withheld**, merged by exact flops on `n <= 600 && nnz <= 5 000` (−7.90e-5 dev,
+  3 rows). Also closes: the `{v} ∪ N(v)` star neighbourhood (0 wins / 189 rows), relabelled seeds on
+  at-anchor rows (0 / 144), and nested dissection on every `n > 45 000` row (2.2x–9500x AMD).
+  Both probe-frame divergences (`SSI_PRECLASS_*`, `SSI_EXCHANGE_SWEEPS`) are fixed at the source.

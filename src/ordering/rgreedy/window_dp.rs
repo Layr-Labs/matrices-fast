@@ -1097,3 +1097,129 @@ mod tests {
         }
     }
 }
+
+/// ── STAR WINDOW DESCENT (new neighbourhood) ─────────────────────────────────
+///
+/// Every existing exact site reorders a set of vertices chosen by their
+/// **positions** in the permutation: the exchange tiles contiguous windows, the
+/// spans widen them, the pair/triple/four/five descents take adjacent slots.
+/// None of them can reach a set that is adjacent in the *graph* but scattered in
+/// position, which is exactly the shape of a local fill pocket: the vertices
+/// that must be eliminated together are `{v} ∪ N(v)`, and in a good ordering
+/// their positions are spread out.
+///
+/// This pass walks the permutation once, maintaining the live graph, and at
+/// every position `i` takes the closed live neighbourhood `S = {v_i} ∪ N(v_i)`.
+/// Reordering `S` *within its own positions* leaves the residual graph after `S`
+/// untouched (the standard exchange argument — the fill of a fixed position set
+/// is order-independent), so the conditional problem is exact and a strict
+/// decrease is a strict decrease of the whole ordering. `solve_component` prices
+/// that conditional problem exactly, including the case where `S` is
+/// disconnected, so the move is one-sided by construction.
+///
+/// Cost per position is `2^|S| · w` for the union DP plus a fresh scratch
+/// allocation of the same size, and `|S| = deg(v)+1` can be 14 on a hub — hence
+/// `max_star` and the caller's `n` gate. Nothing here reads a clock, an
+/// environment variable or a pointer address.
+pub(crate) fn star_window_descent(
+    n: usize,
+    col_ptr: &[usize],
+    row_idx: &[usize],
+    seed: &[usize],
+    max_star: usize,
+    sweeps: usize,
+    budget: i64,
+) -> Option<Vec<usize>> {
+    if n < 2
+        || n > max_dimension()
+        || !(2..=MAX_WIDTH).contains(&max_star)
+        || sweeps == 0
+        || budget <= 0
+        || seed.len() != n
+        || col_ptr.len() != n + 1
+    {
+        return None;
+    }
+    let mut work = TripleWork { remaining: budget };
+    if !work.charge(n + 1 + row_idx.len() + 2 * n)
+        || col_ptr.first().copied() != Some(0)
+        || col_ptr.last().copied() != Some(row_idx.len())
+        || col_ptr.windows(2).any(|p| p[0] > p[1])
+        || row_idx.iter().any(|&v| v >= n)
+    {
+        return None;
+    }
+    let mut seen = vec![false; n];
+    for &v in seed {
+        if v >= n || seen[v] {
+            return None;
+        }
+        seen[v] = true;
+    }
+    let words = n.div_ceil(64);
+    let setup = 3 * n * words + 2 * row_idx.len() + 16 * n + words;
+    if !work.charge(setup) {
+        return None;
+    }
+    let pristine = super::pristine_memo(n, col_ptr, row_idx)?;
+    let mut game = pristine.game()?;
+    let mut current = seed.to_vec();
+    let mut at: Vec<usize> = vec![0; n];
+    for (i, &v) in current.iter().enumerate() {
+        at[v] = i;
+    }
+    let mut verts: Vec<usize> = Vec::with_capacity(MAX_WIDTH);
+    let mut slots: Vec<usize> = Vec::with_capacity(MAX_WIDTH);
+    let mut changed_any = false;
+    for _ in 0..sweeps {
+        if !work.charge(2 * n * words + 8 * n) {
+            return changed_any.then_some(current);
+        }
+        game.reset();
+        let mut changed = false;
+        for i in 0..n {
+            let v = current[i];
+            let w = game.w;
+            // Closed live neighbourhood, ordered by permutation position.
+            verts.clear();
+            slots.clear();
+            verts.push(v);
+            slots.push(i);
+            for k in 0..w {
+                let mut word = game.adj[v * w + k];
+                while word != 0 {
+                    let b = word.trailing_zeros() as usize;
+                    word &= word - 1;
+                    let u = k * 64 + b;
+                    verts.push(u);
+                    slots.push(at[u]);
+                }
+            }
+            if verts.len() >= 3 && verts.len() <= max_star {
+                let mut order: Vec<usize> = (0..verts.len()).collect();
+                order.sort_unstable_by_key(|&j| slots[j]);
+                let sorted_v: Vec<usize> = order.iter().map(|&j| verts[j]).collect();
+                let sorted_s: Vec<usize> = order.iter().map(|&j| slots[j]).collect();
+                if let Some((new_order, best, incumbent)) =
+                    solve_component(&game, &sorted_v, &mut work)
+                {
+                    if best < incumbent {
+                        for (j, &p) in sorted_s.iter().enumerate() {
+                            current[p] = new_order[j];
+                            at[new_order[j]] = p;
+                        }
+                        changed = true;
+                        changed_any = true;
+                    }
+                }
+            }
+            if !work.eliminate(&mut game, current[i]) {
+                return changed_any.then_some(current);
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    changed_any.then_some(current)
+}

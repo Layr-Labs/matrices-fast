@@ -713,6 +713,24 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 // the cap. So the allowance ships at 2 GiB and the value is bought back on the
 // ceiling, which is wall-cheap where the allowance is wall-expensive.
 const PRODUCTION_EXCHANGE_LEDGER: i64 = 2147483648;
+/// Upper `n` of the band whose exact exchange runs the wider 14-wide window
+/// (see the width-band note at the exchange site). Above it the ledger
+/// truncates a 14-cycle below the complete 12-cycle it replaces, so those rows
+/// keep `12/5/12` byte-identically.
+const EXCHANGE_WIDE_MAX_N: usize = 10_000;
+/// The band's window width. 14 is `window_dp::MAX_WIDTH`'s component ceiling —
+/// a 14-window is the widest that can still solve its own components exactly.
+const EXCHANGE_WIDE_WIDTH: usize = 14;
+/// The band's sweep count. **Eight, not fourteen.** A wider window is bought
+/// with `2^k` per component, so the sweep count is the only lever that buys
+/// the wider neighbourhood back: measured on the 85-row band in one binary, the
+/// four arms price at `14/6` **-1.295e-4**, `14/8` **-1.506e-4**, `14/10` and
+/// `14/12` **-1.588e-4**, and the wall they add over the shipped `12/5/12`
+/// (min of 3 per arm over the fourteen slowest band rows) reads **+6.2 %
+/// (14/6)**, **+5.4 % (14/8)** and **+8.0 % (14/10)** — i.e. past eight sweeps
+/// the curve pays wall for nothing, and the two extra sweeps of a full
+/// 14-cycle (`14/14`) had already cost +11..+35 % per row. Eight is the knee.
+const EXCHANGE_WIDE_SWEEPS: usize = 8;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
@@ -1333,6 +1351,76 @@ fn mid_engine_cfg() -> (i64, u8, u8) {
     (0, 0, 0)
 }
 
+/// ── BASIN FORK (this session's device) ──────────────────────────────────────
+///
+/// The middle of the pipeline is a chain of **greedy** acceptances: each stage
+/// keeps a candidate only because it is cheaper *at that point*, and the stages
+/// after it are monotone from there. A greedy step is therefore a commitment,
+/// and on some rows it is a trap — the lineage it locks in ends worse than the
+/// lineage that never took it, even though the step itself was an improvement.
+/// That is not a defect to patch inside the chain (the chain's own value is
+/// measured and large); it is a **diversity** axis, and the strongest form of
+/// diversity on this pipeline is a second, independent run whose middle
+/// commitment is withheld.
+///
+/// So: on the cheap tier, run `leader_order` twice — once exactly as shipped,
+/// once with the whole-graph `4.subtree` cascade suppressed — and return the
+/// lineage with the smaller **exact** `Σ cⱼ²`. Both lineages are deterministic
+/// functions of the pattern alone; the merge is a strict `<` on u64 with the
+/// shipped lineage winning ties, so the returned permutation is a deterministic
+/// function of the pattern and cannot be worse than the shipped one.
+///
+/// The gate is deliberately structural and narrow: `n <= 600 && nnz <= 5 000`
+/// is the part of `lt_1k` whose whole pipeline is cheap (the fork's added wall
+/// on a row tracks that row's own pipeline cost), and it excludes the dense
+/// small patterns whose `nnz` at n = 600 is ~1.8e5 as well as every mid/crown
+/// row. The two lineages run concurrently on a shared `&Pattern`, so the gate's
+/// added wall is the *slower* of two runs, not their sum; all pipeline state is
+/// `thread_local`, which is what makes that safe.
+const PRODUCTION_BASIN_FORK_MAX_N: usize = 600;
+const PRODUCTION_BASIN_FORK_MAX_NNZ: usize = 5_000;
+
+thread_local! {
+    /// Fork lineage flag: when set, the whole-graph `4.subtree` cascade is
+    /// skipped, so the remaining (monotone) stages refine the pre-cascade
+    /// incumbent instead of the cascade's. Default false = the shipped lineage.
+    static CHAIN_SUPPRESSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[inline]
+fn chain_suppressed() -> bool {
+    CHAIN_SUPPRESSED.with(|c| c.get())
+}
+
+/// Is this row in the fork band? Production reads the two constants; test
+/// builds may re-point them (and switch the fork off entirely) so one binary
+/// prices the whole band curve in one session.
+#[inline]
+fn basin_fork_band(n: usize, nnz: usize) -> bool {
+    #[cfg(test)]
+    {
+        if std::env::var("SSI_BASIN_FORK")
+            .map(|v| v.trim() == "0")
+            .unwrap_or(false)
+        {
+            return false;
+        }
+        let max_n = std::env::var("SSI_FORK_MAX_N")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(PRODUCTION_BASIN_FORK_MAX_N);
+        let max_nnz = std::env::var("SSI_FORK_MAX_NNZ")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(PRODUCTION_BASIN_FORK_MAX_NNZ);
+        n >= 6 && n <= max_n && nnz <= max_nnz
+    }
+    #[cfg(not(test))]
+    {
+        n >= 6 && n <= PRODUCTION_BASIN_FORK_MAX_N && nnz <= PRODUCTION_BASIN_FORK_MAX_NNZ
+    }
+}
+
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
     if let Some(perm) = forest_certificate(pattern) { return perm; }
@@ -1340,6 +1428,38 @@ pub fn order(pattern: &Pattern) -> Vec<usize> {
         pattern.n, &pattern.col_ptr, &pattern.row_idx, 2_000_000,
     ) {
         return perm;
+    }
+    if basin_fork_band(pattern.n, pattern.nnz()) {
+        // Two lineages, one shared immutable pattern. The shipped lineage runs
+        // on this thread (byte-identical to the un-forked `order()`); the
+        // suppressed-cascade lineage runs beside it with the flag set on its own
+        // thread. A panic inside the fork must not take the worker down, so a
+        // failed join falls back to the shipped lineage.
+        let sp = ScoringPattern {
+            n: pattern.n,
+            col_ptr: pattern.col_ptr.clone(),
+            row_idx: pattern.row_idx.clone(),
+        };
+        let (base, alt) = std::thread::scope(|scope| {
+            let fork = scope.spawn(|| {
+                CHAIN_SUPPRESSED.with(|c| c.set(true));
+                let perm = leader_order(pattern);
+                CHAIN_SUPPRESSED.with(|c| c.set(false));
+                perm
+            });
+            let base = leader_order(pattern);
+            let alt = match fork.join() {
+                Ok(perm) => Some(perm),
+                Err(_) => None,
+            };
+            (base, alt)
+        });
+        if let Some(alt) = alt {
+            if alt.len() == base.len() && flops_of(&sp, &alt) < flops_of(&sp, &base) {
+                return alt;
+            }
+        }
+        return base;
     }
     leader_order(pattern)
 }
@@ -3378,7 +3498,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
-    if (SUBTREE_MIN_N..=SUBTREE_CHAIN_MAX_N).contains(&n) && nnz <= 1_500_000 {
+    if !chain_suppressed()
+        && (SUBTREE_MIN_N..=SUBTREE_CHAIN_MAX_N).contains(&n)
+        && nnz <= 1_500_000
+    {
         let (mut candidate, counts, parent) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
         let mut cfg1 = subtree_cfg_for(n, nnz);
         let mut improved = rgreedy::subtree_refine(
@@ -5046,16 +5169,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // exceeded the 2.0s per-matrix cap and was killed" — so a value-free spend
     // here is not score-neutral book-keeping, it is *cap margin* on the rows
     // that decide the run. Both arms are graded-closest (`SSI_MARK_NOSCORE=1`).
+    // Frame fidelity (this session): both of these defaulted to ON in test
+    // builds and OFF in production, so a plain probe ran two extra exchange
+    // passes the graded worker never runs. They are now opt-IN seams whose
+    // unset default equals the production value; a probe that wants the old
+    // frame sets `SSI_PRECLASS_WIN=1 SSI_PRECLASS_STEP=1`.
     #[cfg(test)]
     let preclass_win: bool = std::env::var("SSI_PRECLASS_WIN")
         .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_win: bool = false;
     #[cfg(test)]
     let preclass_step: bool = std::env::var("SSI_PRECLASS_STEP")
         .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_step: bool = false;
     if preclass_win && n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
@@ -5491,13 +5619,32 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // diffed against `475be33` and carries none of it, so this is the one
         // device of ours that is *validated on the hidden frame* and absent here.
         // Test-only env seam: one binary prices both arms in-frame.
+        // ── THE WIDTH BAND (this session's second device) ───────────────────
+        // Window width and sweep count are one decision, not two: with `step`
+        // coprime to `width`, `width` sweeps visit every alignment of the tiling
+        // exactly once, so 12/5/12 is a complete cycle and so is 14/5/14.
+        // Which cycle to run is a *ledger* question. A wider window costs 2^k
+        // more per component, and on the rows where 2 GiB truncates the sweep
+        // loop (measured: `refused = 0` but the window count stops at 2-6 of 12
+        // sweeps on `crudeoil_lee4_09/10`, `crudeoil_lee4_06`, `chp_shorttermplan2d`,
+        // `crudeoil_pooling_dt3`) a truncated 14-cycle is strictly less search
+        // than a complete 12-cycle. On rows the ledger does NOT truncate, the
+        // wider window is the only way to reach components of 13-14 vertices,
+        // and it wins. In-frame, one binary/one session, all 198 class rows,
+        // graded-closest frame (`SSI_MARK_NOSCORE=1`): 14/5/14 everywhere is
+        // +1.01e-4 dev (bucket `1k_10k` **-7.45e-5**, bucket `gt_10k` +2.03e-4 —
+        // the large rows are exactly the truncated ones); restricted to
+        // `n <= 10 000` it is **-5.94e-5 dev** with every large row byte-identical.
+        // The 10 000 boundary is the census's own: every row that regressed under
+        // the wider cycle has n >= 10 429.
         #[cfg(test)]
         let exchange_width: usize = std::env::var("SSI_EXCHANGE_WIDTH")
             .ok()
             .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(12);
+            .unwrap_or(if n <= EXCHANGE_WIDE_MAX_N { EXCHANGE_WIDE_WIDTH } else { 12 });
         #[cfg(not(test))]
-        let exchange_width: usize = 12;
+        let exchange_width: usize =
+            if n <= EXCHANGE_WIDE_MAX_N { EXCHANGE_WIDE_WIDTH } else { 12 };
         // iter55: the sweeps axis was **dead at a 1G allowance** (0234 family curve:
         // 6 and 8 sweeps measured identical to 5) and is **live at 2G**: 2G + 6 sweeps
         // priced 0.790425 -> **0.790368** (−5.7e-5) in one binary/one session on the
@@ -5514,13 +5661,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // 4G+6), so this ships the 4G allowance with five sweeps: the failed tree's
         // value minus its one dead sweep. [0239-sweeps{3,4,5}-noscore-4cpu.log,
         // 0238-noscore-4cpu.log, 0239-board-receipt.txt]
+        // The probe's old default here was 6, one full cycle short of the
+        // shipped 12 — a frame divergence that made every un-overridden probe
+        // run a different program from the graded worker. It now follows the
+        // same band as the width; `SSI_EXCHANGE_SWEEPS` still forces one value
+        // for the whole corpus when a probe wants a flat arm.
         #[cfg(test)]
         let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
             .ok()
             .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(6);
+            .unwrap_or(if n <= EXCHANGE_WIDE_MAX_N { EXCHANGE_WIDE_SWEEPS } else { 12 });
         #[cfg(not(test))]
-        let exchange_sweeps: usize = 12;
+        let exchange_sweeps: usize =
+            if n <= EXCHANGE_WIDE_MAX_N { EXCHANGE_WIDE_SWEEPS } else { 12 };
         #[cfg(test)]
         let exchange_step: usize = std::env::var("SSI_EXCHANGE_STEP")
             .ok()
@@ -5601,12 +5754,23 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // block's gate excludes (`nnz > 16n || max_deg > n/2`) and it
                 // still calls the 8/4/3 shape the class block outgrew. The
                 // family curve (0234) prices 12/* on the class block only.
+                // iter-candidate (this session): the dense/hub twin still ran the
+                // 8/4/3 shape the class block outgrew two devices ago. In-frame,
+                // one binary/one session, the twin's own 24-row census, graded-closest
+                // frame: 8/4/3 **0.776753**, 12/4/5 0.776776, 12/12/5 0.776629,
+                // **10/4/4 0.776456** — worth -2.21e-5 dev, with movers
+                // `chimera_lga-01` -0.52 %, `chimera_mgw-c16-2031-01` -0.38 %,
+                // `chimera_rfr-02` -0.10 % and the two `sporttournament`/`torsion`
+                // rows unchanged. The width axis here is NOT the class block's:
+                // the twin's rows are hubs and dense small patterns where 10/4/4
+                // beats both 8/4/3 and the full 12-cycle, so the sites are priced
+                // separately.
                 #[cfg(test)]
                 let (dense_w, dense_s, dense_t): (usize, usize, usize) = (
                     std::env::var("SSI_DENSE_W")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(8),
+                        .unwrap_or(10),
                     std::env::var("SSI_DENSE_S")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
@@ -5614,10 +5778,10 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                     std::env::var("SSI_DENSE_T")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(3),
+                        .unwrap_or(4),
                 );
                 #[cfg(not(test))]
-                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (8, 4, 3);
+                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (10, 4, 4);
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     dense_w, dense_s, dense_t, dense_window_ledger,
@@ -5662,7 +5826,22 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 };
             #[cfg(not(test))]
             let span_windows: &[(usize, usize, usize, i64)] = &PRODUCTION_SPAN_WINDOWS;
+            // iter-candidate seam (test-only): the nine span passes carry their
+            // own small allowances (32-64M each, ~0.54G in total) while the
+            // class-block exchange above carries 2 GiB. This scales every span
+            // budget in the same binary/session, so "is the span site starved
+            // relative to the exchange site?" is answerable in one build.
+            // Production always reads 100.
+            #[cfg(test)]
+            let span_scale: i64 = std::env::var("SSI_SPAN_SCALE")
+                .ok()
+                .and_then(|v| v.trim().parse::<i64>().ok())
+                .unwrap_or(100)
+                .clamp(1, 4000);
+            #[cfg(not(test))]
+            let span_scale: i64 = 100;
             for &(width, sweeps, step, budget) in span_windows {
+                let budget = budget.saturating_mul(span_scale) / 100;
                 if let Some(candidate) = rgreedy::sparse_span_window_descent(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     width, sweeps, step, budget,

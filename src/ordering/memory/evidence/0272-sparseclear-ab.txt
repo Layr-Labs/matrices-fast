@@ -1,0 +1,52 @@
+iter72 — the nonzero-only row clear: value-free by construction, but its production-frame wall is a WASH (not shipped)
+frame: production worker (one process per 1-row corpus), taskset -c 0-3, /usr/bin/time; P = nonzero-only clear (worker-sparseclear), F = full-width clear (worker-fullclear)
+the two binaries differ by one loop in Game::eliminate only: for i in 0..nonzero_words.len() { adj[base+nzw[i]]=0 } vs for k in 0..w { adj[base+k]=0 }
+load at measurement: 3.23 3.10 2.59 3/1390 2350856
+chimera_selby-c16-01     P wall=2.46 user=4.07 sys=0.10 faults=51708
+chimera_selby-c16-01     F wall=2.45 user=4.07 sys=0.08 faults=51643
+chimera_selby-c16-01     F wall=2.48 user=4.17 sys=0.09 faults=51631
+chimera_selby-c16-01     P wall=2.45 user=4.06 sys=0.09 faults=51731
+chimera_selby-c16-01     P wall=2.44 user=4.03 sys=0.11 faults=51676
+chimera_selby-c16-01     F wall=2.42 user=4.03 sys=0.08 faults=51709
+chimera_selby-c16-01     F wall=2.43 user=4.05 sys=0.08 faults=51745
+chimera_selby-c16-01     P wall=2.40 user=3.96 sys=0.11 faults=51721
+chimera_selby-c16-02     P wall=2.56 user=4.41 sys=0.09 faults=51615
+chimera_selby-c16-02     F wall=2.54 user=4.38 sys=0.09 faults=51663
+chimera_selby-c16-02     F wall=2.49 user=4.37 sys=0.08 faults=51728
+chimera_selby-c16-02     P wall=2.46 user=4.26 sys=0.09 faults=51609
+chimera_selby-c16-02     P wall=2.48 user=4.31 sys=0.07 faults=51698
+chimera_selby-c16-02     F wall=2.43 user=4.22 sys=0.08 faults=51601
+chimera_selby-c16-02     F wall=2.54 user=4.39 sys=0.09 faults=51665
+chimera_selby-c16-02     P wall=2.80 user=4.86 sys=0.12 faults=51617
+crudeoil_lee4_09         P wall=3.02 user=5.82 sys=0.24 faults=139138
+crudeoil_lee4_09         F wall=3.07 user=6.12 sys=0.22 faults=136618
+crudeoil_lee4_09         F wall=3.08 user=6.22 sys=0.24 faults=136960
+crudeoil_lee4_09         P wall=3.00 user=6.19 sys=0.24 faults=138201
+crudeoil_lee4_09         P wall=2.85 user=5.39 sys=0.18 faults=135261
+crudeoil_lee4_09         F wall=2.99 user=5.52 sys=0.22 faults=139221
+crudeoil_lee4_09         F wall=3.29 user=6.13 sys=0.21 faults=138620
+crudeoil_lee4_09         P wall=3.17 user=6.00 sys=0.21 faults=134719
+mpbp_48                  P wall=2.58 user=4.59 sys=0.31 faults=210687
+mpbp_48                  F wall=2.70 user=4.76 sys=0.31 faults=214687
+mpbp_48                  F wall=2.34 user=4.15 sys=0.26 faults=213991
+mpbp_48                  P wall=2.28 user=4.05 sys=0.29 faults=212027
+mpbp_48                  P wall=2.28 user=4.10 sys=0.26 faults=212521
+mpbp_48                  F wall=2.33 user=4.11 sys=0.27 faults=213194
+mpbp_48                  F wall=2.41 user=4.14 sys=0.29 faults=213895
+mpbp_48                  P wall=2.27 user=4.05 sys=0.28 faults=209944
+procurement1large        P wall=2.23 user=4.02 sys=0.17 faults=114786
+procurement1large        F wall=2.24 user=4.06 sys=0.16 faults=114079
+procurement1large        F wall=2.24 user=4.07 sys=0.15 faults=114836
+procurement1large        P wall=2.23 user=4.03 sys=0.17 faults=113380
+procurement1large        P wall=2.21 user=3.98 sys=0.20 faults=114117
+procurement1large        F wall=2.26 user=4.07 sys=0.17 faults=114800
+procurement1large        F wall=2.23 user=4.05 sys=0.18 faults=114301
+procurement1large        P wall=2.23 user=4.04 sys=0.16 faults=114259
+nuclear10a               P wall=2.19 user=4.34 sys=0.15 faults=115795
+nuclear10a               F wall=2.11 user=3.95 sys=0.16 faults=117052
+nuclear10a               F wall=2.18 user=4.37 sys=0.15 faults=116039
+nuclear10a               P wall=2.17 user=4.22 sys=0.17 faults=115667
+nuclear10a               P wall=2.27 user=4.46 sys=0.16 faults=117651
+nuclear10a               F wall=2.39 user=4.50 sys=0.17 faults=117652
+nuclear10a               F wall=2.03 user=3.95 sys=0.15 faults=116877
+nuclear10a               P wall=2.57 user=4.06 sys=0.18 faults=116789

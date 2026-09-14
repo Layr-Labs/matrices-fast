@@ -1,0 +1,282 @@
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1299:1
+     |
+1299 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1300 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1301 | | /// budget disables the stream, which is what production compiles to — the
+1302 | | /// switch can never change a submitted ordering. Configured through
+1303 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1304 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1585:1
+     |
+1585 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1586 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:335:1
+    |
+335 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+336 | | /// can run the SAME `order()` both ways in one process and compare the
+337 | | /// returned permutations element by element. Production builds compile
+338 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:369:1
+    |
+369 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+370 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+371 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+372 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5186:5
+     |
+5186 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+5187 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+5188 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+5189 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5195 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5196 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5197 |       #[cfg(test)]
+5198 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5199 | |         .ok()
+5200 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5201 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5338:9
+     |
+5338 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5339 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5340 | /         let shipped_ladder = || {
+5341 | |             if nnz < 3 * n {
+5342 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5343 | |             } else {
+...    |
+5346 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4165:9
+     |
+4165 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `t_refine`
+   --> candidate-worker/src/../../src/ordering/rgreedy/window_dp.rs:743:17
+    |
+743 |             let t_refine = std::time::Instant::now();
+    |                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_t_refine`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:733:29
+    |
+733 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:946:7
+    |
+946 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: function `audit_enabled` is never used
+   --> candidate-worker/src/../../src/ordering/symbolic_flat.rs:316:15
+    |
+316 | pub(super) fn audit_enabled() -> bool {
+    |               ^^^^^^^^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:189:15
+    |
+189 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:314:15
+    |
+314 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:134:4
+    |
+134 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:230:4
+    |
+230 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:725:4
+    |
+725 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:560:19
+    |
+560 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 19 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.01s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+CENSUS	name	n	nnz	amd	tip	tip_s	ratio	best	best_ratio	best_s	budget	won
+LADGATE	5030	10000	0.336	1
+CEN2	pooling_sppa9pq	15198662	0.354	15198662:0.017	15198662:0.043	15198662:0.109	15198662:0.455
+CENSUS	pooling_sppa9pq	5030	120730	23971280	15198662	0.354	0.634036	15198662	0.634036	0.000	0	0
+CEN2	maxcsp-ehi-85-297-71	1110971341	0.287	1110971341:0.008	1110971341:0.032	1110971341:0.074	1110971341:0.167
+CENSUS	maxcsp-ehi-85-297-71	2372	207996	1381768944	1110971341	0.287	0.804021	1110971341	0.804021	0.000	0	0
+LADGATE	255	10000	0.105	1
+CEN2	qap	3650113	0.204	3650113:0.020	3650113:0.085	3650113:0.221	3650113:0.499
+CENSUS	qap	255	43748	3802533	3650113	0.204	0.959916	3650113	0.959916	0.000	0	0
+LADGATE	7252	10000	0.656	1
+CEN2	rsyn0830m04m	171498	1.038	171498:0.058	171498:0.199	171498:0.532	171498:1.140
+CENSUS	rsyn0830m04m	7252	20752	212130	171498	1.038	0.808457	171498	0.808457	0.000	0	0
+LADGATE	9532	10000	0.752	1
+CEN2	mpbp_07	1248083	1.051	1248083:0.060	1247767:0.158	1247767:0.395	1247767:1.261
+CENSUS	mpbp_07	9532	30810	1368477	1248083	1.051	0.912023	1247767	0.911792	0.098	500000000	1
+LADGATE	7295	10000	0.225	1
+CEN2	squfl015-080persp	74520	0.242	74520:0.067	74520:0.247	74520:0.594	74520:1.487
+CENSUS	squfl015-080persp	7295	21600	74520	74520	0.242	1.000000	74520	1.000000	0.000	0	0
+LADGATE	2157	10000	0.223	1
+CEN2	knp5-44	3764003	0.249	3764003:0.025	3764003:0.168	3764003:0.303	3764003:0.465
+CENSUS	knp5-44	2157	32604	3764003	3764003	0.249	1.000000	3764003	1.000000	0.000	0	0
+LADGATE	4405	10000	0.163	1
+CEN2	meanvar-orl400_05_e_8	21922611	0.281	21922611:0.054	21922611:0.093	21922611:0.141	21922611:0.612
+CENSUS	meanvar-orl400_05_e_8	4405	171604	21923414	21922611	0.281	0.999963	21922611	0.999963	0.000	0	0
+LADGATE	9170	10000	0.393	1
+CEN2	squfl020-150	135020	0.433	135020:0.070	135020:0.242	135020:0.591	135020:1.155
+CENSUS	squfl020-150	9170	24000	135020	135020	0.433	1.000000	135020	1.000000	0.000	0	0
+LADGATE	6709	10000	0.363	1
+CEN2	ringpack_20_3	865627	0.514	865627:0.052	865627:0.157	865627:0.368	865627:1.015
+CENSUS	ringpack_20_3	6709	45220	2415136	865627	0.514	0.358417	865627	0.358417	0.000	0	0
+LADGATE	1310	10000	0.126	1
+CEN2	watercontamination0303r	2171882	0.144	2171882:0.012	2171882:0.043	2171882:0.114	2171882:0.245
+CENSUS	watercontamination0303r	1310	37028	2171882	2171882	0.144	1.000000	2171882	1.000000	0.000	0	0
+LADGATE	5205	10000	0.150	1
+CEN2	meanvar-orl400_05_e_7	21935811	0.245	21935811:0.066	21935811:0.109	21935811:0.135	21935811:0.558
+CENSUS	meanvar-orl400_05_e_7	5205	174804	21939414	21935811	0.245	0.999836	21935811	0.999836	0.000	0	0
+LADGATE	705	10000	0.385	1
+CEN2	qapw	12183146	0.416	12183146:0.031	12183146:0.081	12183146:0.183	12183146:0.403
+CENSUS	qapw	705	87496	12183146	12183146	0.416	1.000000	12183146	1.000000	0.000	0	0
+LADGATE	8232	10000	0.319	1
+CEN2	sonet21v6	1585871	0.578	1585871:0.053	1585871:0.187	1585871:0.421	1585871:0.862
+CENSUS	sonet21v6	8232	40744	1643311	1585871	0.578	0.965046	1585871	0.965046	0.000	0	0
+LADGATE	560	10000	0.221	1
+CEN2	qspp_0_14_0_1_10_1	16038266	0.326	16038266:0.003	16021109:0.007	16017111:0.027	16017111:0.070
+CENSUS	qspp_0_14_0_1_10_1	560	120274	16119226	16038266	0.326	0.994977	16017111	0.993665	0.020	1000000000	1
+LADGATE	6885	10000	0.188	1
+CEN2	emfl100_3_3	55506	0.210	55506:0.070	55506:0.184	55506:0.497	55506:1.617
+CENSUS	emfl100_3_3	6885	15948	55506	55506	0.210	1.000000	55506	1.000000	0.000	0	0
+CEN2	polygon75	1171822	0.000	1171822:0.045	1171822:0.074	1171822:0.175	1171822:0.579
+CENSUS	polygon75	5846	49652	1171822	1171822	0.000	1.000000	1171822	1.000000	0.000	0	0
+LADGATE	481	10000	0.162	1
+CEN2	qspp_0_13_0_1_10_1	10097446	0.260	10097446:0.003	10095353:0.009	10095353:0.047	10088531:0.165
+CENSUS	qspp_0_13_0_1_10_1	481	88522	10150185	10097446	0.260	0.994804	10088531	0.993926	0.118	2000000000	1
+LADGATE	6089	10000	0.341	1
+CEN2	ringpack_20_2	707413	0.542	707413:0.034	707413:0.132	707413:0.371	707413:0.719
+CENSUS	ringpack_20_2	6089	40368	1872174	707413	0.542	0.377856	707413	0.377856	0.000	0	0
+LADGATE	6028	10000	0.694	1
+CEN2	rsyn0820m04m	152748	1.038	152748:0.055	152748:0.196	152748:0.492	152748:1.171
+CENSUS	rsyn0820m04m	6028	17372	196890	152748	1.038	0.775804	152748	0.775804	0.000	0	0
+LADGATE	6418	10000	0.824	1
+CEN2	crudeoil_lee2_06	15882492	1.111	15882492:0.018	15882492:0.064	15793192:0.161	15793192:0.352
+CENSUS	crudeoil_lee2_06	6418	34646	23299675	15882492	1.111	0.681662	15793192	0.677829	0.096	1000000000	1
+LADGATE	8508	10000	0.839	1
+CEN2	rsyn0840m04m	184844	1.283	184844:0.079	184844:0.243	184844:0.506	184844:1.347
+CENSUS	rsyn0840m04m	8508	24272	229914	184844	1.283	0.803970	184844	0.803970	0.000	0	0
+LADGATE	2065	10000	0.226	1
+CEN2	knp5-43	3517788	0.239	3517788:0.012	3517788:0.133	3517788:0.251	3517788:0.467
+CENSUS	knp5-43	2065	31132	3517788	3517788	0.239	1.000000	3517788	1.000000	0.000	0	0
+LADGATE	341	10000	0.133	1
+CEN2	qspp_0_11_0_1_10_1	3531915	0.218	3531915:0.008	3531915:0.039	3531915:0.107	3531915:0.249
+CENSUS	qspp_0_11_0_1_10_1	341	44264	3563707	3531915	0.218	0.991079	3531915	0.991079	0.000	0	0
+LADGATE	8992	10000	0.493	1
+CEN2	chp_shorttermplan2a	574732	0.783	574732:0.087	574732:0.280	574732:0.502	574732:1.263
+CENSUS	chp_shorttermplan2a	8992	26288	821014	574732	0.783	0.700027	574732	0.700027	0.000	0	0
+LADGATE	5040	10000	0.630	1
+CEN2	pooling_sppa9tp	16877457	0.645	16877457:0.014	16762686:0.049	16762686:0.070	16687817:0.138
+CENSUS	pooling_sppa9tp	5040	121302	104609262	16877457	0.645	0.161338	16687817	0.159525	0.068	2000000000	1
+LADGATE	9858	10000	0.712	1
+CEN2	mpbp_15	1163008	1.111	1163008:0.059	1163008:0.161	1161940:0.464	1161940:0.924
+CENSUS	mpbp_15	9858	31692	1496502	1163008	1.111	0.777151	1161940	0.776437	0.303	1000000000	1
+LADGATE	7993	10000	0.868	1
+CEN2	arki0016	835661	1.219	835661:0.047	835661:0.153	835661:0.374	835661:1.193
+CENSUS	arki0016	7993	37208	878890	835661	1.219	0.950814	835661	0.950814	0.000	0	0
+LADGATE	6328	10000	0.325	1
+CEN2	syn40m04hfsg	73526	0.579	73526:0.064	73526:0.233	73526:0.481	73526:1.168
+CENSUS	syn40m04hfsg	6328	16896	76232	73526	0.579	0.964503	73526	0.964503	0.000	0	0
+
+ENGINE-CENSUS rows=29 wins=6 of the engine-affordable ungated class
+lt_1k    count=5    geomean_now=0.9880 geomean_with_engine=0.9876
+1k_10k   count=24   geomean_now=0.7663 geomean_with_engine=0.7657
+CLASS_SCORE now=0.877173 with-engine=0.876667 (delta -5.07 bips on this class)
+LEVEL	k=0	budget=200000000	wins=0/29	added_total_s=1.2	mean_added=0.041	worst_tip_plus_added=1.361
+LEVEL	k=1	budget=500000000	wins=4/29	added_total_s=3.8	mean_added=0.131	worst_tip_plus_added=1.525
+LEVEL	k=2	budget=1000000000	wins=6/29	added_total_s=8.7	mean_added=0.300	worst_tip_plus_added=1.789
+LEVEL	k=3	budget=2000000000	wins=6/29	added_total_s=21.7	mean_added=0.750	worst_tip_plus_added=2.630
+test ordering::probe::probe_engine_census ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 37.94s
+

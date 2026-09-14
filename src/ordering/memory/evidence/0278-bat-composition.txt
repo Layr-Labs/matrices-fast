@@ -1,0 +1,37 @@
+iter78 — WHAT SEPARATES A PASS FROM A KILL ACROSS THE DAY (composition of every submitted tree)
+==============================================================================================
+
+Method: every submitted tree is a public branch (`submissions/<uuid>`). Fetch each and read
+the *production* constants out of it — no inference:
+
+  for s in <7-char prefixes>; do git fetch origin submissions/$s-*:refs/remotes/origin/s-$s; done
+  git show refs/remotes/origin/s-$s:src/ordering/rgreedy/window_dp.rs | grep PRODUCTION_XCH_ALLOC
+  git show refs/remotes/origin/s-$s:src/ordering/rgreedy/window_dp.rs | grep PRODUCTION_XCH_BIGK_PCT
+  git show refs/remotes/origin/s-$s:src/ordering/mod.rs | grep -c SHIPPED_DENSE_LADDER
+
+  sub        outcome              ALLOC  charge shape  dense rung  sweeps  ledger
+  bbf5849    PROMOTED 0.840623    0      absent        0           12      2 GiB
+  039c8e2    completed (rejected)  ?     absent        0            6      2 GiB
+  2815e21    FAILED (86 s)        2      75 %         0           12      2 GiB
+  628b534    FAILED (86 s)        2      75 %         1           12      2 GiB
+  5e7259a    FAILED (86 s)        2      100 % (retired) 1        12      2 GiB
+  657b5db    FAILED (85 s)        absent absent        0            6      3 GiB
+  65cb40e    FAILED (107 s)       absent absent        0            6      3 GiB
+  49f6584    FAILED (107 s)       absent absent        0            6      3 GiB
+
+Reading:
+  * The older kills are a different animal: all three are 3 GiB-ledger, 6-sweep trees (a
+    heavier allowance), which is the mechanism iter66 recorded.
+  * The three kills after 15:52 UTC are all *this* lineage and all die at the SAME 86 s mark,
+    and the one thing every one of them carries that the promoted tree does not is
+    **`PRODUCTION_XCH_ALLOC = 2`** (plus the dense rung in two of the three). The charge shape
+    is now *excluded* by measurement: `5e7259a4` retired it (charge 100 %) and still died at
+    86 s, at the same position, with no measurable wall or value change in the graded frame
+    (-5e-6 dev, and the probe A/B shows its wall price is <= 0.05 s on any single row).
+  * So the surviving suspect set for the repeated 86 s kill is {`XCH_ALLOC = 2`, dense-band
+    rung}. Both are given back in the next bat, in that order: `ALLOC` first (worth 6e-6 dev,
+    the cheapest of the two), then the rung if it dies again.
+  * Corollary for the record: bbf58495's completion at 633 s is NOT evidence that the cap has
+    slack for this lineage's current profile — the three descendants that differ by <= 5 % of
+    corpus wall all died, at the same row index, so the promoted profile sits within a few
+    percent of the cap and any delta that costs more than ~2 % of corpus wall is fatal.

@@ -148,6 +148,13 @@ fn probe_timing_and_score() {
             println!("LIFT\t{name}\t{ln}\t{core_n}\t{core_nnz}\t{x}");
         }
         println!("COUNTS\t{name}\t{n}\t{}\t{base}\t{mine}", pat.nnz());
+        // iter72: the buffer-restore axis (see `rgreedy::copy_stats`).
+        let cs = rgreedy::copy_stats::take();
+        println!(
+            "COPYSTATS\t{name}\tsecs={secs:.3}\tasm_calls={}\tasm_words={}\tasm_ms={:.1}\trst_calls={}\trst_words={}\trst_ms={:.1}\trst_tail_ms={:.1}\telims={}\tfullclear_words={}\tsparse_words={}\tsparse_clears={}",
+            cs[0], cs[1], cs[2] as f64 / 1e6, cs[3], cs[4], cs[5] as f64 / 1e6,
+            cs[6] as f64 / 1e6, cs[7], cs[8], cs[9], cs[10]
+        );
         if std::env::var_os("SSI_XCH_TIME").is_some() {
             let ((win, dp, elim), c, hist) = rgreedy::xch_split::take();
             println!(
@@ -4340,5 +4347,107 @@ fn probe_floor_battery() {
             line.push_str(&format!("\t{s:.4}\t{r:.4}"));
         }
         println!("{line}");
+    }
+}
+
+// ===========================================================================
+// iter77 — FLOOR-CERTIFICATE CENSUS
+// ===========================================================================
+//
+// The at-floor class (rows whose shipped ratio is *exactly* 1.0000, i.e. the
+// AMD anchor was never beaten) is 25 % of the dev corpus and every value device
+// this lane has priced in the last thirty iterations lands somewhere else. The
+// pipeline itself has a proof for a subclass of those rows: `order()` returns
+// the AMD permutation *immediately* when AMD's elimination adds no fill at all
+// (`nnz_l == n + edges`, mod.rs:1765), because a fill-free ordering attains the
+// graph's flop lower bound `n + 3e + 2t` — so that row's ratio is not a search
+// failure but the *global optimum* over all orderings, and no submission can
+// ever move it.
+//
+// This probe counts that subclass in the shipped frame — per row it reports the
+// AMD column-count total, the fill-free target, the certificate flag, and the
+// shipped ratio — so the size of the *irreducible* part of the corpus is a
+// measured number instead of an assumption. Rows outside `SSI_PROBE_ONLY` are
+// skipped; the shipped `order()` is only run when `SSI_CERT_SHIPPED=1` (it is
+// the expensive half and the ratio is already known from an official run).
+#[test]
+#[ignore]
+fn probe_floor_certificate() {
+    let corpus = match std::env::var("SSI_CORPUS_FILE") {
+        Ok(path) if !path.trim().is_empty() => {
+            ssi_scoring::load_corpus_jsonl(std::path::Path::new(&path))
+                .unwrap_or_else(|_| crate::corpus::corpus())
+        }
+        _ => crate::corpus::corpus(),
+    };
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let with_shipped = std::env::var_os("SSI_CERT_SHIPPED").is_some();
+    let mut certified = 0usize;
+    let mut floor_rows = 0usize;
+    let mut cert_floor = 0usize;
+    let mut cert_floor_n = Vec::new();
+    println!("CERT\tname\tn\tnnz\tedges\tfill\tcertified\tshipped_ratio");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let edges: u64 = (0..n)
+            .map(|j| {
+                pat.row_idx[pat.col_ptr[j]..pat.col_ptr[j + 1]]
+                    .iter()
+                    .filter(|&&i| i > j)
+                    .count() as u64
+            })
+            .sum();
+        let mut ws = scoring_ws::ScoreWorkspace::new(n, pat.nnz());
+        let amd_flops = ws.flops(&sp, &amd);
+        let fill = ws.nnz_l();
+        let is_cert = fill == n as u64 + edges;
+        if is_cert {
+            certified += 1;
+        }
+        let ratio = if with_shipped {
+            let shipped = order(pat);
+            flops_of(&sp, &shipped) as f64 / amd_flops as f64
+        } else {
+            f64::NAN
+        };
+        if with_shipped && ratio >= 1.0 - 1e-12 {
+            floor_rows += 1;
+            if is_cert {
+                cert_floor += 1;
+                cert_floor_n.push((name.clone(), n, pat.nnz()));
+            }
+        }
+        println!(
+            "CERT\t{name}\t{n}\t{}\t{edges}\t{fill}\t{}\t{ratio:.6}",
+            pat.nnz(),
+            if is_cert { 1 } else { 0 }
+        );
+    }
+    println!("\nCERT-SUMMARY\tcertified_rows={certified}");
+    if with_shipped {
+        println!(
+            "CERT-SUMMARY\tshipped_at_floor={floor_rows}\tof_which_certified={cert_floor}"
+        );
+        for (name, n, nnz) in cert_floor_n.iter() {
+            println!("CERT-FLOOR\t{name}\tn={n}\tnnz={nnz}");
+        }
     }
 }

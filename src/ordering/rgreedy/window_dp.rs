@@ -93,7 +93,7 @@ fn xch_plateau_min_n() -> usize {
 /// which components are offered to it changes. Determinism is preserved: the
 /// walk is a stable sort of a deterministic enumeration (ties broken by the
 /// component's bit mask).
-const PRODUCTION_XCH_ALLOC: usize = 0;
+const PRODUCTION_XCH_ALLOC: usize = 1;
 
 #[inline]
 fn xch_alloc() -> usize {

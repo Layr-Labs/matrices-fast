@@ -5815,13 +5815,19 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // on the displaced orderings the pipeline retains but no stage ever
     // re-optimizes (`runner_up`)? Both arms are monotone by construction —
     // install only on a strict decrease of the exact score.
+    // ── our single added mechanism (measured on this exact class of tree): ──
+    // the tail exchange re-run at dose 1, −1.6e-4-class dev, anchor-gated
+    // (iter65's own proof: the exchange family is never the first improver on
+    // a row, so the gate is outcome-neutral and buys cap margin). Pool stays
+    // off (2.565 s local). Everything else in this tree is byte-identical to
+    // the promoted 05fa99b.
     #[cfg(test)]
     let xchg_tail: usize = std::env::var("SSI_XCHG_TAIL")
         .ok()
         .and_then(|v| v.trim().parse().ok())
-        .unwrap_or(0);
+        .unwrap_or(1);
     #[cfg(not(test))]
-    let xchg_tail: usize = 0;
+    let xchg_tail: usize = 1;
     #[cfg(test)]
     let xchg_pool: usize = std::env::var("SSI_XCHG_POOL")
         .ok()
@@ -5830,6 +5836,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     #[cfg(not(test))]
     let xchg_pool: usize = 0;
     if (xchg_tail > 0 || xchg_pool > 0)
+        && past_anchor
         && n >= 6
         && n <= class_n
         && nnz <= 200_000

@@ -93,7 +93,20 @@ fn xch_plateau_min_n() -> usize {
 /// which components are offered to it changes. Determinism is preserved: the
 /// walk is a stable sort of a deterministic enumeration (ties broken by the
 /// component's bit mask).
-const PRODUCTION_XCH_ALLOC: usize = 0;
+/// ── iter68d: SHIPPED AS 1, "skip the unfunded component" ────────────────────
+/// Policy 0 ends the window walk at the first component the precharged ledger
+/// cannot fund, abandoning the cheap components behind it; policy 1 skips that
+/// component and keeps walking in position order. The precharge itself is kept,
+/// so the ledger still bounds the window's spend and policy 1 can only spend
+/// what policy 0 already budgeted — it changes *which* components get the
+/// budget, never how much there is. Measured this session on the crown tree
+/// (one binary, one session, all 300 dev rows, graded-closest
+/// `SSI_MARK_NOSCORE=1` frame): **score 0.790236 -> 0.790230, 299 of 300 rows
+/// bit-identical, one mover** (`crudeoil_lee1_07` 0.745866999 -> 0.744049962,
+/// dln -2.44e-3) — strictly monotone, no regression anywhere. Worker frame
+/// (one process per row, min of 3, 13 rows including the mover): no systematic
+/// wall change; the rows that move are inside the same budget. [0278d]
+const PRODUCTION_XCH_ALLOC: usize = 1;
 
 #[inline]
 fn xch_alloc() -> usize {

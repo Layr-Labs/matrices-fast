@@ -1,0 +1,64 @@
+
+running 1 test
+test ordering::probe::probe_slow_row_stage ... STAGED	mpbp_07	9532	30810	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/mpbp_07.bin
+STAGED	pinene200	19995	97990	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pinene200.bin
+STAGED	rsyn0815m04m	5456	15756	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/rsyn0815m04m.bin
+STAGED	mpbp_48	28368	91016	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/mpbp_48.bin
+STAGED	chimera_mgw-c16-2031-01	2032	15900	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_mgw-c16-2031-01.bin
+STAGED	crudeoil_pooling_dt2	18742	75910	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/crudeoil_pooling_dt2.bin
+STAGED	transswitch0300p	11659	48446	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/transswitch0300p.bin
+STAGED	crudeoil_pooling_dt3	30660	152210	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/crudeoil_pooling_dt3.bin
+STAGED	chimera_selby-c16-01	2031	10964	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_selby-c16-01.bin
+STAGED	crudeoil_lee4_10	17809	120632	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/crudeoil_lee4_10.bin
+STAGED	procurement1large	14416	41068	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/procurement1large.bin
+STAGED	chimera_selby-c16-02	2031	10878	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_selby-c16-02.bin
+STAGED	chp_partload	5211	16740	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chp_partload.bin
+STAGED	powerflow0300p	11251	41918	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/powerflow0300p.bin
+STAGED	chp_shorttermplan2d	16364	52108	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chp_shorttermplan2d.bin
+STAGED	crudeoil_lee4_06	10429	55492	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/crudeoil_lee4_06.bin
+STAGED	netmod_kar1	1746	4928	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/netmod_kar1.bin
+STAGED	powerflow0118p	5065	18730	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/powerflow0118p.bin
+STAGED	crudeoil_lee2_06	6418	34646	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/crudeoil_lee2_06.bin
+STAGED	ringpack_30_2	17999	121458	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/ringpack_30_2.bin
+STAGED	rsyn0840m04m	8508	24272	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/rsyn0840m04m.bin
+STAGED	nuclear10a	17493	163816	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/nuclear10a.bin
+STAGED	pooling_sppa9tp	5040	121302	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pooling_sppa9tp.bin
+STAGED	mpbp_15	9858	31692	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/mpbp_15.bin
+STAGED	crudeoil_lee4_09	15904	101792	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/crudeoil_lee4_09.bin
+STAGED	arki0013	44909	160172	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/arki0013.bin
+STAGED	mpbp_47	5310	17098	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/mpbp_47.bin
+STAGED	arki0016	7993	37208	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/arki0016.bin
+STAGED_TOTAL	28
+WALL	arm	matrix	min	median	max	ratio
+WALL	frontier	mpbp_07	3.3874	3.4105	3.4628	0.912023366
+WALL	frontier	pinene200	3.7214	3.7691	3.8137	0.833587740
+WALL	frontier	rsyn0815m04m	3.3692	3.5348	4.0440	0.777870595
+WALL	frontier	mpbp_48	4.1882	4.2005	4.6205	0.474586466
+WALL	frontier	chimera_mgw-c16-2031-01	2.3290	2.5057	2.5243	0.772227953
+WALL	frontier	crudeoil_pooling_dt2	3.2226	3.3897	3.4353	0.661025162
+WALL	frontier	transswitch0300p	3.7441	3.7617	4.0049	0.926445893
+WALL	frontier	crudeoil_pooling_dt3	3.4516	3.5607	3.6752	0.691487988
+WALL	frontier	chimera_selby-c16-01	3.9062	4.3772	4.5640	0.666589010
+WALL	frontier	crudeoil_lee4_10	4.2134	4.3473	4.3551	0.614716213
+WALL	frontier	procurement1large	3.4809	3.6277	3.7455	0.527457383
+WALL	frontier	chimera_selby-c16-02	4.0447	4.1166	4.3073	0.536589828
+WALL	frontier	chp_partload	3.6341	3.7743	3.7852	0.732820080
+WALL	frontier	powerflow0300p	3.4733	3.6135	4.0941	0.951815691
+WALL	frontier	chp_shorttermplan2d	3.4385	3.4811	3.5487	0.502533747
+WALL	frontier	crudeoil_lee4_06	3.8786	3.9052	3.9854	0.495102218
+WALL	frontier	netmod_kar1	2.5653	2.7119	2.7320	0.771737218
+WALL	frontier	powerflow0118p	3.3635	3.6961	4.0664	0.965630478
+WALL	frontier	crudeoil_lee2_06	3.6488	3.9142	3.9765	0.681756806
+WALL	frontier	ringpack_30_2	4.0388	4.0729	4.5482	0.231087490
+WALL	frontier	rsyn0840m04m	3.4965	3.5661	3.5707	0.803970180
+WALL	frontier	nuclear10a	3.4178	3.4682	3.4863	0.670600260
+WALL	frontier	pooling_sppa9tp	2.4926	2.5163	2.5616	0.161338075
+WALL	frontier	mpbp_15	3.5033	3.5345	3.6917	0.777150983
+WALL	frontier	crudeoil_lee4_09	4.2117	4.5166	4.9587	0.617148810
+WALL	frontier	arki0013	4.2304	4.3438	4.4098	0.399278668
+WALL	frontier	mpbp_47	2.9405	3.0063	3.0436	0.892672565
+WALL	frontier	arki0016	4.5188	4.5925	4.6394	0.950814095
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 313.10s
+

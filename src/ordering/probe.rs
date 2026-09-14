@@ -4342,3 +4342,135 @@ fn probe_floor_battery() {
         println!("{line}");
     }
 }
+
+/// iter67 — REAL-WORKER TIMING FRAME for the globally slowest rows.
+///
+/// `probe_timing_and_score` times `order()` in-process on the (loaded,
+/// parallel) test host; the number the 2 s cap is actually charged in is a
+/// fresh production child process. The 0276 receipts showed the two frames can
+/// disagree by more than 2x on the same row, so a wall claim must name its
+/// frame. This probe stages each named pattern into `.session-backup/patterns/`
+/// so the same rows can be re-timed by hand, and reports the per-row min and
+/// median of N real `ssi-candidate-worker` runs plus the ratio the worker's own
+/// permutation scores.
+///
+/// Env:
+///   `SSI_PROBE_ONLY=a,b,c` rows to stage (default: a fixed slow-row list),
+///   `SSI_STAGE_REPS=k`     worker runs per row per arm (default 3),
+///   `SSI_GRADED_WORKERS=tag=/abs/path[,...]` worker arms (default: none —
+///   staging only). Arms run interleaved, arm by arm, so a slow interval on
+///   the host cannot load one arm.
+#[test]
+#[ignore]
+fn probe_slow_row_stage() {
+    let default_rows = "arki0016,crudeoil_pooling_dt3,chp_partload,arki0013,crudeoil_lee4_10,crudeoil_lee4_09,rsyn0840m04m,mpbp_48,crudeoil_lee4_06,chimera_selby-c16-02,ringpack_30_2,chimera_selby-c16-01,pinene200,crudeoil_lee2_06,transswitch0300p,netmod_kar1,pooling_sppa9tp,procurement1large,chp_shorttermplan2d,mpbp_47,crudeoil_pooling_dt2,nuclear10a,mpbp_15,rsyn0815m04m,chimera_mgw-c16-2031-01,mpbp_07,powerflow0300p,powerflow0118p";
+    let want: std::collections::HashSet<String> = std::env::var("SSI_PROBE_ONLY")
+        .unwrap_or_else(|_| default_rows.to_string())
+        .split(',')
+        .map(|x| x.trim().to_string())
+        .filter(|x| !x.is_empty())
+        .collect();
+    let reps: usize = std::env::var("SSI_STAGE_REPS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3)
+        .max(1);
+    let arms: Vec<(String, String)> = std::env::var("SSI_GRADED_WORKERS")
+        .map(|raw| {
+            raw.split(',')
+                .map(|e| {
+                    let (t, p) = e.split_once('=').expect("arm must be tag=/abs/path");
+                    (t.to_string(), p.to_string())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let cpus = std::env::var("SSI_GRADED_CPU_LIST").unwrap_or_else(|_| "0-3".to_string());
+    // `SSI_STAGE_KEEP_ENV=1` lets a worker inherit this process's environment instead of
+    // `env_clear()`-ing it, so a `#[cfg(test)]` seam (`SSI_XCH_ALLOC`, `SSI_DENSE_*`,
+    // `SSI_PEO_ROUNDS`, ...) can be priced in the REAL worker frame and not only in the
+    // in-process probe. The graded worker never sees these variables: a `cfg(not(test))`
+    // build compiles the seams out into shipped constants.
+    let keep_env = std::env::var_os("SSI_STAGE_KEEP_ENV").is_some();
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.session-backup/patterns");
+    std::fs::create_dir_all(&dir).expect("create pattern scratch");
+    let corpus = crate::corpus::corpus();
+    let mut staged = 0usize;
+    for (name, pat) in &corpus {
+        if pat.n == 0 || !want.contains(name) {
+            continue;
+        }
+        let file = dir.join(format!("{name}.bin"));
+        ssi_worker_protocol::write_pattern(&file, pat).expect("stage pattern");
+        println!(
+            "STAGED\t{name}\t{}\t{}\t{}",
+            pat.n,
+            pat.nnz(),
+            file.display()
+        );
+        staged += 1;
+    }
+    println!("STAGED_TOTAL\t{staged}");
+    if arms.is_empty() {
+        return;
+    }
+    println!("WALL\tarm\tmatrix\tmin\tmedian\tmax\tratio");
+    for (name, pat) in &corpus {
+        if pat.n == 0 || !want.contains(name) {
+            continue;
+        }
+        let file = dir.join(format!("{name}.bin"));
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        );
+        for (tag, path) in &arms {
+            let mut times: Vec<f64> = Vec::with_capacity(reps);
+            let mut perm: Option<Vec<usize>> = None;
+            for rep in 0..reps {
+                let out = dir.join(format!("{name}-{tag}-{rep}.bin"));
+                let mut cmd = std::process::Command::new("/usr/bin/taskset");
+                cmd.args(["-c", &cpus, path])
+                    .arg(&file)
+                    .arg(&out)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null());
+                if !keep_env {
+                    cmd.env_clear();
+                }
+                let t0 = Instant::now();
+                let status = cmd.status().expect("run production worker");
+                times.push(t0.elapsed().as_secs_f64());
+                assert!(status.success(), "worker {tag} failed on {name}");
+                let p = ssi_worker_protocol::read_permutation(&out, pat.n)
+                    .expect("read worker permutation");
+                assert!(is_bijection(&p, pat.n), "invalid permutation from {tag}");
+                if let Some(prev) = &perm {
+                    assert_eq!(prev, &p, "nondeterministic worker {tag} on {name}");
+                } else {
+                    perm = Some(p);
+                }
+                std::fs::remove_file(&out).expect("remove worker output");
+            }
+            let mut sorted = times.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let mine = flops_of(&sp, perm.as_ref().unwrap());
+            println!(
+                "WALL\t{tag}\t{name}\t{:.4}\t{:.4}\t{:.4}\t{:.9}",
+                sorted[0],
+                sorted[sorted.len() / 2],
+                sorted[sorted.len() - 1],
+                mine as f64 / base as f64
+            );
+        }
+    }
+}
+

@@ -55,28 +55,6 @@ pub(in crate::ordering) fn note_scored(f: u64, perm: &[usize]) {
     UNIVERSE.with(|u| retain(&mut u.borrow_mut(), UNIVERSE_KEEP, f, perm));
 }
 
-/// Arm the capture for ONE `order()` invocation and drop the previous pool.
-/// `UNIVERSE` keeps the best `UNIVERSE_KEEP` distinct scores, so the pool's
-/// first entry is the pipeline's own minimum over every full-pattern score it
-/// paid. Callers must not enable this concurrently on other threads: the
-/// capture is thread-local and a worker thread's scores would be missed.
-pub(in crate::ordering) fn audit_begin() {
-    ACTIVE.with(|a| a.set(true));
-    DISPLACED.with(|d| d.borrow_mut().clear());
-    DISPLACED_SCORES.with(|s| s.borrow_mut().clear());
-    UNIVERSE.with(|u| u.borrow_mut().clear());
-    CAPTURED.with(|c| *c.borrow_mut() = None);
-}
-
-/// Hand back (and clear) the scores captured since the last `audit_begin`.
-pub(in crate::ordering) fn audit_take() -> Vec<(u64, Vec<usize>)> {
-    UNIVERSE.with(|u| std::mem::take(&mut *u.borrow_mut()))
-}
-
-pub(in crate::ordering) fn audit_end() {
-    ACTIVE.with(|a| a.set(false));
-}
-
 /// The `consider` funnel's displaced ordering, under production's own rule.
 pub(in crate::ordering) fn note_consider(
     f: u64,

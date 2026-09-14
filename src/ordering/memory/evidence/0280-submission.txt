@@ -1,0 +1,22 @@
+iter80 — bat f70480c1 in flight (the fork's band extended to the two rows that pay)
+==================================================================================
++--------------------------------------------------+
+| Submission queued                                |
+| benchmark   8c3e7051-530a-4aee-88df-a426e6e78151 |
+| submission  f70480c1-66a7-4eb9-97ed-99408dc81857 |
+| status      validating                           |
+| note        10.4 KiB                             |
++--------------------------------------------------+
+
+Tree: promoted profile (no dense rung, no charge shape, XCH_ALLOC 0) + basin fork gated to
+n <= 1200 && nnz <= 6000 (was n <= 600 && nnz <= 5000); test-only seams SSI_BASIN_FORK_N/NNZ.
+
+Local sandboxed harness: 0.790154 / 0.923112, 300 rows, 0 FAIL; 126 unit tests pass.
+Predecessor `3587d1b` (fork@600 alone) RESOLVED this iteration: rejected 0.840545, i.e. -7.8e-5
+hidden (-0.78 bip) and COMPLETED the hidden corpus — the cheap tier is cap-safe and the fork's
+dev->hidden transfer is 0.94, so this bat's expected hidden value is ~-1.3e-4 against 0.840623.
+
+Evidence: 0280-fork-band-and-killer-class.txt (per-row arm A/B/C tables, the tie census in the
+production-identical frame, the scorer-weighted marginal-value map, the sweep-count curve),
+0280-probe-fork-B-*.log / 0280-probe-fork-C-*.log (full 300-row probe logs),
+0280-official-run-fork1200.log, 0280-submission-note.md (public note).

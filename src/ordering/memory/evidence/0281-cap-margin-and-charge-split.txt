@@ -1,0 +1,81 @@
+iter81 — THE WIDE FORK'S RECEIPT, THE 6-SWEEP FENCE PRICED NEGATIVE IN THE WORKER FRAME,
+THE ORDER AXIS CLOSED, AND THE KILLED RUNG RE-ENTERED AS TWO CHEAP DRAWS
+=======================================================================
+
+0. THE IN-FLIGHT EXPERIMENT AND THE PREVIOUS BAT (fetched this iteration, gh api)
+   * bat f70480c1 (the iter80 fork band extension n<=1200 && nnz<=6000) RESOLVED:
+     run 34785503709 benchmark = FAILED; the Benchmark step ran 22:04:35 -> 22:06:01
+     = 86.2 s and the verdict is the per-matrix cap string. The predecessor
+     3587d1b (fork@600) COMPLETED (step 21:23:36 -> 21:34:11 = 635 s, 0.840545).
+   * the deep experiment dir 1789337292098-145005 returned stop_reason=setup_error
+     (the 16 MiB snapshot cap rejects corpus/dev/patterns.jsonl, 103.9 MB), so the
+     DP-scheduling hypothesis was never entered and is NOT answered by it.
+
+1. THE WIDE GATE'S WALL IS NOT SPARSE-ONLY (corrects the iter80 localisation)
+   Per-row wall of arm B (1200/6000) minus arm A (600/5000), one frame:
+   45 rows with +>0.02 s, +6.476 s total; top rows multiplants_stg1b +0.369 (n=814),
+   multiplants_stg1c +0.359, multiplants_stg5 +0.349, multiplants_mtg1b +0.316,
+   ndcc12 +0.262, ndcc12persp +0.236, **pooling_digabel19 +0.224 (n=514, nnz=5340,
+   nnz/n = 10.4 — DENSE and inside the old gate's nnz-clause shadow)**, ndcc13 +0.208,
+   edgecross10-090 +0.193, edgecross10-030 +0.187, edgecross10-080 +0.180,
+   clay0305hfsg +0.175. The wide gate adds wall on the dense class too, so the
+   86 s kill is consistent with the dense-killer model after all.
+
+2. THE 6-SWEEP FENCE IS VALUE-NEGATIVE IN THE GRADED FRAME (kills the prepped bat)
+   One build per arm, official local sandboxed harness, same corpus, this session:
+     12 sweeps (shipped): score.json 0.790199-equivalent, table est 0.790174
+                           buckets lt 0.887006 / mid 0.837339 / gt 0.682176
+      6 sweeps:            score.json 0.790237,            table est 0.790214
+                           buckets lt 0.887006 / mid 0.837461 / gt 0.682186
+   -> 6 sweeps is +4.0e-5 WORSE. Its only win is transswitch0300p 0.9260->0.9220
+   (+3.85e-5); it loses edgecross24-115 0.8010->0.8050 (-4.4e-5), rsyn0840m04m -1.4e-5,
+   crudeoil_lee2_06, crudeoil_pooling_ct1, chp_shorttermplan2a, crudeoil_lee1_07,
+   rsyn0830m04m, hydroenergy2. lt_1k is BIT-IDENTICAL in both arms (0.887006).
+
+3. THE ORDER AXIS IS AT ITS OPTIMUM (new axis, one probe frame, 12 sweeps, fork@600)
+     step 5 (shipped) 0.790110 | step 7 0.790152 | step 11 0.790346 | step 1 0.790463
+     min over the four orders: 0.790024 (-8.4e-5) but every one of its 11 movers has
+     local wall >= 0.80 s (transswitch0300p 1.123, procurement1large 1.211,
+     crudeoil_lee4_09 1.272, mpbp_48 1.156, ...). Re-ordering identical work is not a
+     free win; capturing it needs two passes on the cap's own hot class.
+
+4. WHERE THE REMAINING HEADROOM LIVES (oracle over all measured arms)
+     cheap band  n<=600 && nnz<=5000 (119 rows): gain 0.0e+00
+     n<=1200 && nnz<=6000          (152 rows): gain 0.0e+00
+     dense band  nnz>=10n           (39 rows): gain 0.0e+00
+     gt bucket   n>=10000           (45 rows): gain +1.085e-04  (all of it heavy rows)
+   i.e. the cheap tier is the minimum of every policy this tree owns, and all remaining
+   value sits on rows whose local wall is 1.0 s+ — the class the cap has killed for.
+
+5. THE SWEEP FENCE CANNOT FUND THE RUNG (dense-subset probe, 39 dense rows)
+   12 vs 6 sweeps on the dense subset: wall -0.126 s total, score -9e-6 (neutral);
+   the rung's worst row torsion50 moves -0.001 s (0.573/0.574). The exchange is not the
+   dense class's spender — the ladder's draw is.
+
+6. THE DEVICE (SUBMITTED): SPLIT THE KILLED RUNG'S CHARGE
+   iter77's rung = one extra 5e8 draw on nnz>=10n && n<=10 000, worth -2.4e-5 dev and
+   +1.92 s on the dense class (worst torsion50 +0.214); carrying only that rung
+   (4d26ed3d) was killed at the cap. The ladder's price law (~0.15 ns per charged
+   word-op) makes the wall proportional to the charge, and the rung's value rows were
+   already the cheap ones (pooling_sppa9tp +0.033 s, qspp_0_14 +0.010 s), so the 5e8
+   draw is replaced by TWO 1e8 draws on new seeds (2e8 added charge, 40 % of the kill):
+     fork@600 (the completed band) + SHIPPED_DENSE_LADDER [(2e8, s0), (1e8, s1), (1e8, s2)]
+   Official local sandboxed harness, same session, same frame:
+     baseline (no dense draws)            table est 0.790174  lt 0.887006 mid 0.837339
+     + two 1e8 draws (SUBMITTED)          score.json 0.790173 (table est 0.790149)
+                                          lt 0.886972 mid 0.837290 gt 0.682176
+   => -2.5e-5 dev, movers pooling_digabel19 (0.8430->0.8400), qspp_0_14 (0.9950->0.9940),
+   pooling_sppa9tp (0.1613->0.1602); gt_10k untouched. 126 unit tests pass; 300/300 rows,
+   0 FAIL. A separate arm measured the same two draws on a 6-sweep tree as +1.2e-5 by
+   themselves, so the movers are the dense rows and are schedule-independent.
+   Bat `69bc2fc5-a4e7-40bc-a927-ff19f95da4bc`, claimed 0.790173, note 7.3 KiB.
+
+7. FRAME AUDIT (why probe deltas below ~2e-5 were distrusted this pass)
+   The probe binary under target/probe is a 09:47 build (pre-iter75 default fix) and
+   probe-sandbox.sh does NOT forward SSI_TERM_DENSE_RUNG (two "A/B" arms came back
+   byte-identical until this was noticed). No current-probe arm reproduces iter80's
+   base.tsv (0.790172): 12 sweeps -> 0.790110, 6 sweeps -> 0.790194, defaults -> 0.790194,
+   while the official frame puts 6 sweeps at 0.790237 and the 12-sweep tree at ~0.790199.
+   Probe-frame per-row wall also has a +-0.05 s noise floor between two runs of the
+   identical program. Hence: device decisions in this pass were taken in the worker
+   frame only, and the submitted delta is a same-session same-frame A/B.

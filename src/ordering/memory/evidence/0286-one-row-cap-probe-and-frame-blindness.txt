@@ -1,0 +1,48 @@
+# iter84 instrument: one-row corpora as a per-row worker-frame cap probe
+
+## What it is
+
+`SSI_CORPUS_FILE=<one-row jsonl> cargo run --release` runs the *official* harness on a single
+matrix, in the same two sandboxed children the graded run uses, and the wall of the whole
+invocation is the per-row worker-frame cost (two calls + spawn/parse/write + harness startup).
+
+Two harness behaviours make this work and had to be read out of the source first:
+
+* `src/main.rs:176` — `show_matrix_census = is_public_dev_corpus(...)`: only the canonical dev path
+  prints the matrix census, so a substituted corpus is graded on the **hidden** path (redacted
+  failure text, no name/`n` echo).
+* `src/main.rs:183` **and** `src/main.rs:199` — a non-canonical `SSI_CORPUS_FILE` is **unlinked
+  after it is loaded** ("so worker children cannot read the eval set from disk"). The file must be
+  regenerated before every run; the second run of a loop otherwise fails with
+  `no patterns found at ...`.
+
+## Measured (fork-retired tree, one core, `taskset -c 0 cargo run --release`)
+
+| row | n | nnz | run wall (2 calls) | run verdict |
+|---|---|---|---|---|
+| `st_bsj2` | 13 | 40 | 0.58 / 0.59 s | OK |
+| `chimera_mgw-c8-439-onc8-001` | 440 | 3 040 | 1.71 / 1.70 s | OK |
+| `gasprod_sarawak16` | 4 596 | 15 316 | 3.52 / 3.51 s | OK (≈1.6 s/call) |
+| `arki0016` | 7 993 | 37 208 | 2.20 / 2.21 s | **FAIL — cap** |
+
+So `gasprod_sarawak16` passes at 1.6 s/call while `arki0016` dies on its first call: the *dev*
+corpus's heaviest row is past the cap line in a one-core frame whose aggregate rate matches the
+graded runner's (graded 635 s / 300 rows = 2.12 s/row; this tree unpinned 4 m 15 s / 300 rows
+= 0.85 s/row; pinned ≈ 2×).
+
+## The frame that hides the fork
+
+Same rows, unpinned (24 threads), fork ON vs fork OFF, official harness:
+
+| row | fork ON | fork OFF |
+|---|---|---|
+| `st_bsj2` | 0.56 s | 0.56 s |
+| `chimera_mgw-c8-439-onc8-001` | 1.22 s | 1.20 s |
+| `gasprod_sarawak16` | 2.07 s | 2.02 s |
+| `arki0016` | 2.37 s | 2.38 s |
+
+The local harness frame cannot see the fork at all (its two lineages run on separate cores), while
+the pinned probe frame charges `chimera_mgw-c8-439-onc8-001` +0.76 s/row. Value is frame-invariant;
+wall is not — the wall of any threaded device has to be read in a one-core frame, and the unpinned
+local harness both *under*-reports it (fork) and *over*-reports the margin (its own 4 m 15 s total
+is 2.3× faster than the graded runner).

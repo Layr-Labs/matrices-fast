@@ -1,0 +1,63 @@
+# iter84: the basin fork retired, the chain-displaced registration kept
+
+Measured this session, same box, same corpus, official local sandboxed harness
+(`bash scripts/local-candidate-build.sh && cargo run --release`, 300-row contract
+corpus, two `order()` calls per row in their own sandboxed child).
+
+| tree | score.json | lt_1k | 1k_10k | gt_10k | fill |
+|---|---|---|---|---|---|
+| promoted profile (fork OFF, no registration) | 0.790263 | 0.887006 | 0.837339 | 0.682176 | 0.923140 |
+| fork@600 (bat `3587d1b`, hidden 0.840545) | 0.790199 | 0.886961 | 0.837239 | 0.681771 | 0.923124 |
+| fork@600 + registration (bat `f02eb0d7`, KILLED at the cap) | 0.790017 | 0.886977 | 0.837385 | 0.681771 | 0.923134 |
+| **fork OFF + registration (this bat)** | **0.790106** | **0.887273** | 0.837385 | **0.681771** | 0.923160 |
+
+300/300 rows scored, 0 FAIL, run wall 4 m 15 s. `cargo test --release -p
+ssi-candidate-worker --offline --locked`: **126 passed, 0 failed**.
+
+Note: the `lt_1k` geomean of the middle row above is the *bucket* line of the
+0.790174/0.790199 family in the ledger; the promoted-profile row is the
+`results.tsv` 1789331117 entry, which is the tree the round started from.
+
+## 1. The fork's wall, priced per row in the frame the cap is paid in
+
+One binary, `taskset -c 0` (the graded frame is ~one core: the completed hidden
+run's 635 s over 300 two-call rows ≈ 1.06 s/call, against 0.83 s/call locally
+pinned to one core and 0.60 s/call at four), `SSI_MARK_NOSCORE=1`, production
+seams, 30 rows chosen as the union of the corpus's heavy set and the fork band:
+
+| arm | seams | 30-row wall |
+|---|---|---|
+| A fork ON, registration ON | — | **43.00 s** |
+| B fork ON, registration OFF | `SSI_NO_CHAIN_DONOR=1` | 42.77 s |
+| C fork OFF, registration ON | `SSI_NO_BASIN_FORK=1` | **37.64 s** |
+| D fork OFF, registration OFF | both | 38.11 s |
+
+* **the fork costs +5.36 s (A−C) / +4.66 s (B−D) over those 30 rows**, and the
+  cost lands entirely on the fork band's *heaviest* rows: `chimera_mgw-c8-439-
+  onc8-001` 0.771 → 1.529 s, `chimera_mgw-c8-439-onc8-002` 0.762 → 1.535 s,
+  `rocket50` 0.771 → 1.529 s, `gancns` 0.767 → 1.466 s, `wastewater13m1`
+  0.681 → 1.336 s, `tls6` 0.623 → 1.223 s — while the heavy rows *outside* the
+  band (`arki0016`, `crudeoil_lee4_10`, `gams05`, `arki0013`) move by ≤ 0.07 s.
+* **the registration costs +0.23 s (A−B) / −0.47 s (C−D)** over the same rows —
+  i.e. nothing outside the ±0.06 s/row noise floor — while carrying the value
+  (`crudeoil_pooling_dt3` 0.7056 → 0.6449, `arki0013` 0.3993 → 0.3919,
+  `crudeoil_lee4_09` 0.6171 → 0.6100 with it on).
+* the fork's whole *value* on that 30-row set is two rows: `chimera_mgw-c8-439-
+  onc8-001` 0.7522 → 0.7347 and `gancns` 0.8421 → 0.8407 — the same rows that
+  carry its wall cost.
+
+Hidden, the fork is worth −7.8e-5 (bat `3587d1b` was rejected below the 1e-4
+bar) while the registration is worth −1.57e-4 dev with the fork off. Retiring
+the fork therefore buys ~0.7 s/row of cap margin on the class that is closest to
+the line (in the harness frame a single 1.529 s row + sandbox/parse overhead is
+what put `gasprod_sarawak16`-class rows at ≥ 2.0 s: `results.tsv` 1789347694).
+
+## 2. What the tree is
+
+* `BASIN_FORK_MAX_N` 600 → 0: `basin_fork_gate` can no longer fire, so `order()`
+  never runs two lineages. Structural, deterministic, no identity, no clock.
+* the chain-displaced registration (iter83) is kept verbatim: the ordering the
+  `4.subtree` chain displaces is pushed into `runner_up` when the chain actually
+  installed an improvement, which is the ledger `13.alt`'s PEO_ALT seeds,
+  `14.transplant`'s donors and the terminal exchange's seed pool read.
+* the dense-band ladder rung stays retired (production compiles it OFF).

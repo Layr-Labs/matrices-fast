@@ -4342,3 +4342,458 @@ fn probe_floor_battery() {
         println!("{line}");
     }
 }
+
+/// HYPOTHESIS PROBE (test-only): can the exact-kernel class improve a row that
+/// the shipped pipeline leaves AT the AMD anchor, when it is seeded from a
+/// different basin?
+///
+/// The class block is gated on `best_flops < amd_flops`, so an at-anchor row
+/// gets no exact-kernel search at all. The recorded reason is that the family
+/// is "never the first improver" — measured with the incumbent the pipeline
+/// hands it (AMD, or an equal-flops ordering). This probe asks the different
+/// question: from the *same* gate, if the kernel is seeded with a relabelled
+/// AMD draw instead, does any seed land strictly below the anchor?
+///
+/// Env: SSI_MS_SEEDS (default 6), SSI_MS_LEDGER (default PRODUCTION_EXCHANGE_LEDGER),
+///      SSI_MS_MAX_N (default 20 000), SSI_PROBE_ONLY row filter.
+#[test]
+#[ignore]
+fn probe_anchor_multistart() {
+    let corpus = crate::corpus::corpus();
+    let seeds: u64 = std::env::var("SSI_MS_SEEDS")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(6);
+    let ledger: i64 = std::env::var("SSI_MS_LEDGER")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(PRODUCTION_EXCHANGE_LEDGER);
+    let max_n: usize = std::env::var("SSI_MS_MAX_N")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(20_000);
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let mut sums = [0.0f64; 3];
+    let mut counts = [0usize; 3];
+    let mut at_anchor = 0usize;
+    let mut improved = 0usize;
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let sp = scoring_pattern(pat);
+        let perm = order(pat);
+        let mine = flops_of(&sp, &perm);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|x| x as usize)
+            .collect();
+        let base = flops_of(&sp, &amd);
+        let b = bucket(n);
+        counts[b] += 1;
+        let nnz = pat.nnz();
+        let eligible = mine == base
+            && n >= 6
+            && n <= max_n
+            && nnz <= 200_000
+            && nnz <= n.saturating_mul(16);
+        println!(
+            "MSDEBUG\t{name}\t{n}\t{nnz}\t{base}\t{mine}\t{eligible}\t{}",
+            perm == amd
+        );
+        if !eligible {
+            sums[b] += (mine as f64 / base as f64).ln();
+            continue;
+        }
+        at_anchor += 1;
+        let mut best = mine;
+        let mut best_seed = 0u64;
+        let mut sorted = sorted_permutation::SortedPermutation::new(&sp);
+        for seed in 1..=seeds {
+            let q = relabel(n, seed);
+            let bp = sorted.permute(&q);
+            let bcp: Vec<i32> = bp.col_ptr.iter().map(|&x| x as i32).collect();
+            let bri: Vec<i32> = bp.row_idx.iter().map(|&x| x as i32).collect();
+            let bcore = feral_ordering_core::CscPattern::new(n, &bcp, &bri).unwrap();
+            let Ok(pb) = feral_amd::amd_order(&bcore) else {
+                continue;
+            };
+            let seed_perm: Vec<usize> = pb.into_iter().map(|x| q[x as usize]).collect();
+            if let Some(cand) = rgreedy::subset_window_descent_step(
+                n, &pat.col_ptr, &pat.row_idx, &seed_perm, 12, 12, 5, ledger,
+            ) {
+                let f = flops_of(&sp, &cand);
+                if f < best {
+                    best = f;
+                    best_seed = seed;
+                }
+            }
+        }
+        if best < mine {
+            improved += 1;
+        }
+        println!(
+            "MSROW\t{name}\t{n}\t{nnz}\t{base}\t{mine}\t{best}\t{best_seed}\t{:.6}",
+            best as f64 / base as f64
+        );
+        sums[b] += (best as f64 / base as f64).ln();
+    }
+    println!(
+        "MS_TOTAL at_anchor={at_anchor} improved={improved} score={:.12}",
+        aggregate(&sums, &counts)
+    );
+}
+
+/// HYPOTHESIS PROBE (test-only): headroom and price of the separator family on
+/// the rows the portfolio's partitioner gates exclude.
+///
+/// The library partitioners are gated (`METIS_MAX_N` 130k / `METIS_MAX_NNZ`
+/// 320k, Scotch 12k, KaHIP) while the corpus reaches n = 340k. A row above
+/// those gates is ordered by AMD variants plus, at most, one relabelled pass —
+/// which is why the giants sit at ratios 0.93–0.98. This probe prints, per row,
+/// the shipped ratio and then each partitioner's ratio AND wall, so the
+/// headroom and its price are both on the table before anything is wired in.
+#[test]
+#[ignore]
+fn probe_giant_partitioners() {
+    let corpus = crate::corpus::corpus();
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let min_n: usize = std::env::var("SSI_GP_MIN_N")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(45_000);
+    println!("GP\tmatrix\tn\tnnz\tlabel\tsecs\tratio");
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n < min_n {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let nnz = pat.nnz();
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let Some(core) = feral_ordering_core::CscPattern::new(n, &cp, &ri) else {
+            continue;
+        };
+        let base = flops_of(
+            &sp,
+            &feral_amd::amd_order(&core)
+                .unwrap()
+                .into_iter()
+                .map(|x| x as usize)
+                .collect::<Vec<_>>(),
+        ) as f64;
+        let run = |label: &str,
+                   f: &dyn Fn() -> Result<Vec<i32>, feral_ordering_core::OrderingError>| {
+            let t = Instant::now();
+            let r = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+                Ok(Ok(p)) => {
+                    let p: Vec<usize> = p.into_iter().map(|x| x as usize).collect();
+                    if is_bijection(&p, n) {
+                        flops_of(&sp, &p) as f64 / base
+                    } else {
+                        f64::NAN
+                    }
+                }
+                _ => f64::NAN,
+            };
+            println!("GP\t{name}\t{n}\t{nnz}\t{label}\t{:.3}\t{r:.4}", t.elapsed().as_secs_f64());
+        };
+        let t0 = Instant::now();
+        let cur = flops_of(&sp, &order(pat)) as f64 / base;
+        println!("GP\t{name}\t{n}\t{nnz}\tshipped\t{:.3}\t{cur:.4}", t0.elapsed().as_secs_f64());
+        run("metis_default", &|| {
+            feral_metis::metis_order_full(&core, &feral_metis::MetisOptions::default())
+                .map(|(p, _, _)| p)
+        });
+        let m_hi = feral_metis::MetisOptions {
+            niparts: 16,
+            fm_passes: 20,
+            ..Default::default()
+        };
+        run("metis_tuned", &|| {
+            feral_metis::metis_order_full(&core, &m_hi).map(|(p, _, _)| p)
+        });
+        run("scotch", &|| {
+            feral_scotch::scotch_order_full(&core, &feral_scotch::ScotchOptions::default())
+                .map(|(p, ..)| p)
+        });
+        run("kahip_fast", &|| {
+            feral_kahip::kahip_order_full(
+                &core,
+                &feral_kahip::KahipOptions {
+                    mode: feral_kahip::KahipMode::Fast,
+                    ..Default::default()
+                },
+            )
+            .map(|(p, ..)| p)
+        });
+        run("nd_hand", &|| Ok(nd_order(pat).into_iter().map(|x| x as i32).collect()));
+        run("ndfm_hand", &|| Ok(ndfm_order(pat).into_iter().map(|x| x as i32).collect()));
+    }
+}
+
+/// HYPOTHESIS PROBE (test-only): the STAR neighbourhood — exact reordering of
+/// each vertex's closed live neighbourhood — priced on top of the shipped
+/// incumbent, over the rows whose exact-kernel sites can afford it.
+///
+/// Run: SSI_STAR_MAX_N=2000 SSI_STAR_MAX=10 SSI_STAR_SWEEPS=2
+#[test]
+#[ignore]
+fn probe_star_descent() {
+    let corpus = crate::corpus::corpus();
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let max_n: usize = std::env::var("SSI_STAR_MAX_N")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(2_000);
+    let max_star: usize = std::env::var("SSI_STAR_MAX")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(10);
+    let sweeps: usize = std::env::var("SSI_STAR_SWEEPS")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(2);
+    let budget: i64 = std::env::var("SSI_STAR_BUDGET")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(1 << 31);
+    let mut sums = [0.0f64; 3];
+    let mut counts = [0usize; 3];
+    let mut wins = 0usize;
+    let mut total_s = 0.0f64;
+    for (name, pat) in &corpus {
+        let n = pat.n;
+        if n == 0 || n > max_n {
+            continue;
+        }
+        if let Some(set) = &only {
+            if !set.contains(name) {
+                continue;
+            }
+        }
+        let sp = scoring_pattern(pat);
+        let seed_mode: usize = std::env::var("SSI_STAR_SEED")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(0);
+        let perm = if seed_mode == 1 {
+            relabel(n, 12_345)
+        } else if seed_mode == 2 {
+            let mut p: Vec<usize> = (0..n).collect();
+            p.reverse();
+            p
+        } else {
+            order(pat)
+        };
+        let mine = flops_of(&sp, &perm);
+        let b = bucket(n);
+        let t = Instant::now();
+        let star = rgreedy::star_window_descent(
+            n, &pat.col_ptr, &pat.row_idx, &perm, max_star, sweeps, budget,
+        );
+        let secs = t.elapsed().as_secs_f64();
+        total_s += secs;
+        counts[b] += 1;
+        let mut best = mine;
+        if let Some(cand) = &star {
+            if is_bijection(cand, n) {
+                let f = flops_of(&sp, cand);
+                if f < best {
+                    best = f;
+                    wins += 1;
+                }
+            }
+        }
+        println!(
+            "STAR\t{name}\t{n}\t{}\t{mine}\t{best}\t{:.6}\t{secs:.3}",
+            pat.nnz(),
+            best as f64 / mine as f64
+        );
+        sums[b] += (best as f64 / mine as f64).ln();
+        let _ = base_ratio(&sp, pat, mine);
+    }
+    println!(
+        "STAR_TOTAL rows={} wins={wins} delta_ln={:.8} secs={total_s:.2}",
+        counts.iter().sum::<usize>(),
+        (0..3).map(|b| sums[b]).sum::<f64>()
+    );
+}
+
+fn base_ratio(sp: &ScoringPattern, pat: &Pattern, mine: u64) -> f64 {
+    let (cp, ri) = core_of(pat);
+    match feral_ordering_core::CscPattern::new(pat.n, &cp, &ri) {
+        Some(core) => match feral_amd::amd_order(&core) {
+            Ok(a) => {
+                let p: Vec<usize> = a.into_iter().map(|x| x as usize).collect();
+                mine as f64 / flops_of(sp, &p) as f64
+            }
+            Err(_) => f64::NAN,
+        },
+        None => f64::NAN,
+    }
+}
+
+/// Run one or more separately built production workers on identical staged
+/// patterns.  Unlike `probe_timing_and_score`, this times the non-test binary
+/// that the watchdog actually charges.  Arms are interleaved row by row so a
+/// machine-wide slowdown cannot systematically favour one complete run.
+///
+/// Required env: `SSI_GRADED_WORKERS=tag=/absolute/worker,tag=/absolute/worker`.
+/// Optional: `SSI_PROBE_ONLY`, `SSI_GRADED_REPS` (minimum wall is reported),
+/// and `SSI_GRADED_CPU_LIST` (default `0-3`).
+#[test]
+#[ignore]
+fn probe_graded_frame() {
+    struct Arm {
+        tag: String,
+        path: String,
+        log_sums: [f64; 3],
+        counts: [usize; 3],
+        total: f64,
+        worst: (f64, String),
+    }
+
+    let raw = std::env::var("SSI_GRADED_WORKERS").expect("set SSI_GRADED_WORKERS");
+    let mut arms: Vec<Arm> = raw
+        .split(',')
+        .map(|entry| {
+            let (tag, path) = entry.split_once('=').expect("worker arm must be tag=/absolute/path");
+            assert!(std::path::Path::new(path).is_absolute(), "worker path must be absolute");
+            Arm {
+                tag: tag.to_string(),
+                path: path.to_string(),
+                log_sums: [0.0; 3],
+                counts: [0; 3],
+                total: 0.0,
+                worst: (0.0, String::new()),
+            }
+        })
+        .collect();
+    assert!(!arms.is_empty());
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    let candidate_scope = std::env::var_os("SSI_GRADED_CANDIDATE_SCOPE").is_some();
+    let reps = std::env::var("SSI_GRADED_REPS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(1)
+        .max(1);
+    let cpus = std::env::var("SSI_GRADED_CPU_LIST").unwrap_or_else(|_| "0-3".to_string());
+    let scratch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../.session-backup")
+        .join(format!("graded-frame-{}", std::process::id()));
+    std::fs::create_dir(&scratch).expect("create unique graded-frame scratch");
+
+    for (seq, (name, pat)) in crate::corpus::corpus().iter().enumerate() {
+        if pat.n == 0 || only.as_ref().is_some_and(|set| !set.contains(name)) {
+            continue;
+        }
+        if candidate_scope {
+            let max_deg = (0..pat.n)
+                .map(|v| pat.col_ptr[v + 1] - pat.col_ptr[v])
+                .max()
+                .unwrap_or(0);
+            let fork = pat.n >= 6
+                && pat.n <= SHARED_BASIN_FORK_MAX_N
+                && pat.nnz() <= SHARED_BASIN_FORK_MAX_NNZ;
+            let dense_twin = pat.n >= 6
+                && (DENSE_TWIN_WIDE_MIN_N..=DENSE_TWIN_WIDE_MAX_N).contains(&pat.n)
+                && (pat.nnz() > pat.n.saturating_mul(16) || max_deg > pat.n / 2);
+            if !fork && !dense_twin {
+                continue;
+            }
+        }
+        let pattern_file = scratch.join(format!("{seq}-pattern.bin"));
+        ssi_worker_protocol::write_pattern(&pattern_file, pat).expect("stage pattern");
+        let sp = scoring_pattern(pat);
+        let (cp, ri) = core_of(pat);
+        let core = feral_ordering_core::CscPattern::new(pat.n, &cp, &ri).unwrap();
+        let amd: Vec<usize> = feral_amd::amd_order(&core)
+            .unwrap()
+            .into_iter()
+            .map(|v| v as usize)
+            .collect();
+        let base = flops_of(&sp, &amd);
+
+        for arm in &mut arms {
+            let mut best_secs = f64::INFINITY;
+            let mut first_perm: Option<Vec<usize>> = None;
+            for rep in 0..reps {
+                let output_file = scratch.join(format!("{seq}-{}-{rep}.bin", arm.tag));
+                let mut cmd = std::process::Command::new("/usr/bin/taskset");
+                cmd.args(["-c", &cpus, &arm.path])
+                    .arg(&pattern_file)
+                    .arg(&output_file)
+                    .env_clear()
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null());
+                let t0 = Instant::now();
+                let status = cmd.status().expect("run production worker");
+                let secs = t0.elapsed().as_secs_f64();
+                assert!(status.success(), "worker {} failed on {name}", arm.tag);
+                best_secs = best_secs.min(secs);
+                let perm = ssi_worker_protocol::read_permutation(&output_file, pat.n)
+                    .expect("read worker permutation");
+                assert!(is_bijection(&perm, pat.n), "invalid permutation from {}", arm.tag);
+                if let Some(first) = &first_perm {
+                    assert_eq!(first, &perm, "nondeterministic worker {} on {name}", arm.tag);
+                } else {
+                    first_perm = Some(perm);
+                }
+                std::fs::remove_file(&output_file).expect("remove worker output");
+            }
+            let mine = flops_of(&sp, first_perm.as_ref().unwrap());
+            let ratio = mine as f64 / base as f64;
+            let b = bucket(pat.n);
+            arm.log_sums[b] += ratio.ln();
+            arm.counts[b] += 1;
+            arm.total += best_secs;
+            if best_secs > arm.worst.0 {
+                arm.worst = (best_secs, name.clone());
+            }
+            println!(
+                "GRADED\t{}\t{name}\t{}\t{}\t{best_secs:.6}\t{ratio:.9}",
+                arm.tag,
+                pat.n,
+                pat.nnz(),
+            );
+        }
+        std::fs::remove_file(&pattern_file).expect("remove staged pattern");
+    }
+    std::fs::remove_dir(&scratch).expect("remove graded-frame scratch");
+
+    for arm in arms {
+        println!(
+            "GRADED_TOTAL\t{}\trows={}\tscore={:.9}\tsecs={:.6}\tworst={:.6}\tworst_row={}",
+            arm.tag,
+            arm.counts.iter().sum::<usize>(),
+            aggregate(&arm.log_sums, &arm.counts),
+            arm.total,
+            arm.worst.0,
+            arm.worst.1,
+        );
+    }
+}

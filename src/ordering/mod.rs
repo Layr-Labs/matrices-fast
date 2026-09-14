@@ -714,6 +714,16 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 // ceiling, which is wall-cheap where the allowance is wall-expensive.
 const PRODUCTION_EXCHANGE_LEDGER: i64 = 2147483648;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
+/// Cheap-row basin diversity without replaying the expensive common prefix.
+/// Both suffixes start from the exact same post-search checkpoint; one runs
+/// the stage-4 subtree cascade and one withholds it.  The structural fence is
+/// the previously priced band, and the exact merge can only improve the base.
+const SHARED_BASIN_FORK_MAX_N: usize = 600;
+const SHARED_BASIN_FORK_MAX_NNZ: usize = 5_000;
+/// The dense/hub twin's wider shape was measured only through this dimension.
+/// Keep larger hidden hub rows on the frontier's cheaper 8/4/3 schedule.
+const DENSE_TWIN_WIDE_MIN_N: usize = 1_000;
+const DENSE_TWIN_WIDE_MAX_N: usize = 5_205;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
 const LADDER_FILL_CAP: usize = 64;
@@ -1333,6 +1343,18 @@ fn mid_engine_cfg() -> (i64, u8, u8) {
     (0, 0, 0)
 }
 
+#[inline]
+fn shared_basin_fork_band(n: usize, nnz: usize) -> bool {
+    #[cfg(test)]
+    if std::env::var("SSI_SHARED_BASIN_FORK")
+        .map(|v| v.trim() == "0")
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    n >= 6 && n <= SHARED_BASIN_FORK_MAX_N && nnz <= SHARED_BASIN_FORK_MAX_NNZ
+}
+
 /// Return an elimination order for `pattern` (best-of over the ordering family).
 pub fn order(pattern: &Pattern) -> Vec<usize> {
     if let Some(perm) = forest_certificate(pattern) { return perm; }
@@ -1685,7 +1707,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // because the probe scores 300 rows in one process.
     #[cfg(test)]
     let t_pipeline = std::time::Instant::now();
-    let mut terminal_core_candidate: Option<(u64, Vec<usize>)> = None;
     let n = pattern.n;
     if n == 0 {
         return Vec::new();
@@ -3349,6 +3370,37 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
 
     #[cfg(test)]
     parallel::phase_mark("3.search", _tph, markval!(best_perm, best_flops));
+    // The prefix scorer and runner-up pool become immutable suffix inputs here.
+    // A forked suffix gets its own scorer arena, so the two lineages can run in
+    // parallel without sharing mutable state; the base reuses the prefix arena.
+    let prefix_score_workspace = score_workspace.into_inner();
+    let runner_up = std::sync::Arc::new(runner_up.into_inner());
+    let run_suffix = |
+        mut best_perm: Vec<usize>,
+        mut best_flops: u64,
+        mut indep_deferred: Option<(u64, Vec<usize>)>,
+        run_subtree: bool,
+        score_workspace: scoring_ws::ScoreWorkspace,
+        stage4_signal: Option<std::sync::mpsc::SyncSender<bool>>,
+    | -> Vec<usize> {
+    let score_workspace = std::cell::RefCell::new(score_workspace);
+    let score = |p: &[usize]| {
+        let f = score_workspace.borrow_mut().flops(&scoring_pat, p);
+        #[cfg(test)]
+        probe::alt_lineage::note_scored(f, p);
+        f
+    };
+    #[cfg(test)]
+    macro_rules! markval {
+        ($perm:expr, $flops:expr) => {
+            if std::env::var_os("SSI_MARK_NOSCORE").is_some() {
+                $flops
+            } else {
+                score(&$perm)
+            }
+        };
+    }
+    let mut terminal_core_candidate: Option<(u64, Vec<usize>)> = None;
     #[cfg(test)]
     let _tph = std::time::Instant::now();
     // Search bounded, disjoint blocks of the incumbent elimination tree. An
@@ -3378,7 +3430,11 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
-    if (SUBTREE_MIN_N..=SUBTREE_CHAIN_MAX_N).contains(&n) && nnz <= 1_500_000 {
+    let subtree_input_flops = best_flops;
+    if run_subtree
+        && (SUBTREE_MIN_N..=SUBTREE_CHAIN_MAX_N).contains(&n)
+        && nnz <= 1_500_000
+    {
         let (mut candidate, counts, parent) = symbolic_flat::prep_subtree(&scoring_pat, &best_perm);
         let mut cfg1 = subtree_cfg_for(n, nnz);
         let mut improved = rgreedy::subtree_refine(
@@ -3563,6 +3619,12 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 }
             }
         }
+    }
+    if let Some(signal) = stage4_signal {
+        // A suppressed lineage starts from the same pre-subtree checkpoint.
+        // If stage 4 accepted nothing, both suffix inputs are identical and a
+        // second suffix cannot produce a different deterministic result.
+        let _ = signal.send(best_flops < subtree_input_flops);
     }
 
     #[cfg(test)]
@@ -4334,7 +4396,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // are orderings the portfolio already built and discarded, so only the rounds cost
     // anything, and they are charged against one shared allowance under the measured law.
     #[cfg(test)]
-    probe::alt_lineage::capture_entry(n, nnz, &best_perm, &runner_up.borrow());
+    probe::alt_lineage::capture_entry(n, nnz, &best_perm, &runner_up);
     // Alternate-seed chains are gated to n <= PEO_ALT_MAX_N; the bound's own
     // doc comment records the 0187 corpus-wide cost/yield measurement that set
     // it. Above n = 10 000 the chain is pure wall cost (0.11-0.20 s per row on
@@ -4367,7 +4429,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         && !peo_alt_danger
     {
         let ledger_cap: u64 = PEO_ALT_ALLOWANCE;
-        let seeds = runner_up.borrow().clone();
+        let seeds = runner_up.as_ref().clone();
         if !seeds.is_empty() {
             let mut ledger: u64 = 0;
             let mut leader_flops = score(&best_perm);
@@ -4435,7 +4497,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // Late, strict-accept, ledger-bounded; only below-AMD incumbents. Donors
     // are the displaced portfolio orderings already retained for PEO_ALT.
     {
-        let donors = runner_up.borrow();
+        let donors = runner_up.as_ref();
         if let Some(cand) = transplant_probe::refine_with_donors(
             &scoring_pat, &best_perm, &donors, amd_flops,
         ) {
@@ -4559,7 +4621,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     let _tph = std::time::Instant::now();
 
     #[cfg(test)]
-    transplant_probe::capture(&runner_up.borrow());
+    transplant_probe::capture(&runner_up);
 
     // iter74: LATE exact polish with COST-SCALED budgets.
     // Restore breadth toward iter72 (n<3000 nnz≤12k) but starve the known
@@ -5046,16 +5108,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // exceeded the 2.0s per-matrix cap and was killed" — so a value-free spend
     // here is not score-neutral book-keeping, it is *cap margin* on the rows
     // that decide the run. Both arms are graded-closest (`SSI_MARK_NOSCORE=1`).
+    // Frame fidelity (this session): both of these defaulted to ON in test
+    // builds and OFF in production, so a plain probe ran two extra exchange
+    // passes the graded worker never runs. They are now opt-IN seams whose
+    // unset default equals the production value; a probe that wants the old
+    // frame sets `SSI_PRECLASS_WIN=1 SSI_PRECLASS_STEP=1`.
     #[cfg(test)]
     let preclass_win: bool = std::env::var("SSI_PRECLASS_WIN")
         .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_win: bool = false;
     #[cfg(test)]
     let preclass_step: bool = std::env::var("SSI_PRECLASS_STEP")
         .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_step: bool = false;
     if preclass_win && n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
@@ -5490,7 +5557,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // 0.841666 (−1.02e-4). The current frontier (`78c434c`, `7df69b9`) was
         // diffed against `475be33` and carries none of it, so this is the one
         // device of ours that is *validated on the hidden frame* and absent here.
-        // Test-only env seam: one binary prices both arms in-frame.
+        // Test-only env seam: one binary prices both arms in-frame. The rejected
+        // banded variants remain reproducible from commits 670b453 and 0f6cd9b;
+        // production stays on the frontier's flat 12/5/12 schedule.
         #[cfg(test)]
         let exchange_width: usize = std::env::var("SSI_EXCHANGE_WIDTH")
             .ok()
@@ -5514,11 +5583,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // 4G+6), so this ships the 4G allowance with five sweeps: the failed tree's
         // value minus its one dead sweep. [0239-sweeps{3,4,5}-noscore-4cpu.log,
         // 0238-noscore-4cpu.log, 0239-board-receipt.txt]
+        // The probe's old default here was 6, one full cycle short of the
+        // shipped 12 — a frame divergence that made every un-overridden probe
+        // run a different program from the graded worker. The seam still forces
+        // one value for the whole corpus when a probe wants a flat arm.
         #[cfg(test)]
         let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
             .ok()
             .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(6);
+            .unwrap_or(12);
         #[cfg(not(test))]
         let exchange_sweeps: usize = 12;
         #[cfg(test)]
@@ -5601,23 +5674,45 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // block's gate excludes (`nnz > 16n || max_deg > n/2`) and it
                 // still calls the 8/4/3 shape the class block outgrew. The
                 // family curve (0234) prices 12/* on the class block only.
+                // iter-candidate (this session): the dense/hub twin still ran the
+                // 8/4/3 shape the class block outgrew two devices ago. In-frame,
+                // one binary/one session, the twin's own 24-row census, graded-closest
+                // frame: 8/4/3 **0.776753**, 12/4/5 0.776776, 12/12/5 0.776629,
+                // **10/4/4 0.776456** — worth -2.21e-5 dev, with movers
+                // `chimera_lga-01` -0.52 %, `chimera_mgw-c16-2031-01` -0.38 %,
+                // `chimera_rfr-02` -0.10 % and the two `sporttournament`/`torsion`
+                // rows unchanged. The width axis here is NOT the class block's:
+                // the twin's rows are hubs and dense small patterns where 10/4/4
+                // beats both 8/4/3 and the full 12-cycle, so the sites are priced
+                // separately.
+                // The measured 10/4/4 shape is admitted only through the top of
+                // its dev census. Larger hub rows retain the frontier's 8/4/3;
+                // this prevents an unmeasured n~30k row from paying the roughly
+                // 4x DP charge of a ten- rather than eight-vertex component.
+                let dense_default = if (DENSE_TWIN_WIDE_MIN_N..=DENSE_TWIN_WIDE_MAX_N)
+                    .contains(&n)
+                {
+                    (10, 4, 4)
+                } else {
+                    (8, 4, 3)
+                };
                 #[cfg(test)]
                 let (dense_w, dense_s, dense_t): (usize, usize, usize) = (
                     std::env::var("SSI_DENSE_W")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(8),
+                        .unwrap_or(dense_default.0),
                     std::env::var("SSI_DENSE_S")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(4),
+                        .unwrap_or(dense_default.1),
                     std::env::var("SSI_DENSE_T")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(3),
+                        .unwrap_or(dense_default.2),
                 );
                 #[cfg(not(test))]
-                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (8, 4, 3);
+                let (dense_w, dense_s, dense_t): (usize, usize, usize) = dense_default;
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     dense_w, dense_s, dense_t, dense_window_ledger,
@@ -5662,7 +5757,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 };
             #[cfg(not(test))]
             let span_windows: &[(usize, usize, usize, i64)] = &PRODUCTION_SPAN_WINDOWS;
+            // Test-only seam for pricing the nine span allowances. Production
+            // passes the frontier budgets through without an extra operation.
+            #[cfg(test)]
+            let span_scale: i64 = std::env::var("SSI_SPAN_SCALE")
+                .ok()
+                .and_then(|v| v.trim().parse::<i64>().ok())
+                .unwrap_or(100)
+                .clamp(1, 4000);
             for &(width, sweeps, step, budget) in span_windows {
+                #[cfg(test)]
+                let budget = budget.saturating_mul(span_scale) / 100;
                 if let Some(candidate) = rgreedy::sparse_span_window_descent(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     width, sweeps, step, budget,
@@ -5878,7 +5983,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
         if xchg_pool > 0 {
             let seeds: Vec<Vec<usize>> = runner_up
-                .borrow()
                 .iter()
                 .take(xchg_pool)
                 .map(|(_, p)| p.clone())
@@ -5914,6 +6018,60 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         }
     }
     best_perm
+    };
+
+    if shared_basin_fork_band(n, nnz) {
+        let alt_start_perm = best_perm.clone();
+        let fallback_perm = alt_start_perm.clone();
+        let alt_deferred = indep_deferred.clone();
+        let (base, alt) = std::thread::scope(|scope| {
+            let (decision_tx, decision_rx) = std::sync::mpsc::sync_channel(1);
+            let base = scope.spawn(|| {
+                run_suffix(
+                    best_perm,
+                    best_flops,
+                    indep_deferred,
+                    true,
+                    prefix_score_workspace,
+                    Some(decision_tx),
+                )
+            });
+            let alt = if decision_rx.recv().unwrap_or(false) {
+                Some(run_suffix(
+                    alt_start_perm,
+                    best_flops,
+                    alt_deferred,
+                    false,
+                    scoring_ws::ScoreWorkspace::new(n, nnz),
+                    None,
+                ))
+            } else {
+                None
+            };
+            (base.join().ok(), alt)
+        });
+        let Some(base) = base else {
+            return alt.unwrap_or(fallback_perm);
+        };
+        if let Some(alt) = alt {
+            let mut merge_workspace = scoring_ws::ScoreWorkspace::new(n, nnz);
+            if merge_workspace.flops(&scoring_pat, &alt)
+                < merge_workspace.flops(&scoring_pat, &base)
+            {
+                return alt;
+            }
+        }
+        base
+    } else {
+        run_suffix(
+            best_perm,
+            best_flops,
+            indep_deferred,
+            true,
+            prefix_score_workspace,
+            None,
+        )
+    }
 }
 
 

@@ -1,0 +1,87 @@
+# 0279 — public-ledger threshold audit (generated)
+#
+# Source:   `yukon submissions --all` (716 parsed rows, 2026-09-02 .. 2026-09-14)
+# Script:   ../../../memory/evidence/0279-ledger-threshold-audit.py
+# Command:  yukon submissions --all > ledger.txt
+#           python3 0279-ledger-threshold-audit.py ledger.txt
+# Note:     the ledger's own 'diff' column is each solver's delta against ITS OWN
+#           previous tip, not against the board best. The script therefore walks the
+#           ledger in chronological order and compares every rejected score against
+#           the best KNOWN AT THE TIME. That is what produces the 'gap' column.
+#
+parsed rows: 716
+status: {'promoted': 97, 'failed': 464, 'rejected': 139, 'cancelled': 16}
+
+improving-but-rejected (beat the best known at the time, still closed): 52
+distinct solvers: 16
+gap distribution (score - best):
+  worst (largest gain) -0.0000790   median -0.0000310   smallest -0.0000010
+
+=== improving rejections, sorted by size of gain ===
+gap -0.0000790  6d8cf85  jonathan308      score 0.844449  best 0.844528  b9e4df9  9/9/26, 1:57 AM
+gap -0.0000780  3587d1b  newjordan        score 0.840545  best 0.840623  72a525d  9/13/26, 11:20 PM
+gap -0.0000770  e5dcd69  rcwrightiii      score 0.8435    best 0.843577  819d4ff  9/9/26, 12:22 PM
+gap -0.0000730  46f3ee4  rcwrightiii      score 0.850667  best 0.85074   a4059e8  9/7/26, 10:52 PM
+gap -0.0000730  fa75759  jonathan308      score 0.843417  best 0.84349   2837568  9/9/26, 1:47 PM
+gap -0.0000730  cbaa7b4  jonathan308      score 0.843417  best 0.84349   b7d7094  9/9/26, 3:05 PM
+gap -0.0000730  00d74e4  jonathan308      score 0.843417  best 0.84349   416dd85  9/9/26, 5:40 PM
+gap -0.0000690  d2ec3ae  jonathan308      score 0.844012  best 0.844081  eaafd78  9/9/26, 5:35 AM
+gap -0.0000690  671fd35  jonathan308      score 0.844012  best 0.844081  a11ea70  9/9/26, 6:28 AM
+gap -0.0000640  d6f2a2d  hybridnoise      score 0.877631  best 0.877695  b3ffe96  9/3/26, 7:09 AM
+gap -0.0000610  3a549ee  newjordan        score 0.877025  best 0.877086  6b68e67  9/3/26, 8:10 AM
+gap -0.0000600  c27e1f1  jonathan308      score 0.843517  best 0.843577  0a1bb44  9/9/26, 12:52 PM
+gap -0.0000570  039c8e2  newjordan        score 0.840725  best 0.840782  04fd8eb  9/13/26, 3:08 PM
+gap -0.0000570  bd4b051  jtaroreh         score 0.871182  best 0.871239  bcd30fb  9/4/26, 9:54 AM
+gap -0.0000540  a30dc6c  jtaroreh         score 0.870978  best 0.871032  0cad437  9/4/26, 5:16 PM
+gap -0.0000520  69be95b  newjordan        score 0.860061  best 0.860113  42bb402  9/6/26, 3:01 PM
+gap -0.0000500  5f8835c  jonathan308      score 0.844031  best 0.844081  1d4f0d1  9/9/26, 4:33 AM
+gap -0.0000480  f86e225  jonathan308      score 0.849082  best 0.84913   4a562ec  9/8/26, 5:33 PM
+gap -0.0000470  83941fc  darthweenies     score 0.84353   best 0.843577  542d3e6  9/9/26, 8:21 AM
+gap -0.0000410  d7977e7  jonathan308      score 0.843536  best 0.843577  d9bb8af  9/9/26, 9:47 AM
+gap -0.0000410  f9b2fe4  IvanLudvig       score 0.840741  best 0.840782  4916a62  9/13/26, 3:59 PM
+gap -0.0000400  336efcd  newjordan        score 0.880427  best 0.880467  8d3a0d1  9/3/26, 4:43 AM
+gap -0.0000390  8e1962c  jonathan308      score 0.843538  best 0.843577  e76b294  9/9/26, 12:26 PM
+gap -0.0000380  6e8abb6  jonathan308      score 0.848704  best 0.848742  6ba1ef0  9/8/26, 10:44 PM
+gap -0.0000380  f2941ce  jonathan308      score 0.848704  best 0.848742  ef6626a  9/8/26, 11:00 PM
+gap -0.0000320  4f49891  jonathan308      score 0.843545  best 0.843577  8f6fc10  9/9/26, 8:59 AM
+gap -0.0000310  87e7f7b  darthweenies     score 0.843142  best 0.843173  f16b804  9/10/26, 2:06 AM
+gap -0.0000240  2062d24  dukemawex        score 0.851686  best 0.85171   b0b11fa  9/7/26, 2:01 PM
+gap -0.0000240  0dd301d  Xo1otl           score 0.842833  best 0.842857  b29f202  9/11/26, 3:27 AM
+gap -0.0000240  8156a16  Xo1otl           score 0.842833  best 0.842857  4d0e322  9/11/26, 3:51 AM
+gap -0.0000240  4f37d4c  Xo1otl           score 0.842833  best 0.842857  c580125  9/11/26, 6:29 AM
+gap -0.0000220  dda1f34  gdonninelli      score 0.851688  best 0.85171   00123e0  9/7/26, 2:01 PM
+gap -0.0000220  6664fb0  Xo1otl           score 0.842835  best 0.842857  c6bc5d4  9/11/26, 1:31 AM
+gap -0.0000220  0ecf4b9  PKCrox           score 0.842835  best 0.842857  ad035fb  9/12/26, 10:29 AM
+gap -0.0000210  ab6fd76  jtaroreh         score 0.861459  best 0.86148   2c44f1f  9/6/26, 8:47 AM
+gap -0.0000210  2ca418a  srikanth-gm      score 0.844507  best 0.844528  9a85a96  9/9/26, 2:59 AM
+gap -0.0000210  ec56531  rubenmarcus      score 0.842836  best 0.842857  f206d1d  9/12/26, 5:05 AM
+gap -0.0000190  d6045e2  jonathan308      score 0.844062  best 0.844081  4a5244e  9/9/26, 6:09 AM
+gap -0.0000170  273fff1  gdonninelli      score 0.871015  best 0.871032  490b159  9/4/26, 2:55 PM
+gap -0.0000160  23f4d41  dukemawex        score 0.86981   best 0.869826  0a24893  9/5/26, 5:07 AM
+gap -0.0000160  17b62bf  gdonninelli      score 0.843474  best 0.84349   9261ce7  9/9/26, 4:29 PM
+gap -0.0000140  1895063  newjordan        score 0.85982   best 0.859834  83490a2  9/6/26, 5:36 PM
+gap -0.0000140  386a14c  darthweenies     score 0.843476  best 0.84349   9f3427c  9/9/26, 4:09 PM
+gap -0.0000120  339b30f  rcwrightiii      score 0.843565  best 0.843577  5990f0c  9/9/26, 9:38 AM
+gap -0.0000080  a004c1c  rcwrightiii      score 0.848875  best 0.848883  cb284e2  9/8/26, 9:21 PM
+gap -0.0000070  1848ecb  darthweenies     score 0.843483  best 0.84349   c2e7df4  9/9/26, 5:43 PM
+gap -0.0000060  2544dae  darthweenies     score 0.843484  best 0.84349   189aff2  9/9/26, 5:15 PM
+gap -0.0000040  95eb6c6  dun999           score 0.871235  best 0.871239  e0d5fa2  9/4/26, 6:54 AM
+gap -0.0000030  de17cd3  linson007        score 0.842374  best 0.842377  f9c69b0  9/12/26, 10:32 PM
+gap -0.0000030  d5f51fb  jonathan308      score 0.85046   best 0.850463  1e9bc26  9/8/26, 6:26 AM
+gap -0.0000020  f8941f7  Xo1otl           score 0.859571  best 0.859573  0e3c1d0  9/6/26, 11:14 PM
+gap -0.0000010  6864d7b  gunboatsss       score 0.840622  best 0.840623  e5db8b3  9/14/26, 2:04 AM
+
+=== CALIBRATION: the bar is RELATIVE (fraction of the current best) ===
+max gap still rejected: -0.0000790
+min gap still accepted: -0.0000870  (723bf79, score 0.84349 vs best 0.843577)
+implied relative bar: 9.354e-05 < bar < 1.031e-04
+
+acceptances with the smallest gain over the then-best:
+gap -0.0000870  723bf79  jonathan308      score 0.84349   best 0.843577    rel 1.03 bip
+gap -0.0000900  e07fe7a  newjordan        score 0.841768  best 0.841858    rel 1.07 bip
+gap -0.0000910  1a4183b  dukemawex        score 0.859834  best 0.859925    rel 1.06 bip
+gap -0.0000950  a778968  hybridnoise      score 0.876991  best 0.877086    rel 1.08 bip
+gap -0.0000960  4bbe2d0  dukemawex        score 0.860113  best 0.860209    rel 1.12 bip
+gap -0.0001020  83a8f4f  newjordan        score 0.841666  best 0.841768    rel 1.21 bip
+
+=== control: every 9/14-scored entry cited in 0278 (same-day corpus) ===

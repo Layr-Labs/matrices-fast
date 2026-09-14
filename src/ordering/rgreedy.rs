@@ -267,8 +267,22 @@ impl Pristine {
         self.n * self.w * 8 + self.n * 4
     }
 
-    pub(crate) fn game(&self) -> Option<Game<'_>> {
-        Game::new_with_degrees(self.n, &self.adj0[..], self.deg0.as_ref().clone())
+    pub(crate) fn game_reset_first(&self) -> Option<Game<'_>> {
+        // Every window descent performs a mandatory full `reset()` before it
+        // can inspect `adj`. Initializing the pooled buffer here would copy
+        // the same `n * w` words twice. Keep a test-only eager arm so old/new
+        // can be compared in one binary; production skips only bytes that are
+        // overwritten before their first read.
+        #[cfg(test)]
+        let eager = std::env::var_os("SSI_XCH_EAGER_ADJ").is_some();
+        #[cfg(not(test))]
+        let eager = false;
+        Game::new_reset_first_with_degrees(
+            self.n,
+            &self.adj0[..],
+            self.deg0.as_ref().clone(),
+            eager,
+        )
     }
 }
 
@@ -476,7 +490,7 @@ impl<'a> Game<'a> {
                 .map(|word| word.count_ones())
                 .sum();
         }
-        Game::assemble(n, adj0, deg0)
+        Game::assemble(n, adj0, deg0, true)
     }
 
     /// Same game as [`Game::new`] when `deg0` is the degree vector of `adj0`,
@@ -493,17 +507,42 @@ impl<'a> Game<'a> {
         if adj0.len() < n * n.div_ceil(64) {
             return None;
         }
-        Game::assemble(n, adj0, deg0)
+        Game::assemble(n, adj0, deg0, true)
     }
 
-    fn assemble(n: usize, adj0: &'a [u64], deg0: Vec<u32>) -> Option<Game<'a>> {
+    /// Variant for a caller that guarantees [`Game::reset`] is the first
+    /// operation that can read the mutable adjacency. A recycled buffer may
+    /// contain arbitrary words; `reset` overwrites all of them.
+    fn new_reset_first_with_degrees(
+        n: usize,
+        adj0: &'a [u64],
+        deg0: Vec<u32>,
+        eager: bool,
+    ) -> Option<Game<'a>> {
+        if n == 0 || n > max_n_limit() || deg0.len() != n {
+            return None;
+        }
+        if adj0.len() < n * n.div_ceil(64) {
+            return None;
+        }
+        Game::assemble(n, adj0, deg0, eager)
+    }
+
+    fn assemble(
+        n: usize,
+        adj0: &'a [u64],
+        deg0: Vec<u32>,
+        initialize_adj: bool,
+    ) -> Option<Game<'a>> {
         let w = n.div_ceil(64);
         // iter69: reuse a recycled bitset buffer instead of `adj0[..n*w].to_vec()`.
         // `resize` + `copy_from_slice` leaves the buffer bit-identical to a fresh
         // allocation; `Drop for Game` returns it to the thread-local pool.
         let mut adj = adj_pool_take(n * w);
         adj.resize(n * w, 0);
-        adj.copy_from_slice(&adj0[..n * w]);
+        if initialize_adj {
+            adj.copy_from_slice(&adj0[..n * w]);
+        }
         Some(Game {
             n,
             w,

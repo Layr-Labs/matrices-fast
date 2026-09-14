@@ -1,3 +1,7 @@
+## 2026-09-14 — 0208 reduce-then-lift (terminal, 500k, narrow, winning set kinds) + DegPlusDegme on core2, on 99de589
+- terminal reduce-core lift: dev 4/0 -2.8 bip, held-out 6/0 -7.4 bip (with the core2 metric); mid-pipeline placement re-rolled rows and cost +1 s; 2M ledger -35 bip held-out but +1 s on big cores.
+- census: winners come from set kinds ginf/sc_inf/sc_15/sc_9 only; no shape gate separates winners; cost ~+0.05..0.09 s on ~10 slow rows, WORST under the crown.
+
 
 ## 2026-09-07 late PT — 4aa9f8f failed; fd9829c resubmit
 

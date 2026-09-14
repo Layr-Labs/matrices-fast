@@ -1,0 +1,1745 @@
+   Compiling ssi-candidate-worker v0.1.0 (/home/frosty/angelX/.tmp/live-performance-20260911/matrices-deepseek/candidate-worker)
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1033:1
+     |
+1033 | / /// Which lineage the current `leader_order` call runs: `true` is the shipped
+1034 | | /// pipeline, `false` is the same pipeline with the `4.subtree` chain's budget
+1035 | | /// suppressed. A thread-local keeps the `order()` fork from re-parameterising
+1036 | | /// every intermediate call site, and the two lineages never share it.
+     | |_---------------------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1339:1
+     |
+1339 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1340 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1341 | | /// budget disables the stream, which is what production compiles to — the
+1342 | | /// switch can never change a submitted ordering. Configured through
+1343 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1344 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1702:1
+     |
+1702 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1703 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:335:1
+    |
+335 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+336 | | /// can run the SAME `order()` both ways in one process and compare the
+337 | | /// returned permutations element by element. Production builds compile
+338 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:369:1
+    |
+369 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+370 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+371 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+372 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5318:5
+     |
+5318 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+5319 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+5320 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+5321 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5327 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5328 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5329 |       #[cfg(test)]
+5330 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5331 | |         .ok()
+5332 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5333 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5487:9
+     |
+5487 | /         /// ── iter79: the dense rung is RETIRED (production compiles it OFF) ──
+5488 | |         /// Bat `4d26ed3d` was the promoted tree plus *only* this rung and it was
+5489 | |         /// killed at the grader's per-matrix time cap (86 s into the hidden run,
+5490 | |         /// the same mark as every other post-15:52 kill), so the rung's ~2.4e-5
+...    |
+5493 | |         /// now the production value (the 0275 lesson: a probe default that
+5494 | |         /// disagrees with production measures a different program).
+     | |____________________________________________________________________^
+5495 |           #[cfg(test)]
+5496 | /         let dense_rung_on: bool = std::env::var("SSI_TERM_DENSE_RUNG")
+5497 | |             .map(|v| v.trim() == "1")
+5498 | |             .unwrap_or(false);
+     | |______________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5501:9
+     |
+5501 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5502 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5503 | /         let shipped_ladder = || {
+5504 | |             if nnz < 3 * n {
+5505 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5506 | |             } else if dense_rung_on && nnz >= 10 * n {
+...    |
+5511 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4165:9
+     |
+4165 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `t_refine`
+   --> candidate-worker/src/../../src/ordering/rgreedy/window_dp.rs:763:17
+    |
+763 |             let t_refine = std::time::Instant::now();
+    |                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_t_refine`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:733:29
+    |
+733 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:946:7
+    |
+946 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: function `audit_enabled` is never used
+   --> candidate-worker/src/../../src/ordering/symbolic_flat.rs:316:15
+    |
+316 | pub(super) fn audit_enabled() -> bool {
+    |               ^^^^^^^^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:189:15
+    |
+189 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:314:15
+    |
+314 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:134:4
+    |
+134 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:230:4
+    |
+230 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:725:4
+    |
+725 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:560:19
+    |
+560 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 21 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 15.88s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+LADGATE	357	10000	0.309	1
+LADGATE	357	10000	0.313	1
+LIFT	slay06m	357	147	660	147
+COUNTS	slay06m	357	1080	4025	4025
+COPYSTATS	slay06m	secs=0.404	asm_calls=98	asm_words=122516	asm_ms=0.0	rst_calls=34818	rst_words=31657776	rst_ms=3.5	rst_tail_ms=5.3	elims=6014032	fullclear_words=30585822	sparse_words=8233329	sparse_clears=0
+LADGATE	401	10000	0.369	1
+LADGATE	401	10000	0.383	1
+LIFT	sssd25-08	401	89	640	89
+COUNTS	sssd25-08	401	1200	5389	5389
+COPYSTATS	sssd25-08	secs=0.413	asm_calls=114	asm_words=148460	asm_ms=0.0	rst_calls=65035	rst_words=25247854	rst_ms=5.1	rst_tail_ms=10.4	elims=5342515	fullclear_words=24317562	sparse_words=7861003	sparse_clears=0
+LADGATE	4772	10000	0.758	1
+LIFT	rsyn0810m04m	4772	2520	9996	2520
+COUNTS	rsyn0810m04m	4772	13836	147553	113207
+COPYSTATS	rsyn0810m04m	secs=1.009	asm_calls=241	asm_words=9154742	asm_ms=4.3	rst_calls=177609	rst_words=59512964	rst_ms=29.9	rst_tail_ms=21.7	elims=10451039	fullclear_words=55293878	sparse_words=12142596	sparse_clears=0
+LIFT	pooling_sppc3pq	23173	12327	872032	12327
+COUNTS	pooling_sppc3pq	23173	893724	1153877333	325595394
+COPYSTATS	pooling_sppc3pq	secs=0.675	asm_calls=48	asm_words=107588	asm_ms=0.0	rst_calls=3175	rst_words=1708966	rst_ms=0.3	rst_tail_ms=0.6	elims=194307	fullclear_words=689646	sparse_words=451251	sparse_clears=0
+LADGATE	1131	10000	0.511	1
+LIFT	sporttournament48	1131	721	7408	721
+COUNTS	sporttournament48	1131	6676	919582	592120
+COPYSTATS	sporttournament48	secs=0.666	asm_calls=73	asm_words=1076318	asm_ms=0.2	rst_calls=1691	rst_words=13484832	rst_ms=1.6	rst_tail_ms=0.7	elims=768415	fullclear_words=12420559	sparse_words=6172971	sparse_clears=0
+LADGATE	5030	10000	0.379	1
+LIFT	pooling_sppa9pq	5030	2509	126346	2509
+COUNTS	pooling_sppa9pq	5030	120730	23971280	15198662
+COPYSTATS	pooling_sppa9pq	secs=0.397	asm_calls=86	asm_words=495078	asm_ms=0.2	rst_calls=6910	rst_words=3745300	rst_ms=1.3	rst_tail_ms=0.9	elims=257437	fullclear_words=2596298	sparse_words=581379	sparse_clears=0
+LADGATE	1053	10000	0.311	1
+LIFT	edgecross10-090	1053	571	4240	571
+COUNTS	edgecross10-090	1053	5204	126115	103179
+COPYSTATS	edgecross10-090	secs=0.416	asm_calls=88	asm_words=625205	asm_ms=0.1	rst_calls=21932	rst_words=12310756	rst_ms=2.5	rst_tail_ms=2.2	elims=1416699	fullclear_words=11546805	sparse_words=1914732	sparse_clears=0
+LIFT	maxcsp-ehi-85-297-71	2372	2075	216272	2075
+COUNTS	maxcsp-ehi-85-297-71	2372	207996	1381768944	1110971341
+COPYSTATS	maxcsp-ehi-85-297-71	secs=0.254	asm_calls=30	asm_words=139995	asm_ms=0.0	rst_calls=671	rst_words=1079038	rst_ms=0.1	rst_tail_ms=0.1	elims=15839	fullclear_words=88339	sparse_words=64438	sparse_clears=0
+LADGATE	30	10000	0.516	1
+LADGATE	30	10000	0.516	1
+COUNTS	st_bpaf1a	30	120	623	580
+COPYSTATS	st_bpaf1a	secs=0.761	asm_calls=80	asm_words=2400	asm_ms=0.0	rst_calls=535620	rst_words=16068600	rst_ms=22.1	rst_tail_ms=22.7	elims=14577877	fullclear_words=14577877	sparse_words=14261550	sparse_clears=0
+LADGATE	1462	10000	0.463	1
+LIFT	risk2bpb	1462	628	4030	628
+COUNTS	risk2bpb	1462	5396	118471	66041
+COPYSTATS	risk2bpb	secs=0.655	asm_calls=98	asm_words=1287039	asm_ms=0.2	rst_calls=7165	rst_words=22631578	rst_ms=3.0	rst_tail_ms=1.8	elims=1579917	fullclear_words=22060507	sparse_words=3012691	sparse_clears=0
+LADGATE	255	10000	0.094	1
+LIFT	qap	255	225	49148	225
+COUNTS	qap	255	43748	3802533	3650113
+COPYSTATS	qap	secs=0.186	asm_calls=23	asm_words=23460	asm_ms=0.0	rst_calls=322	rst_words=328440	rst_ms=0.0	rst_tail_ms=0.1	elims=79972	fullclear_words=319888	sparse_words=295303	sparse_clears=0
+LADGATE	7252	10000	0.701	1
+LIFT	rsyn0830m04m	7252	3744	14872	3744
+COUNTS	rsyn0830m04m	7252	20752	212130	171498
+COPYSTATS	rsyn0830m04m	secs=1.074	asm_calls=219	asm_words=14247015	asm_ms=7.9	rst_calls=183366	rst_words=56798441	rst_ms=35.4	rst_tail_ms=20.4	elims=9682135	fullclear_words=47670271	sparse_words=10785281	sparse_clears=0
+LADGATE	1073	10000	0.248	1
+LIFT	lop97icx	1073	155	1760	155
+COUNTS	lop97icx	1073	2118	79286	64044
+COPYSTATS	lop97icx	secs=0.348	asm_calls=52	asm_words=652185	asm_ms=0.1	rst_calls=2653	rst_words=13115025	rst_ms=1.7	rst_tail_ms=1.0	elims=1025927	fullclear_words=12858979	sparse_words=1272037	sparse_clears=0
+LADGATE	1201	10000	0.193	1
+LIFT	chain400	1201	800	3196	800
+COUNTS	chain400	1201	4796	16382	16382
+COPYSTATS	chain400	secs=0.233	asm_calls=24	asm_words=477212	asm_ms=0.1	rst_calls=456	rst_words=8361532	rst_ms=1.0	rst_tail_ms=0.4	elims=402763	fullclear_words=7480981	sparse_words=1010199	sparse_clears=0
+LADGATE	9532	10000	0.792	1
+LIFT	mpbp_07	9532	5704	23110	5704
+COUNTS	mpbp_07	9532	30810	1368477	1248083
+COPYSTATS	mpbp_07	secs=1.085	asm_calls=302	asm_words=24781399	asm_ms=14.1	rst_calls=108758	rst_words=87059564	rst_ms=41.6	rst_tail_ms=17.4	elims=8314913	fullclear_words=73965767	sparse_words=11988977	sparse_clears=0
+LADGATE	440	10000	0.410	1
+LADGATE	440	10000	0.436	1
+LIFT	sonetgr17	440	317	2712	317
+COUNTS	sonetgr17	440	2958	37814	30971
+COPYSTATS	sonetgr17	secs=0.568	asm_calls=180	asm_words=235272	asm_ms=0.0	rst_calls=64745	rst_words=25890886	rst_ms=7.5	rst_tail_ms=6.3	elims=4715110	fullclear_words=24554510	sparse_words=6667312	sparse_clears=0
+LADGATE	2207	10000	0.378	1
+LIFT	p_ball_30b_7p_2d_h	2207	1415	5932	1415
+COUNTS	p_ball_30b_7p_2d_h	2207	7516	42456	42319
+COPYSTATS	p_ball_30b_7p_2d_h	secs=0.539	asm_calls=123	asm_words=2313987	asm_ms=0.5	rst_calls=26844	rst_words=23275455	rst_ms=5.0	rst_tail_ms=3.5	elims=1931643	fullclear_words=22122055	sparse_words=2787883	sparse_clears=0
+LADGATE	19995	10000	0.803	0
+LIFT	pinene200	19995	15795	89590	15795
+COUNTS	pinene200	19995	97990	1358716	1132609
+COPYSTATS	pinene200	secs=1.105	asm_calls=306	asm_words=62717070	asm_ms=24.7	rst_calls=213829	rst_words=114490970	rst_ms=49.5	rst_tail_ms=25.1	elims=11067798	fullclear_words=70389149	sparse_words=13539367	sparse_clears=0
+LIFT	unitcommit_200_100_1_mod_8	146830	73272	329560	73272
+COUNTS	unitcommit_200_100_1_mod_8	146830	476332	3053940	2981835
+COPYSTATS	unitcommit_200_100_1_mod_8	secs=0.403	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	123	10000	0.389	1
+LADGATE	123	10000	0.414	1
+LIFT	ex8_3_9	123	101	766	101
+COUNTS	ex8_3_9	123	834	15050	11503
+COPYSTATS	ex8_3_9	secs=0.547	asm_calls=123	asm_words=27938	asm_ms=0.0	rst_calls=78492	rst_words=18575792	rst_ms=3.7	rst_tail_ms=7.9	elims=8586331	fullclear_words=17172662	sparse_words=15692336	sparse_clears=0
+LADGATE	2486	10000	0.526	1
+LIFT	rsyn0820m02m	2486	1364	4808	1364
+COUNTS	rsyn0820m02m	2486	6932	38190	35775
+COPYSTATS	rsyn0820m02m	secs=0.720	asm_calls=170	asm_words=3050078	asm_ms=0.6	rst_calls=66108	rst_words=26820013	rst_ms=7.6	rst_tail_ms=6.0	elims=3352430	fullclear_words=25278093	sparse_words=4897305	sparse_clears=0
+LADGATE	293	10000	0.344	1
+LADGATE	293	10000	0.351	1
+LIFT	p_ball_10b_5p_2d_m	293	119	716	119
+COUNTS	p_ball_10b_5p_2d_m	293	964	6648	6547
+COPYSTATS	p_ball_10b_5p_2d_m	secs=0.476	asm_calls=128	asm_words=126040	asm_ms=0.0	rst_calls=48584	rst_words=28102240	rst_ms=3.4	rst_tail_ms=5.8	elims=6691057	fullclear_words=27324105	sparse_words=11578480	sparse_clears=0
+LADGATE	170	10000	0.294	1
+LADGATE	170	10000	0.294	1
+LIFT	pooling_adhya4tp	170	93	806	93
+COUNTS	pooling_adhya4tp	170	936	26842	20581
+COPYSTATS	pooling_adhya4tp	secs=0.425	asm_calls=102	asm_words=44980	asm_ms=0.0	rst_calls=43340	rst_words=18130280	rst_ms=2.9	rst_tail_ms=5.3	elims=5888941	fullclear_words=16674055	sparse_words=6968192	sparse_clears=0
+LADGATE	7295	10000	0.272	1
+LIFT	squfl015-080persp	7295	2495	12000	2495
+COUNTS	squfl015-080persp	7295	21600	74520	74520
+COPYSTATS	squfl015-080persp	secs=0.288	asm_calls=47	asm_words=1672690	asm_ms=0.9	rst_calls=4774	rst_words=5164580	rst_ms=2.7	rst_tail_ms=0.8	elims=458065	fullclear_words=4435282	sparse_words=621729	sparse_clears=0
+LADGATE	1053	10000	0.319	1
+LIFT	edgecross10-080	1053	571	4976	571
+COUNTS	edgecross10-080	1053	5940	170814	164639
+COPYSTATS	edgecross10-080	secs=0.438	asm_calls=75	asm_words=633846	asm_ms=0.1	rst_calls=9598	rst_words=11184066	rst_ms=1.7	rst_tail_ms=1.5	elims=1111381	fullclear_words=10501569	sparse_words=1588723	sparse_clears=0
+LADGATE	590	10000	0.399	1
+LADGATE	590	10000	0.419	1
+LIFT	clay0204hfsg	590	278	1184	278
+COUNTS	clay0204hfsg	590	1696	7198	6562
+COPYSTATS	clay0204hfsg	secs=0.505	asm_calls=187	asm_words=446407	asm_ms=0.1	rst_calls=79891	rst_words=27506417	rst_ms=6.9	rst_tail_ms=7.5	elims=5508492	fullclear_words=25431772	sparse_words=7886640	sparse_clears=0
+LADGATE	13	10000	0.634	1
+LADGATE	13	10000	0.638	1
+COUNTS	st_bsj2	13	40	143	114
+COPYSTATS	st_bsj2	secs=0.956	asm_calls=56	asm_words=728	asm_ms=0.0	rst_calls=1457844	rst_words=18951972	rst_ms=66.7	rst_tail_ms=33.7	elims=17343656	fullclear_words=17343656	sparse_words=16279754	sparse_clears=0
+LADGATE	440	10000	0.580	1
+LADGATE	440	10000	0.581	1
+LIFT	chimera_mgw-c8-439-onc8-002	440	418	3060	418
+COUNTS	chimera_mgw-c8-439-onc8-002	440	3038	97870	86320
+COPYSTATS	chimera_mgw-c8-439-onc8-002	secs=0.744	asm_calls=138	asm_words=331343	asm_ms=0.0	rst_calls=10886	rst_words=19217610	rst_ms=2.4	rst_tail_ms=3.0	elims=2789498	fullclear_words=18272612	sparse_words=8584132	sparse_clears=0
+LADGATE	5188	10000	0.836	1
+LIFT	batchs201210m	5188	2645	13208	2645
+COUNTS	batchs201210m	5188	17910	349298	303381
+COPYSTATS	batchs201210m	secs=1.020	asm_calls=217	asm_words=8574729	asm_ms=4.2	rst_calls=123324	rst_words=70280633	rst_ms=26.8	rst_tail_ms=23.3	elims=10848662	fullclear_words=59673946	sparse_words=14331346	sparse_clears=0
+LADGATE	5456	10000	0.826	1
+LIFT	rsyn0815m04m	5456	2966	10968	2966
+COUNTS	rsyn0815m04m	5456	15756	184352	143402
+COPYSTATS	rsyn0815m04m	secs=1.134	asm_calls=228	asm_words=11896598	asm_ms=6.0	rst_calls=191919	rst_words=60979554	rst_ms=34.6	rst_tail_ms=21.5	elims=10260616	fullclear_words=55527715	sparse_words=11627702	sparse_clears=0
+LADGATE	560	10000	0.368	1
+LADGATE	560	10000	0.370	1
+LIFT	syn40m	560	291	1080	291
+COUNTS	syn40m	560	1528	5007	4829
+COPYSTATS	syn40m	secs=0.493	asm_calls=146	asm_words=382627	asm_ms=0.1	rst_calls=48042	rst_words=25612508	rst_ms=5.6	rst_tail_ms=5.3	elims=4276891	fullclear_words=23350861	sparse_words=6434448	sparse_clears=0
+LADGATE	2157	10000	0.234	1
+LIFT	knp5-44	2157	1167	31152	1167
+COUNTS	knp5-44	2157	32604	3764003	3764003
+COPYSTATS	knp5-44	secs=0.258	asm_calls=18	asm_words=774053	asm_ms=0.1	rst_calls=124	rst_words=4972059	rst_ms=0.6	rst_tail_ms=0.2	elims=152759	fullclear_words=4895653	sparse_words=302569	sparse_clears=0
+LADGATE	94	10000	0.365	1
+LADGATE	94	10000	0.365	1
+LIFT	ex1263a	94	59	320	59
+COUNTS	ex1263a	94	390	2098	2098
+COPYSTATS	ex1263a	secs=0.522	asm_calls=84	asm_words=10974	asm_ms=0.0	rst_calls=119330	rst_words=20781068	rst_ms=5.3	rst_tail_ms=9.7	elims=9808888	fullclear_words=19402558	sparse_words=10226725	sparse_clears=0
+COUNTS	st_e41	8	32	88	88
+COPYSTATS	st_e41	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	2305	10000	0.321	1
+LIFT	squfl025-030	2305	805	3000	805
+COUNTS	squfl025-030	2305	6000	42305	42305
+COPYSTATS	squfl025-030	secs=0.341	asm_calls=63	asm_words=1458255	asm_ms=0.2	rst_calls=14873	rst_words=15238031	rst_ms=2.4	rst_tail_ms=1.8	elims=1267512	fullclear_words=14910000	sparse_words=1643680	sparse_clears=0
+LADGATE	98	10000	0.397	1
+LADGATE	98	10000	0.397	1
+LIFT	wastewater05m1	98	62	740	62
+COUNTS	wastewater05m1	98	536	11690	8002
+COPYSTATS	wastewater05m1	secs=0.566	asm_calls=100	asm_words=17956	asm_ms=0.0	rst_calls=110181	rst_words=17301074	rst_ms=4.7	rst_tail_ms=9.6	elims=8739821	fullclear_words=16001208	sparse_words=12409140	sparse_clears=0
+COUNTS	cvxnonsep_psig20	20	380	2870	2870
+COPYSTATS	cvxnonsep_psig20	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	4405	10000	0.144	1
+LIFT	meanvar-orl400_05_e_8	4405	2403	168400	2403
+COUNTS	meanvar-orl400_05_e_8	4405	171604	21923414	21922611
+COPYSTATS	meanvar-orl400_05_e_8	secs=0.263	asm_calls=11	asm_words=3343395	asm_ms=1.6	rst_calls=32	rst_words=9726240	rst_ms=4.0	rst_tail_ms=0.2	elims=128851	fullclear_words=8890719	sparse_words=233098	sparse_clears=0
+LADGATE	301	10000	0.378	1
+LADGATE	301	10000	0.385	1
+LIFT	st_e31	301	163	492	163
+COUNTS	st_e31	301	744	4534	4257
+COPYSTATS	st_e31	secs=0.483	asm_calls=142	asm_words=120542	asm_ms=0.0	rst_calls=69370	rst_words=24729640	rst_ms=4.2	rst_tail_ms=7.0	elims=6387159	fullclear_words=23209690	sparse_words=8921469	sparse_clears=0
+LIFT	pooling_sppc1pq	14100	7273	535700	7273
+COUNTS	pooling_sppc1pq	14100	477680	812210652	136686008
+COPYSTATS	pooling_sppc1pq	secs=0.413	asm_calls=16	asm_words=79942	asm_ms=0.0	rst_calls=16	rst_words=79942	rst_ms=0.0	rst_tail_ms=0.0	elims=5489	fullclear_words=49995	sparse_words=17608	sparse_clears=0
+LADGATE	31	10000	0.556	1
+LADGATE	31	10000	0.560	1
+COUNTS	pooling_haverly1pq	31	96	412	403
+COPYSTATS	pooling_haverly1pq	secs=0.815	asm_calls=80	asm_words=2480	asm_ms=0.0	rst_calls=552423	rst_words=17125113	rst_ms=24.9	rst_tail_ms=24.2	elims=15640641	fullclear_words=15640641	sparse_words=15314645	sparse_clears=0
+LADGATE	128	10000	0.291	1
+LADGATE	128	10000	0.307	1
+LIFT	graphpart_3g-0244-0244	128	96	672	96
+COUNTS	graphpart_3g-0244-0244	128	672	33446	32534
+COPYSTATS	graphpart_3g-0244-0244	secs=0.449	asm_calls=110	asm_words=26240	asm_ms=0.0	rst_calls=47897	rst_words=11584512	rst_ms=2.3	rst_tail_ms=5.0	elims=5351192	fullclear_words=10702384	sparse_words=9131772	sparse_clears=0
+LADGATE	80	10000	0.309	1
+LADGATE	80	10000	0.310	1
+LIFT	graphpart_clique-20	80	77	1254	77
+COUNTS	graphpart_clique-20	80	1260	34885	27856
+COPYSTATS	graphpart_clique-20	secs=0.445	asm_calls=92	asm_words=13520	asm_ms=0.0	rst_calls=68937	rst_words=9465520	rst_ms=3.0	rst_tail_ms=5.3	elims=4879594	fullclear_words=8831490	sparse_words=8197711	sparse_clears=0
+LADGATE	28368	10000	0.840	0
+LIFT	mpbp_48	28368	16000	66180	16000
+COUNTS	mpbp_48	28368	91016	33835023	16057644
+COPYSTATS	mpbp_48	secs=1.126	asm_calls=177	asm_words=12918864	asm_ms=4.8	rst_calls=16598	rst_words=104449050	rst_ms=32.9	rst_tail_ms=8.0	elims=4076106	fullclear_words=95733151	sparse_words=6591504	sparse_clears=0
+LIFT	pooling_sppb5pq	18529	9496	693670	9496
+COUNTS	pooling_sppb5pq	18529	674470	523815053	213571545
+COPYSTATS	pooling_sppb5pq	secs=0.565	asm_calls=16	asm_words=7920	asm_ms=0.0	rst_calls=544	rst_words=269280	rst_ms=0.0	rst_tail_ms=0.1	elims=35360	fullclear_words=106080	sparse_words=73440	sparse_clears=0
+LADGATE	497	10000	0.340	1
+LADGATE	497	10000	0.364	1
+LIFT	slay07m	497	203	924	203
+COUNTS	slay07m	497	1512	5740	5740
+COPYSTATS	slay07m	secs=0.456	asm_calls=134	asm_words=221198	asm_ms=0.0	rst_calls=81325	rst_words=33561010	rst_ms=8.1	rst_tail_ms=11.4	elims=5483540	fullclear_words=32424500	sparse_words=7298161	sparse_clears=0
+COUNTS	nvs19	24	200	1353	884
+COPYSTATS	nvs19	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	3270	10000	0.632	1
+LIFT	oil	3270	1687	5444	1687
+COUNTS	oil	3270	8430	36313	34760
+COPYSTATS	oil	secs=0.752	asm_calls=204	asm_words=4609130	asm_ms=1.3	rst_calls=135622	rst_words=45180782	rst_ms=16.9	rst_tail_ms=15.0	elims=7707943	fullclear_words=42485170	sparse_words=10375686	sparse_clears=0
+LADGATE	2775	10000	0.423	1
+LIFT	squfl015-060	2775	975	3600	975
+COUNTS	squfl015-060	2775	7200	36400	36400
+COPYSTATS	squfl015-060	secs=0.437	asm_calls=68	asm_words=2079790	asm_ms=0.4	rst_calls=18603	rst_words=16991832	rst_ms=3.8	rst_tail_ms=2.1	elims=1365730	fullclear_words=16612502	sparse_words=1636284	sparse_clears=0
+LADGATE	1112	10000	0.485	1
+LIFT	ndcc12persp	1112	961	5220	961
+COUNTS	ndcc12persp	1112	5522	299115	284793
+COPYSTATS	ndcc12persp	secs=0.666	asm_calls=153	asm_words=869535	asm_ms=0.2	rst_calls=129694	rst_words=16884786	rst_ms=10.9	rst_tail_ms=9.7	elims=3263375	fullclear_words=13198605	sparse_words=4698187	sparse_clears=0
+LIFT	kissing2	20772	10772	381024	10772
+COUNTS	kissing2	20772	401024	156414018	156414018
+COPYSTATS	kissing2	secs=0.344	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	1942	10000	0.594	1
+LIFT	nuclear25a	1942	755	18260	755
+COUNTS	nuclear25a	1942	16030	1977163	1136191
+COPYSTATS	nuclear25a	secs=0.873	asm_calls=130	asm_words=1546284	asm_ms=0.4	rst_calls=59251	rst_words=22445845	rst_ms=6.4	rst_tail_ms=8.1	elims=2785372	fullclear_words=15974510	sparse_words=4990144	sparse_clears=0
+LADGATE	222	10000	0.366	1
+LADGATE	222	10000	0.367	1
+LIFT	clay0204m	222	102	464	102
+COUNTS	clay0204m	222	704	2330	2330
+COPYSTATS	clay0204m	secs=0.481	asm_calls=92	asm_words=52616	asm_ms=0.0	rst_calls=56673	rst_words=31826852	rst_ms=4.1	rst_tail_ms=7.2	elims=8618270	fullclear_words=30269002	sparse_words=10880007	sparse_clears=0
+LADGATE	23	10000	0.613	1
+LADGATE	23	10000	0.616	1
+COUNTS	st_ph13	23	68	207	178
+COPYSTATS	st_ph13	secs=0.690	asm_calls=66	asm_words=1518	asm_ms=0.0	rst_calls=636426	rst_words=14637798	rst_ms=31.9	rst_tail_ms=23.0	elims=13365530	fullclear_words=13365530	sparse_words=12960600	sparse_clears=0
+LADGATE	1053	10000	0.389	1
+LIFT	edgecross10-030	1053	573	5134	573
+COUNTS	edgecross10-030	1053	4654	135854	100080
+COPYSTATS	edgecross10-030	secs=0.513	asm_calls=69	asm_words=712994	asm_ms=0.1	rst_calls=17471	rst_words=18991742	rst_ms=2.8	rst_tail_ms=2.2	elims=1694631	fullclear_words=18170028	sparse_words=2329027	sparse_clears=0
+LADGATE	601	10000	0.217	1
+LIFT	chain200	601	400	1596	400
+COUNTS	chain200	601	2396	8182	8182
+COPYSTATS	chain200	secs=0.288	asm_calls=27	asm_words=152830	asm_ms=0.0	rst_calls=1903	rst_words=11163270	rst_ms=1.5	rst_tail_ms=1.0	elims=1002492	fullclear_words=9959700	sparse_words=2298715	sparse_clears=0
+LADGATE	25	10000	0.628	1
+LADGATE	25	10000	0.628	1
+COUNTS	ex1223b	25	66	178	178
+COPYSTATS	ex1223b	secs=0.699	asm_calls=54	asm_words=1350	asm_ms=0.0	rst_calls=601850	rst_words=15046250	rst_ms=29.8	rst_tail_ms=22.4	elims=13530871	fullclear_words=13530871	sparse_words=13162177	sparse_clears=0
+LADGATE	2718	10000	0.481	1
+LIFT	slay09h	2718	1206	5040	1206
+COUNTS	slay09h	2718	7488	36057	32385
+COPYSTATS	slay09h	secs=0.559	asm_calls=178	asm_words=3154649	asm_ms=0.7	rst_calls=198910	rst_words=35006569	rst_ms=19.0	rst_tail_ms=12.0	elims=4811939	fullclear_words=32628488	sparse_words=6171287	sparse_clears=0
+LADGATE	974	10000	0.482	1
+LIFT	ndcc12	974	902	6222	902
+COUNTS	ndcc12	974	5982	345696	329556
+COPYSTATS	ndcc12	secs=0.762	asm_calls=129	asm_words=661807	asm_ms=0.1	rst_calls=82263	rst_words=13419203	rst_ms=7.2	rst_tail_ms=6.3	elims=2221936	fullclear_words=10955890	sparse_words=3985979	sparse_clears=0
+LADGATE	1306	10000	0.441	1
+LIFT	kall_circlesrectangles_c6r39	1306	924	4638	924
+COUNTS	kall_circlesrectangles_c6r39	1306	5378	75744	74610
+COPYSTATS	kall_circlesrectangles_c6r39	secs=0.652	asm_calls=188	asm_words=1082000	asm_ms=0.2	rst_calls=88493	rst_words=19213146	rst_ms=8.2	rst_tail_ms=8.3	elims=3618685	fullclear_words=17776484	sparse_words=5086894	sparse_clears=0
+LADGATE	9170	10000	0.525	1
+LIFT	squfl020-150	9170	3170	12000	3170
+COUNTS	squfl020-150	9170	24000	135020	135020
+COPYSTATS	squfl020-150	secs=0.563	asm_calls=50	asm_words=6611430	asm_ms=3.9	rst_calls=7235	rst_words=14406222	rst_ms=8.3	rst_tail_ms=1.1	elims=520251	fullclear_words=11019991	sparse_words=772351	sparse_clears=0
+COUNTS	autocorr_bern40-30	43	1534	20034	20034
+COPYSTATS	autocorr_bern40-30	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	660	10000	0.294	1
+LIFT	slay08m	660	268	1232	268
+COUNTS	slay08m	660	2016	7796	7796
+COPYSTATS	slay08m	secs=0.376	asm_calls=77	asm_words=198715	asm_ms=0.0	rst_calls=69291	rst_words=16455347	rst_ms=6.8	rst_tail_ms=4.2	elims=2460460	fullclear_words=15787782	sparse_words=3146038	sparse_clears=0
+LADGATE	2032	10000	0.604	1
+LIFT	chimera_mgw-c16-2031-01	2032	2021	15902	2021
+COUNTS	chimera_mgw-c16-2031-01	2032	15900	3328073	2570031
+COPYSTATS	chimera_mgw-c16-2031-01	secs=0.736	asm_calls=140	asm_words=1858092	asm_ms=0.4	rst_calls=84388	rst_words=19126895	rst_ms=6.7	rst_tail_ms=9.6	elims=3089520	fullclear_words=14545157	sparse_words=5900181	sparse_clears=0
+LADGATE	713	10000	0.393	1
+LIFT	forest	713	404	2076	404
+COUNTS	forest	713	2658	10614	10543
+COPYSTATS	forest	secs=0.560	asm_calls=134	asm_words=323228	asm_ms=0.1	rst_calls=75409	rst_words=18235999	rst_ms=7.1	rst_tail_ms=5.2	elims=3178945	fullclear_words=17147412	sparse_words=4588027	sparse_clears=0
+LADGATE	280	10000	0.132	1
+LIFT	qspp_0_10_0_1_10_1	280	244	29450	244
+COUNTS	qspp_0_10_0_1_10_1	280	29636	1942907	1932414
+COPYSTATS	qspp_0_10_0_1_10_1	secs=0.208	asm_calls=40	asm_words=48296	asm_ms=0.0	rst_calls=637	rst_words=820284	rst_ms=0.1	rst_tail_ms=0.1	elims=167566	fullclear_words=804900	sparse_words=451742	sparse_clears=0
+LADGATE	16	10000	0.615	1
+LADGATE	16	10000	0.626	1
+COUNTS	st_ph1	16	58	274	233
+COPYSTATS	st_ph1	secs=0.913	asm_calls=66	asm_words=1056	asm_ms=0.0	rst_calls=1084864	rst_words=17357824	rst_ms=46.6	rst_tail_ms=28.1	elims=15906730	fullclear_words=15906730	sparse_words=15169696	sparse_clears=0
+LADGATE	124	10000	0.352	1
+LADGATE	124	10000	0.356	1
+LIFT	elf	124	65	258	65
+COUNTS	elf	124	376	2733	2173
+COPYSTATS	elf	secs=0.519	asm_calls=80	asm_words=19840	asm_ms=0.0	rst_calls=81566	rst_words=20228368	rst_ms=4.1	rst_tail_ms=9.3	elims=9576856	fullclear_words=19153712	sparse_words=12446482	sparse_clears=0
+LADGATE	18	10000	0.692	1
+LADGATE	18	10000	0.699	1
+COUNTS	ex3_1_3	18	36	90	83
+COPYSTATS	ex3_1_3	secs=0.775	asm_calls=66	asm_words=1188	asm_ms=0.0	rst_calls=904768	rst_words=16285824	rst_ms=44.1	rst_tail_ms=25.5	elims=14670968	fullclear_words=14670968	sparse_words=12564278	sparse_clears=0
+COUNTS	cvxnonsep_normcon40r	162	322	645	645
+COPYSTATS	cvxnonsep_normcon40r	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	155	10000	0.437	1
+LADGATE	155	10000	0.439	1
+LIFT	demo7	155	66	448	66
+COUNTS	demo7	155	618	3579	3426
+COPYSTATS	demo7	secs=0.577	asm_calls=126	asm_words=39366	asm_ms=0.0	rst_calls=97680	rst_words=25819554	rst_ms=5.6	rst_tail_ms=9.5	elims=9848603	fullclear_words=24609021	sparse_words=13109464	sparse_clears=0
+LADGATE	615	10000	0.371	1
+LIFT	waternd2	615	338	2036	338
+COUNTS	waternd2	615	2580	155674	74817
+COPYSTATS	waternd2	secs=0.537	asm_calls=94	asm_words=235944	asm_ms=0.0	rst_calls=28029	rst_words=13565629	rst_ms=3.4	rst_tail_ms=3.4	elims=2094340	fullclear_words=12590307	sparse_words=3576911	sparse_clears=0
+LADGATE	64	10000	0.444	1
+LADGATE	64	10000	0.446	1
+LIFT	prolog	64	42	248	42
+COUNTS	prolog	64	292	1245	1225
+COPYSTATS	prolog	secs=0.642	asm_calls=102	asm_words=5948	asm_ms=0.0	rst_calls=217659	rst_words=13542244	rst_ms=8.7	rst_tail_ms=15.9	elims=12379104	fullclear_words=12379104	sparse_words=12288552	sparse_clears=0
+LADGATE	11	10000	0.597	1
+LADGATE	11	10000	0.600	1
+COUNTS	ex14_1_8	11	30	80	80
+COPYSTATS	ex14_1_8	secs=0.682	asm_calls=34	asm_words=374	asm_ms=0.0	rst_calls=1191638	rst_words=13108018	rst_ms=52.7	rst_tail_ms=25.5	elims=12012270	fullclear_words=12012270	sparse_words=11107042	sparse_clears=0
+LIFT	faclay75	272878	137826	1109602	137826
+COUNTS	faclay75	272878	1379706	3204527350	3013800414
+COPYSTATS	faclay75	secs=0.674	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	55	10000	0.440	1
+LADGATE	55	10000	0.441	1
+LIFT	st_qpk3	55	33	504	33
+COUNTS	st_qpk3	55	548	5467	3762
+COPYSTATS	st_qpk3	secs=0.620	asm_calls=84	asm_words=4400	asm_ms=0.0	rst_calls=211570	rst_words=11590018	rst_ms=9.9	rst_tail_ms=15.5	elims=11011838	fullclear_words=11011838	sparse_words=10874836	sparse_clears=0
+LADGATE	11556	10000	0.605	0
+LIFT	mpbp_34	11556	7230	32172	7230
+COUNTS	mpbp_34	11556	40860	3093917	891022
+COPYSTATS	mpbp_34	secs=0.840	asm_calls=144	asm_words=33713236	asm_ms=21.2	rst_calls=6048	rst_words=53180756	rst_ms=29.3	rst_tail_ms=3.1	elims=1746723	fullclear_words=36648571	sparse_words=2628857	sparse_clears=0
+COUNTS	cvxnonsep_normcon20r	82	162	325	325
+COPYSTATS	cvxnonsep_normcon20r	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+COUNTS	cvxnonsep_psig20r	86	170	341	341
+COPYSTATS	cvxnonsep_psig20r	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	18742	10000	0.795	0
+LIFT	crudeoil_pooling_dt2	18742	10735	60222	10735
+COUNTS	crudeoil_pooling_dt2	18742	75910	14985540	9905819
+COPYSTATS	crudeoil_pooling_dt2	secs=1.117	asm_calls=281	asm_words=6140680	asm_ms=2.6	rst_calls=59683	rst_words=60572385	rst_ms=20.3	rst_tail_ms=13.1	elims=5217794	fullclear_words=50564540	sparse_words=8083767	sparse_clears=0
+LADGATE	2868	10000	0.882	1
+LIFT	rsyn0805m03m	2868	1596	5810	1596
+COUNTS	rsyn0805m03m	2868	8270	60979	54830
+COPYSTATS	rsyn0805m03m	secs=1.067	asm_calls=269	asm_words=4080256	asm_ms=1.0	rst_calls=215720	rst_words=48453305	rst_ms=22.3	rst_tail_ms=23.5	elims=11350150	fullclear_words=44585250	sparse_words=13675637	sparse_clears=0
+COUNTS	st_iqpbk1	22	98	295	295
+COPYSTATS	st_iqpbk1	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	96	10000	0.485	1
+LADGATE	96	10000	0.486	1
+LIFT	waterund01	96	47	384	47
+COUNTS	waterund01	96	404	4546	3317
+COPYSTATS	waterund01	secs=0.653	asm_calls=94	asm_words=16296	asm_ms=0.0	rst_calls=150397	rst_words=23096228	rst_ms=6.2	rst_tail_ms=12.0	elims=11813094	fullclear_words=21653094	sparse_words=15480278	sparse_clears=0
+LADGATE	29	10000	0.527	1
+LADGATE	29	10000	0.528	1
+COUNTS	pointpack04	29	120	577	577
+COPYSTATS	pointpack04	secs=0.767	asm_calls=54	asm_words=1566	asm_ms=0.0	rst_calls=548300	rst_words=15900700	rst_ms=23.5	rst_tail_ms=21.5	elims=14785634	fullclear_words=14785634	sparse_words=14384377	sparse_clears=0
+LADGATE	12	10000	0.597	1
+LADGATE	12	10000	0.601	1
+COUNTS	st_e22	12	30	77	70
+COPYSTATS	st_e22	secs=0.685	asm_calls=54	asm_words=648	asm_ms=0.0	rst_calls=1140318	rst_words=13683816	rst_ms=51.3	rst_tail_ms=25.4	elims=12302360	fullclear_words=12302360	sparse_words=11512922	sparse_clears=0
+LADGATE	16678	10000	0.404	0
+LIFT	faclay30	16678	8556	65998	8556
+COUNTS	faclay30	16678	82242	13452923	12850431
+COPYSTATS	faclay30	secs=0.526	asm_calls=23	asm_words=43618992	asm_ms=16.2	rst_calls=46	rst_words=43689091	rst_ms=16.0	rst_tail_ms=0.2	elims=89699	fullclear_words=20063453	sparse_words=163833	sparse_clears=0
+LADGATE	4432	10000	0.403	1
+LIFT	arki0002	4432	2608	9424	2608
+COUNTS	arki0002	4432	11248	683476	667374
+COPYSTATS	arki0002	secs=0.583	asm_calls=100	asm_words=7326360	asm_ms=3.1	rst_calls=4272	rst_words=26896426	rst_ms=10.4	rst_tail_ms=1.3	elims=759035	fullclear_words=25399070	sparse_words=1540961	sparse_clears=0
+LADGATE	11659	10000	0.820	0
+LIFT	transswitch0300p	11659	6750	41276	6750
+COUNTS	transswitch0300p	11659	48446	404940	375155
+COPYSTATS	transswitch0300p	secs=1.252	asm_calls=378	asm_words=35872856	asm_ms=14.0	rst_calls=123043	rst_words=81942670	rst_ms=31.0	rst_tail_ms=19.1	elims=9132638	fullclear_words=60040480	sparse_words=12455187	sparse_clears=0
+LADGATE	30660	10000	0.753	0
+LIFT	crudeoil_pooling_dt3	30660	15957	134914	15957
+COUNTS	crudeoil_pooling_dt3	30660	152210	48975085	34556239
+COPYSTATS	crudeoil_pooling_dt3	secs=1.061	asm_calls=209	asm_words=15608966	asm_ms=5.7	rst_calls=6952	rst_words=47467544	rst_ms=13.9	rst_tail_ms=3.9	elims=2120730	fullclear_words=38422237	sparse_words=4425973	sparse_clears=0
+LADGATE	22536	10000	0.534	0
+LIFT	gasprod_sarawak81	22536	12902	61066	12902
+COUNTS	gasprod_sarawak81	22536	75636	1030380	939449
+COPYSTATS	gasprod_sarawak81	secs=0.725	asm_calls=110	asm_words=79682760	asm_ms=29.9	rst_calls=3062	rst_words=83101176	rst_ms=30.6	rst_tail_ms=1.6	elims=746917	fullclear_words=30889853	sparse_words=1214575	sparse_clears=0
+LADGATE	660	10000	0.347	1
+LIFT	maxcsp-langford-3-11	660	627	41846	627
+COUNTS	maxcsp-langford-3-11	660	29646	33444033	10360919
+COPYSTATS	maxcsp-langford-3-11	secs=0.490	asm_calls=41	asm_words=231794	asm_ms=0.0	rst_calls=719	rst_words=2075979	rst_ms=0.3	rst_tail_ms=0.2	elims=152434	fullclear_words=1604268	sparse_words=1448630	sparse_clears=0
+LADGATE	1543	10000	0.360	1
+LIFT	p_ball_30b_5p_2d_h	1543	999	4136	999
+COUNTS	p_ball_30b_5p_2d_h	1543	5224	25843	25742
+COPYSTATS	p_ball_30b_5p_2d_h	secs=0.522	asm_calls=125	asm_words=1162796	asm_ms=0.2	rst_calls=35284	rst_words=16705362	rst_ms=4.4	rst_tail_ms=3.7	elims=2096828	fullclear_words=15760171	sparse_words=2738150	sparse_clears=0
+LADGATE	6709	10000	0.520	1
+LIFT	ringpack_20_3	6709	3451	41284	3451
+COUNTS	ringpack_20_3	6709	45220	2415136	865627
+COPYSTATS	ringpack_20_3	secs=0.669	asm_calls=72	asm_words=8556045	asm_ms=4.7	rst_calls=2845	rst_words=41363044	rst_ms=22.6	rst_tail_ms=1.6	elims=628430	fullclear_words=39258188	sparse_words=990100	sparse_clears=0
+LADGATE	4825	10000	0.661	1
+LIFT	waste	4825	2503	19260	2503
+COUNTS	waste	4825	21504	1468261	1270649
+COPYSTATS	waste	secs=0.869	asm_calls=121	asm_words=7055133	asm_ms=3.3	rst_calls=11557	rst_words=31993703	rst_ms=13.0	rst_tail_ms=3.1	elims=1541463	fullclear_words=28851326	sparse_words=3176074	sparse_clears=0
+LADGATE	2001	10000	0.169	1
+LIFT	catmix400	2001	1998	11180	1998
+COUNTS	catmix400	2001	11192	36373	36364
+COPYSTATS	catmix400	secs=0.761	asm_calls=35	asm_words=1765647	asm_ms=0.4	rst_calls=443	rst_words=17043622	rst_ms=2.3	rst_tail_ms=0.6	elims=495190	fullclear_words=15163869	sparse_words=1528454	sparse_clears=0
+LADGATE	3054	10000	0.599	1
+LIFT	rsyn0815m02hfsg	3054	1697	5478	1697
+COUNTS	rsyn0815m02hfsg	3054	7968	44604	41384
+COPYSTATS	rsyn0815m02hfsg	secs=0.799	asm_calls=222	asm_words=4103545	asm_ms=1.0	rst_calls=93116	rst_words=43676638	rst_ms=13.0	rst_tail_ms=12.1	elims=6501604	fullclear_words=40963219	sparse_words=9450539	sparse_clears=0
+LADGATE	1236	10000	0.287	1
+LIFT	p_ball_10b_7p_3d_h	1236	751	3216	751
+COUNTS	p_ball_10b_7p_3d_h	1236	4186	24380	23744
+COPYSTATS	p_ball_10b_7p_3d_h	secs=0.478	asm_calls=96	asm_words=865788	asm_ms=0.1	rst_calls=7829	rst_words=16925956	rst_ms=2.4	rst_tail_ms=1.6	elims=1549730	fullclear_words=16405636	sparse_words=2650200	sparse_clears=0
+LADGATE	1225	10000	0.647	1
+LIFT	chimera_k64ising-02	1225	772	3732	772
+COUNTS	chimera_k64ising-02	1225	3846	613390	371142
+COPYSTATS	chimera_k64ising-02	secs=0.882	asm_calls=121	asm_words=1031017	asm_ms=0.2	rst_calls=97188	rst_words=24602777	rst_ms=8.4	rst_tail_ms=9.1	elims=4243143	fullclear_words=21604719	sparse_words=7447674	sparse_clears=0
+LADGATE	3404	10000	0.888	1
+LIFT	batchs121208m	3404	1725	8392	1725
+COUNTS	batchs121208m	3404	11462	138030	128816
+COPYSTATS	batchs121208m	secs=1.057	asm_calls=199	asm_words=5040887	asm_ms=1.5	rst_calls=557538	rst_words=63574032	rst_ms=56.9	rst_tail_ms=43.6	elims=17124452	fullclear_words=55192825	sparse_words=18482960	sparse_clears=0
+LADGATE	11	10000	0.516	1
+LADGATE	11	10000	0.519	1
+COUNTS	nvs02	11	46	142	142
+COPYSTATS	nvs02	secs=0.827	asm_calls=34	asm_words=374	asm_ms=0.0	rst_calls=1460232	rst_words=16062552	rst_ms=57.1	rst_tail_ms=32.8	elims=14964712	fullclear_words=14964712	sparse_words=13807946	sparse_clears=0
+LADGATE	191	10000	0.363	1
+LADGATE	191	10000	0.365	1
+LIFT	wastepaper6	191	156	1358	156
+COUNTS	wastepaper6	191	1416	16611	16611
+COPYSTATS	wastepaper6	secs=0.475	asm_calls=92	asm_words=42068	asm_ms=0.0	rst_calls=35378	rst_words=18741990	rst_ms=2.7	rst_tail_ms=5.2	elims=6055967	fullclear_words=18004097	sparse_words=11225460	sparse_clears=0
+test ordering::probe::probe_timing_and_score has been running for over 60 seconds
+LADGATE	399	10000	0.404	1
+LADGATE	399	10000	0.407	1
+LIFT	syn15hfsg	399	221	666	221
+COUNTS	syn15hfsg	399	1022	3300	3272
+COPYSTATS	syn15hfsg	secs=0.456	asm_calls=132	asm_words=210462	asm_ms=0.0	rst_calls=71425	rst_words=27181164	rst_ms=5.4	rst_tail_ms=7.3	elims=6191109	fullclear_words=25031519	sparse_words=7607446	sparse_clears=0
+LADGATE	36	10000	0.451	1
+LADGATE	36	10000	0.451	1
+LIFT	st_jcbpaf2	36	23	220	23
+COUNTS	st_jcbpaf2	36	246	1635	1543
+COPYSTATS	st_jcbpaf2	secs=0.657	asm_calls=80	asm_words=2872	asm_ms=0.0	rst_calls=353134	rst_words=12711400	rst_ms=14.5	rst_tail_ms=19.8	elims=11923570	fullclear_words=11923570	sparse_words=11684804	sparse_clears=0
+COUNTS	camshape400	2000	7188	16768	16768
+COPYSTATS	camshape400	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	120	10000	0.325	1
+LADGATE	120	10000	0.329	1
+LIFT	graphpart_clique-30	120	117	2784	117
+COUNTS	graphpart_clique-30	120	2790	114505	91153
+COPYSTATS	graphpart_clique-30	secs=0.461	asm_calls=92	asm_words=21360	asm_ms=0.0	rst_calls=31080	rst_words=7145280	rst_ms=1.4	rst_tail_ms=3.2	elims=3374499	fullclear_words=6748998	sparse_words=6284852	sparse_clears=0
+LADGATE	280	10000	0.184	1
+LIFT	graphpart_clique-70	280	277	14904	277
+COUNTS	graphpart_clique-70	280	14910	1413012	1144894
+COPYSTATS	graphpart_clique-70	secs=0.289	asm_calls=31	asm_words=43400	asm_ms=0.0	rst_calls=840	rst_words=1176000	rst_ms=0.1	rst_tail_ms=0.2	elims=221372	fullclear_words=1106860	sparse_words=713158	sparse_clears=0
+COUNTS	smallinvDAXr1b010-011	39	1120	13510	13319
+COPYSTATS	smallinvDAXr1b010-011	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	22074	10000	0.369	0
+LIFT	nd_netgen-2000-3-4-b-a-ns_7	22074	10074	36000	10074
+COUNTS	nd_netgen-2000-3-4-b-a-ns_7	22074	60000	289420	272736
+COPYSTATS	nd_netgen-2000-3-4-b-a-ns_7	secs=0.554	asm_calls=80	asm_words=76338803	asm_ms=28.9	rst_calls=11843	rst_words=83226528	rst_ms=30.0	rst_tail_ms=2.6	elims=1467452	fullclear_words=37212972	sparse_words=1648019	sparse_clears=0
+LADGATE	240	10000	0.357	1
+LADGATE	240	10000	0.361	1
+LIFT	slay05m	240	100	440	100
+COUNTS	slay05m	240	720	2635	2635
+COPYSTATS	slay05m	secs=0.473	asm_calls=92	asm_words=56480	asm_ms=0.0	rst_calls=51225	rst_words=30176120	rst_ms=3.7	rst_tail_ms=6.8	elims=8280513	fullclear_words=28977054	sparse_words=11145899	sparse_clears=0
+LADGATE	2031	10000	0.633	1
+LIFT	chimera_selby-c16-01	2031	1517	13662	1517
+COUNTS	chimera_selby-c16-01	2031	10964	3605628	2403472
+COPYSTATS	chimera_selby-c16-01	secs=1.126	asm_calls=129	asm_words=2072415	asm_ms=0.5	rst_calls=33288	rst_words=13802911	rst_ms=3.7	rst_tail_ms=3.5	elims=1398293	fullclear_words=11940717	sparse_words=3098624	sparse_clears=0
+LADGATE	110	10000	0.367	1
+LADGATE	110	10000	0.369	1
+LIFT	csched1	110	30	100	30
+COUNTS	csched1	110	376	975	975
+COPYSTATS	csched1	secs=0.533	asm_calls=62	asm_words=11976	asm_ms=0.0	rst_calls=106497	rst_words=22926396	rst_ms=5.0	rst_tail_ms=10.0	elims=10591528	fullclear_words=21157072	sparse_words=12246156	sparse_clears=0
+LADGATE	1310	10000	0.109	1
+LIFT	watercontamination0303r	1310	755	35918	755
+COUNTS	watercontamination0303r	1310	37028	2171882	2171882
+COPYSTATS	watercontamination0303r	secs=0.122	asm_calls=47	asm_words=196196	asm_ms=0.0	rst_calls=7358	rst_words=2217662	rst_ms=0.8	rst_tail_ms=0.9	elims=466843	fullclear_words=2023793	sparse_words=594484	sparse_clears=0
+LADGATE	15	10000	0.555	1
+LADGATE	15	10000	0.558	1
+COUNTS	ex9_2_4	15	36	117	117
+COPYSTATS	ex9_2_4	secs=0.635	asm_calls=34	asm_words=510	asm_ms=0.0	rst_calls=824584	rst_words=12368760	rst_ms=35.0	rst_tail_ms=19.3	elims=11482676	fullclear_words=11482676	sparse_words=10905474	sparse_clears=0
+LADGATE	163	10000	0.346	1
+LADGATE	163	10000	0.348	1
+LIFT	sssd15-04	163	47	240	47
+COUNTS	sssd15-04	163	440	1625	1625
+COPYSTATS	sssd15-04	secs=0.383	asm_calls=74	asm_words=26966	asm_ms=0.0	rst_calls=53680	rst_words=19341660	rst_ms=3.4	rst_tail_ms=6.9	elims=6253676	fullclear_words=18140856	sparse_words=8847383	sparse_clears=0
+COUNTS	autocorr_bern35-35fix	38	1264	16214	16214
+COPYSTATS	autocorr_bern35-35fix	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	1491	10000	0.328	1
+LIFT	sfacloc2_4_90	1491	775	3282	775
+COUNTS	sfacloc2_4_90	1491	4500	31682	28843
+COPYSTATS	sfacloc2_4_90	secs=0.541	asm_calls=107	asm_words=1175982	asm_ms=0.2	rst_calls=9657	rst_words=18471090	rst_ms=2.7	rst_tail_ms=2.0	elims=1569441	fullclear_words=17806551	sparse_words=2997428	sparse_clears=0
+LIFT	cont6-qq	120395	79800	397602	79800
+COUNTS	cont6-qq	120395	557994	835894090	581918900
+COPYSTATS	cont6-qq	secs=0.286	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	5205	10000	0.127	1
+LIFT	meanvar-orl400_05_e_7	5205	2803	170000	2803
+COUNTS	meanvar-orl400_05_e_7	5205	174804	21939414	21935811
+COPYSTATS	meanvar-orl400_05_e_7	secs=0.219	asm_calls=13	asm_words=4718806	asm_ms=2.4	rst_calls=30	rst_words=10706434	rst_ms=5.1	rst_tail_ms=0.2	elims=124132	fullclear_words=10095432	sparse_words=271868	sparse_clears=0
+LADGATE	10017	10000	0.302	0
+LIFT	glider400	10017	7609	43204	7609
+COUNTS	glider400	10017	49624	373018	327450
+COPYSTATS	glider400	secs=0.416	asm_calls=37	asm_words=17342823	asm_ms=10.2	rst_calls=8214	rst_words=20909417	rst_ms=12.5	rst_tail_ms=0.7	elims=310505	fullclear_words=17082445	sparse_words=644058	sparse_clears=0
+LADGATE	4960	10000	0.913	1
+LIFT	syn40m04m	4960	2524	9280	2524
+COUNTS	syn40m04m	4960	13792	65982	63265
+COPYSTATS	syn40m04m	secs=1.060	asm_calls=244	asm_words=9956345	asm_ms=4.5	rst_calls=443825	rst_words=68685400	rst_ms=55.4	rst_tail_ms=35.8	elims=15773724	fullclear_words=63935376	sparse_words=17039003	sparse_clears=0
+LADGATE	31	10000	0.606	1
+LADGATE	31	10000	0.606	1
+COUNTS	ex2_1_3	31	72	189	189
+COPYSTATS	ex2_1_3	secs=0.675	asm_calls=54	asm_words=1666	asm_ms=0.0	rst_calls=486229	rst_words=15063392	rst_ms=24.8	rst_tail_ms=20.4	elims=13572818	fullclear_words=13572818	sparse_words=12835961	sparse_clears=0
+LADGATE	705	10000	0.470	1
+LIFT	qapw	705	480	87046	480
+COUNTS	qapw	705	87496	12183146	12183146
+COPYSTATS	qapw	secs=0.502	asm_calls=5	asm_words=32948	asm_ms=0.0	rst_calls=65	rst_words=540548	rst_ms=0.1	rst_tail_ms=0.0	elims=45151	fullclear_words=538868	sparse_words=172062	sparse_clears=0
+LADGATE	14	10000	0.513	1
+LADGATE	14	10000	0.517	1
+COUNTS	himmel11	14	60	198	198
+COPYSTATS	himmel11	secs=0.808	asm_calls=34	asm_words=476	asm_ms=0.0	rst_calls=1121626	rst_words=15702764	rst_ms=43.9	rst_tail_ms=26.2	elims=14558616	fullclear_words=14558616	sparse_words=13691958	sparse_clears=0
+LADGATE	1908	10000	0.367	1
+LIFT	syn15m04m	1908	970	3540	970
+COUNTS	syn15m04m	1908	5288	26094	25061
+COPYSTATS	syn15m04m	secs=0.537	asm_calls=117	asm_words=1850168	asm_ms=0.4	rst_calls=13272	rst_words=23028913	rst_ms=3.6	rst_tail_ms=2.5	elims=1912165	fullclear_words=22190885	sparse_words=3117473	sparse_clears=0
+LADGATE	118	10000	0.428	1
+LADGATE	118	10000	0.431	1
+LIFT	pooling_rt2tp	118	66	554	66
+COUNTS	pooling_rt2tp	118	654	5876	5796
+COPYSTATS	pooling_rt2tp	secs=0.586	asm_calls=144	asm_words=25372	asm_ms=0.0	rst_calls=111658	rst_words=20682944	rst_ms=5.1	rst_tail_ms=11.0	elims=9953018	fullclear_words=19525056	sparse_words=11076294	sparse_clears=0
+LADGATE	333	10000	0.404	1
+LADGATE	333	10000	0.414	1
+LIFT	waterund14	333	191	2068	191
+COUNTS	waterund14	333	2204	200484	70488
+COPYSTATS	waterund14	secs=0.568	asm_calls=99	asm_words=174475	asm_ms=0.0	rst_calls=13786	rst_words=20512026	rst_ms=1.7	rst_tail_ms=3.3	elims=3457026	fullclear_words=19158826	sparse_words=7325951	sparse_clears=0
+LADGATE	17809	10000	1.042	0
+LIFT	crudeoil_lee4_10	17809	10229	106656	10229
+COUNTS	crudeoil_lee4_10	17809	120632	294531623	181053364
+COPYSTATS	crudeoil_lee4_10	secs=1.243	asm_calls=209	asm_words=6031164	asm_ms=2.1	rst_calls=25568	rst_words=44889957	rst_ms=10.5	rst_tail_ms=6.9	elims=2568033	fullclear_words=26839337	sparse_words=4804945	sparse_clears=0
+LADGATE	1294	10000	0.478	1
+LIFT	pooling_foulds4pq	1294	723	7208	723
+COUNTS	pooling_foulds4pq	1294	8302	138692	138540
+COPYSTATS	pooling_foulds4pq	secs=0.631	asm_calls=67	asm_words=904239	asm_ms=0.1	rst_calls=1809	rst_words=11810597	rst_ms=1.6	rst_tail_ms=0.8	elims=745209	fullclear_words=11558346	sparse_words=2122974	sparse_clears=0
+LADGATE	3097	10000	0.339	1
+LIFT	edgecross14-156	3097	1641	21120	1641
+COUNTS	edgecross14-156	3097	19664	1487933	1376964
+COPYSTATS	edgecross14-156	secs=0.464	asm_calls=89	asm_words=4268083	asm_ms=1.1	rst_calls=8348	rst_words=22513320	rst_ms=5.6	rst_tail_ms=1.6	elims=860241	fullclear_words=21387900	sparse_words=1111981	sparse_clears=0
+LADGATE	72	10000	0.411	1
+LADGATE	72	10000	0.413	1
+LIFT	tspn08	72	34	646	34
+COUNTS	tspn08	72	668	11074	7600
+COPYSTATS	tspn08	secs=0.560	asm_calls=94	asm_words=12456	asm_ms=0.0	rst_calls=135794	rst_words=16838676	rst_ms=5.7	rst_tail_ms=9.8	elims=8861540	fullclear_words=16142824	sparse_words=12041558	sparse_clears=0
+LADGATE	4225	10000	0.655	1
+LIFT	crudeoil_li05	4225	2656	17380	2656
+COUNTS	crudeoil_li05	4225	14628	680022	533453
+COPYSTATS	crudeoil_li05	secs=0.932	asm_calls=184	asm_words=7259406	asm_ms=3.1	rst_calls=117500	rst_words=48664084	rst_ms=21.9	rst_tail_ms=11.8	elims=5443054	fullclear_words=43242756	sparse_words=7943853	sparse_clears=0
+LADGATE	14416	10000	0.696	0
+LIFT	procurement1large	14416	6606	28248	6606
+COUNTS	procurement1large	14416	41068	13858240	7309631
+COPYSTATS	procurement1large	secs=1.115	asm_calls=295	asm_words=33966326	asm_ms=12.6	rst_calls=54037	rst_words=80953354	rst_ms=25.6	rst_tail_ms=12.1	elims=5896602	fullclear_words=66888273	sparse_words=9208221	sparse_clears=0
+LADGATE	1428	10000	0.306	1
+LIFT	blend721	1428	829	3334	829
+COUNTS	blend721	1428	4548	77560	66143
+COPYSTATS	blend721	secs=0.475	asm_calls=80	asm_words=1089616	asm_ms=0.2	rst_calls=6356	rst_words=15782008	rst_ms=2.2	rst_tail_ms=1.5	elims=1300771	fullclear_words=15272480	sparse_words=2267885	sparse_clears=0
+LADGATE	2031	10000	0.702	1
+LIFT	chimera_selby-c16-02	2031	1436	15878	1436
+COUNTS	chimera_selby-c16-02	2031	10878	4280329	2296781
+COPYSTATS	chimera_selby-c16-02	secs=1.217	asm_calls=119	asm_words=1864330	asm_ms=0.5	rst_calls=62789	rst_words=17612899	rst_ms=5.7	rst_tail_ms=6.9	elims=2503728	fullclear_words=14254050	sparse_words=4982595	sparse_clears=0
+LADGATE	16640	10000	0.387	0
+LIFT	supplychainr1_053050	16640	9640	44160	9640
+COUNTS	supplychainr1_053050	16640	57800	2173490	2173490
+COPYSTATS	supplychainr1_053050	secs=0.387	asm_calls=98	asm_words=849488	asm_ms=0.2	rst_calls=12849	rst_words=2682304	rst_ms=1.3	rst_tail_ms=1.3	elims=557108	fullclear_words=1692206	sparse_words=788339	sparse_clears=0
+LADGATE	5067	10000	0.734	1
+LIFT	sfacloc2_4_80	5067	2567	16656	2567
+COUNTS	sfacloc2_4_80	5067	21424	93048	88884
+COPYSTATS	sfacloc2_4_80	secs=0.927	asm_calls=131	asm_words=8128307	asm_ms=3.9	rst_calls=53112	rst_words=41090899	rst_ms=20.7	rst_tail_ms=5.8	elims=2789002	fullclear_words=39334471	sparse_words=3627296	sparse_clears=0
+COUNTS	st_e24	10	26	64	57
+COPYSTATS	st_e24	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	1053	10000	0.350	1
+LIFT	edgecross10-040	1053	571	4152	571
+COUNTS	edgecross10-040	1053	5116	161851	143518
+COPYSTATS	edgecross10-040	secs=0.470	asm_calls=85	asm_words=690729	asm_ms=0.1	rst_calls=8369	rst_words=12204659	rst_ms=1.7	rst_tail_ms=1.4	elims=1215794	fullclear_words=11605673	sparse_words=1722722	sparse_clears=0
+LADGATE	8232	10000	0.397	1
+LIFT	sonet21v6	8232	4221	32722	4221
+COUNTS	sonet21v6	8232	40744	1643311	1585871
+COPYSTATS	sonet21v6	secs=0.652	asm_calls=40	asm_words=15978808	asm_ms=9.3	rst_calls=1301	rst_words=47284197	rst_ms=26.9	rst_tail_ms=0.9	elims=436914	fullclear_words=42149126	sparse_words=682824	sparse_clears=0
+LADGATE	2490	10000	0.330	1
+LIFT	squfl010-080	2490	890	3200	890
+COUNTS	squfl010-080	2490	6400	27665	27665
+COPYSTATS	squfl010-080	secs=0.350	asm_calls=36	asm_words=1653178	asm_ms=0.3	rst_calls=13677	rst_words=14440598	rst_ms=2.6	rst_tail_ms=1.4	elims=1131816	fullclear_words=14158414	sparse_words=1371096	sparse_clears=0
+LADGATE	221	10000	0.339	1
+LADGATE	221	10000	0.344	1
+LIFT	genpooling_lee2	221	145	896	145
+COUNTS	genpooling_lee2	221	1048	19895	14028
+COPYSTATS	genpooling_lee2	secs=0.483	asm_calls=94	asm_words=74720	asm_ms=0.0	rst_calls=40273	rst_words=25523608	rst_ms=3.0	rst_tail_ms=6.1	elims=6606986	fullclear_words=24240344	sparse_words=8003513	sparse_clears=0
+LADGATE	2807	10000	0.706	1
+LIFT	popdynm25	2807	2349	13004	2349
+COUNTS	popdynm25	2807	13904	360081	286684
+COPYSTATS	popdynm25	secs=1.001	asm_calls=243	asm_words=4256390	asm_ms=1.1	rst_calls=61278	rst_words=40972797	rst_ms=9.5	rst_tail_ms=14.0	elims=7115702	fullclear_words=37211835	sparse_words=11628341	sparse_clears=0
+LADGATE	5211	10000	0.946	1
+LIFT	chp_partload	5211	3186	12690	3186
+COUNTS	chp_partload	5211	16740	509170	373130
+COPYSTATS	chp_partload	secs=1.306	asm_calls=285	asm_words=11560351	asm_ms=5.4	rst_calls=215516	rst_words=68276478	rst_ms=38.9	rst_tail_ms=24.2	elims=11101939	fullclear_words=62351167	sparse_words=14666957	sparse_clears=0
+LADGATE	560	10000	0.202	1
+LIFT	qspp_0_14_0_1_10_1	560	364	119024	364
+COUNTS	qspp_0_14_0_1_10_1	560	120274	16119226	16038266
+COPYSTATS	qspp_0_14_0_1_10_1	secs=0.291	asm_calls=20	asm_words=91968	asm_ms=0.0	rst_calls=52	rst_words=248480	rst_ms=0.0	rst_tail_ms=0.0	elims=24859	fullclear_words=220745	sparse_words=113926	sparse_clears=0
+LADGATE	24	10000	0.627	1
+LADGATE	24	10000	0.632	1
+COUNTS	st_glmp_ss1	24	66	160	160
+COPYSTATS	st_glmp_ss1	secs=0.700	asm_calls=54	asm_words=1296	asm_ms=0.0	rst_calls=619781	rst_words=14874744	rst_ms=30.9	rst_tail_ms=22.7	elims=13654977	fullclear_words=13654977	sparse_words=13274346	sparse_clears=0
+LADGATE	2508	10000	0.458	1
+LIFT	torsion50	2508	1302	20190	1302
+COUNTS	torsion50	2508	29808	1691033	1118955
+COPYSTATS	torsion50	secs=0.588	asm_calls=172	asm_words=3454642	asm_ms=0.9	rst_calls=24265	rst_words=17342443	rst_ms=4.0	rst_tail_ms=3.6	elims=1616019	fullclear_words=15593392	sparse_words=4319012	sparse_clears=0
+LADGATE	40	10000	0.410	1
+LADGATE	40	10000	0.410	1
+LIFT	st_rv2	40	10	90	10
+COUNTS	st_rv2	40	340	2045	2045
+COPYSTATS	st_rv2	secs=0.595	asm_calls=54	asm_words=2144	asm_ms=0.0	rst_calls=289448	rst_words=11574920	rst_ms=10.7	rst_tail_ms=16.8	elims=10837791	fullclear_words=10837791	sparse_words=10647959	sparse_clears=0
+LADGATE	6885	10000	0.239	1
+LIFT	emfl100_3_3	6885	2961	8100	2961
+COUNTS	emfl100_3_3	6885	15948	55506	55506
+COPYSTATS	emfl100_3_3	secs=0.261	asm_calls=19	asm_words=3721302	asm_ms=2.0	rst_calls=1012	rst_words=9834318	rst_ms=5.2	rst_tail_ms=0.2	elims=144001	fullclear_words=7892564	sparse_words=186418	sparse_clears=0
+COUNTS	pedigree_sim400	351	23546	1183471	1183168
+COPYSTATS	pedigree_sim400	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+COUNTS	polygon75	5846	49652	1171822	1171822
+COPYSTATS	polygon75	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LIFT	gabriel10	244056	129644	1260406	129644
+COUNTS	gabriel10	244056	1148210	1365442310	1267760679
+COPYSTATS	gabriel10	secs=0.685	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	1049	10000	0.290	1
+LIFT	fo9_ar25_1	1049	507	3606	507
+COUNTS	fo9_ar25_1	1049	4336	41668	38237
+COPYSTATS	fo9_ar25_1	secs=0.426	asm_calls=74	asm_words=647349	asm_ms=0.1	rst_calls=31019	rst_words=14312847	rst_ms=3.9	rst_tail_ms=2.3	elims=1413447	fullclear_words=13852717	sparse_words=2171412	sparse_clears=0
+LADGATE	1159	10000	0.342	1
+LIFT	rsyn0840m	1159	610	2176	610
+COUNTS	rsyn0840m	1159	3168	11274	10602
+COPYSTATS	rsyn0840m	secs=0.477	asm_calls=119	asm_words=779949	asm_ms=0.1	rst_calls=77082	rst_words=16646204	rst_ms=6.3	rst_tail_ms=5.6	elims=3315788	fullclear_words=15421084	sparse_words=4376781	sparse_clears=0
+LADGATE	548	10000	0.572	1
+LADGATE	548	10000	0.583	1
+LIFT	gancns	548	318	2280	318
+COUNTS	gancns	548	2800	69234	58202
+COPYSTATS	gancns	secs=0.790	asm_calls=171	asm_words=452161	asm_ms=0.1	rst_calls=36997	rst_words=25502146	rst_ms=5.0	rst_tail_ms=6.3	elims=3783614	fullclear_words=23964229	sparse_words=8964296	sparse_clears=0
+LADGATE	1049	10000	0.288	1
+LIFT	o9_ar4_1	1049	507	3606	507
+COUNTS	o9_ar4_1	1049	4336	41668	38237
+COPYSTATS	o9_ar4_1	secs=0.423	asm_calls=74	asm_words=647349	asm_ms=0.1	rst_calls=30975	rst_words=13528195	rst_ms=3.7	rst_tail_ms=2.3	elims=1367212	fullclear_words=13066722	sparse_words=2099277	sparse_clears=0
+LADGATE	123	10000	0.449	1
+LADGATE	123	10000	0.450	1
+LIFT	ex1265a	123	79	472	79
+COUNTS	ex1265a	123	560	3948	3750
+COPYSTATS	ex1265a	secs=0.632	asm_calls=106	asm_words=21048	asm_ms=0.0	rst_calls=112631	rst_words=20279584	rst_ms=5.0	rst_tail_ms=10.3	elims=10571105	fullclear_words=19115700	sparse_words=13245916	sparse_clears=0
+LADGATE	28	10000	0.620	1
+LADGATE	28	10000	0.627	1
+COUNTS	ex9_2_6	28	68	190	190
+COPYSTATS	ex9_2_6	secs=0.693	asm_calls=54	asm_words=1376	asm_ms=0.0	rst_calls=519898	rst_words=14408632	rst_ms=24.1	rst_tail_ms=20.9	elims=13272016	fullclear_words=13272016	sparse_words=11639156	sparse_clears=0
+LADGATE	481	10000	0.154	1
+LIFT	qspp_0_13_0_1_10_1	481	312	87460	312
+COUNTS	qspp_0_13_0_1_10_1	481	88522	10150185	10097446
+COPYSTATS	qspp_0_13_0_1_10_1	secs=0.239	asm_calls=21	asm_words=74361	asm_ms=0.0	rst_calls=57	rst_words=209537	rst_ms=0.0	rst_tail_ms=0.0	elims=24658	fullclear_words=194098	sparse_words=91144	sparse_clears=0
+LADGATE	146	10000	0.534	1
+LADGATE	146	10000	0.543	1
+LIFT	slay04m	146	62	264	62
+COUNTS	slay04m	146	432	1554	1554
+COPYSTATS	slay04m	secs=0.575	asm_calls=92	asm_words=25126	asm_ms=0.0	rst_calls=95826	rst_words=22418116	rst_ms=6.7	rst_tail_ms=12.0	elims=8874890	fullclear_words=21185162	sparse_words=11121692	sparse_clears=0
+COUNTS	st_e25	20	92	336	262
+COPYSTATS	st_e25	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	32	10000	0.585	1
+LADGATE	32	10000	0.591	1
+LIFT	ex8_4_1	32	12	40	12
+COUNTS	ex8_4_1	32	100	225	225
+COPYSTATS	ex8_4_1	secs=0.862	asm_calls=54	asm_words=1728	asm_ms=0.0	rst_calls=559781	rst_words=17912992	rst_ms=26.1	rst_tail_ms=25.1	elims=16311715	fullclear_words=16311715	sparse_words=16012516	sparse_clears=0
+LADGATE	19	10000	0.677	1
+LADGATE	19	10000	0.679	1
+COUNTS	st_e07	19	60	199	199
+COPYSTATS	st_e07	secs=0.984	asm_calls=46	asm_words=874	asm_ms=0.0	rst_calls=962406	rst_words=18285714	rst_ms=47.6	rst_tail_ms=30.3	elims=16338894	fullclear_words=16338894	sparse_words=15744118	sparse_clears=0
+LADGATE	26	10000	0.684	1
+LADGATE	26	10000	0.685	1
+COUNTS	ex1225	26	66	171	161
+COPYSTATS	ex1225	secs=0.760	asm_calls=80	asm_words=2080	asm_ms=0.0	rst_calls=596355	rst_words=15505230	rst_ms=32.3	rst_tail_ms=25.3	elims=13813653	fullclear_words=13813653	sparse_words=13477164	sparse_clears=0
+LADGATE	969	10000	0.486	1
+LIFT	ndcc13	969	735	6656	735
+COUNTS	ndcc13	969	5882	525212	324727
+COPYSTATS	ndcc13	secs=0.710	asm_calls=115	asm_words=622180	asm_ms=0.1	rst_calls=33339	rst_words=12515218	rst_ms=3.8	rst_tail_ms=3.2	elims=1395562	fullclear_words=11168138	sparse_words=3295847	sparse_clears=0
+LADGATE	1224	10000	0.280	1
+LIFT	syn10m04m	1224	620	2256	620
+COUNTS	syn10m04m	1224	3384	13501	13463
+COPYSTATS	syn10m04m	secs=0.407	asm_calls=112	asm_words=770386	asm_ms=0.1	rst_calls=33471	rst_words=13151488	rst_ms=3.4	rst_tail_ms=3.3	elims=2311610	fullclear_words=12473221	sparse_words=3221169	sparse_clears=0
+LADGATE	18	10000	0.616	1
+LADGATE	18	10000	0.621	1
+COUNTS	ex5_2_4	18	62	204	193
+COPYSTATS	ex5_2_4	secs=0.908	asm_calls=66	asm_words=1188	asm_ms=0.0	rst_calls=1024214	rst_words=18435852	rst_ms=45.3	rst_tail_ms=28.0	elims=16702374	fullclear_words=16702374	sparse_words=16024116	sparse_clears=0
+LADGATE	72	10000	0.327	1
+LADGATE	72	10000	0.328	1
+LIFT	st_m2	72	21	420	21
+COUNTS	st_m2	72	1226	16331	16331
+COPYSTATS	st_m2	secs=0.435	asm_calls=76	asm_words=8898	asm_ms=0.0	rst_calls=100866	rst_words=12243786	rst_ms=4.0	rst_tail_ms=7.1	elims=6458034	fullclear_words=11725008	sparse_words=9886554	sparse_clears=0
+LADGATE	16	10000	0.650	1
+LADGATE	16	10000	0.681	1
+COUNTS	st_bpk1	16	44	115	108
+COPYSTATS	st_bpk1	secs=0.742	asm_calls=66	asm_words=1056	asm_ms=0.0	rst_calls=970024	rst_words=15520384	rst_ms=44.3	rst_tail_ms=32.9	elims=13769116	fullclear_words=13769116	sparse_words=13140186	sparse_clears=0
+LADGATE	736	10000	0.542	1
+LIFT	multiplants_stg1	736	321	3112	321
+COUNTS	multiplants_stg1	736	3594	197998	155496
+COPYSTATS	multiplants_stg1	secs=0.757	asm_calls=72	asm_words=386164	asm_ms=0.1	rst_calls=5668	rst_words=13402197	rst_ms=1.8	rst_tail_ms=2.0	elims=1553080	fullclear_words=12421977	sparse_words=4059007	sparse_clears=0
+LADGATE	11251	10000	0.841	0
+LIFT	powerflow0300p	11251	6342	34748	6342
+COUNTS	powerflow0300p	11251	41918	304705	290023
+COPYSTATS	powerflow0300p	secs=1.173	asm_calls=406	asm_words=35336229	asm_ms=19.7	rst_calls=189863	rst_words=76811399	rst_ms=44.8	rst_tail_ms=22.2	elims=9181021	fullclear_words=55722589	sparse_words=11826095	sparse_clears=0
+LADGATE	33155	10000	0.523	0
+LIFT	nd_netgen-3000-1-1-b-b-ns_7	33155	15155	54000	15155
+COUNTS	nd_netgen-3000-1-1-b-b-ns_7	33155	90000	922197	883821
+COPYSTATS	nd_netgen-3000-1-1-b-b-ns_7	secs=0.818	asm_calls=172	asm_words=138027785	asm_ms=51.3	rst_calls=14746	rst_words=69945791	rst_ms=22.2	rst_tail_ms=6.0	elims=3295414	fullclear_words=67885117	sparse_words=3677218	sparse_clears=0
+LADGATE	803	10000	0.500	1
+LIFT	sonet23v4	803	547	5952	547
+COUNTS	sonet23v4	803	6462	139703	94348
+COPYSTATS	sonet23v4	secs=0.755	asm_calls=102	asm_words=396462	asm_ms=0.1	rst_calls=81786	rst_words=16551742	rst_ms=7.7	rst_tail_ms=6.8	elims=3334286	fullclear_words=15299821	sparse_words=4025467	sparse_clears=0
+LADGATE	1649	10000	0.398	1
+LIFT	pooling_sppa0pq	1649	1648	24190	1648
+COUNTS	pooling_sppa0pq	1649	24192	3745896	1187376
+COPYSTATS	pooling_sppa0pq	secs=0.728	asm_calls=114	asm_words=1432158	asm_ms=0.3	rst_calls=8435	rst_words=14829883	rst_ms=2.5	rst_tail_ms=1.9	elims=1077991	fullclear_words=13664174	sparse_words=2895549	sparse_clears=0
+LADGATE	645	10000	0.544	1
+LIFT	multiplants_mtg1b	645	406	4016	406
+COUNTS	multiplants_mtg1b	645	4404	229415	152043
+COPYSTATS	multiplants_mtg1b	secs=0.762	asm_calls=62	asm_words=299483	asm_ms=0.0	rst_calls=8649	rst_words=12081774	rst_ms=1.7	rst_tail_ms=1.6	elims=1370710	fullclear_words=11419838	sparse_words=2948032	sparse_clears=0
+LADGATE	338	10000	0.377	1
+LADGATE	338	10000	0.380	1
+LIFT	sssd18-08persp	338	138	768	138
+COUNTS	sssd18-08persp	338	1168	4654	4654
+COPYSTATS	sssd18-08persp	secs=0.477	asm_calls=104	asm_words=111484	asm_ms=0.0	rst_calls=51921	rst_words=33051996	rst_ms=4.7	rst_tail_ms=7.3	elims=6908216	fullclear_words=31543500	sparse_words=8496842	sparse_clears=0
+LADGATE	19	10000	0.612	1
+LADGATE	19	10000	0.614	1
+COUNTS	ex9_1_2	19	54	188	179
+COPYSTATS	ex9_1_2	secs=0.687	asm_calls=66	asm_words=1254	asm_ms=0.0	rst_calls=737582	rst_words=14014058	rst_ms=32.2	rst_tail_ms=21.1	elims=12564850	fullclear_words=12564850	sparse_words=12123942	sparse_clears=0
+LADGATE	3670	10000	0.949	1
+LIFT	crudeoil_lee1_07	3670	1957	17600	1957
+COUNTS	crudeoil_lee1_07	3670	19322	4746188	3540025
+COPYSTATS	crudeoil_lee1_07	secs=1.193	asm_calls=225	asm_words=5701300	asm_ms=2.0	rst_calls=234411	rst_words=51643479	rst_ms=26.5	rst_tail_ms=26.0	elims=9379858	fullclear_words=38277255	sparse_words=11607035	sparse_clears=0
+LADGATE	31	10000	0.552	1
+LADGATE	31	10000	0.561	1
+COUNTS	pooling_haverly1tp	31	96	423	403
+COPYSTATS	pooling_haverly1tp	secs=0.812	asm_calls=80	asm_words=2480	asm_ms=0.0	rst_calls=552570	rst_words=17129670	rst_ms=24.6	rst_tail_ms=23.0	elims=15644011	fullclear_words=15644011	sparse_words=15317302	sparse_clears=0
+LADGATE	230	10000	0.300	1
+LADGATE	230	10000	0.305	1
+LIFT	waterund08	230	120	1760	120
+COUNTS	waterund08	230	1290	35284	30110
+COPYSTATS	waterund08	secs=0.431	asm_calls=92	asm_words=75640	asm_ms=0.0	rst_calls=32014	rst_words=20677880	rst_ms=2.3	rst_tail_ms=5.1	elims=5211539	fullclear_words=19255204	sparse_words=8530229	sparse_clears=0
+LADGATE	76	10000	0.358	1
+LADGATE	76	10000	0.359	1
+LIFT	kall_diffcircles_6	76	45	240	45
+COUNTS	kall_diffcircles_6	76	302	1511	1511
+COPYSTATS	kall_diffcircles_6	secs=0.522	asm_calls=72	asm_words=8610	asm_ms=0.0	rst_calls=148087	rst_words=21907946	rst_ms=6.9	rst_tail_ms=11.9	elims=10644493	fullclear_words=21175330	sparse_words=10657640	sparse_clears=0
+LADGATE	440	10000	0.581	1
+LADGATE	440	10000	0.601	1
+LIFT	chimera_mgw-c8-439-onc8-001	440	423	3066	423
+COUNTS	chimera_mgw-c8-439-onc8-001	440	3040	106479	78229
+COPYSTATS	chimera_mgw-c8-439-onc8-001	secs=0.766	asm_calls=120	asm_words=289655	asm_ms=0.0	rst_calls=16992	rst_words=19782331	rst_ms=2.6	rst_tail_ms=3.6	elims=2968880	fullclear_words=18639928	sparse_words=8844550	sparse_clears=0
+LADGATE	160	10000	0.368	1
+LADGATE	160	10000	0.378	1
+LIFT	waterund11	160	91	642	91
+COUNTS	waterund11	160	828	14818	10705
+COPYSTATS	waterund11	secs=0.528	asm_calls=99	asm_words=43338	asm_ms=0.0	rst_calls=61334	rst_words=23257607	rst_ms=3.9	rst_tail_ms=7.4	elims=7633879	fullclear_words=21778787	sparse_words=11602772	sparse_clears=0
+LADGATE	16364	10000	0.714	0
+LIFT	chp_shorttermplan2d	16364	8902	38240	8902
+COUNTS	chp_shorttermplan2d	16364	52108	4089003	2054862
+COPYSTATS	chp_shorttermplan2d	secs=1.049	asm_calls=250	asm_words=42490882	asm_ms=17.5	rst_calls=16690	rst_words=89770264	rst_ms=29.0	rst_tail_ms=8.9	elims=4930977	fullclear_words=77096678	sparse_words=7603947	sparse_clears=0
+LADGATE	156	10000	0.374	1
+LADGATE	156	10000	0.383	1
+LIFT	sporttournament18	156	136	810	136
+COUNTS	sporttournament18	156	886	17568	13608
+COPYSTATS	sporttournament18	secs=0.527	asm_calls=98	asm_words=45144	asm_ms=0.0	rst_calls=46926	rst_words=21491328	rst_ms=3.4	rst_tail_ms=5.9	elims=6492102	fullclear_words=19476306	sparse_words=17749318	sparse_clears=0
+COUNTS	cvxnonsep_psig30	30	870	9455	9455
+COPYSTATS	cvxnonsep_psig30	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	6089	10000	0.440	1
+LIFT	ringpack_20_2	6089	3132	37034	3132
+COUNTS	ringpack_20_2	6089	40368	1872174	707413
+COPYSTATS	ringpack_20_2	secs=0.634	asm_calls=89	asm_words=7125564	asm_ms=3.8	rst_calls=6321	rst_words=30763021	rst_ms=15.6	rst_tail_ms=1.7	elims=862982	fullclear_words=26401366	sparse_words=1322015	sparse_clears=0
+LADGATE	1386	10000	0.312	1
+LIFT	blend718	1386	808	3138	808
+COUNTS	blend718	1386	4310	70355	61466
+COPYSTATS	blend718	secs=0.492	asm_calls=89	asm_words=1015191	asm_ms=0.2	rst_calls=14235	rst_words=17061778	rst_ms=2.8	rst_tail_ms=2.3	elims=1716170	fullclear_words=16377083	sparse_words=2763157	sparse_clears=0
+LADGATE	115	10000	0.441	1
+LADGATE	115	10000	0.442	1
+LIFT	wastepaper4	115	50	654	50
+COUNTS	wastepaper4	115	724	9711	7183
+COPYSTATS	wastepaper4	secs=0.594	asm_calls=104	asm_words=21406	asm_ms=0.0	rst_calls=90630	rst_words=19662772	rst_ms=4.2	rst_tail_ms=8.8	elims=9293590	fullclear_words=18525636	sparse_words=16010461	sparse_clears=0
+LADGATE	2450	10000	0.381	1
+LIFT	squfl010-040persp	2450	850	4000	850
+COUNTS	squfl010-040persp	2450	7200	22825	22825
+COPYSTATS	squfl010-040persp	secs=0.394	asm_calls=67	asm_words=1630530	asm_ms=0.3	rst_calls=25497	rst_words=15911162	rst_ms=3.1	rst_tail_ms=2.5	elims=1639088	fullclear_words=15324422	sparse_words=2098251	sparse_clears=0
+LADGATE	10429	10000	0.966	0
+LIFT	crudeoil_lee4_06	10429	6797	109128	6797
+COUNTS	crudeoil_lee4_06	10429	55492	65337120	32348553
+COPYSTATS	crudeoil_lee4_06	secs=1.258	asm_calls=215	asm_words=12550939	asm_ms=7.1	rst_calls=58458	rst_words=46795480	rst_ms=19.6	rst_tail_ms=10.4	elims=4333074	fullclear_words=32284712	sparse_words=6938213	sparse_clears=0
+LADGATE	1746	10000	0.584	1
+LIFT	netmod_kar1	1746	798	3664	798
+COUNTS	netmod_kar1	1746	4928	56838	43864
+COPYSTATS	netmod_kar1	secs=0.731	asm_calls=119	asm_words=1656291	asm_ms=0.3	rst_calls=49648	rst_words=37321528	rst_ms=8.0	rst_tail_ms=6.5	elims=3813044	fullclear_words=36065971	sparse_words=5381646	sparse_clears=0
+LADGATE	14	10000	0.566	1
+LADGATE	14	10000	0.570	1
+COUNTS	ex8_1_7	14	46	137	128
+COPYSTATS	ex8_1_7	secs=0.884	asm_calls=54	asm_words=756	asm_ms=0.0	rst_calls=1227020	rst_words=17178280	rst_ms=54.1	rst_tail_ms=29.4	elims=15574806	fullclear_words=15574806	sparse_words=14722616	sparse_clears=0
+LADGATE	108	10000	0.276	1
+LADGATE	108	10000	0.279	1
+LIFT	graphpart_3g-0333-0333	108	81	648	81
+COUNTS	graphpart_3g-0333-0333	108	648	44928	36228
+COPYSTATS	graphpart_3g-0333-0333	secs=0.412	asm_calls=92	asm_words=19224	asm_ms=0.0	rst_calls=54689	rst_words=11267424	rst_ms=2.5	rst_tail_ms=5.2	elims=5180772	fullclear_words=10361544	sparse_words=8625783	sparse_clears=0
+LADGATE	760	10000	0.314	1
+LIFT	slay05h	760	340	1400	340
+COUNTS	slay05h	760	2080	9815	8795
+COPYSTATS	slay05h	secs=0.438	asm_calls=108	asm_words=343604	asm_ms=0.1	rst_calls=22878	rst_words=14602052	rst_ms=2.5	rst_tail_ms=3.0	elims=2530090	fullclear_words=13698661	sparse_words=3976482	sparse_clears=0
+LADGATE	156	10000	0.408	1
+LADGATE	156	10000	0.413	1
+LIFT	korcns	156	92	598	92
+COUNTS	korcns	156	712	7241	6599
+COPYSTATS	korcns	secs=0.581	asm_calls=142	asm_words=47866	asm_ms=0.0	rst_calls=68917	rst_words=24042094	rst_ms=4.3	rst_tail_ms=7.9	elims=8325564	fullclear_words=22765664	sparse_words=14954243	sparse_clears=0
+LADGATE	5065	10000	0.880	1
+LIFT	powerflow0118p	5065	2810	15480	2810
+COUNTS	powerflow0118p	5065	18730	121503	117327
+COPYSTATS	powerflow0118p	secs=1.224	asm_calls=322	asm_words=10924139	asm_ms=5.1	rst_calls=228112	rst_words=63397947	rst_ms=35.6	rst_tail_ms=26.3	elims=11744698	fullclear_words=57400074	sparse_words=13941842	sparse_clears=0
+LADGATE	4799	10000	0.805	1
+LIFT	sfacloc2_3_80	4799	2402	16046	2402
+COUNTS	sfacloc2_3_80	4799	20600	84672	81119
+COPYSTATS	sfacloc2_3_80	secs=1.004	asm_calls=140	asm_words=7438121	asm_ms=3.3	rst_calls=50398	rst_words=40168346	rst_ms=19.0	rst_tail_ms=5.7	elims=2810174	fullclear_words=38042404	sparse_words=3245468	sparse_clears=0
+LADGATE	6028	10000	0.749	1
+LIFT	rsyn0820m04m	6028	3144	12532	3144
+COUNTS	rsyn0820m04m	6028	17372	196890	152748
+COPYSTATS	rsyn0820m04m	secs=1.080	asm_calls=235	asm_words=9921847	asm_ms=5.4	rst_calls=193988	rst_words=50254920	rst_ms=32.5	rst_tail_ms=23.1	elims=10414606	fullclear_words=43726465	sparse_words=11541522	sparse_clears=0
+LADGATE	1046	10000	0.239	1
+LIFT	hydroenergy1	1046	570	2164	570
+COUNTS	hydroenergy1	1046	3024	14089	14089
+COPYSTATS	hydroenergy1	secs=0.250	asm_calls=61	asm_words=390858	asm_ms=0.1	rst_calls=12361	rst_words=11148032	rst_ms=1.7	rst_tail_ms=1.5	elims=1339302	fullclear_words=10383295	sparse_words=2565574	sparse_clears=0
+LADGATE	181	10000	0.349	1
+LADGATE	181	10000	0.353	1
+LIFT	maxmin	181	103	1284	103
+COUNTS	maxmin	181	1440	8405	8405
+COPYSTATS	maxmin	secs=0.456	asm_calls=96	asm_words=35636	asm_ms=0.0	rst_calls=53214	rst_words=21750774	rst_ms=3.2	rst_tail_ms=6.6	elims=7754718	fullclear_words=21640092	sparse_words=7732310	sparse_clears=0
+LADGATE	8	10000	0.648	1
+LADGATE	8	10000	0.652	1
+COUNTS	st_ht	8	18	51	44
+COPYSTATS	st_ht	secs=0.742	asm_calls=54	asm_words=432	asm_ms=0.0	rst_calls=1742262	rst_words=13938096	rst_ms=74.8	rst_tail_ms=33.1	elims=12570146	fullclear_words=12570146	sparse_words=11292274	sparse_clears=0
+LADGATE	6418	10000	0.938	1
+LIFT	crudeoil_lee2_06	6418	4139	66598	4139
+COUNTS	crudeoil_lee2_06	6418	34646	23299675	15884712
+COPYSTATS	crudeoil_lee2_06	secs=1.225	asm_calls=218	asm_words=11270831	asm_ms=6.3	rst_calls=131081	rst_words=50947000	rst_ms=24.3	rst_tail_ms=16.9	elims=5953665	fullclear_words=35918951	sparse_words=8528930	sparse_clears=0
+LADGATE	3183	10000	0.490	1
+LIFT	kan_r3_h1_n4	3183	2301	12330	2301
+COUNTS	kan_r3_h1_n4	3183	14062	104945	98697
+COPYSTATS	kan_r3_h1_n4	secs=0.636	asm_calls=186	asm_words=4392106	asm_ms=1.3	rst_calls=22994	rst_words=35119518	rst_ms=9.2	rst_tail_ms=5.0	elims=2974703	fullclear_words=33772412	sparse_words=5264585	sparse_clears=0
+LADGATE	378	10000	0.281	1
+LIFT	primary	378	222	5294	222
+COUNTS	primary	378	5610	109639	95258
+COPYSTATS	primary	secs=0.399	asm_calls=68	asm_words=91974	asm_ms=0.0	rst_calls=10080	rst_words=9367756	rst_ms=0.7	rst_tail_ms=1.6	elims=1825012	fullclear_words=9072972	sparse_words=2661318	sparse_clears=0
+LADGATE	1071	10000	0.279	1
+LIFT	syn10m03hfsg	1071	591	1812	591
+COUNTS	syn10m03hfsg	1071	2772	9890	9812
+COPYSTATS	syn10m03hfsg	secs=0.375	asm_calls=98	asm_words=612515	asm_ms=0.1	rst_calls=18443	rst_words=15625172	rst_ms=2.6	rst_tail_ms=2.3	elims=1983332	fullclear_words=14743802	sparse_words=3001249	sparse_clears=0
+LADGATE	36	10000	0.475	1
+LADGATE	36	10000	0.480	1
+LIFT	wastewater02m1	36	24	118	24
+COUNTS	wastewater02m1	36	138	848	790
+COPYSTATS	wastewater02m1	secs=0.698	asm_calls=80	asm_words=2864	asm_ms=0.0	rst_calls=406616	rst_words=14634880	rst_ms=15.7	rst_tail_ms=22.7	elims=13293607	fullclear_words=13293607	sparse_words=13055547	sparse_clears=0
+LADGATE	4620	10000	0.372	1
+LIFT	supplychainr1_022020	4620	2680	11920	2680
+COUNTS	supplychainr1_022020	4620	15680	273140	273100
+COPYSTATS	supplychainr1_022020	secs=0.557	asm_calls=120	asm_words=8069520	asm_ms=3.7	rst_calls=12527	rst_words=36165276	rst_ms=16.1	rst_tail_ms=2.3	elims=1106992	fullclear_words=33964299	sparse_words=2139285	sparse_clears=0
+LADGATE	3800	10000	0.249	1
+LIFT	squfl025-025persp	3800	1300	6250	1300
+COUNTS	squfl025-025persp	3800	11250	49925	49925
+COPYSTATS	squfl025-025persp	secs=0.265	asm_calls=27	asm_words=3196474	asm_ms=1.1	rst_calls=1139	rst_words=19510670	rst_ms=6.7	rst_tail_ms=0.7	elims=432949	fullclear_words=19410655	sparse_words=710960	sparse_clears=0
+LADGATE	17999	10000	0.821	0
+LIFT	ringpack_30_2	17999	9231	103922	9231
+COUNTS	ringpack_30_2	17999	121458	12394600	2864237
+COPYSTATS	ringpack_30_2	secs=0.994	asm_calls=74	asm_words=51254891	asm_ms=19.7	rst_calls=357	rst_words=61801071	rst_ms=23.7	rst_tail_ms=0.5	elims=171558	fullclear_words=24967849	sparse_words=278631	sparse_clears=0
+LIFT	nuclear104	39098	26306	232222	26306
+COUNTS	nuclear104	39098	257806	103156931	78332024
+COPYSTATS	nuclear104	secs=0.895	asm_calls=197	asm_words=986086	asm_ms=0.2	rst_calls=28533	rst_words=32119701	rst_ms=5.3	rst_tail_ms=6.6	elims=2351640	fullclear_words=15982429	sparse_words=4322722	sparse_clears=0
+LADGATE	4952	10000	0.687	1
+LIFT	chp_shorttermplan1a	4952	2592	11264	2592
+COUNTS	chp_shorttermplan1a	4952	15700	376486	299825
+COPYSTATS	chp_shorttermplan1a	secs=0.891	asm_calls=164	asm_words=9789506	asm_ms=5.0	rst_calls=100991	rst_words=63666143	rst_ms=29.9	rst_tail_ms=14.0	elims=6853770	fullclear_words=59038319	sparse_words=9229320	sparse_clears=0
+LADGATE	555	10000	0.538	1
+LADGATE	555	10000	0.572	1
+LIFT	rocket50	555	450	3272	450
+COUNTS	rocket50	555	3488	19983	19265
+COPYSTATS	rocket50	secs=0.742	asm_calls=102	asm_words=419100	asm_ms=0.1	rst_calls=14188	rst_words=27737535	rst_ms=3.8	rst_tail_ms=3.5	elims=3021355	fullclear_words=25363128	sparse_words=11441981	sparse_clears=0
+LADGATE	8508	10000	0.872	1
+LIFT	rsyn0840m04m	8508	4368	17360	4368
+COUNTS	rsyn0840m04m	8508	24272	229914	184844
+COPYSTATS	rsyn0840m04m	secs=1.315	asm_calls=253	asm_words=19454263	asm_ms=11.4	rst_calls=215681	rst_words=77780287	rst_ms=48.4	rst_tail_ms=25.1	elims=12028256	fullclear_words=68332638	sparse_words=13441031	sparse_clears=0
+LADGATE	11716	10000	0.656	0
+LIFT	mpbp_21	11716	6945	28072	6945
+COUNTS	mpbp_21	11716	37660	1691114	1456963
+COPYSTATS	mpbp_21	secs=0.759	asm_calls=190	asm_words=30346108	asm_ms=12.0	rst_calls=41415	rst_words=57148599	rst_ms=17.6	rst_tail_ms=10.9	elims=5844824	fullclear_words=46641800	sparse_words=7526972	sparse_clears=0
+LADGATE	172	10000	0.347	1
+LADGATE	172	10000	0.350	1
+LIFT	orth_d4m6_pl	172	92	896	92
+COUNTS	orth_d4m6_pl	172	1096	10938	10703
+COPYSTATS	orth_d4m6_pl	secs=0.482	asm_calls=122	asm_words=46096	asm_ms=0.0	rst_calls=53625	rst_words=21051644	rst_ms=3.3	rst_tail_ms=6.4	elims=7419234	fullclear_words=20702626	sparse_words=9590643	sparse_clears=0
+LADGATE	1681	10000	0.546	1
+LIFT	kall_circlespolygons_c1p5b	1681	1245	6560	1245
+COUNTS	kall_circlespolygons_c1p5b	1681	7432	201759	193841
+COPYSTATS	kall_circlespolygons_c1p5b	secs=0.778	asm_calls=184	asm_words=1665212	asm_ms=0.3	rst_calls=42251	rst_words=19118744	rst_ms=4.6	rst_tail_ms=5.1	elims=2476794	fullclear_words=17352022	sparse_words=4085387	sparse_clears=0
+LIFT	acopf_case9241pegase_qcqp	313068	201757	1141270	201757
+COUNTS	acopf_case9241pegase_qcqp	313068	1292408	34647355	33736789
+COPYSTATS	acopf_case9241pegase_qcqp	secs=0.641	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	33	10000	0.558	1
+LADGATE	33	10000	0.560	1
+LIFT	ex1223	33	18	54	18
+COUNTS	ex1223	33	82	244	244
+COPYSTATS	ex1223	secs=0.622	asm_calls=54	asm_words=1782	asm_ms=0.0	rst_calls=419710	rst_words=13850430	rst_ms=19.6	rst_tail_ms=21.9	elims=12429902	fullclear_words=12429902	sparse_words=12198118	sparse_clears=0
+LADGATE	10	10000	0.595	1
+LADGATE	10	10000	0.600	1
+COUNTS	ex6_1_4	10	48	197	153
+COPYSTATS	ex6_1_4	secs=0.897	asm_calls=56	asm_words=560	asm_ms=0.0	rst_calls=1672410	rst_words=16724100	rst_ms=69.7	rst_tail_ms=34.7	elims=15457194	fullclear_words=15457194	sparse_words=14134762	sparse_clears=0
+LADGATE	403	10000	0.358	1
+LADGATE	403	10000	0.364	1
+LIFT	powerflow0014r	403	234	1432	234
+COUNTS	powerflow0014r	403	1630	10761	10361
+COPYSTATS	powerflow0014r	secs=0.481	asm_calls=124	asm_words=232628	asm_ms=0.0	rst_calls=19477	rst_words=31222252	rst_ms=3.2	rst_tail_ms=4.8	elims=5117257	fullclear_words=29943843	sparse_words=9112448	sparse_clears=0
+LADGATE	2065	10000	0.226	1
+LIFT	knp5-43	2065	1119	29756	1119
+COUNTS	knp5-43	2065	31132	3517788	3517788
+COPYSTATS	knp5-43	secs=0.238	asm_calls=18	asm_words=723728	asm_ms=0.1	rst_calls=97	rst_words=3323955	rst_ms=0.5	rst_tail_ms=0.1	elims=106656	fullclear_words=3262496	sparse_words=212250	sparse_clears=0
+LADGATE	21688	10000	0.635	0
+LIFT	gabriel09	21688	11348	105698	11348
+COUNTS	gabriel09	21688	89702	29373994	25540477
+COPYSTATS	gabriel09	secs=0.875	asm_calls=161	asm_words=8418652	asm_ms=3.1	rst_calls=11351	rst_words=52478209	rst_ms=18.6	rst_tail_ms=2.6	elims=1283650	fullclear_words=45514160	sparse_words=2036863	sparse_clears=0
+LADGATE	32	10000	0.568	1
+LADGATE	32	10000	0.571	1
+LIFT	tln2	32	18	60	18
+COUNTS	tln2	32	88	233	233
+COPYSTATS	tln2	secs=0.634	asm_calls=54	asm_words=1728	asm_ms=0.0	rst_calls=438795	rst_words=14041440	rst_ms=20.6	rst_tail_ms=18.7	elims=12589019	fullclear_words=12589019	sparse_words=12339435	sparse_clears=0
+LADGATE	22	10000	0.590	1
+LADGATE	22	10000	0.595	1
+COUNTS	prob02	22	76	267	232
+COPYSTATS	prob02	secs=0.873	asm_calls=66	asm_words=1452	asm_ms=0.0	rst_calls=831676	rst_words=18296872	rst_ms=38.9	rst_tail_ms=29.0	elims=16639172	fullclear_words=16639172	sparse_words=16099830	sparse_clears=0
+LADGATE	1422	10000	0.317	1
+LIFT	blend146	1422	826	3252	826
+COUNTS	blend146	1422	4460	78102	64296
+COPYSTATS	blend146	secs=0.507	asm_calls=88	asm_words=1154304	asm_ms=0.2	rst_calls=10142	rst_words=17932780	rst_ms=2.9	rst_tail_ms=2.0	elims=1536012	fullclear_words=17297875	sparse_words=2667543	sparse_clears=0
+LADGATE	4518	10000	0.435	1
+LIFT	mpbp_46	4518	2728	10872	2728
+COUNTS	mpbp_46	4518	14492	499547	447603
+COPYSTATS	mpbp_46	secs=0.676	asm_calls=83	asm_words=7453838	asm_ms=3.5	rst_calls=4264	rst_words=37770399	rst_ms=16.9	rst_tail_ms=1.5	elims=897307	fullclear_words=36590816	sparse_words=1629614	sparse_clears=0
+LADGATE	413	10000	0.508	1
+LADGATE	413	10000	0.528	1
+LIFT	tls6	413	291	2630	291
+COUNTS	tls6	413	2860	18483	17511
+COPYSTATS	tls6	secs=0.677	asm_calls=221	asm_words=301261	asm_ms=0.0	rst_calls=62516	rst_words=32346168	rst_ms=6.4	rst_tail_ms=12.8	elims=6702323	fullclear_words=31082585	sparse_words=11310077	sparse_clears=0
+LADGATE	21925	10000	0.366	0
+LIFT	emfl100_5_5	21925	9425	27300	9425
+COUNTS	emfl100_5_5	21925	52300	221650	221650
+COPYSTATS	emfl100_5_5	secs=0.366	asm_calls=17	asm_words=152572	asm_ms=0.0	rst_calls=412	rst_words=424124	rst_ms=0.1	rst_tail_ms=0.1	elims=45872	fullclear_words=374590	sparse_words=57717	sparse_clears=0
+LADGATE	341	10000	0.130	1
+LIFT	qspp_0_11_0_1_10_1	341	220	43506	220
+COUNTS	qspp_0_11_0_1_10_1	341	44264	3563707	3531915
+COPYSTATS	qspp_0_11_0_1_10_1	secs=0.207	asm_calls=34	asm_words=57909	asm_ms=0.0	rst_calls=214	rst_words=367746	rst_ms=0.0	rst_tail_ms=0.1	elims=63660	fullclear_words=352052	sparse_words=214208	sparse_clears=0
+LADGATE	403	10000	0.345	1
+LADGATE	403	10000	0.348	1
+LIFT	p_ball_10b_5p_4d_m	403	169	1116	169
+COUNTS	p_ball_10b_5p_4d_m	403	1484	13581	13288
+COPYSTATS	p_ball_10b_5p_4d_m	secs=0.465	asm_calls=138	asm_words=226698	asm_ms=0.0	rst_calls=32620	rst_words=30198214	rst_ms=3.9	rst_tail_ms=5.2	elims=5415775	fullclear_words=29459536	sparse_words=9140851	sparse_clears=0
+LADGATE	90	10000	0.387	1
+LADGATE	90	10000	0.391	1
+LIFT	st_rv9	90	70	800	70
+COUNTS	st_rv9	90	840	6691	6321
+COPYSTATS	st_rv9	secs=0.533	asm_calls=102	asm_words=17480	asm_ms=0.0	rst_calls=104052	rst_words=17910320	rst_ms=4.3	rst_tail_ms=8.9	elims=8562843	fullclear_words=17125686	sparse_words=9903373	sparse_clears=0
+LADGATE	3486	10000	0.667	1
+LIFT	rsyn0840m02m	3486	1876	6568	1876
+COUNTS	rsyn0840m02m	3486	9576	47529	44981
+COPYSTATS	rsyn0840m02m	secs=0.887	asm_calls=209	asm_words=5204211	asm_ms=1.9	rst_calls=260678	rst_words=48004591	rst_ms=30.4	rst_tail_ms=22.1	elims=10077705	fullclear_words=44735184	sparse_words=11620375	sparse_clears=0
+LADGATE	22	10000	0.581	1
+LADGATE	22	10000	0.583	1
+COUNTS	nvs05	22	84	277	266
+COPYSTATS	nvs05	secs=0.859	asm_calls=66	asm_words=1452	asm_ms=0.0	rst_calls=803156	rst_words=17669432	rst_ms=36.2	rst_tail_ms=27.9	elims=15972994	fullclear_words=15972994	sparse_words=15462966	sparse_clears=0
+COUNTS	autocorr_bern25-19	28	612	5278	5278
+COPYSTATS	autocorr_bern25-19	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	356	10000	0.356	1
+LADGATE	356	10000	0.364	1
+LIFT	sssd20-08persp	356	140	800	140
+COUNTS	sssd20-08persp	356	1232	4960	4960
+COPYSTATS	sssd20-08persp	secs=0.458	asm_calls=108	asm_words=117024	asm_ms=0.0	rst_calls=53675	rst_words=31693846	rst_ms=4.3	rst_tail_ms=7.0	elims=6729718	fullclear_words=30257465	sparse_words=8417747	sparse_clears=0
+LADGATE	827	10000	0.639	1
+LIFT	multiplants_stg5	827	310	3480	310
+COUNTS	multiplants_stg5	827	3804	377794	155722
+COPYSTATS	multiplants_stg5	secs=0.752	asm_calls=88	asm_words=496419	asm_ms=0.1	rst_calls=31008	rst_words=15318702	rst_ms=3.6	rst_tail_ms=3.8	elims=2268758	fullclear_words=13985440	sparse_words=4588152	sparse_clears=0
+LADGATE	2032	10000	0.650	1
+LIFT	chimera_rfr-02	2032	2012	15234	2012
+COUNTS	chimera_rfr-02	2032	15140	3860441	2489836
+COPYSTATS	chimera_rfr-02	secs=0.780	asm_calls=128	asm_words=1848653	asm_ms=0.5	rst_calls=48643	rst_words=17190172	rst_ms=4.7	rst_tail_ms=6.1	elims=2452817	fullclear_words=13600444	sparse_words=5348046	sparse_clears=0
+LADGATE	726	10000	0.566	1
+LIFT	multiplants_stg1a	726	304	2994	304
+COUNTS	multiplants_stg1a	726	3510	142058	121443
+COPYSTATS	multiplants_stg1a	secs=0.778	asm_calls=108	asm_words=390601	asm_ms=0.1	rst_calls=66311	rst_words=16276248	rst_ms=5.9	rst_tail_ms=5.8	elims=3125713	fullclear_words=14768895	sparse_words=5572434	sparse_clears=0
+LADGATE	170	10000	0.309	1
+LADGATE	170	10000	0.313	1
+LIFT	pooling_adhya4pq	170	93	790	93
+COUNTS	pooling_adhya4pq	170	932	24314	16556
+COPYSTATS	pooling_adhya4pq	secs=0.461	asm_calls=94	asm_words=44100	asm_ms=0.0	rst_calls=44394	rst_words=18662700	rst_ms=2.9	rst_tail_ms=5.6	elims=6099671	fullclear_words=17312629	sparse_words=7784924	sparse_clears=0
+LADGATE	17493	10000	0.721	0
+LIFT	nuclear10a	17493	15309	159656	15309
+COUNTS	nuclear10a	17493	163816	82406325	55261703
+COPYSTATS	nuclear10a	secs=0.939	asm_calls=206	asm_words=5397217	asm_ms=2.0	rst_calls=26513	rst_words=67879090	rst_ms=15.3	rst_tail_ms=8.7	elims=3153342	fullclear_words=36992349	sparse_words=6449484	sparse_clears=0
+LADGATE	874	10000	0.490	1
+LIFT	sonet24v5	874	595	6704	595
+COUNTS	sonet24v5	874	7260	185654	110276
+COPYSTATS	sonet24v5	secs=0.757	asm_calls=100	asm_words=453750	asm_ms=0.1	rst_calls=59461	rst_words=15822127	rst_ms=5.8	rst_tail_ms=5.4	elims=2753444	fullclear_words=14664803	sparse_words=3414352	sparse_clears=0
+LIFT	transswitch2736spr	69651	44696	297260	44696
+COUNTS	transswitch2736spr	69651	331010	7933133	7281507
+COPYSTATS	transswitch2736spr	secs=0.460	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	8992	10000	0.502	1
+LIFT	chp_shorttermplan2a	8992	4760	18484	4760
+COUNTS	chp_shorttermplan2a	8992	26288	821014	574732
+COPYSTATS	chp_shorttermplan2a	secs=0.787	asm_calls=168	asm_words=21734133	asm_ms=12.7	rst_calls=40661	rst_words=58643554	rst_ms=33.1	rst_tail_ms=5.7	elims=2706684	fullclear_words=52861671	sparse_words=3881772	sparse_clears=0
+LADGATE	1001	10000	0.191	1
+LIFT	catmix200	1001	998	5580	998
+COUNTS	catmix200	1001	5592	18173	18164
+COPYSTATS	catmix200	secs=0.662	asm_calls=47	asm_words=662247	asm_ms=0.1	rst_calls=1387	rst_words=19741226	rst_ms=2.6	rst_tail_ms=1.1	elims=1115560	fullclear_words=17548544	sparse_words=3502475	sparse_clears=0
+COUNTS	nvs23	27	252	1921	1221
+COPYSTATS	nvs23	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	20	10000	0.652	1
+LADGATE	20	10000	0.655	1
+COUNTS	oaer	20	40	107	107
+COPYSTATS	oaer	secs=0.730	asm_calls=46	asm_words=920	asm_ms=0.0	rst_calls=763918	rst_words=15278360	rst_ms=36.4	rst_tail_ms=24.8	elims=14103332	fullclear_words=14103332	sparse_words=13544704	sparse_clears=0
+LADGATE	168	10000	0.297	1
+LADGATE	168	10000	0.303	1
+LIFT	hybriddynamic_fixed	168	80	250	80
+COUNTS	hybriddynamic_fixed	168	388	1103	1103
+COPYSTATS	hybriddynamic_fixed	secs=0.339	asm_calls=62	asm_words=26592	asm_ms=0.0	rst_calls=51765	rst_words=21453942	rst_ms=3.7	rst_tail_ms=7.4	elims=6574523	fullclear_words=19122363	sparse_words=8735271	sparse_clears=0
+LADGATE	16747	10000	0.559	0
+LIFT	edgecross24-115	16747	8651	85448	8651
+COUNTS	edgecross24-115	16747	77352	35096942	28128250
+COPYSTATS	edgecross24-115	secs=0.807	asm_calls=11	asm_words=4523405	asm_ms=1.7	rst_calls=39	rst_words=44070420	rst_ms=16.9	rst_tail_ms=0.3	elims=173217	fullclear_words=42870690	sparse_words=283164	sparse_clears=0
+LADGATE	1178	10000	0.295	1
+LIFT	space25	1178	243	1212	243
+COUNTS	space25	1178	4334	23567	22528
+COPYSTATS	space25	secs=0.424	asm_calls=115	asm_words=755763	asm_ms=0.1	rst_calls=22181	rst_words=14571324	rst_ms=2.8	rst_tail_ms=2.6	elims=1993359	fullclear_words=14205497	sparse_words=2978274	sparse_clears=0
+LADGATE	23999	10000	0.642	0
+LIFT	methanol400	23999	19199	142128	19199
+COUNTS	methanol400	23999	151728	2586036	1792285
+COPYSTATS	methanol400	secs=0.895	asm_calls=149	asm_words=9033987	asm_ms=3.6	rst_calls=441348	rst_words=67979718	rst_ms=52.7	rst_tail_ms=24.9	elims=7283974	fullclear_words=58230665	sparse_words=7668155	sparse_clears=0
+LADGATE	1218	10000	0.515	1
+LIFT	pooling_foulds5tp	1218	659	7246	659
+COUNTS	pooling_foulds5tp	1218	8364	251833	171941
+COPYSTATS	pooling_foulds5tp	secs=0.686	asm_calls=56	asm_words=866009	asm_ms=0.2	rst_calls=1155	rst_words=16571747	rst_ms=2.2	rst_tail_ms=0.9	elims=918325	fullclear_words=16127074	sparse_words=2700893	sparse_clears=0
+LADGATE	5040	10000	0.719	1
+LIFT	pooling_sppa9tp	5040	2642	116234	2642
+COUNTS	pooling_sppa9tp	5040	121302	104609262	16877457
+COPYSTATS	pooling_sppa9tp	secs=0.734	asm_calls=181	asm_words=600442	asm_ms=0.3	rst_calls=218142	rst_words=20671851	rst_ms=16.6	rst_tail_ms=16.9	elims=5094956	fullclear_words=10582820	sparse_words=7222501	sparse_clears=0
+COUNTS	st_miqp2	10	18	37	37
+COPYSTATS	st_miqp2	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+COUNTS	autocorr_bern30-23	33	878	8940	8940
+COPYSTATS	autocorr_bern30-23	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	9858	10000	0.760	1
+LIFT	mpbp_15	9858	5550	25800	5550
+COUNTS	mpbp_15	9858	31692	1496502	1163008
+COPYSTATS	mpbp_15	secs=1.166	asm_calls=221	asm_words=26125774	asm_ms=15.6	rst_calls=66524	rst_words=86200073	rst_ms=39.1	rst_tail_ms=15.3	elims=8139377	fullclear_words=67514341	sparse_words=11627115	sparse_clears=0
+COUNTS	cvxnonsep_psig30r	126	250	501	501
+COPYSTATS	cvxnonsep_psig30r	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	1590	10000	0.437	1
+LIFT	rsyn0830hfsg	1590	876	2784	876
+COUNTS	rsyn0830hfsg	1590	4100	16168	15383
+COPYSTATS	rsyn0830hfsg	secs=0.652	asm_calls=146	asm_words=1350665	asm_ms=0.3	rst_calls=61992	rst_words=26543148	rst_ms=6.5	rst_tail_ms=5.7	elims=3615648	fullclear_words=24588459	sparse_words=5288339	sparse_clears=0
+LADGATE	1271	10000	0.531	1
+LIFT	crudeoil_pooling_ct1	1271	722	3626	722
+COUNTS	crudeoil_pooling_ct1	1271	4642	125127	93553
+COPYSTATS	crudeoil_pooling_ct1	secs=0.754	asm_calls=102	asm_words=1064352	asm_ms=0.2	rst_calls=31959	rst_words=26065030	rst_ms=5.0	rst_tail_ms=5.2	elims=3164036	fullclear_words=24423608	sparse_words=5344957	sparse_clears=0
+LADGATE	800	10000	0.579	1
+LIFT	multiplants_stg1c	800	326	3346	326
+COUNTS	multiplants_stg1c	800	3894	150039	143020
+COPYSTATS	multiplants_stg1c	secs=0.745	asm_calls=98	asm_words=461686	asm_ms=0.1	rst_calls=53334	rst_words=14965593	rst_ms=4.9	rst_tail_ms=4.0	elims=2281430	fullclear_words=13825668	sparse_words=4434006	sparse_clears=0
+LADGATE	11	10000	0.654	1
+LADGATE	11	10000	0.658	1
+COUNTS	st_pan1	11	32	123	94
+COPYSTATS	st_pan1	secs=0.738	asm_calls=56	asm_words=616	asm_ms=0.0	rst_calls=1301808	rst_words=14319888	rst_ms=57.4	rst_tail_ms=27.8	elims=13145824	fullclear_words=13145824	sparse_words=12173394	sparse_clears=0
+LADGATE	814	10000	0.604	1
+LIFT	multiplants_stg1b	814	337	3456	337
+COUNTS	multiplants_stg1b	814	3992	308612	187593
+COPYSTATS	multiplants_stg1b	secs=0.811	asm_calls=86	asm_words=466358	asm_ms=0.1	rst_calls=34956	rst_words=13406584	rst_ms=3.5	rst_tail_ms=3.3	elims=1954727	fullclear_words=12451977	sparse_words=3913642	sparse_clears=0
+LADGATE	11999	10000	0.695	0
+LIFT	methanol200	11999	9599	71328	9599
+COUNTS	methanol200	11999	76128	1290836	905945
+COPYSTATS	methanol200	secs=0.830	asm_calls=227	asm_words=24912565	asm_ms=10.6	rst_calls=490093	rst_words=44243145	rst_ms=46.1	rst_tail_ms=30.8	elims=9683099	fullclear_words=24285192	sparse_words=9961775	sparse_clears=0
+LADGATE	26778	10000	0.521	0
+LIFT	faclay35	26778	13686	106196	13686
+COUNTS	faclay35	26778	132380	33630126	32021838
+COPYSTATS	faclay35	secs=0.591	asm_calls=16	asm_words=11330197	asm_ms=4.4	rst_calls=126	rst_words=11475733	rst_ms=4.3	rst_tail_ms=0.1	elims=51155	fullclear_words=11373898	sparse_words=107249	sparse_clears=0
+LADGATE	13175	10000	0.228	0
+LIFT	emfl050_5_5	13175	5675	17300	5675
+COUNTS	emfl050_5_5	13175	32300	155400	155400
+COPYSTATS	emfl050_5_5	secs=0.228	asm_calls=17	asm_words=133312	asm_ms=0.0	rst_calls=412	rst_words=404864	rst_ms=0.1	rst_tail_ms=0.1	elims=46588	fullclear_words=379882	sparse_words=58889	sparse_clears=0
+LIFT	transswitch2383wpr	59853	37844	247952	37844
+COUNTS	transswitch2383wpr	59853	277562	3946309	3861509
+COPYSTATS	transswitch2383wpr	secs=0.552	asm_calls=56	asm_words=163528	asm_ms=0.0	rst_calls=3074	rst_words=2571422	rst_ms=0.4	rst_tail_ms=0.9	elims=538231	fullclear_words=2274302	sparse_words=796718	sparse_clears=0
+LADGATE	1120	10000	0.485	1
+LIFT	chimera_lga-01	1120	721	5500	721
+COUNTS	chimera_lga-01	1120	6400	668019	494726
+COPYSTATS	chimera_lga-01	secs=0.627	asm_calls=103	asm_words=820484	asm_ms=0.2	rst_calls=21947	rst_words=13405715	rst_ms=2.6	rst_tail_ms=3.7	elims=1929382	fullclear_words=11515666	sparse_words=4899183	sparse_clears=0
+LADGATE	4596	10000	0.777	1
+LIFT	gasprod_sarawak16	4596	2632	12316	2632
+COUNTS	gasprod_sarawak16	4596	15316	213850	196064
+COPYSTATS	gasprod_sarawak16	secs=1.158	asm_calls=266	asm_words=8766046	asm_ms=4.1	rst_calls=186971	rst_words=60623326	rst_ms=30.0	rst_tail_ms=19.1	elims=8775326	fullclear_words=53647141	sparse_words=11500428	sparse_clears=0
+LADGATE	15904	10000	0.996	0
+LIFT	crudeoil_lee4_09	15904	10632	92014	10632
+COUNTS	crudeoil_lee4_09	15904	101792	208785578	128851771
+COPYSTATS	crudeoil_lee4_09	secs=1.221	asm_calls=209	asm_words=4915130	asm_ms=1.7	rst_calls=32406	rst_words=39116634	rst_ms=9.8	rst_tail_ms=7.4	elims=3236897	fullclear_words=28145665	sparse_words=5606182	sparse_clears=0
+LADGATE	44909	10000	0.838	0
+LIFT	arki0013	44909	18463	161472	18463
+COUNTS	arki0013	44909	160172	390472987	155907534
+COPYSTATS	arki0013	secs=1.216	asm_calls=205	asm_words=32242306	asm_ms=11.5	rst_calls=12612	rst_words=53766276	rst_ms=14.8	rst_tail_ms=5.3	elims=2912054	fullclear_words=42578281	sparse_words=4980476	sparse_clears=0
+LADGATE	42	10000	0.366	1
+LADGATE	42	10000	0.370	1
+LIFT	st_m1	42	11	110	11
+COUNTS	st_m1	42	432	3097	3097
+COPYSTATS	st_m1	secs=0.534	asm_calls=54	asm_words=2248	asm_ms=0.0	rst_calls=250047	rst_words=10498569	rst_ms=9.5	rst_tail_ms=15.7	elims=9908548	fullclear_words=9908548	sparse_words=9739684	sparse_clears=0
+LADGATE	5310	10000	0.892	1
+LIFT	mpbp_47	5310	3182	12798	3182
+COUNTS	mpbp_47	5310	17098	730624	652208
+COPYSTATS	mpbp_47	secs=1.082	asm_calls=197	asm_words=11202721	asm_ms=5.7	rst_calls=399700	rst_words=72529737	rst_ms=52.6	rst_tail_ms=34.2	elims=12565210	fullclear_words=62557917	sparse_words=14719712	sparse_clears=0
+LADGATE	821	10000	0.491	1
+LIFT	rsyn0815m	821	434	1516	434
+COUNTS	rsyn0815m	821	2242	8260	7745
+COPYSTATS	rsyn0815m	secs=0.660	asm_calls=135	asm_words=390140	asm_ms=0.1	rst_calls=222907	rst_words=20587518	rst_ms=18.0	rst_tail_ms=13.4	elims=6794300	fullclear_words=18845531	sparse_words=8072535	sparse_clears=0
+LADGATE	7993	10000	1.037	1
+LIFT	arki0016	7993	4968	26810	4968
+COUNTS	arki0016	7993	37208	878890	835661
+COPYSTATS	arki0016	secs=1.386	asm_calls=331	asm_words=12976359	asm_ms=7.3	rst_calls=88780	rst_words=63057207	rst_ms=26.2	rst_tail_ms=16.4	elims=7513240	fullclear_words=49142522	sparse_words=11842905	sparse_clears=0
+LADGATE	18	10000	0.649	1
+LADGATE	18	10000	0.654	1
+COUNTS	st_glmp_ss2	18	48	121	121
+COPYSTATS	st_glmp_ss2	secs=0.726	asm_calls=46	asm_words=828	asm_ms=0.0	rst_calls=839818	rst_words=15116724	rst_ms=39.9	rst_tail_ms=23.4	elims=13650118	fullclear_words=13650118	sparse_words=13120254	sparse_clears=0
+LADGATE	2670	10000	0.686	1
+LIFT	rsyn0810m02hfsg	2670	1484	4808	1484
+COUNTS	rsyn0810m02hfsg	2670	6964	36862	34794
+COPYSTATS	rsyn0810m02hfsg	secs=0.882	asm_calls=192	asm_words=3535456	asm_ms=0.9	rst_calls=108908	rst_words=43625130	rst_ms=13.5	rst_tail_ms=13.4	elims=7339399	fullclear_words=40514370	sparse_words=10112124	sparse_clears=0
+LADGATE	55	10000	0.447	1
+LADGATE	55	10000	0.447	1
+LIFT	pointpack06	55	34	234	34
+COUNTS	pointpack06	55	276	1497	1497
+COPYSTATS	pointpack06	secs=0.647	asm_calls=72	asm_words=3274	asm_ms=0.0	rst_calls=241443	rst_words=13099857	rst_ms=10.8	rst_tail_ms=16.7	elims=12703359	fullclear_words=12703359	sparse_words=12509439	sparse_clears=0
+LADGATE	6328	10000	0.336	1
+LIFT	syn40m04hfsg	6328	3492	11224	3492
+COUNTS	syn40m04hfsg	6328	16896	76232	73526
+COPYSTATS	syn40m04hfsg	secs=0.583	asm_calls=126	asm_words=10904490	asm_ms=6.0	rst_calls=21486	rst_words=35097349	rst_ms=18.7	rst_tail_ms=2.7	elims=1334734	fullclear_words=30639237	sparse_words=1794618	sparse_clears=0
+LADGATE	258	10000	0.328	1
+LADGATE	258	10000	0.332	1
+LIFT	clay0304m	258	122	576	122
+COUNTS	clay0304m	258	840	2742	2742
+COPYSTATS	clay0304m	secs=0.427	asm_calls=94	asm_words=75528	asm_ms=0.0	rst_calls=44794	rst_words=31591852	rst_ms=3.2	rst_tail_ms=6.1	elims=7193960	fullclear_words=29695932	sparse_words=8976738	sparse_clears=0
+LADGATE	1218	10000	0.411	1
+LIFT	pooling_foulds5pq	1218	655	7342	655
+COUNTS	pooling_foulds5pq	1218	8300	159641	159641
+COPYSTATS	pooling_foulds5pq	secs=0.457	asm_calls=41	asm_words=504622	asm_ms=0.1	rst_calls=762	rst_words=8730675	rst_ms=1.1	rst_tail_ms=0.5	elims=524274	fullclear_words=8603725	sparse_words=1367129	sparse_clears=0
+LADGATE	1000	10000	0.378	1
+LIFT	clay0305hfsg	1000	485	2050	485
+COUNTS	clay0305hfsg	1000	2910	12260	11240
+COPYSTATS	clay0305hfsg	secs=0.557	asm_calls=130	asm_words=595838	asm_ms=0.1	rst_calls=52961	rst_words=17605361	rst_ms=5.0	rst_tail_ms=4.6	elims=3044657	fullclear_words=16388233	sparse_words=4094231	sparse_clears=0
+LADGATE	64	10000	0.401	1
+LADGATE	64	10000	0.407	1
+LIFT	st_test8	64	44	192	44
+COUNTS	st_test8	64	232	2343	1964
+COPYSTATS	st_test8	secs=0.594	asm_calls=80	asm_words=5120	asm_ms=0.0	rst_calls=184733	rst_words=11822912	rst_ms=7.1	rst_tail_ms=13.4	elims=11061456	fullclear_words=11061456	sparse_words=10968663	sparse_clears=0
+LIFT	gams05	17364	8487	278504	8487
+COUNTS	gams05	17364	252910	6179750712	3259322396
+COPYSTATS	gams05	secs=0.896	asm_calls=123	asm_words=1132214	asm_ms=0.2	rst_calls=32235	rst_words=12717492	rst_ms=3.4	rst_tail_ms=3.3	elims=1302932	fullclear_words=5876586	sparse_words=2011162	sparse_clears=0
+LADGATE	31	10000	0.479	1
+LADGATE	31	10000	0.479	1
+COUNTS	sporttournament08	31	156	862	862
+COPYSTATS	sporttournament08	secs=0.699	asm_calls=54	asm_words=1674	asm_ms=0.0	rst_calls=460691	rst_words=14281421	rst_ms=17.5	rst_tail_ms=20.8	elims=13024452	fullclear_words=13024452	sparse_words=12725674	sparse_clears=0
+LADGATE	1121	10000	0.351	1
+LIFT	powerflow0030p	1121	642	3468	642
+COUNTS	powerflow0030p	1121	4194	24944	23642
+COPYSTATS	powerflow0030p	secs=0.533	asm_calls=125	asm_words=767463	asm_ms=0.1	rst_calls=36602	rst_words=16637844	rst_ms=4.0	rst_tail_ms=3.7	elims=2291473	fullclear_words=15874387	sparse_words=3884026	sparse_clears=0
+LADGATE	22407	10000	0.811	0
+LIFT	popdynm200	22407	18799	98384	18799
+COUNTS	popdynm200	22407	105584	2567878	2404589
+COPYSTATS	popdynm200	secs=1.084	asm_calls=233	asm_words=8033086	asm_ms=3.1	rst_calls=57501	rst_words=63661416	rst_ms=23.3	rst_tail_ms=12.6	elims=6454445	fullclear_words=58341727	sparse_words=9591847	sparse_clears=0
+LADGATE	11120	10000	0.736	0
+LIFT	mpbp_35	11120	6920	32350	6920
+COUNTS	mpbp_35	11120	40790	3037207	975441
+COPYSTATS	mpbp_35	secs=0.996	asm_calls=256	asm_words=31321077	asm_ms=18.5	rst_calls=19119	rst_words=67241136	rst_ms=28.1	rst_tail_ms=9.1	elims=5131446	fullclear_words=47094051	sparse_words=7745642	sparse_clears=0
+LADGATE	1492	10000	0.487	1
+LIFT	syn30m02m	1492	762	2608	762
+COUNTS	syn30m02m	1492	3936	13752	13455
+COPYSTATS	syn30m02m	secs=0.681	asm_calls=144	asm_words=1287744	asm_ms=0.3	rst_calls=216957	rst_words=23013601	rst_ms=16.5	rst_tail_ms=12.9	elims=6283901	fullclear_words=21182171	sparse_words=7567315	sparse_clears=0
+LADGATE	481	10000	0.512	1
+LADGATE	481	10000	0.534	1
+LIFT	wastewater13m1	481	353	3026	353
+COUNTS	wastewater13m1	481	3252	60135	60068
+COPYSTATS	wastewater13m1	secs=0.673	asm_calls=250	asm_words=324338	asm_ms=0.1	rst_calls=74638	rst_words=23963844	rst_ms=6.6	rst_tail_ms=7.8	elims=4071512	fullclear_words=21496560	sparse_words=6422388	sparse_clears=0
+LADGATE	1022	10000	0.303	1
+LIFT	syn40hfsg	1022	573	1726	573
+COUNTS	syn40hfsg	1022	2624	8432	8155
+COPYSTATS	syn40hfsg	secs=0.439	asm_calls=100	asm_words=563711	asm_ms=0.1	rst_calls=47525	rst_words=16839902	rst_ms=4.6	rst_tail_ms=4.3	elims=2862619	fullclear_words=15441372	sparse_words=3983297	sparse_clears=0
+LADGATE	69	10000	0.392	1
+LADGATE	69	10000	0.395	1
+LIFT	sep1	69	36	150	36
+COUNTS	sep1	69	206	1097	1047
+COPYSTATS	sep1	secs=0.444	asm_calls=108	asm_words=11636	asm_ms=0.0	rst_calls=142185	rst_words=18122884	rst_ms=6.3	rst_tail_ms=9.3	elims=8541592	fullclear_words=16767656	sparse_words=8696363	sparse_clears=0
+LADGATE	2508	10000	0.422	1
+LIFT	syn30m03m	2508	1278	4542	1278
+COUNTS	syn30m03m	2508	6804	26806	26552
+COPYSTATS	syn30m03m	secs=0.528	asm_calls=131	asm_words=3011441	asm_ms=0.7	rst_calls=49627	rst_words=29606672	rst_ms=8.3	rst_tail_ms=4.7	elims=2851895	fullclear_words=28261571	sparse_words=3948514	sparse_clears=0
+COUNTS	st_qpc-m3a	30	304	2330	1574
+COPYSTATS	st_qpc-m3a	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	2644	10000	0.734	1
+LIFT	crudeoil_pooling_ct3	2644	1586	9346	1586
+COUNTS	crudeoil_pooling_ct3	2644	11426	1381490	865089
+COPYSTATS	crudeoil_pooling_ct3	secs=1.029	asm_calls=139	asm_words=3106887	asm_ms=0.9	rst_calls=95647	rst_words=32286932	rst_ms=10.7	rst_tail_ms=10.5	elims=4660644	fullclear_words=28234449	sparse_words=7423376	sparse_clears=0
+LADGATE	634	10000	0.360	1
+LIFT	space25a	634	417	2530	417
+COUNTS	space25a	634	3246	29078	27875
+COPYSTATS	space25a	secs=0.553	asm_calls=97	asm_words=294894	asm_ms=0.1	rst_calls=19628	rst_words=15635075	rst_ms=2.8	rst_tail_ms=2.8	elims=2361731	fullclear_words=14996693	sparse_words=3899200	sparse_clears=0
+COUNTS	autocorr_bern20-15	23	394	2784	2784
+COPYSTATS	autocorr_bern20-15	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+LADGATE	35	10000	0.544	1
+LADGATE	35	10000	0.550	1
+LIFT	ex7_2_1	35	21	106	21
+COUNTS	ex7_2_1	35	134	352	341
+COPYSTATS	ex7_2_1	secs=0.797	asm_calls=80	asm_words=2792	asm_ms=0.0	rst_calls=500654	rst_words=17520850	rst_ms=23.0	rst_tail_ms=27.3	elims=15819350	fullclear_words=15819350	sparse_words=15538012	sparse_clears=0
+LADGATE	2092	10000	0.976	1
+LIFT	hydroenergy2	2092	1090	4556	1090
+COUNTS	hydroenergy2	2092	6236	69051	55964
+COPYSTATS	hydroenergy2	secs=1.154	asm_calls=236	asm_words=2308983	asm_ms=0.5	rst_calls=729984	rst_words=45782445	rst_ms=61.2	rst_tail_ms=45.3	elims=18257557	fullclear_words=39477124	sparse_words=20099317	sparse_clears=0
+LADGATE	514	10000	0.363	1
+LIFT	pooling_digabel19	514	296	5918	296
+COUNTS	pooling_digabel19	514	5340	325989	274903
+COPYSTATS	pooling_digabel19	secs=0.505	asm_calls=53	asm_words=195857	asm_ms=0.0	rst_calls=2611	rst_words=7783136	rst_ms=1.0	rst_tail_ms=1.0	elims=920808	fullclear_words=7298427	sparse_words=2446461	sparse_clears=0
+LADGATE	132	10000	0.433	1
+LADGATE	132	10000	0.435	1
+LIFT	clay0203m	132	63	282	63
+COUNTS	clay0203m	132	420	1348	1348
+COPYSTATS	clay0203m	secs=0.568	asm_calls=88	asm_words=22832	asm_ms=0.0	rst_calls=120448	rst_words=29220436	rst_ms=7.2	rst_tail_ms=10.7	elims=10923976	fullclear_words=27256392	sparse_words=12506757	sparse_clears=0
+LADGATE	13680	10000	0.360	0
+LIFT	squfl030-150	13680	4680	18000	4680
+COUNTS	squfl030-150	13680	36000	252605	252605
+COPYSTATS	squfl030-150	secs=0.360	asm_calls=53	asm_words=14316	asm_ms=0.0	rst_calls=4584	rst_words=1130784	rst_ms=0.4	rst_tail_ms=0.8	elims=423254	fullclear_words=859170	sparse_words=522500	sparse_clears=0
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.3863	arki0016	7993	37208	0.9508
+1.3152	rsyn0840m04m	8508	24272	0.8040
+1.3056	chp_partload	5211	16740	0.7328
+1.2581	crudeoil_lee4_06	10429	55492	0.4951
+1.2517	transswitch0300p	11659	48446	0.9264
+1.2428	crudeoil_lee4_10	17809	120632	0.6147
+1.2245	crudeoil_lee2_06	6418	34646	0.6818
+1.2242	powerflow0118p	5065	18730	0.9656
+1.2210	crudeoil_lee4_09	15904	101792	0.6171
+1.2169	chimera_selby-c16-02	2031	10878	0.5366
+1.2163	arki0013	44909	160172	0.3993
+1.1934	crudeoil_lee1_07	3670	19322	0.7459
+1.1729	powerflow0300p	11251	41918	0.9518
+1.1660	mpbp_15	9858	31692	0.7772
+1.1577	gasprod_sarawak16	4596	15316	0.9168
+1.1543	hydroenergy2	2092	6236	0.8105
+1.1342	rsyn0815m04m	5456	15756	0.7779
+1.1264	mpbp_48	28368	91016	0.4746
+1.1259	chimera_selby-c16-01	2031	10964	0.6666
+1.1172	crudeoil_pooling_dt2	18742	75910	0.6610
+1.1148	procurement1large	14416	41068	0.5275
+1.1047	pinene200	19995	97990	0.8336
+1.0850	mpbp_07	9532	30810	0.9120
+1.0841	popdynm200	22407	105584	0.9364
+1.0818	mpbp_47	5310	17098	0.8927
+1.0801	rsyn0820m04m	6028	17372	0.7758
+1.0741	rsyn0830m04m	7252	20752	0.8085
+1.0668	rsyn0805m03m	2868	8270	0.8992
+1.0606	crudeoil_pooling_dt3	30660	152210	0.7056
+1.0600	syn40m04m	4960	13792	0.9588
+1.0573	batchs121208m	3404	11462	0.9332
+1.0492	chp_shorttermplan2d	16364	52108	0.5025
+1.0291	crudeoil_pooling_ct3	2644	11426	0.6262
+1.0205	batchs201210m	5188	17910	0.8685
+1.0090	rsyn0810m04m	4772	13836	0.7672
+1.0045	sfacloc2_3_80	4799	20600	0.9580
+1.0009	popdynm25	2807	13904	0.7962
+0.9963	mpbp_35	11120	40790	0.3212
+0.9937	ringpack_30_2	17999	121458	0.2311
+0.9843	st_e07	19	60	1.0000
+0.9557	st_bsj2	13	40	0.7972
+0.9386	nuclear10a	17493	163816	0.6706
+0.9324	crudeoil_li05	4225	14628	0.7845
+0.9266	sfacloc2_4_80	5067	21424	0.9552
+0.9130	st_ph1	16	58	0.8504
+0.9082	ex5_2_4	18	62	0.9461
+0.8969	ex6_1_4	10	48	0.7766
+0.8961	gams05	17364	252910	0.5274
+0.8951	nuclear104	39098	257806	0.7593
+0.8950	methanol400	23999	151728	0.6931
+0.8914	chp_shorttermplan1a	4952	15700	0.7964
+0.8871	rsyn0840m02m	3486	9576	0.9464
+0.8843	ex8_1_7	14	46	0.9343
+0.8825	rsyn0810m02hfsg	2670	6964	0.9439
+0.8822	chimera_k64ising-02	1225	3846	0.6051
+0.8755	gabriel09	21688	89702	0.8695
+0.8734	nuclear25a	1942	16030	0.5747
+0.8731	prob02	22	76	0.8689
+0.8690	waste	4825	21504	0.8654
+0.8622	ex8_4_1	32	100	1.0000
+0.8588	nvs05	22	84	0.9603
+0.8402	mpbp_34	11556	40860	0.2880
+0.8296	methanol200	11999	76128	0.7018
+0.8269	nvs02	11	46	1.0000
+0.8181	nd_netgen-3000-1-1-b-b-ns_7	33155	90000	0.9584
+0.8148	pooling_haverly1pq	31	96	0.9782
+0.8124	pooling_haverly1tp	31	96	0.9527
+0.8111	multiplants_stg1b	814	3992	0.6079
+0.8076	himmel11	14	60	1.0000
+0.8071	edgecross24-115	16747	77352	0.8014
+0.7994	rsyn0815m02hfsg	3054	7968	0.9278
+0.7972	ex7_2_1	35	134	0.9688
+0.7901	gancns	548	2800	0.8407
+0.7875	chp_shorttermplan2a	8992	26288	0.7000
+0.7798	chimera_rfr-02	2032	15140	0.6450
+0.7784	kall_circlespolygons_c1p5b	1681	7432	0.9608
+0.7777	multiplants_stg1a	726	3510	0.8549
+0.7753	ex3_1_3	18	36	0.9222
+0.7673	pointpack04	29	120	1.0000
+0.7657	chimera_mgw-c8-439-onc8-001	440	3040	0.7347
+0.7621	multiplants_mtg1b	645	4404	0.6627
+0.7616	ndcc12	974	5982	0.9533
+0.7612	catmix400	2001	11192	0.9998
+0.7611	st_bpaf1a	30	120	0.9310
+0.7599	ex1225	26	66	0.9415
+0.7587	mpbp_21	11716	37660	0.8615
+0.7572	multiplants_stg1	736	3594	0.7853
+0.7567	sonet24v5	874	7260	0.5940
+0.7549	sonet23v4	803	6462	0.6753
+0.7538	crudeoil_pooling_ct1	1271	4642	0.7477
+0.7525	multiplants_stg5	827	3804	0.4122
+0.7522	oil	3270	8430	0.9572
+0.7446	multiplants_stg1c	800	3894	0.9532
+0.7438	chimera_mgw-c8-439-onc8-002	440	3038	0.8820
+0.7424	st_ht	8	18	0.8627
+0.7419	rocket50	555	3488	0.9641
+0.7417	st_bpk1	16	44	0.9391
+0.7385	st_pan1	11	32	0.7642
+0.7356	chimera_mgw-c16-2031-01	2032	15900	0.7722
+0.7339	pooling_sppa9tp	5040	121302	0.1613
+0.7310	netmod_kar1	1746	4928	0.7717
+0.7301	oaer	20	40	1.0000
+0.7280	pooling_sppa0pq	1649	24192	0.3170
+0.7259	st_glmp_ss2	18	48	1.0000
+0.7252	gasprod_sarawak81	22536	75636	0.9118
+0.7198	rsyn0820m02m	2486	6932	0.9368
+0.7097	ndcc13	969	5882	0.6183
+0.6998	st_glmp_ss1	24	66	1.0000
+0.6993	sporttournament08	31	156	1.0000
+0.6993	ex1223b	25	66	1.0000
+0.6984	wastewater02m1	36	138	0.9316
+0.6925	ex9_2_6	28	68	1.0000
+0.6902	st_ph13	23	68	0.8599
+0.6875	ex9_1_2	19	54	0.9521
+0.6859	pooling_foulds5tp	1218	8364	0.6828
+0.6850	gabriel10	244056	1148210	0.9285
+0.6849	st_e22	12	30	0.9091
+0.6821	ex14_1_8	11	30	1.0000
+0.6806	syn30m02m	1492	3936	0.9784
+0.6768	tls6	413	2860	0.9474
+0.6761	mpbp_46	4518	14492	0.8960
+0.6754	ex2_1_3	31	72	1.0000
+0.6747	pooling_sppc3pq	23173	893724	0.2822
+0.6744	faclay75	272878	1379706	0.9405
+0.6733	wastewater13m1	481	3252	0.9989
+0.6687	ringpack_20_3	6709	45220	0.3584
+0.6661	sporttournament48	1131	6676	0.6439
+0.6658	ndcc12persp	1112	5522	0.9521
+0.6620	catmix200	1001	5592	0.9995
+0.6598	rsyn0815m	821	2242	0.9377
+0.6570	st_jcbpaf2	36	246	0.9437
+0.6551	risk2bpb	1462	5396	0.5574
+0.6530	waterund01	96	404	0.7297
+0.6523	rsyn0830hfsg	1590	4100	0.9514
+0.6522	kall_circlesrectangles_c6r39	1306	5378	0.9850
+0.6518	sonet21v6	8232	40744	0.9650
+0.6465	pointpack06	55	276	1.0000
+0.6420	prolog	64	292	0.9839
+0.6409	acopf_case9241pegase_qcqp	313068	1292408	0.9737
+0.6361	kan_r3_h1_n4	3183	14062	0.9405
+0.6352	ex9_2_4	15	36	1.0000
+0.6345	ringpack_20_2	6089	40368	0.3779
+0.6339	tln2	32	88	1.0000
+0.6324	ex1265a	123	560	0.9498
+0.6308	pooling_foulds4pq	1294	8302	0.9989
+0.6266	chimera_lga-01	1120	6400	0.7406
+0.6224	ex1223	33	82	1.0000
+0.6199	st_qpk3	55	548	0.6881
+0.5952	st_rv2	40	340	1.0000
+0.5936	wastepaper4	115	724	0.7397
+0.5936	st_test8	64	232	0.8382
+0.5910	faclay35	26778	132380	0.9522
+0.5883	torsion50	2508	29808	0.6617
+0.5862	pooling_rt2tp	118	654	0.9864
+0.5833	syn40m04hfsg	6328	16896	0.9645
+0.5826	arki0002	4432	11248	0.9764
+0.5815	korcns	156	712	0.9113
+0.5772	demo7	155	618	0.9573
+0.5753	slay04m	146	432	1.0000
+0.5684	sonetgr17	440	2958	0.8190
+0.5683	waterund14	333	2204	0.3516
+0.5675	clay0203m	132	420	1.0000
+0.5658	wastewater05m1	98	536	0.6845
+0.5653	pooling_sppb5pq	18529	674470	0.4077
+0.5633	squfl020-150	9170	24000	1.0000
+0.5596	forest	713	2658	0.9933
+0.5596	tspn08	72	668	0.6863
+0.5585	slay09h	2718	7488	0.8982
+0.5570	supplychainr1_022020	4620	15680	0.9999
+0.5567	clay0305hfsg	1000	2910	0.9168
+0.5543	nd_netgen-2000-3-4-b-a-ns_7	22074	60000	0.9424
+0.5528	space25a	634	3246	0.9586
+0.5522	transswitch2383wpr	59853	277562	0.9785
+0.5472	ex8_3_9	123	834	0.7643
+0.5412	sfacloc2_4_90	1491	4500	0.9104
+0.5385	p_ball_30b_7p_2d_h	2207	7516	0.9968
+0.5369	syn15m04m	1908	5288	0.9604
+0.5369	waternd2	615	2580	0.4806
+0.5335	st_m1	42	432	1.0000
+0.5328	st_rv9	90	840	0.9447
+0.5326	csched1	110	376	1.0000
+0.5325	powerflow0030p	1121	4194	0.9478
+0.5281	waterund11	160	828	0.7224
+0.5281	syn30m03m	2508	6804	0.9905
+0.5265	sporttournament18	156	886	0.7746
+0.5257	faclay30	16678	82242	0.9552
+0.5220	ex1263a	94	390	1.0000
+0.5219	kall_diffcircles_6	76	302	1.0000
+0.5217	p_ball_30b_5p_2d_h	1543	5224	0.9961
+0.5191	elf	124	376	0.7951
+0.5126	edgecross10-030	1053	4654	0.7367
+0.5068	blend146	1422	4460	0.8232
+0.5053	pooling_digabel19	514	5340	0.8433
+0.5049	clay0204hfsg	590	1696	0.9116
+0.5016	qapw	705	87496	1.0000
+0.4930	syn40m	560	1528	0.9644
+0.4917	blend718	1386	4310	0.8737
+0.4903	maxcsp-langford-3-11	660	29646	0.3098
+0.4835	st_e31	301	744	0.9389
+0.4829	genpooling_lee2	221	1048	0.7051
+0.4821	orth_d4m6_pl	172	1096	0.9785
+0.4809	clay0204m	222	704	1.0000
+0.4806	powerflow0014r	403	1630	0.9628
+0.4780	p_ball_10b_7p_3d_h	1236	4186	0.9739
+0.4773	sssd18-08persp	338	1168	1.0000
+0.4767	rsyn0840m	1159	3168	0.9404
+0.4757	p_ball_10b_5p_2d_m	293	964	0.9848
+0.4748	blend721	1428	4548	0.8528
+0.4748	wastepaper6	191	1416	1.0000
+0.4734	slay05m	240	720	1.0000
+0.4704	edgecross10-040	1053	5116	0.8867
+0.4651	p_ball_10b_5p_4d_m	403	1484	0.9784
+0.4641	edgecross14-156	3097	19664	0.9254
+0.4611	graphpart_clique-30	120	2790	0.7961
+0.4607	pooling_adhya4pq	170	932	0.6809
+0.4598	transswitch2736spr	69651	331010	0.9179
+0.4577	sssd20-08persp	356	1232	1.0000
+0.4569	pooling_foulds5pq	1218	8300	1.0000
+0.4565	syn15hfsg	399	1022	0.9915
+0.4558	slay07m	497	1512	1.0000
+0.4556	maxmin	181	1440	1.0000
+0.4490	graphpart_3g-0244-0244	128	672	0.9727
+0.4448	graphpart_clique-20	80	1260	0.7985
+0.4445	sep1	69	206	0.9544
+0.4392	syn40hfsg	1022	2624	0.9671
+0.4384	edgecross10-080	1053	5940	0.9638
+0.4381	slay05h	760	2080	0.8961
+0.4366	squfl015-060	2775	7200	1.0000
+0.4349	st_m2	72	1226	1.0000
+0.4311	waterund08	230	1290	0.8534
+0.4269	clay0304m	258	840	1.0000
+0.4258	fo9_ar25_1	1049	4336	0.9177
+0.4248	pooling_adhya4tp	170	936	0.7667
+0.4243	space25	1178	4334	0.9559
+0.4233	o9_ar4_1	1049	4336	0.9177
+0.4164	glider400	10017	49624	0.8778
+0.4163	edgecross10-090	1053	5204	0.8181
+0.4130	pooling_sppc1pq	14100	477680	0.1683
+0.4130	sssd25-08	401	1200	1.0000
+0.4120	graphpart_3g-0333-0333	108	648	0.8064
+0.4069	syn10m04m	1224	3384	0.9972
+0.4039	slay06m	357	1080	1.0000
+0.4033	unitcommit_200_100_1_mod_8	146830	476332	0.9764
+0.3994	primary	378	5610	0.8688
+0.3970	pooling_sppa9pq	5030	120730	0.6340
+0.3938	squfl010-040persp	2450	7200	1.0000
+0.3868	supplychainr1_053050	16640	57800	1.0000
+0.3826	sssd15-04	163	440	1.0000
+0.3756	slay08m	660	2016	1.0000
+0.3754	syn10m03hfsg	1071	2772	0.9921
+0.3663	emfl100_5_5	21925	52300	1.0000
+0.3602	squfl030-150	13680	36000	1.0000
+0.3504	squfl010-080	2490	6400	1.0000
+0.3476	lop97icx	1073	2118	0.8078
+0.3438	kissing2	20772	401024	1.0000
+0.3413	squfl025-030	2305	6000	1.0000
+0.3394	hybriddynamic_fixed	168	388	1.0000
+0.2911	qspp_0_14_0_1_10_1	560	120274	0.9950
+0.2892	graphpart_clique-70	280	14910	0.8103
+0.2884	squfl015-080persp	7295	21600	1.0000
+0.2881	chain200	601	2396	1.0000
+0.2858	cont6-qq	120395	557994	0.6962
+0.2654	squfl025-025persp	3800	11250	1.0000
+0.2629	meanvar-orl400_05_e_8	4405	171604	1.0000
+0.2606	emfl100_3_3	6885	15948	1.0000
+0.2578	knp5-44	2157	32604	1.0000
+0.2542	maxcsp-ehi-85-297-71	2372	207996	0.8040
+0.2496	hydroenergy1	1046	3024	1.0000
+0.2389	qspp_0_13_0_1_10_1	481	88522	0.9948
+0.2382	knp5-43	2065	31132	1.0000
+0.2330	chain400	1201	4796	1.0000
+0.2281	emfl050_5_5	13175	32300	1.0000
+0.2189	meanvar-orl400_05_e_7	5205	174804	0.9998
+0.2079	qspp_0_10_0_1_10_1	280	29636	0.9946
+0.2069	qspp_0_11_0_1_10_1	341	44264	0.9911
+0.1856	qap	255	43748	0.9599
+0.1219	watercontamination0303r	1310	37028	1.0000
+0.0002	polygon75	5846	49652	1.0000
+0.0001	pedigree_sim400	351	23546	0.9997
+0.0000	camshape400	2000	7188	1.0000
+0.0000	autocorr_bern40-30	43	1534	1.0000
+0.0000	autocorr_bern35-35fix	38	1264	1.0000
+0.0000	smallinvDAXr1b010-011	39	1120	0.9859
+0.0000	autocorr_bern25-19	28	612	1.0000
+0.0000	autocorr_bern30-23	33	878	1.0000
+0.0000	cvxnonsep_psig30	30	870	1.0000
+0.0000	autocorr_bern20-15	23	394	1.0000
+0.0000	st_qpc-m3a	30	304	0.6755
+0.0000	cvxnonsep_psig20	20	380	1.0000
+0.0000	nvs23	27	252	0.6356
+0.0000	cvxnonsep_normcon40r	162	322	1.0000
+0.0000	nvs19	24	200	0.6534
+0.0000	st_iqpbk1	22	98	1.0000
+0.0000	st_e25	20	92	0.7798
+0.0000	cvxnonsep_psig30r	126	250	1.0000
+0.0000	st_miqp2	10	18	1.0000
+0.0000	cvxnonsep_normcon20r	82	162	1.0000
+0.0000	st_e41	8	32	1.0000
+0.0000	st_e24	10	26	0.8906
+0.0000	cvxnonsep_psig20r	86	170	1.0000
+matrices under 0.010s: 23/300
+matrices under 0.050s: 23/300
+matrices under 0.100s: 23/300
+matrices under 0.200s: 25/300
+matrices under 0.400s: 57/300
+
+--- per-bucket ---
+lt_1k    count=147   geomean=0.8870
+1k_10k   count=108   geomean=0.8373
+gt_10k   count=45    geomean=0.6822
+SCORE = 0.790171
+WORST order() = 1.386 s
+FORCEAUDIT	stage1b_sites=46	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=16	tie_pass_run=2
+test ordering::probe::probe_timing_and_score ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 185.34s
+

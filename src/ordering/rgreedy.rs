@@ -348,6 +348,61 @@ impl Drop for Game<'_> {
     }
 }
 
+/// TEST-ONLY (compiled out of the graded worker): the *buffer-restore* axis of
+/// the elimination game.
+///
+/// Every `Game` holds a mutable copy of the pristine `n·⌈n/64⌉`-word bitset.
+/// The iter69 pool device removed the *allocation* churn of that buffer; this
+/// counter module prices the *traffic* that remains: (a) the `assemble` copy
+/// that materialises a game, (b) the `reset` copy that restores the pristine
+/// image after a replay, (c) the full-row zeroing inside `eliminate`
+/// (`adj[v*w .. v*w+w] = 0`, `w` words per eliminated pivot regardless of how
+/// many of them are actually nonzero), and (d) the whole-reset non-copy work
+/// (`bhead.fill`, `deg` copy, the bucket/livelist rebuild).
+#[cfg(test)]
+pub(crate) mod copy_stats {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    pub(crate) static ASSEMBLE_CALLS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static ASSEMBLE_WORDS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static ASSEMBLE_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static RESET_CALLS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static RESET_WORDS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static RESET_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static RESET_TAIL_NS: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static ELIMS: AtomicU64 = AtomicU64::new(0);
+    /// Words a full-row clear writes (one `w` per pivot).
+    pub(crate) static FULLCLEAR_WORDS: AtomicU64 = AtomicU64::new(0);
+    /// Words a nonzero-only clear would write (|nonzero_words(v)| per pivot).
+    pub(crate) static SPARSE_WORDS: AtomicU64 = AtomicU64::new(0);
+    /// Pivots whose row was cleared through the nonzero-only path.
+    pub(crate) static SPARSE_CLEARS: AtomicU64 = AtomicU64::new(0);
+
+    #[inline]
+    pub(crate) fn bump(c: &AtomicU64, v: u64) {
+        c.fetch_add(v, Ordering::Relaxed);
+    }
+
+    /// (assemble_calls, assemble_words, assemble_ns, reset_calls, reset_words,
+    /// reset_ns, reset_tail_ns, elims, fullclear_words, sparse_words)
+    pub(crate) fn take() -> [u64; 11] {
+        let n = |c: &AtomicU64| c.swap(0, Ordering::Relaxed);
+        [
+            n(&ASSEMBLE_CALLS),
+            n(&ASSEMBLE_WORDS),
+            n(&ASSEMBLE_NS),
+            n(&RESET_CALLS),
+            n(&RESET_WORDS),
+            n(&RESET_NS),
+            n(&RESET_TAIL_NS),
+            n(&ELIMS),
+            n(&FULLCLEAR_WORDS),
+            n(&SPARSE_WORDS),
+            n(&SPARSE_CLEARS),
+        ]
+    }
+}
+
 /// Test-only seam: `SSI_NO_PRISTINE_MEMO=1` prices the rebuild arm inside the
 /// same binary. Production always takes the memoized path.
 #[inline(always)]
@@ -503,7 +558,15 @@ impl<'a> Game<'a> {
         // allocation; `Drop for Game` returns it to the thread-local pool.
         let mut adj = adj_pool_take(n * w);
         adj.resize(n * w, 0);
+        #[cfg(test)]
+        let t_copy = std::time::Instant::now();
         adj.copy_from_slice(&adj0[..n * w]);
+        #[cfg(test)]
+        {
+            copy_stats::bump(&copy_stats::ASSEMBLE_CALLS, 1);
+            copy_stats::bump(&copy_stats::ASSEMBLE_WORDS, (n * w) as u64);
+            copy_stats::bump(&copy_stats::ASSEMBLE_NS, t_copy.elapsed().as_nanos() as u64);
+        }
         Some(Game {
             n,
             w,
@@ -534,7 +597,17 @@ impl<'a> Game<'a> {
     }
 
     fn reset(&mut self) {
+        #[cfg(test)]
+        let t_copy = std::time::Instant::now();
         self.adj.copy_from_slice(&self.adj0[..self.n * self.w]);
+        #[cfg(test)]
+        {
+            copy_stats::bump(&copy_stats::RESET_CALLS, 1);
+            copy_stats::bump(&copy_stats::RESET_WORDS, (self.n * self.w) as u64);
+            copy_stats::bump(&copy_stats::RESET_NS, t_copy.elapsed().as_nanos() as u64);
+        }
+        #[cfg(test)]
+        let t_tail = std::time::Instant::now();
         self.bhead.fill(-1);
         self.livelist.clear();
         self.deg.copy_from_slice(&self.deg0);
@@ -558,6 +631,8 @@ impl<'a> Game<'a> {
         }
         self.mind = 0;
         self.nlive = self.nelim;
+        #[cfg(test)]
+        copy_stats::bump(&copy_stats::RESET_TAIL_NS, t_tail.elapsed().as_nanos() as u64);
         // Charged to match measured cost: the bitset copy and the per-vertex
         // popcount pass are both `n·w`, plus a fixed per-vertex bookkeeping term
         // (bucket insertion). Without the linear term the budget massively
@@ -697,6 +772,21 @@ impl<'a> Game<'a> {
         }
         // Keep legacy logical charges: search trajectories depend on them.
         self.ops += ((self.nlist.len() + 1) * (3 * w + 6) + 24) as i64;
+        // iter72: the scan above just proved that exactly `nonzero_words` words
+        // of row `v` are non-zero, so zeroing *those* leaves the row
+        // bit-identical to the full-width clear while writing
+        // `w - |nonzero_words(v)|` fewer words per pivot. Every replay of the
+        // elimination game pays this once per pivot (the exchange replays the
+        // whole order per sweep, and `rgreedy::search` replays per candidate),
+        // and a sparse fill graph has `|nonzero_words| << w` — so this is the
+        // dominant *write* term of a replay. `SSI_NO_SPARSE_CLEAR=1` prices the
+        // full-width arm inside the same binary.
+        #[cfg(test)]
+        {
+            copy_stats::bump(&copy_stats::ELIMS, 1);
+            copy_stats::bump(&copy_stats::FULLCLEAR_WORDS, w as u64);
+            copy_stats::bump(&copy_stats::SPARSE_WORDS, self.nonzero_words.len() as u64);
+        }
         for k in 0..w {
             self.adj[v * w + k] = 0;
         }

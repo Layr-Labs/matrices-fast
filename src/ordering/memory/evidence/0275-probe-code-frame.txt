@@ -1,0 +1,119 @@
+iter75 — THE PROBE'S *CODE* FRAME IS NOT PRODUCTION (two env-seam defaults), the probe->worker
+value-transfer failure measured for the first time, the charge shape shipped, and the true-frame
+max row is `arki0016` (1.28 s), not any row in the iter74 crown census.
+================================================================================================
+
+Why this exists
+---------------
+iter74 found that the lane's per-row `.pat` census fed the worker a graph with `n` self-loops
+(INPUT frame). This iteration audits the other half of the measurement frame — the *code*: every
+env seam here is `#[cfg(test)]`-gated, and the tests' UNSET defaults are what a probe actually
+runs. Two of them do not equal the production arm.
+
+1. The code-frame defect (source-level, verified)
+-------------------------------------------------
+    src/ordering/mod.rs:5518   #[cfg(test)] exchange_sweeps = env(SSI_EXCHANGE_SWEEPS).unwrap_or(6)
+    src/ordering/mod.rs:5527   #[cfg(not(test))] exchange_sweeps = 12        <-- shipped
+    src/ordering/mod.rs:5053   #[cfg(test)] preclass_win  = env(SSI_PRECLASS_WIN).unwrap_or(true)
+    src/ordering/mod.rs:5059   #[cfg(not(test))] preclass_win  = false       <-- shipped
+                               (same pair for preclass_step)
+
+So a probe run that sets neither seam measures **6 sweeps with the retired pre-class pair LIVE**,
+not the shipped program. Measured (one binary, 300/300 dev rows, `taskset -c 0-3`):
+
+    probe, seams pinned to production (SSI_EXCHANGE_SWEEPS=12, SSI_PRECLASS_WIN=0,
+    SSI_PRECLASS_STEP=0, SSI_MARK_NOSCORE=1)            SCORE 0.790254  buckets 0.8873/0.8373/0.6822
+    probe, 12 sweeps only (pre-class default = ON)      SCORE 0.790232  <-- equals the number
+                                                        iter74 recorded as "production-identical"
+    official local harness, shipped tree                SCORE 0.790282  (results.tsv:105)
+
+Readings:
+  * the pre-class pair is worth **-2.2e-5 dev at 12 sweeps** (0.790254 -> 0.790232); the iter61
+    receipt quoted -3.1e-5 at 6 sweeps, i.e. the pair is value-positive, not "a value-free spend".
+  * every probe price table in this record that did not pin those two seams was measured on the
+    6-sweep + pre-class-on program. iter72's charge-shape price (-1.75e-5) is one of them.
+  * the correction is applied in the tree (see §3).
+
+2. The probe frame and the worker frame disagree on 4 of 300 rows — and that is the whole
+   probe/official score offset
+----------------------------------------------------------------------------------------------
+Same tree, same config (12 sweeps, pre-class off, width 12, step 5, alloc 2):
+
+    row                     worker (official table)   probe (pinned)   probe - worker
+    gabriel09                       0.897                0.8695          -0.0275
+    crudeoil_pooling_dt3            0.691                0.7056          +0.0146
+    popdynm200                      0.932                0.9364          +0.0044
+    gasprod_sarawak81               0.910                0.9118          +0.0018
+
+Every other row agrees to the 3-dp rounding of the harness table. The four rows are all
+`gt_10k`; their log-ratio differences sum to -0.00461, i.e. -1.02e-4 of log-mean in a 45-row
+bucket -> **-2.8e-5 of score = exactly the probe(0.790254) - official(0.790282) gap**.
+
+The divergence is not the worker's environment:
+  * single-row official runs reproduce the table exactly (gabriel09 0.8968, pooling_dt3 0.6915,
+    popdynm200 0.9324, gasprod 0.9101) and the harness itself compares two fresh worker runs;
+  * direct worker runs on the contract `.pat` give the identical permutation md5 under
+    `ulimit -v 4194304`, 1 core, 4 cores and all 24 cores (gabriel09 `dccb8b327e92`,
+    pooling_dt3 `65479dcc1c4b` in all four);
+  * the probe is likewise stable across 4-core and all-core runs and with/without
+    `SSI_MARK_NOSCORE`.
+=> both frames are internally deterministic; the test build is a *behaviourally different
+program* on those rows. Hypothesis (unproven): a `#[cfg(test)]` instrument perturbs the
+pipeline's deterministic restart/ticket stream. Consequence for the lane: probe per-row value
+is exact on 296/300 rows and chaotic on 4, so a probe-priced device delta is only trustworthy
+where the two frames share a trajectory.
+
+3. The charge shape: probe-only by construction, shipped, and a measured transfer failure
+---------------------------------------------------------------------------------------------
+`xch_charge_scale` existed but its only consumer was `#[cfg(test)]` (`window_dp.rs:367`), so
+production charged exactly 100 % for every width — the "charge shape" rung was unreachable by
+a submitted tree. Shipped now:
+
+    window_dp.rs  PRODUCTION_XCH_BIGK_MIN = 11, PRODUCTION_XCH_BIGK_PCT = 75  (charge 75 % of
+                  the modelled price for every window component of width k >= 11)
+    window_dp.rs  the multiplier is no longer `#[cfg(test)]`-gated
+    mod.rs:5518   probe default for `exchange_sweeps` 6 -> 12 (production value)
+    mod.rs:5053/5059  probe defaults for the pre-class pair -> false (production value)
+
+Value, three frames:
+    probe, production-identical frame     0.790254 -> 0.790203   (-5.1e-5 dev, 7 movers)
+    official local sandboxed harness      0.790282 -> 0.790277   (-5.0e-6 dev, 300/300 OK,
+                                          fill 0.923142, results.tsv this iteration)
+    worker frame, per-row permutation md5: of 13 rows the probe moved, only TWO change
+        (ndcc12, chimera_selby-c16-01); the probe's largest movers
+        procurement1large -0.0014, lee4_09 -0.0006, pooling_dt3 -0.0006, lee4_06 -0.0005,
+        mpbp_48 -0.0005, lee1_07 +0.0013 are ALL permutation-identical in the worker frame.
+
+Wall (true frame: production worker, contract `.pat`, `taskset -c 0-3`, 3 reps, median):
+    row                  ctl     75 %     delta
+    chimera_selby-c16-01 1.110   1.130    +0.020
+    chimera_selby-c16-02 1.160   1.170    +0.010
+    arki0016             1.280   1.280     0.000
+    arki0013             1.230   1.220    -0.010
+    crudeoil_lee4_09     1.200   1.190    -0.010
+    crudeoil_lee4_10     1.210   1.200    -0.010
+    (17 rows total; 12 rows are equal-or-faster, the corpus max does not move)
+
+4. The true-frame max row is not in the crown list
+--------------------------------------------------
+`arki0016` (n = 7 993, nnz = 37 208 — a *small* row) reads **1.27/1.28/1.29 s** in the true
+4-core worker frame, above `arki0013` 1.23 and every row iter74's census listed (its worst was
+1.20-1.23 on lee4_09/lee4_10/arki0013). The probe agrees independently (its slowest row is
+`arki0016` 1.3996 s, then `rsyn0840m04m` 1.33, `chp_partload` 1.31, `transswitch0300p` 1.28).
+With the same-day pass/kill pair (shipped tree passed; the 3 GiB arm's 1.31 was cap-killed) the
+hidden slowdown bracket tightens from iter74's f in (1.53, 1.64] to
+
+    f <= 2.0/1.28 = 1.5625   and   f > 2.0/1.31 = 1.53     =>   f in (1.53, 1.5625]
+
+i.e. the standing survival line is ~**1.28 s local 4-core**, not 1.24-1.31, and the shipped
+tree's margin is 0.02-0.03 s on `arki0016` — not the 0.02-0.09 s iter74 quoted. Any further
+schedule-depth rung must be funded on THAT row.
+
+Next action
+-----------
+(i) The bat carrying §3 is submitted (`--note` quotes the frames and the -5e-6 worker-frame
+number). (ii) `arki0016`/`chp_partload`/`rsyn0840m04m` — the expensive *small-mid* rows the
+crown census never contained — are now the cap-critical set: attribute their 1.28 s per phase
+in the true frame before adding wall anywhere. (iii) A device's value must be confirmed by a
+worker-frame permutation change (md5 on contract `.pat`) or by the official harness; the probe
+alone over-reports by ~10x for ledger-shaped devices.

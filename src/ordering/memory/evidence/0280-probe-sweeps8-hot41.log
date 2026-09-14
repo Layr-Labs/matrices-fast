@@ -1,0 +1,968 @@
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1033:1
+     |
+1033 | / /// Which lineage the current `leader_order` call runs: `true` is the shipped
+1034 | | /// pipeline, `false` is the same pipeline with the `4.subtree` chain's budget
+1035 | | /// suppressed. A thread-local keeps the `order()` fork from re-parameterising
+1036 | | /// every intermediate call site, and the two lineages never share it.
+     | |_---------------------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1339:1
+     |
+1339 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1340 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1341 | | /// budget disables the stream, which is what production compiles to — the
+1342 | | /// switch can never change a submitted ordering. Configured through
+1343 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1344 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1702:1
+     |
+1702 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1703 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:335:1
+    |
+335 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+336 | | /// can run the SAME `order()` both ways in one process and compare the
+337 | | /// returned permutations element by element. Production builds compile
+338 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:369:1
+    |
+369 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+370 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+371 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+372 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5318:5
+     |
+5318 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+5319 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+5320 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+5321 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5327 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5328 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5329 |       #[cfg(test)]
+5330 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5331 | |         .ok()
+5332 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5333 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5487:9
+     |
+5487 | /         /// ── iter79: the dense rung is RETIRED (production compiles it OFF) ──
+5488 | |         /// Bat `4d26ed3d` was the promoted tree plus *only* this rung and it was
+5489 | |         /// killed at the grader's per-matrix time cap (86 s into the hidden run,
+5490 | |         /// the same mark as every other post-15:52 kill), so the rung's ~2.4e-5
+...    |
+5493 | |         /// now the production value (the 0275 lesson: a probe default that
+5494 | |         /// disagrees with production measures a different program).
+     | |____________________________________________________________________^
+5495 |           #[cfg(test)]
+5496 | /         let dense_rung_on: bool = std::env::var("SSI_TERM_DENSE_RUNG")
+5497 | |             .map(|v| v.trim() == "1")
+5498 | |             .unwrap_or(false);
+     | |______________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5501:9
+     |
+5501 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5502 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5503 | /         let shipped_ladder = || {
+5504 | |             if nnz < 3 * n {
+5505 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5506 | |             } else if dense_rung_on && nnz >= 10 * n {
+...    |
+5511 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4165:9
+     |
+4165 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `t_refine`
+   --> candidate-worker/src/../../src/ordering/rgreedy/window_dp.rs:763:17
+    |
+763 |             let t_refine = std::time::Instant::now();
+    |                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_t_refine`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:733:29
+    |
+733 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:946:7
+    |
+946 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: function `audit_enabled` is never used
+   --> candidate-worker/src/../../src/ordering/symbolic_flat.rs:316:15
+    |
+316 | pub(super) fn audit_enabled() -> bool {
+    |               ^^^^^^^^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:189:15
+    |
+189 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:314:15
+    |
+314 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:134:4
+    |
+134 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:230:4
+    |
+230 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:725:4
+    |
+725 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:560:19
+    |
+560 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 21 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.01s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+LADGATE	7252	10000	0.705	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	8	44	186999445	964626	513455	3898785	20922	181601657	125982598078368	125982598136400	20752
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	1	0	5133869	11519	507962	472042	0	4142346	125982598078368	125982598136400	20752
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	1	0	6383238	10962	504992	472143	0	5395141	125982598078368	125982598136400	20752
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	3	9	13044752	11598	478862	1436430	3903	11113959	125982598078368	125982598136400	20752
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	1	0	11095450	11032	499148	470534	0	10114736	125982598078368	125982598136400	20752
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	3	9	13020658	11476	498827	1471180	4012	11035163	125982598078368	125982598136400	20752
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	2	4	12570852	11137	478466	959735	1823	11119691	125982598078368	125982598136400	20752
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	1	0	11692193	10752	475092	495397	0	10710952	125982598078368	125982598136400	20752
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	1	0	9867142	11486	479002	487321	0	8889333	125982598078368	125982598136400	20752
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7252	3	3	12925740	14296	488839	1443045	1645	10977915	125982598078368	125982598136400	20752
+LIFT	rsyn0830m04m	7252	3744	14872	3744
+COUNTS	rsyn0830m04m	7252	20752	212130	171498
+COPYSTATS	rsyn0830m04m	secs=1.009	asm_calls=219	asm_words=14247015	asm_ms=8.1	rst_calls=183362	rst_words=53491529	rst_ms=33.8	rst_tail_ms=20.0	elims=9653157	fullclear_words=44366779	sparse_words=10739161	sparse_clears=0
+XCHSPLIT	rsyn0830m04m	1.009	windows=15002	comps=41633	refused=7	refused_big=5	engine=5955	brute=35678	win=0.241	dp=0.223	elim=0.024	hist=[35678, 3303, 1347, 552, 743, 10]
+LADGATE	1201	10000	0.193	1
+LIFT	chain400	1201	800	3196	800
+COUNTS	chain400	1201	4796	16382	16382
+COPYSTATS	chain400	secs=0.233	asm_calls=24	asm_words=477212	asm_ms=0.1	rst_calls=456	rst_words=8361532	rst_ms=1.1	rst_tail_ms=0.4	elims=402763	fullclear_words=7480981	sparse_words=1010199	sparse_clears=0
+XCHSPLIT	chain400	0.233	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	2157	10000	0.228	1
+LIFT	knp5-44	2157	1167	31152	1167
+COUNTS	knp5-44	2157	32604	3764003	3764003
+COPYSTATS	knp5-44	secs=0.252	asm_calls=18	asm_words=774053	asm_ms=0.2	rst_calls=124	rst_words=4972059	rst_ms=0.7	rst_tail_ms=0.2	elims=152759	fullclear_words=4895653	sparse_words=302569	sparse_clears=0
+XCHSPLIT	knp5-44	0.252	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	4405	10000	0.147	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	4	10	8585192	744920	197429	593670	2193	7046980	125982599239280	125982611461776	171604
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	2	19	2715180	95139	190287	298412	3348	2127994	125982599239280	125982611461776	171604
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	2	4	3225812	72803	157983	296210	1027	2697789	125982599239280	125982611461776	171604
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	3	9	5473184	71731	158700	419681	1630	4821442	125982599239280	125982611461776	171604
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	3	15	5363469	74190	157855	432048	2995	4696381	125982599239280	125982611461776	171604
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	3	9	5849568	74176	161267	435096	1948	5177081	125982599239280	125982611461776	171604
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	3	12	5568613	74192	178364	428334	2630	4885093	125982599239280	125982611461776	171604
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	3	12	5666577	73899	160912	440309	3430	4988027	125982599239280	125982611461776	171604
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	2	5	6671917	66899	162293	288813	1221	6152691	125982599239280	125982611461776	171604
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4405	3	3	5739773	67764	162108	428783	821	5080297	125982599239280	125982611461776	171604
+LIFT	meanvar-orl400_05_e_8	4405	2403	168400	2403
+COUNTS	meanvar-orl400_05_e_8	4405	171604	21923414	21922611
+COPYSTATS	meanvar-orl400_05_e_8	secs=0.269	asm_calls=11	asm_words=3343395	asm_ms=1.7	rst_calls=32	rst_words=9726240	rst_ms=4.4	rst_tail_ms=0.2	elims=128851	fullclear_words=8890719	sparse_words=233098	sparse_clears=0
+XCHSPLIT	meanvar-orl400_05_e_8	0.269	windows=12380	comps=25440	refused=4	refused_big=1	engine=6856	brute=18584	win=0.031	dp=0.022	elim=0.017	hist=[18438, 2592, 2335, 1898, 141, 36]
+LADGATE	80	10000	0.298	1
+LADGATE	80	10000	0.300	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	8	44	7528562	4865	1084	2012	7215	7513386	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	8	44	7465609	4119	859	2159	6998	7451474	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	66	1536327	501	932	957	8445	1525492	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	15	600971	461	824	798	2324	596564	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	10	315138	378	634	685	1623	311818	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	66	1515331	595	749	826	8534	1504627	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	15	560141	389	680	837	2319	555916	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	10	315614	384	666	724	1604	312236	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	18	3499686	375	532	908	2988	3494883	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	11	193132	451	899	876	1731	189175	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	18	3508281	337	545	977	2842	3503580	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	11	184303	405	725	746	1728	180699	125982604420896	125982607151648	1260
+XCHTIME	80	4	14	1157290	377	828	852	2219	1153014	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	14	1151911	635	790	1273	2168	1147045	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	13	2215637	395	767	1037	2045	2211393	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	13	2194236	372	988	875	2080	2189921	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	16	13723619	385	691	1659	2590	13718294	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	6	131968	805	1154	757	950	128302	125982604420896	125982607151648	1260
+XCHTIME	80	4	16	13590150	485	846	1346	2607	13584866	125982604420896	125982607151648	1260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	80	4	6	131112	529	813	691	926	128153	125982604420896	125982607151648	1260
+LIFT	graphpart_clique-20	80	77	1254	77
+COUNTS	graphpart_clique-20	80	1260	34885	27856
+COPYSTATS	graphpart_clique-20	secs=0.428	asm_calls=92	asm_words=13520	asm_ms=0.0	rst_calls=68929	rst_words=9464240	rst_ms=2.9	rst_tail_ms=5.8	elims=4878998	fullclear_words=8830298	sparse_words=8196577	sparse_clears=0
+XCHSPLIT	graphpart_clique-20	0.428	windows=692	comps=934	refused=0	refused_big=0	engine=0	brute=934	win=0.061	dp=0.060	elim=0.001	hist=[368, 252, 132, 76, 84, 22]
+LADGATE	28368	10000	0.829	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	28368	6	27	279177685	28599334	28816534	29001197	20492	192740128	125982603649104	125982625749088	91016
+LIFT	mpbp_48	28368	16000	66180	16000
+COUNTS	mpbp_48	28368	91016	33835023	16057644
+COPYSTATS	mpbp_48	secs=1.115	asm_calls=177	asm_words=12918864	asm_ms=4.8	rst_calls=16598	rst_words=104449050	rst_ms=32.9	rst_tail_ms=7.7	elims=4076106	fullclear_words=95733151	sparse_words=6591504	sparse_clears=0
+XCHSPLIT	mpbp_48	1.115	windows=14067	comps=1219	refused=0	refused_big=0	engine=418	brute=801	win=0.078	dp=0.067	elim=0.115	hist=[801, 11, 10, 12, 385, 0]
+LIFT	kissing2	20772	10772	381024	10772
+COUNTS	kissing2	20772	401024	156414018	156414018
+COPYSTATS	kissing2	secs=0.351	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+XCHSPLIT	kissing2	0.351	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	9170	10000	0.493	1
+LIFT	squfl020-150	9170	3170	12000	3170
+COUNTS	squfl020-150	9170	24000	135020	135020
+COPYSTATS	squfl020-150	secs=0.531	asm_calls=50	asm_words=6611430	asm_ms=3.9	rst_calls=7235	rst_words=14406222	rst_ms=8.3	rst_tail_ms=1.0	elims=520251	fullclear_words=11019991	sparse_words=772351	sparse_clears=0
+XCHSPLIT	squfl020-150	0.531	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	11659	10000	0.815	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	8	44	350803273	2682273	876190	7415406	19562	339809842	125982611238576	125982617714592	48446
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	1	0	5268436	24891	931523	888775	0	3423247	125982611238576	125982617714592	48446
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	1	0	5708638	22236	912445	899984	0	3873973	125982611238576	125982617714592	48446
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	1	0	11309442	22263	909643	909422	0	9468114	125982611238576	125982617714592	48446
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	1	0	10469337	23208	927124	876969	0	8642036	125982611238576	125982617714592	48446
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	1	0	10720260	22062	902402	890580	0	8905216	125982611238576	125982617714592	48446
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	1	0	11615713	23991	963889	886832	0	9741001	125982611238576	125982617714592	48446
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	1	0	11001371	23840	898802	898343	0	9180386	125982611238576	125982617714592	48446
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	1	0	9382483	22742	923890	890520	0	7545331	125982611238576	125982617714592	48446
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11659	1	0	10493631	21092	905145	883050	0	8684344	125982611238576	125982617714592	48446
+LIFT	transswitch0300p	11659	6750	41276	6750
+COUNTS	transswitch0300p	11659	48446	404940	375155
+COPYSTATS	transswitch0300p	secs=1.260	asm_calls=378	asm_words=35872856	asm_ms=14.6	rst_calls=123043	rst_words=81942670	rst_ms=31.7	rst_tail_ms=18.5	elims=9132638	fullclear_words=60040480	sparse_words=12455187	sparse_clears=0
+XCHSPLIT	transswitch0300p	1.260	windows=13407	comps=38476	refused=6	refused_big=4	engine=7678	brute=30798	win=0.371	dp=0.350	elim=0.038	hist=[30798, 3875, 1384, 793, 1615, 11]
+LADGATE	2001	10000	0.167	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	8	44	479188981	2508470	41588	241226	7546	476390151	125982618296256	125982618895184	11192
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	4	66	2800924	5854	37499	76156	6929	2674486	125982618296256	125982618895184	11192
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	4	15	2207333	6157	22098	57864	1965	2119249	125982618296256	125982618895184	11192
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	4	10	1922604	4238	16371	42633	1197	1858165	125982618296256	125982618895184	11192
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	1	0	14326817	3066	12626	10098	0	14301027	125982618296256	125982618895184	11192
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	4	11	1848347	5153	35774	54867	1716	1750837	125982618296256	125982618895184	11192
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	1	0	11418121	2878	12771	11363	0	11391109	125982618296256	125982618895184	11192
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	1	0	14684161	3671	19600	13557	0	14647333	125982618296256	125982618895184	11192
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	1	0	14142033	5375	35575	13473	0	14087610	125982618296256	125982618895184	11192
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2001	4	6	1904065	6297	47630	56110	874	1793154	125982618296256	125982618895184	11192
+LIFT	catmix400	2001	1998	11180	1998
+COUNTS	catmix400	2001	11192	36373	36364
+COPYSTATS	catmix400	secs=0.764	asm_calls=35	asm_words=1765647	asm_ms=0.4	rst_calls=443	rst_words=17043622	rst_ms=2.4	rst_tail_ms=0.6	elims=495190	fullclear_words=15163869	sparse_words=1528454	sparse_clears=0
+XCHSPLIT	catmix400	0.764	windows=6111	comps=5945	refused=5	refused_big=5	engine=4363	brute=1582	win=0.536	dp=0.532	elim=0.005	hist=[9, 1336, 2140, 1051, 1398, 11]
+LADGATE	3404	10000	0.870	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	8	44	30784762	190373	70236	689418	7152	29827583	125982598957552	125982658567280	11462
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	2	19	5199379	6020	88718	145180	2604	4956857	125982598957552	125982658567280	11462
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	4	15	6710397	4946	78695	279879	2264	6344613	125982598957552	125982658567280	11462
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	4	10	5991395	6132	91355	269494	1782	5622632	125982598957552	125982658567280	11462
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	3	15	11933965	5911	72366	214829	2045	11638814	125982598957552	125982658567280	11462
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	4	11	5538580	4899	76421	257503	2044	5197713	125982598957552	125982658567280	11462
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	4	14	8474954	4650	72094	278014	2026	8118170	125982598957552	125982658567280	11462
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	4	13	12060297	4465	75549	297791	2282	11680210	125982598957552	125982658567280	11462
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	1	0	9607314	5360	77565	75921	0	9448468	125982598957552	125982658567280	11462
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3404	4	6	5378628	5606	89185	279116	938	5003783	125982598957552	125982658567280	11462
+LIFT	batchs121208m	3404	1725	8392	1725
+COUNTS	batchs121208m	3404	11462	138030	128816
+COPYSTATS	batchs121208m	secs=1.031	asm_calls=199	asm_words=5040887	asm_ms=1.7	rst_calls=557534	rst_words=62838768	rst_ms=57.2	rst_tail_ms=41.4	elims=17110858	fullclear_words=54458749	sparse_words=18459405	sparse_clears=0
+XCHSPLIT	batchs121208m	1.031	windows=13356	comps=42065	refused=3	refused_big=3	engine=5168	brute=36897	win=0.083	dp=0.070	elim=0.014	hist=[36897, 3406, 782, 548, 416, 16]
+COUNTS	camshape400	2000	7188	16768	16768
+COPYSTATS	camshape400	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+XCHSPLIT	camshape400	0.000	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	120	10000	0.314	1
+LADGATE	120	10000	0.316	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	10	455258	6524	876	1159	2528	444171	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	66	562414	770	525	974	13551	546594	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	10	423180	5854	787	971	2165	413403	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	66	539982	695	600	820	11083	526784	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	15	865212	674	1030	946	3187	859375	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	10	411358	503	646	1282	2332	406595	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	15	868071	534	674	966	3182	862715	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	10	391030	540	801	849	2124	386716	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	18	6185312	615	908	1034	3762	6178993	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	11	255674	685	1057	1189	2400	250343	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	18	6236203	520	633	1104	3690	6230256	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	11	258367	545	796	909	2305	253812	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	14	1739128	529	553	1032	2912	1734102	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	14	1740163	541	548	1037	2932	1735105	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	13	3211908	647	843	1219	2715	3206484	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	13	3205838	509	821	1018	2846	3200644	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	16	21628597	580	948	1665	3526	21621878	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	6	197616	1139	1268	1270	1264	192675	125982597989200	125982604259728	2790
+XCHTIME	120	4	16	21461961	649	842	1312	3457	21455701	125982597989200	125982604259728	2790
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	120	4	6	201795	1135	926	893	1207	197634	125982597989200	125982604259728	2790
+LIFT	graphpart_clique-30	120	117	2784	117
+COUNTS	graphpart_clique-30	120	2790	114505	91153
+COPYSTATS	graphpart_clique-30	secs=0.445	asm_calls=92	asm_words=21360	asm_ms=0.0	rst_calls=31080	rst_words=7145280	rst_ms=1.3	rst_tail_ms=4.1	elims=3374499	fullclear_words=6748998	sparse_words=6284852	sparse_clears=0
+XCHSPLIT	graphpart_clique-30	0.445	windows=998	comps=1346	refused=0	refused_big=0	engine=0	brute=1346	win=0.069	dp=0.069	elim=0.001	hist=[580, 308, 256, 102, 72, 28]
+LADGATE	1310	10000	0.110	1
+LIFT	watercontamination0303r	1310	755	35918	755
+COUNTS	watercontamination0303r	1310	37028	2171882	2171882
+COPYSTATS	watercontamination0303r	secs=0.122	asm_calls=47	asm_words=196196	asm_ms=0.0	rst_calls=7358	rst_words=2217662	rst_ms=0.8	rst_tail_ms=0.9	elims=466843	fullclear_words=2023793	sparse_words=594484	sparse_clears=0
+XCHSPLIT	watercontamination0303r	0.122	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	4960	10000	0.881	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	8	44	32013463	428547	200008	1608565	13358	29762985	125982627919248	125982272220784	13792
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	3	57	5786147	7971	227080	583422	10714	4956960	125982627919248	125982272220784	13792
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	4	15	6989095	7185	200655	762351	4334	6014570	125982627919248	125982272220784	13792
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	4	10	7344943	6825	192351	770083	3037	6372647	125982627919248	125982272220784	13792
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	4	18	13164903	6683	186661	782771	4750	12184038	125982627919248	125982272220784	13792
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	4	11	6942849	7132	197473	800927	3383	5933934	125982627919248	125982272220784	13792
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	4	14	9603123	7634	196484	780794	4513	8613698	125982627919248	125982272220784	13792
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	4	13	11822174	6923	200260	851566	4727	10758698	125982627919248	125982272220784	13792
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	2	5	11116610	6905	214678	421716	1342	10471969	125982627919248	125982272220784	13792
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4960	4	6	6532244	7998	192817	733230	1914	5596285	125982627919248	125982272220784	13792
+LIFT	syn40m04m	4960	2524	9280	2524
+COUNTS	syn40m04m	4960	13792	65982	63265
+COPYSTATS	syn40m04m	secs=1.016	asm_calls=244	asm_words=9956345	asm_ms=4.7	rst_calls=443821	rst_words=67137880	rst_ms=54.7	rst_tail_ms=34.3	elims=15753914	fullclear_words=62390196	sparse_words=17010134	sparse_clears=0
+XCHSPLIT	syn40m04m	1.016	windows=20149	comps=17759	refused=2	refused_big=2	engine=7108	brute=10651	win=0.073	dp=0.061	elim=0.028	hist=[10651, 6447, 436, 117, 101, 7]
+LADGATE	705	10000	0.467	1
+LIFT	qapw	705	480	87046	480
+COUNTS	qapw	705	87496	12183146	12183146
+COPYSTATS	qapw	secs=0.498	asm_calls=5	asm_words=32948	asm_ms=0.0	rst_calls=65	rst_words=540548	rst_ms=0.1	rst_tail_ms=0.0	elims=45151	fullclear_words=538868	sparse_words=172062	sparse_clears=0
+XCHSPLIT	qapw	0.498	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	17809	10000	1.034	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	17809	3	15	200423949	12023745	4122641	5782979	7804	178486780	125982634482144	125982639201792	120632
+LIFT	crudeoil_lee4_10	17809	10229	106656	10229
+COUNTS	crudeoil_lee4_10	17809	120632	294531623	181053364
+COPYSTATS	crudeoil_lee4_10	secs=1.240	asm_calls=209	asm_words=6031164	asm_ms=2.1	rst_calls=25568	rst_words=44889957	rst_ms=10.6	rst_tail_ms=6.7	elims=2568033	fullclear_words=26839337	sparse_words=4804945	sparse_clears=0
+XCHSPLIT	crudeoil_lee4_10	1.240	windows=3564	comps=8862	refused=0	refused_big=0	engine=2523	brute=6339	win=0.143	dp=0.138	elim=0.035	hist=[6339, 630, 1158, 152, 583, 0]
+LADGATE	14416	10000	0.683	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	7	33	323487227	7575031	2714461	9060406	22312	304115017	125982614865600	125982634624640	41068
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	1	0	5385867	22404	1297505	1242272	0	2823686	125982614865600	125982634624640	41068
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	1	0	5422512	24103	1269549	1243982	0	2884878	125982614865600	125982634624640	41068
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	1	0	10780562	23507	1276812	1280014	0	8200229	125982614865600	125982634624640	41068
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	1	0	10613298	22435	1265076	1240717	0	8085070	125982614865600	125982634624640	41068
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	1	0	10869447	23634	1321064	1241637	0	8283112	125982614865600	125982634624640	41068
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	1	0	10742919	23745	1280769	1268289	0	8170116	125982614865600	125982634624640	41068
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	1	0	10618039	23321	1263920	1231175	0	8099623	125982614865600	125982634624640	41068
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	1	0	10670147	22928	1289883	1234903	0	8122433	125982614865600	125982634624640	41068
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	14416	1	0	10797712	23663	1272666	1250560	0	8250823	125982614865600	125982634624640	41068
+LIFT	procurement1large	14416	6606	28248	6606
+COUNTS	procurement1large	14416	41068	13858240	7309631
+COPYSTATS	procurement1large	secs=1.111	asm_calls=295	asm_words=33966326	asm_ms=12.9	rst_calls=54037	rst_words=80953354	rst_ms=25.9	rst_tail_ms=11.6	elims=5896602	fullclear_words=66888273	sparse_words=9208221	sparse_clears=0
+XCHSPLIT	procurement1large	1.111	windows=18373	comps=38279	refused=3	refused_big=1	engine=7133	brute=31146	win=0.304	dp=0.282	elim=0.063	hist=[31146, 4008, 1056, 823, 1246, 0]
+LADGATE	16640	10000	0.400	0
+LIFT	supplychainr1_053050	16640	9640	44160	9640
+COUNTS	supplychainr1_053050	16640	57800	2173490	2173490
+COPYSTATS	supplychainr1_053050	secs=0.400	asm_calls=98	asm_words=849488	asm_ms=0.2	rst_calls=12849	rst_words=2682304	rst_ms=1.3	rst_tail_ms=1.3	elims=557108	fullclear_words=1692206	sparse_words=788339	sparse_clears=0
+XCHSPLIT	supplychainr1_053050	0.400	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	5211	10000	0.932	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	8	44	162855039	1631550	244454	1951011	11603	159016421	125982614817616	125982616511776	16740
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	1	0	6022718	9579	268161	232084	0	5512894	125982614817616	125982616511776	16740
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	2	4	6146483	15222	249127	458904	995	5422235	125982614817616	125982616511776	16740
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	4	10	11246313	9511	223617	972999	3701	10036485	125982614817616	125982616511776	16740
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	2	5	12145915	8725	237599	469700	1001	11428890	125982614817616	125982616511776	16740
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	4	11	10508571	8764	239058	890668	2842	9367239	125982614817616	125982616511776	16740
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	4	14	12364668	9307	253687	895518	3638	11202518	125982614817616	125982616511776	16740
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	3	12	12431075	9095	228574	715952	3301	11474153	125982614817616	125982616511776	16740
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	1	0	12132726	8817	230471	251728	0	11641710	125982614817616	125982616511776	16740
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5211	4	6	9680690	8950	251446	897856	1139	8521299	125982614817616	125982616511776	16740
+LIFT	chp_partload	5211	3186	12690	3186
+COUNTS	chp_partload	5211	16740	509170	373130
+COPYSTATS	chp_partload	secs=1.249	asm_calls=285	asm_words=11560351	asm_ms=5.8	rst_calls=215512	rst_words=66567270	rst_ms=39.2	rst_tail_ms=23.4	elims=11081121	fullclear_words=60644091	sparse_words=14610560	sparse_clears=0
+XCHSPLIT	chp_partload	1.249	windows=17681	comps=28113	refused=4	refused_big=4	engine=4907	brute=23206	win=0.211	dp=0.196	elim=0.033	hist=[23206, 2124, 1309, 637, 826, 11]
+LADGATE	2508	10000	0.464	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	4	10	10810855	1003434	59876	116957	1785	9628803	125982617117280	125982638740480	29808
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	2	19	6224520	14017	58699	88699	3872	6059233	125982617117280	125982638740480	29808
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	2	4	6412845	13678	49000	56722	636	6292809	125982617117280	125982638740480	29808
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	4	10	10009389	13067	38140	109233	1620	9847329	125982617117280	125982638740480	29808
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	1	0	12051281	13057	45567	18272	0	11974385	125982617117280	125982638740480	29808
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	4	11	7537940	13424	53061	118514	1875	7351066	125982617117280	125982638740480	29808
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	3	12	12841442	13437	32548	87383	2313	12705761	125982617117280	125982638740480	29808
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	2	4	12408577	13339	27870	51942	712	12314714	125982617117280	125982638740480	29808
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	1	0	15077884	12695	39142	16827	0	15009220	125982617117280	125982638740480	29808
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2508	4	6	6361688	14497	70995	107725	1050	6167421	125982617117280	125982638740480	29808
+LIFT	torsion50	2508	1302	20190	1302
+COUNTS	torsion50	2508	29808	1691033	1118955
+COPYSTATS	torsion50	secs=0.598	asm_calls=172	asm_words=3454642	asm_ms=1.0	rst_calls=24265	rst_words=17342443	rst_ms=4.2	rst_tail_ms=3.6	elims=1616019	fullclear_words=15593392	sparse_words=4319012	sparse_clears=0
+XCHSPLIT	torsion50	0.598	windows=7094	comps=7796	refused=5	refused_big=5	engine=4936	brute=2860	win=0.079	dp=0.075	elim=0.018	hist=[2694, 2799, 1741, 403, 147, 12]
+COUNTS	polygon75	5846	49652	1171822	1171822
+COPYSTATS	polygon75	secs=0.000	asm_calls=0	asm_words=0	asm_ms=0.0	rst_calls=0	rst_words=0	rst_ms=0.0	rst_tail_ms=0.0	elims=0	fullclear_words=0	sparse_words=0	sparse_clears=0
+XCHSPLIT	polygon75	0.000	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	72	10000	0.331	1
+LADGATE	72	10000	0.333	1
+LIFT	st_m2	72	21	420	21
+COUNTS	st_m2	72	1226	16331	16331
+COPYSTATS	st_m2	secs=0.439	asm_calls=76	asm_words=8898	asm_ms=0.0	rst_calls=100866	rst_words=12243786	rst_ms=4.2	rst_tail_ms=7.1	elims=6458034	fullclear_words=11725008	sparse_words=9886554	sparse_clears=0
+XCHSPLIT	st_m2	0.439	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	11251	10000	0.804	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	6	27	236548393	2506357	1202556	7273766	10997	225554717	125982310822000	125982310912032	41918
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	1	0	5970226	21788	1223841	1205875	0	3518722	125982310822000	125982310912032	41918
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	1	0	6440350	19579	1212374	1207480	0	4000917	125982310822000	125982310912032	41918
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	1	0	11901552	21042	1217033	1198870	0	9464607	125982310822000	125982310912032	41918
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	1	0	11538604	29132	1226837	1189797	0	9092838	125982310822000	125982310912032	41918
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	1	0	11663554	20675	1226211	1200553	0	9216115	125982310822000	125982310912032	41918
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	1	0	12294922	20733	1197935	1211006	0	9865248	125982310822000	125982310912032	41918
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	1	0	11903652	21765	1221882	1207977	0	9452028	125982310822000	125982310912032	41918
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	1	0	9815264	20670	1195020	1204507	0	7395067	125982310822000	125982310912032	41918
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	11251	1	0	11034441	19995	1217313	1198655	0	8598478	125982310822000	125982310912032	41918
+LIFT	powerflow0300p	11251	6342	34748	6342
+COUNTS	powerflow0300p	11251	41918	304705	290023
+COPYSTATS	powerflow0300p	secs=1.140	asm_calls=406	asm_words=35336229	asm_ms=20.3	rst_calls=189863	rst_words=76811399	rst_ms=43.6	rst_tail_ms=20.2	elims=9181021	fullclear_words=55722589	sparse_words=11826095	sparse_clears=0
+XCHSPLIT	powerflow0300p	1.140	windows=11919	comps=33430	refused=5	refused_big=3	engine=5746	brute=27684	win=0.266	dp=0.249	elim=0.030	hist=[27684, 3439, 835, 550, 914, 8]
+LADGATE	3670	10000	0.922	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	8	44	110762073	226905	87813	814298	8727	109624330	125982616393008	125982640924192	19322
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	2	19	3700482	8291	121890	176258	2328	3391715	125982616393008	125982640924192	19322
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	3	12	4516964	7663	87229	285163	2150	4134759	125982616393008	125982640924192	19322
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	4	10	6823202	8390	103374	290058	1908	6419472	125982616393008	125982640924192	19322
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	2	5	10744382	8082	94600	181712	1073	10458915	125982616393008	125982640924192	19322
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	4	11	6601440	7941	102250	376581	2783	6111885	125982616393008	125982640924192	19322
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	4	14	9744627	8399	91403	382088	2547	9260190	125982616393008	125982640924192	19322
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	3	12	10251501	8129	88319	287181	2260	9865612	125982616393008	125982640924192	19322
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	1	0	10077550	8208	92328	84859	0	9892155	125982616393008	125982640924192	19322
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	3670	4	6	6218679	8228	116439	361274	1614	5731124	125982616393008	125982640924192	19322
+LIFT	crudeoil_lee1_07	3670	1957	17600	1957
+COUNTS	crudeoil_lee1_07	3670	19322	4746188	3540043
+COPYSTATS	crudeoil_lee1_07	secs=1.117	asm_calls=225	asm_words=5701300	asm_ms=2.2	rst_calls=234407	rst_words=50792039	rst_ms=26.5	rst_tail_ms=24.7	elims=9365207	fullclear_words=37427497	sparse_words=11567617	sparse_clears=0
+XCHSPLIT	crudeoil_lee1_07	1.117	windows=13080	comps=20896	refused=5	refused_big=5	engine=2292	brute=18604	win=0.147	dp=0.138	elim=0.028	hist=[18496, 723, 847, 299, 520, 11]
+LADGATE	10429	10000	0.944	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	10429	7	33	291991406	2322329	1064325	7221635	12604	281370513	125982641571328	125982316764304	55492
+LIFT	crudeoil_lee4_06	10429	6797	109128	6797
+COUNTS	crudeoil_lee4_06	10429	55492	65337120	32348553
+COPYSTATS	crudeoil_lee4_06	secs=1.240	asm_calls=215	asm_words=12550939	asm_ms=7.2	rst_calls=58458	rst_words=46795480	rst_ms=19.4	rst_tail_ms=9.9	elims=4333074	fullclear_words=32284712	sparse_words=6938213	sparse_clears=0
+XCHSPLIT	crudeoil_lee4_06	1.240	windows=6048	comps=15812	refused=0	refused_big=0	engine=3786	brute=12026	win=0.245	dp=0.236	elim=0.036	hist=[12026, 1061, 1347, 375, 1003, 0]
+LADGATE	6418	10000	0.915	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	8	44	128413579	838066	379676	2980302	12049	124203486	125982637104624	125982262880336	34646
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	1	0	4418391	16061	398800	367925	0	3635605	125982637104624	125982262880336	34646
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	1	0	4339168	17224	373374	364200	0	3584370	125982637104624	125982262880336	34646
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	2	3	7155578	17727	376788	734573	1676	6024814	125982637104624	125982262880336	34646
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	1	0	9015701	16259	374379	370124	0	8254939	125982637104624	125982262880336	34646
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	2	3	7110656	17025	383369	741763	1361	5967138	125982637104624	125982262880336	34646
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	2	4	7455460	16044	370602	749801	1523	6317490	125982637104624	125982262880336	34646
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	1	0	7106020	15856	359208	381429	0	6349527	125982637104624	125982262880336	34646
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	1	0	9909114	16933	372935	371182	0	9148064	125982637104624	125982262880336	34646
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	6418	2	3	7125749	16560	381724	741559	1096	5984810	125982637104624	125982262880336	34646
+LIFT	crudeoil_lee2_06	6418	4139	66598	4139
+COUNTS	crudeoil_lee2_06	6418	34646	23299675	15944362
+COPYSTATS	crudeoil_lee2_06	secs=1.148	asm_calls=218	asm_words=11270831	asm_ms=6.1	rst_calls=131077	rst_words=48354128	rst_ms=21.9	rst_tail_ms=15.5	elims=5929118	fullclear_words=33439704	sparse_words=8417273	sparse_clears=0
+XCHSPLIT	crudeoil_lee2_06	1.148	windows=12665	comps=17919	refused=3	refused_big=2	engine=2431	brute=15488	win=0.133	dp=0.123	elim=0.046	hist=[15460, 665, 785, 372, 631, 6]
+LADGATE	8508	10000	0.882	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	8	44	221644045	1366046	688928	5604962	21310	213962799	125982263917424	125982313531584	24272
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	1	0	5339931	13487	699278	677408	0	3949758	125982263917424	125982313531584	24272
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	1	0	6359899	19350	682453	692587	0	4965509	125982263917424	125982313531584	24272
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	2	3	12838717	13677	676461	1370687	1335	10776557	125982263917424	125982313531584	24272
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	1	0	11532623	13614	701309	693156	0	10124544	125982263917424	125982313531584	24272
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	2	3	12875495	12910	706326	1355479	1778	10799002	125982263917424	125982313531584	24272
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	1	0	12070511	12557	680805	671982	0	10705167	125982263917424	125982313531584	24272
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	1	0	12032498	14021	683575	691298	0	10643604	125982263917424	125982313531584	24272
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	1	0	9820795	13408	672944	714346	0	8420097	125982263917424	125982313531584	24272
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	8508	2	3	12284229	12512	683440	1363423	1368	10223486	125982263917424	125982313531584	24272
+LIFT	rsyn0840m04m	8508	4368	17360	4368
+COUNTS	rsyn0840m04m	8508	24272	229914	185785
+COPYSTATS	rsyn0840m04m	secs=1.226	asm_calls=253	asm_words=19454263	asm_ms=11.4	rst_calls=215668	rst_words=63069955	rst_ms=39.4	rst_tail_ms=24.9	elims=11911410	fullclear_words=52792120	sparse_words=13263972	sparse_clears=0
+XCHSPLIT	rsyn0840m04m	1.226	windows=14626	comps=42444	refused=7	refused_big=4	engine=6058	brute=36386	win=0.268	dp=0.250	elim=0.027	hist=[36386, 3350, 1278, 590, 832, 8]
+LADGATE	21925	10000	0.365	0
+LIFT	emfl100_5_5	21925	9425	27300	9425
+COUNTS	emfl100_5_5	21925	52300	221650	221650
+COPYSTATS	emfl100_5_5	secs=0.366	asm_calls=17	asm_words=152572	asm_ms=0.0	rst_calls=412	rst_words=424124	rst_ms=0.1	rst_tail_ms=0.1	elims=45872	fullclear_words=374590	sparse_words=57717	sparse_clears=0
+XCHSPLIT	emfl100_5_5	0.366	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	874	10000	0.481	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	8	44	54516254	21267	3281	32819	4659	54454228	125982313324016	125982265658272	7260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	3	57	7868843	3056	6942	14325	7191	7837329	125982313324016	125982265658272	7260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	4	15	4778569	3525	6278	13926	1287	4753553	125982313324016	125982265658272	7260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	4	10	2717221	2200	5795	12745	780	2695701	125982313324016	125982265658272	7260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	3	15	18819939	2295	4565	14863	1629	18796587	125982313324016	125982265658272	7260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	4	11	1603517	3145	6933	10907	819	1581713	125982313324016	125982265658272	7260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	4	14	8686485	1759	3898	12637	1042	8667149	125982313324016	125982265658272	7260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	4	13	14903675	2261	5688	14654	955	14880117	125982313324016	125982265658272	7260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	2	5	18690581	2227	5652	10571	479	18671652	125982313324016	125982265658272	7260
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	874	4	6	1144440	3464	6117	11447	486	1122926	125982313324016	125982265658272	7260
+LIFT	sonet24v5	874	595	6704	595
+COUNTS	sonet24v5	874	7260	185654	110276
+COPYSTATS	sonet24v5	secs=0.721	asm_calls=100	asm_words=453750	asm_ms=0.1	rst_calls=59457	rst_words=15773183	rst_ms=5.6	rst_tail_ms=5.3	elims=2749966	fullclear_words=14616111	sparse_words=3409461	sparse_clears=0
+XCHSPLIT	sonet24v5	0.721	windows=3486	comps=6730	refused=3	refused_big=3	engine=0	brute=6730	win=0.130	dp=0.128	elim=0.003	hist=[5176, 495, 475, 277, 289, 18]
+LADGATE	5040	10000	0.716	1
+LIFT	pooling_sppa9tp	5040	2642	116234	2642
+COUNTS	pooling_sppa9tp	5040	121302	104609262	16877457
+COPYSTATS	pooling_sppa9tp	secs=0.730	asm_calls=181	asm_words=600442	asm_ms=0.2	rst_calls=218142	rst_words=20671851	rst_ms=17.7	rst_tail_ms=16.6	elims=5094956	fullclear_words=10582820	sparse_words=7222501	sparse_clears=0
+XCHSPLIT	pooling_sppa9tp	0.730	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	9858	10000	0.767	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	8	44	187440837	1937365	924154	7419592	23502	177136224	125982264539296	125982286555200	31692
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	1	0	5895241	16834	933665	933857	0	4010885	125982264539296	125982286555200	31692
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	1	0	6437488	15750	925315	917477	0	4578946	125982264539296	125982286555200	31692
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	2	3	11267705	16284	916573	1848426	2177	8484245	125982264539296	125982286555200	31692
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	1	0	11618387	15805	969275	915869	0	9717438	125982264539296	125982286555200	31692
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	2	3	11320912	16064	934115	1858272	2007	8510454	125982264539296	125982286555200	31692
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	1	0	11340098	15599	915258	925147	0	9484094	125982264539296	125982286555200	31692
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	1	0	11971579	23492	919859	920103	0	10108125	125982264539296	125982286555200	31692
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	1	0	10049636	16461	926421	921402	0	8185352	125982264539296	125982286555200	31692
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	9858	2	3	11281515	15874	932100	1838413	1665	8493463	125982264539296	125982286555200	31692
+LIFT	mpbp_15	9858	5550	25800	5550
+COUNTS	mpbp_15	9858	31692	1496502	1163008
+COPYSTATS	mpbp_15	secs=1.095	asm_calls=221	asm_words=26125774	asm_ms=15.4	rst_calls=66520	rst_words=80088113	rst_ms=35.0	rst_tail_ms=15.3	elims=8099971	fullclear_words=61406411	sparse_words=11527651	sparse_clears=0
+XCHSPLIT	mpbp_15	1.095	windows=14532	comps=47464	refused=7	refused_big=4	engine=7985	brute=39479	win=0.212	dp=0.190	elim=0.037	hist=[39479, 5591, 854, 573, 957, 10]
+LADGATE	814	10000	0.604	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	8	44	42914632	16324	3283	29220	3633	42862172	125982641341200	125982268938032	3992
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	1	0	6992841	2574	4067	2159	0	6984041	125982641341200	125982268938032	3992
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	4	15	3782546	2138	6844	10512	1236	3761816	125982641341200	125982268938032	3992
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	4	10	2214189	1586	5109	9896	693	2196905	125982641341200	125982268938032	3992
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	4	18	17892670	1109	3423	19646	1490	17867002	125982641341200	125982268938032	3992
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	4	11	1389222	2524	4514	8857	763	1372564	125982641341200	125982268938032	3992
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	4	14	6717412	882	3093	9898	1206	6702333	125982641341200	125982268938032	3992
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	4	13	11635642	1336	3751	12878	1206	11616471	125982641341200	125982268938032	3992
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	1	0	15080760	1929	5328	2362	0	15071141	125982641341200	125982268938032	3992
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	814	4	6	1056380	2772	8798	9713	448	1034649	125982641341200	125982268938032	3992
+LIFT	multiplants_stg1b	814	337	3456	337
+COUNTS	multiplants_stg1b	814	3992	308612	187593
+COPYSTATS	multiplants_stg1b	secs=0.790	asm_calls=86	asm_words=466358	asm_ms=0.1	rst_calls=34952	rst_words=13364256	rst_ms=3.6	rst_tail_ms=3.3	elims=1951489	fullclear_words=12409883	sparse_words=3904633	sparse_clears=0
+XCHSPLIT	multiplants_stg1b	0.790	windows=3233	comps=4748	refused=3	refused_big=3	engine=0	brute=4748	win=0.106	dp=0.104	elim=0.003	hist=[3473, 418, 332, 254, 246, 25]
+LADGATE	13175	10000	0.228	0
+LIFT	emfl050_5_5	13175	5675	17300	5675
+COUNTS	emfl050_5_5	13175	32300	155400	155400
+COPYSTATS	emfl050_5_5	secs=0.228	asm_calls=17	asm_words=133312	asm_ms=0.0	rst_calls=412	rst_words=404864	rst_ms=0.1	rst_tail_ms=0.1	elims=46588	fullclear_words=379882	sparse_words=58889	sparse_clears=0
+XCHSPLIT	emfl050_5_5	0.228	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	4596	10000	0.787	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	8	44	164293860	367423	164165	1391889	12102	162358281	125982265756592	125982287013968	15316
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	1	0	4694906	8288	187761	154093	0	4344764	125982265756592	125982287013968	15316
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	2	4	6946750	7393	182268	315175	1380	6440534	125982265756592	125982287013968	15316
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	4	10	14476860	6974	158519	647691	3177	13660499	125982265756592	125982287013968	15316
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	1	0	11328782	7562	153406	162063	0	11005751	125982265756592	125982287013968	15316
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	4	11	12130062	6903	164650	616158	3781	11338570	125982265756592	125982287013968	15316
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	2	4	12999069	7676	162412	336406	1488	12491087	125982265756592	125982287013968	15316
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	1	0	11879036	7234	156071	157792	0	11557939	125982265756592	125982287013968	15316
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	1	0	10108070	7235	167526	159549	0	9773760	125982265756592	125982287013968	15316
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	4596	4	6	9897112	7486	185224	648443	2533	9053426	125982265756592	125982287013968	15316
+LIFT	gasprod_sarawak16	4596	2632	12316	2632
+COUNTS	gasprod_sarawak16	4596	15316	213850	196064
+COPYSTATS	gasprod_sarawak16	secs=1.099	asm_calls=266	asm_words=8766046	asm_ms=3.8	rst_calls=186967	rst_words=59299678	rst_ms=29.4	rst_tail_ms=18.6	elims=8756968	fullclear_words=52325365	sparse_words=11453285	sparse_clears=0
+XCHSPLIT	gasprod_sarawak16	1.099	windows=12587	comps=23569	refused=7	refused_big=5	engine=8326	brute=15243	win=0.231	dp=0.218	elim=0.021	hist=[15243, 4618, 2261, 609, 825, 13]
+LADGATE	15904	10000	1.004	0
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	15904	3	15	217566997	10155792	3121560	4608443	7737	199673465	125982328576928	125982134980336	101792
+LIFT	crudeoil_lee4_09	15904	10632	92014	10632
+COUNTS	crudeoil_lee4_09	15904	101792	208785578	128851771
+COPYSTATS	crudeoil_lee4_09	secs=1.226	asm_calls=209	asm_words=4915130	asm_ms=1.7	rst_calls=32406	rst_words=39116634	rst_ms=9.5	rst_tail_ms=7.4	elims=3236897	fullclear_words=28145665	sparse_words=5606182	sparse_clears=0
+XCHSPLIT	crudeoil_lee4_09	1.226	windows=3953	comps=9820	refused=0	refused_big=0	engine=2560	brute=7260	win=0.161	dp=0.155	elim=0.038	hist=[7260, 661, 1088, 174, 637, 0]
+LADGATE	42	10000	0.332	1
+LADGATE	42	10000	0.354	1
+LIFT	st_m1	42	11	110	11
+COUNTS	st_m1	42	432	3097	3097
+COPYSTATS	st_m1	secs=0.496	asm_calls=54	asm_words=2248	asm_ms=0.0	rst_calls=250047	rst_words=10498569	rst_ms=10.1	rst_tail_ms=15.3	elims=9908548	fullclear_words=9908548	sparse_words=9739684	sparse_clears=0
+XCHSPLIT	st_m1	0.496	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+LADGATE	5310	10000	0.914	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	8	44	49523940	507669	210081	1900282	12094	46893814	125982263650416	125982287210592	17098
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	3	57	4660560	8912	266103	663040	11081	3711424	125982263650416	125982287210592	17098
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	3	12	5582010	8870	247405	670122	3445	4652168	125982263650416	125982287210592	17098
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	4	10	7208885	8383	217161	912911	3822	6066608	125982263650416	125982287210592	17098
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	2	5	11604824	9258	217552	467248	1890	10908876	125982263650416	125982287210592	17098
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	4	11	6533925	9187	234725	878998	3145	5407870	125982263650416	125982287210592	17098
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	4	14	10178626	9592	223729	943106	4983	8997216	125982263650416	125982287210592	17098
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	3	12	11447563	8993	265712	705538	3654	10463666	125982263650416	125982287210592	17098
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	1	0	10816031	9094	242242	218019	0	10346676	125982263650416	125982287210592	17098
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	5310	4	6	6357558	9074	267448	872806	1884	5206346	125982263650416	125982287210592	17098
+LIFT	mpbp_47	5310	3182	12798	3182
+COUNTS	mpbp_47	5310	17098	730624	652208
+COPYSTATS	mpbp_47	secs=1.085	asm_calls=197	asm_words=11202721	asm_ms=5.6	rst_calls=399696	rst_words=70766817	rst_ms=52.5	rst_tail_ms=32.2	elims=12543996	fullclear_words=60797155	sparse_words=14672404	sparse_clears=0
+XCHSPLIT	mpbp_47	1.085	windows=19566	comps=2856	refused=3	refused_big=3	engine=1003	brute=1853	win=0.078	dp=0.071	elim=0.034	hist=[1853, 252, 306, 188, 248, 9]
+LADGATE	7993	10000	1.044	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	8	44	148727823	2729555	605906	4711219	14319	140666824	125982329404352	125982325432880	37208
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	1	0	4209316	18705	617721	609682	0	2963208	125982329404352	125982325432880	37208
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	1	0	5761447	18610	584156	606396	0	4552285	125982329404352	125982325432880	37208
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	2	3	11192187	17867	582076	1176387	1100	9414757	125982329404352	125982325432880	37208
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	1	0	11286067	17913	578696	577706	0	10111752	125982329404352	125982325432880	37208
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	2	3	10894298	17592	590504	1155017	1122	9130063	125982329404352	125982325432880	37208
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	2	4	11434936	17161	601183	1175393	1731	9639468	125982329404352	125982325432880	37208
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	1	0	10946721	17230	597202	584185	0	9748104	125982329404352	125982325432880	37208
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	1	0	10127873	17575	573308	610401	0	8926589	125982329404352	125982325432880	37208
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	7993	2	3	10860490	16434	615822	1163000	1116	9064118	125982329404352	125982325432880	37208
+LIFT	arki0016	7993	4968	26810	4968
+COUNTS	arki0016	7993	37208	878890	835661
+COPYSTATS	arki0016	secs=1.334	asm_calls=331	asm_words=12976359	asm_ms=7.2	rst_calls=88776	rst_words=59060707	rst_ms=23.9	rst_tail_ms=16.0	elims=7481298	fullclear_words=45149772	sparse_words=11734277	sparse_clears=0
+XCHSPLIT	arki0016	1.334	windows=13703	comps=38418	refused=4	refused_big=3	engine=3612	brute=34806	win=0.183	dp=0.166	elim=0.032	hist=[34806, 1389, 1371, 341, 502, 9]
+LADGATE	2092	10000	0.993	1
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	8	44	63250056	56208	11352	243001	4810	62934685	125982269081440	125982287490208	6236
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	4	66	1726678	3569	32948	69549	3969	1616643	125982269081440	125982287490208	6236
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	4	15	4491940	2419	17905	67184	1101	4403331	125982269081440	125982287490208	6236
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	4	10	2820302	2554	21609	63555	927	2731657	125982269081440	125982287490208	6236
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	3	15	16285425	2023	18096	84220	1185	16179901	125982269081440	125982287490208	6236
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	4	11	2143017	4149	20502	73148	1144	2044074	125982269081440	125982287490208	6236
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	4	14	9488982	2306	20316	72182	1680	9392498	125982269081440	125982287490208	6236
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	4	13	16462681	2251	21062	98799	1411	16339158	125982269081440	125982287490208	6236
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	1	0	15646180	3651	25400	20533	0	15596596	125982269081440	125982287490208	6236
+XCHTIME	0	0	0	0	0	0	0	0	0	0	0	0
+XCHTIME	2092	4	6	1762757	3867	44717	64762	768	1648643	125982269081440	125982287490208	6236
+LIFT	hydroenergy2	2092	1090	4556	1090
+COUNTS	hydroenergy2	2092	6236	69051	56014
+COPYSTATS	hydroenergy2	secs=1.142	asm_calls=236	asm_words=2308983	asm_ms=0.5	rst_calls=729980	rst_words=45506301	rst_ms=57.8	rst_tail_ms=44.9	elims=18249171	fullclear_words=39200386	sparse_words=20082099	sparse_clears=0
+XCHSPLIT	hydroenergy2	1.142	windows=8375	comps=6321	refused=3	refused_big=3	engine=954	brute=5367	win=0.125	dp=0.121	elim=0.008	hist=[5010, 598, 256, 205, 243, 9]
+LADGATE	13680	10000	0.356	0
+LIFT	squfl030-150	13680	4680	18000	4680
+COUNTS	squfl030-150	13680	36000	252605	252605
+COPYSTATS	squfl030-150	secs=0.357	asm_calls=53	asm_words=14316	asm_ms=0.0	rst_calls=4584	rst_words=1130784	rst_ms=0.4	rst_tail_ms=0.8	elims=423254	fullclear_words=859170	sparse_words=522500	sparse_clears=0
+XCHSPLIT	squfl030-150	0.357	windows=0	comps=0	refused=0	refused_big=0	engine=0	brute=0	win=0.000	dp=0.000	elim=0.000	hist=[0, 0, 0, 0, 0, 0]
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.3335	arki0016	7993	37208	0.9508
+1.2604	transswitch0300p	11659	48446	0.9264
+1.2486	chp_partload	5211	16740	0.7328
+1.2403	crudeoil_lee4_06	10429	55492	0.4951
+1.2402	crudeoil_lee4_10	17809	120632	0.6147
+1.2264	crudeoil_lee4_09	15904	101792	0.6171
+1.2256	rsyn0840m04m	8508	24272	0.8081
+1.1479	crudeoil_lee2_06	6418	34646	0.6843
+1.1422	hydroenergy2	2092	6236	0.8112
+1.1402	powerflow0300p	11251	41918	0.9518
+1.1167	crudeoil_lee1_07	3670	19322	0.7459
+1.1148	mpbp_48	28368	91016	0.4746
+1.1113	procurement1large	14416	41068	0.5275
+1.0989	gasprod_sarawak16	4596	15316	0.9168
+1.0951	mpbp_15	9858	31692	0.7772
+1.0851	mpbp_47	5310	17098	0.8927
+1.0315	batchs121208m	3404	11462	0.9332
+1.0161	syn40m04m	4960	13792	0.9588
+1.0085	rsyn0830m04m	7252	20752	0.8085
+0.7898	multiplants_stg1b	814	3992	0.6079
+0.7643	catmix400	2001	11192	0.9998
+0.7305	pooling_sppa9tp	5040	121302	0.1613
+0.7214	sonet24v5	874	7260	0.5940
+0.5984	torsion50	2508	29808	0.6617
+0.5313	squfl020-150	9170	24000	1.0000
+0.4984	qapw	705	87496	1.0000
+0.4959	st_m1	42	432	1.0000
+0.4453	graphpart_clique-30	120	2790	0.7961
+0.4393	st_m2	72	1226	1.0000
+0.4279	graphpart_clique-20	80	1260	0.7985
+0.3999	supplychainr1_053050	16640	57800	1.0000
+0.3655	emfl100_5_5	21925	52300	1.0000
+0.3566	squfl030-150	13680	36000	1.0000
+0.3514	kissing2	20772	401024	1.0000
+0.2686	meanvar-orl400_05_e_8	4405	171604	1.0000
+0.2523	knp5-44	2157	32604	1.0000
+0.2332	chain400	1201	4796	1.0000
+0.2280	emfl050_5_5	13175	32300	1.0000
+0.1223	watercontamination0303r	1310	37028	1.0000
+0.0002	polygon75	5846	49652	1.0000
+0.0000	camshape400	2000	7188	1.0000
+matrices under 0.010s: 2/41
+matrices under 0.050s: 2/41
+matrices under 0.100s: 2/41
+matrices under 0.200s: 3/41
+matrices under 0.400s: 11/41
+
+--- per-bucket ---
+lt_1k    count=7     geomean=0.8104
+1k_10k   count=22    geomean=0.8161
+gt_10k   count=12    geomean=0.7670
+SCORE = 0.794758
+WORST order() = 1.334 s
+FORCEAUDIT	stage1b_sites=6	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=3	tie_pass_run=2
+test ordering::probe::probe_timing_and_score ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 31.53s
+

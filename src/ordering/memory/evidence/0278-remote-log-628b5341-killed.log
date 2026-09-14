@@ -1,0 +1,1134 @@
+benchmark	Set up job	﻿2026-09-13T19:11:56.2321738Z Current runner version: '2.337.0'
+benchmark	Set up job	2026-09-13T19:11:56.2347464Z ##[group]Runner Image Provisioner
+benchmark	Set up job	2026-09-13T19:11:56.2348847Z Hosted Compute Agent
+benchmark	Set up job	2026-09-13T19:11:56.2349534Z Version: 20260828.587
+benchmark	Set up job	2026-09-13T19:11:56.2350303Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+benchmark	Set up job	2026-09-13T19:11:56.2351097Z Build Date: 2026-08-28T16:44:25Z
+benchmark	Set up job	2026-09-13T19:11:56.2351848Z Worker ID: {4a334af8-2f65-4700-8a96-dbe964a56984}
+benchmark	Set up job	2026-09-13T19:11:56.2353032Z Azure Region: northcentralus
+benchmark	Set up job	2026-09-13T19:11:56.2353703Z ##[endgroup]
+benchmark	Set up job	2026-09-13T19:11:56.2355356Z ##[group]Operating System
+benchmark	Set up job	2026-09-13T19:11:56.2356107Z Ubuntu
+benchmark	Set up job	2026-09-13T19:11:56.2356733Z 24.04.5
+benchmark	Set up job	2026-09-13T19:11:56.2357289Z LTS
+benchmark	Set up job	2026-09-13T19:11:56.2358156Z ##[endgroup]
+benchmark	Set up job	2026-09-13T19:11:56.2358897Z ##[group]Runner Image
+benchmark	Set up job	2026-09-13T19:11:56.2359594Z Image: ubuntu-24.04
+benchmark	Set up job	2026-09-13T19:11:56.2360281Z Version: 20260907.300.1
+benchmark	Set up job	2026-09-13T19:11:56.2361426Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+benchmark	Set up job	2026-09-13T19:11:56.2363295Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+benchmark	Set up job	2026-09-13T19:11:56.2364326Z ##[endgroup]
+benchmark	Set up job	2026-09-13T19:11:56.2365551Z ##[group]GITHUB_TOKEN Permissions
+benchmark	Set up job	2026-09-13T19:11:56.2368078Z Contents: read
+benchmark	Set up job	2026-09-13T19:11:56.2368831Z Metadata: read
+benchmark	Set up job	2026-09-13T19:11:56.2369430Z ##[endgroup]
+benchmark	Set up job	2026-09-13T19:11:56.2371609Z Secret source: Actions
+benchmark	Set up job	2026-09-13T19:11:56.2372614Z Cache mode: write
+benchmark	Set up job	2026-09-13T19:11:56.2373474Z Prepare workflow directory
+benchmark	Set up job	2026-09-13T19:11:56.2823251Z Prepare all required actions
+benchmark	Set up job	2026-09-13T19:11:56.2893472Z Getting action download info
+benchmark	Set up job	2026-09-13T19:11:56.5493859Z Download action repository 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+benchmark	Set up job	2026-09-13T19:11:56.6543823Z Download action repository 'dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c' (SHA:4360b52568e2003a75bf9bc1d59f33a8e3fc893c)
+benchmark	Set up job	2026-09-13T19:11:56.7842895Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+benchmark	Set up job	2026-09-13T19:11:57.0286018Z Complete job name: benchmark
+benchmark	Checkout dispatched ref	﻿2026-09-13T19:11:57.1077208Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1086500Z ##[group]Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1087536Z with:
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1088250Z   lfs: true
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1088728Z   repository: Layr-Labs/matrices-fast
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1092860Z   token: ***
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1093318Z   ssh-strict: true
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1093779Z   ssh-user: git
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1094254Z   persist-credentials: true
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1094772Z   clean: true
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1095246Z   sparse-checkout-cone-mode: true
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1095819Z   fetch-depth: 1
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1096278Z   fetch-tags: false
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1096743Z   show-progress: true
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1097250Z   submodules: false
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1097885Z   set-safe-directory: true
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1098427Z   allow-unsafe-pr-checkout: false
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.1099288Z ##[endgroup]
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2112075Z Syncing repository: Layr-Labs/matrices-fast
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2115097Z ##[group]Getting Git version info
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2116562Z Working directory is '/home/runner/work/matrices-fast/matrices-fast'
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2118382Z [command]/usr/bin/git version
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2194820Z git version 2.55.0
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2232233Z [command]/usr/bin/git lfs version
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2912334Z git-lfs/3.8.0 (GitHub; linux amd64; go 1.27.0)
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2926976Z ##[endgroup]
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2942014Z Temporarily overriding HOME='/home/runner/work/_temp/0032f6ff-31f9-457e-960b-b7cafe69d3e1' before making global git config changes
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2944444Z Adding repository directory to the temporary git global config as a safe directory
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2946981Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/matrices-fast/matrices-fast
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.2998000Z Deleting the contents of '/home/runner/work/matrices-fast/matrices-fast'
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3001680Z ##[group]Initializing the repository
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3005927Z [command]/usr/bin/git init /home/runner/work/matrices-fast/matrices-fast
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3123914Z hint: Using 'master' as the name for the initial branch. This default branch name
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3125588Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3126870Z hint: to use in all of your new repositories, which will suppress this warning,
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3127997Z hint: call:
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3128496Z hint:
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3129078Z hint: 	git config --global init.defaultBranch <name>
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3129803Z hint:
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3130460Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3131503Z hint: 'development'. The just-created branch can be renamed via this command:
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3132363Z hint:
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3132834Z hint: 	git branch -m <name>
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3133379Z hint:
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3134082Z hint: Disable this message with "git config set advice.defaultBranchName false"
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3147942Z Initialized empty Git repository in /home/runner/work/matrices-fast/matrices-fast/.git/
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3156979Z [command]/usr/bin/git remote add origin https://github.com/Layr-Labs/matrices-fast
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3204750Z ##[endgroup]
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3205771Z ##[group]Disabling ***matic garbage collection
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3208222Z [command]/usr/bin/git config --local gc.*** 0
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3243013Z ##[endgroup]
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3244289Z ##[group]Setting up auth
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3246953Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3277665Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3553249Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3584596Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3814013Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.3848983Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.4083067Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.4115727Z ##[endgroup]
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.4119779Z [command]/usr/bin/git lfs install --local
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.4501058Z Updated Git hooks.
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.4501636Z Git LFS initialized.
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.4516659Z ##[group]Fetching the repository
+benchmark	Checkout dispatched ref	2026-09-13T19:11:57.4527913Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +0a753b4742f4c5a2704fe4c45b3c61376d302e9e:refs/remotes/origin/submissions/628b5341-1215-491b-a61a-9ecb7b527384
+benchmark	Checkout dispatched ref	2026-09-13T19:11:59.6902206Z From https://github.com/Layr-Labs/matrices-fast
+benchmark	Checkout dispatched ref	2026-09-13T19:11:59.6904001Z  * [new ref]         0a753b4742f4c5a2704fe4c45b3c61376d302e9e -> origin/submissions/628b5341-1215-491b-a61a-9ecb7b527384
+benchmark	Checkout dispatched ref	2026-09-13T19:11:59.6910743Z ##[endgroup]
+benchmark	Checkout dispatched ref	2026-09-13T19:11:59.6912108Z ##[group]Determining the checkout info
+benchmark	Checkout dispatched ref	2026-09-13T19:11:59.6919661Z ##[endgroup]
+benchmark	Checkout dispatched ref	2026-09-13T19:11:59.6920970Z ##[group]Fetching LFS objects
+benchmark	Checkout dispatched ref	2026-09-13T19:11:59.6923043Z [command]/usr/bin/git lfs fetch origin refs/remotes/origin/submissions/628b5341-1215-491b-a61a-9ecb7b527384
+benchmark	Checkout dispatched ref	2026-09-13T19:11:59.7160295Z Fetching reference refs/remotes/origin/submissions/628b5341-1215-491b-a61a-9ecb7b527384
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.5798404Z ##[endgroup]
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.5802802Z [command]/usr/bin/git sparse-checkout disable
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.5854120Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.5880039Z ##[group]Checking out the ref
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.5883671Z [command]/usr/bin/git checkout --progress --force -B submissions/628b5341-1215-491b-a61a-9ecb7b527384 refs/remotes/origin/submissions/628b5341-1215-491b-a61a-9ecb7b527384
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.9244809Z Switched to a new branch 'submissions/628b5341-1215-491b-a61a-9ecb7b527384'
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.9250965Z branch 'submissions/628b5341-1215-491b-a61a-9ecb7b527384' set up to track 'origin/submissions/628b5341-1215-491b-a61a-9ecb7b527384'.
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.9527575Z ##[endgroup]
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.9568140Z [command]/usr/bin/git log -1 --format=%H
+benchmark	Checkout dispatched ref	2026-09-13T19:12:06.9590503Z 0a753b4742f4c5a2704fe4c45b3c61376d302e9e
+benchmark	Setup toolchain	﻿2026-09-13T19:12:06.9936661Z ##[group]Run dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+benchmark	Setup toolchain	2026-09-13T19:12:06.9937206Z with:
+benchmark	Setup toolchain	2026-09-13T19:12:06.9937480Z   toolchain: stable
+benchmark	Setup toolchain	2026-09-13T19:12:06.9938019Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0011078Z ##[start-action display=Parse toolchain version;id=__dtolnay_rust-toolchain.parse]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0066867Z ##[group]Run if [[ -z $toolchain ]]; then
+benchmark	Setup toolchain	2026-09-13T19:12:07.0067378Z [36;1mif [[ -z $toolchain ]]; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0068214Z [36;1m  # GitHub does not enforce `required: true` inputs itself. https://github.com/actions/runner/issues/1070[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0068912Z [36;1m  echo "'toolchain' is a required input" >&2[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0069300Z [36;1m  exit 1[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0069725Z [36;1melif [[ $toolchain =~ ^stable' '[0-9]+' '(year|month|week|day)s?' 'ago$ ]]; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0070271Z [36;1m  if [[ Linux == macOS ]]; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0070921Z [36;1m    echo "toolchain=1.$((($(date -v-$(sed 's/stable \([0-9]*\) \(.\).*/\1\2/' <<< $toolchain) +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0071585Z [36;1m  else[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0072077Z [36;1m    echo "toolchain=1.$((($(date --date "${toolchain#stable }" +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0072628Z [36;1m  fi[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0073005Z [36;1melif [[ $toolchain =~ ^stable' 'minus' '[0-9]+' 'releases?$ ]]; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0073629Z [36;1m  echo "toolchain=1.$((($(date +%s)/60/60/24-16569)/7/6-${toolchain//[^0-9]/}))" >> $GITHUB_OUTPUT[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0074179Z [36;1melif [[ $toolchain =~ ^1\.[0-9]+$ ]]; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0074812Z [36;1m  echo "toolchain=1.$((i=${toolchain#1.}, c=($(date +%s)/60/60/24-16569)/7/6, i+9*i*(10*i<=c)+90*i*(100*i<=c)))" >> $GITHUB_OUTPUT[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0075410Z [36;1melse[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0075726Z [36;1m  echo "toolchain=$toolchain" >> $GITHUB_OUTPUT[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0076098Z [36;1mfi[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0116488Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.0116970Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.0117248Z   toolchain: stable
+benchmark	Setup toolchain	2026-09-13T19:12:07.0117535Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0226780Z ##[end-action id=__dtolnay_rust-toolchain.parse;outcome=success;conclusion=success;duration_ms=21]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0240716Z ##[start-action display=Construct rustup command line;id=__dtolnay_rust-toolchain.flags]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0270475Z ##[group]Run echo "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT
+benchmark	Setup toolchain	2026-09-13T19:12:07.0271267Z [36;1mecho "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0272018Z [36;1mecho "components=$(for c in ${components//,/ }; do echo -n ' --component' $c; done)" >> $GITHUB_OUTPUT[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0272753Z [36;1mecho "downgrade=" >> $GITHUB_OUTPUT[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0305955Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.0306399Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.0306653Z   targets: 
+benchmark	Setup toolchain	2026-09-13T19:12:07.0306910Z   components: 
+benchmark	Setup toolchain	2026-09-13T19:12:07.0307174Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0377598Z ##[end-action id=__dtolnay_rust-toolchain.flags;outcome=success;conclusion=success;duration_ms=13]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0380629Z ##[start-action display=Set $CARGO_HOME;id=__dtolnay_rust-toolchain.__run]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0400271Z ##[group]Run echo CARGO_HOME=${CARGO_HOME:-"$HOME/.cargo"} >> $GITHUB_ENV
+benchmark	Setup toolchain	2026-09-13T19:12:07.0400849Z [36;1mecho CARGO_HOME=${CARGO_HOME:-"$HOME/.cargo"} >> $GITHUB_ENV[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0433258Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.0433700Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0494669Z ##[end-action id=__dtolnay_rust-toolchain.__run;outcome=success;conclusion=success;duration_ms=11]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0497231Z ##[start-action display=Install rustup if needed;id=__dtolnay_rust-toolchain.__run_2]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0523508Z ##[group]Run if ! command -v rustup &>/dev/null; then
+benchmark	Setup toolchain	2026-09-13T19:12:07.0524193Z [36;1mif ! command -v rustup &>/dev/null; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0525047Z [36;1m  curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://sh.rustup.rs | sh -s -- --default-toolchain none -y[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0525889Z [36;1m  echo "$CARGO_HOME/bin" >> $GITHUB_PATH[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0526251Z [36;1mfi[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0558718Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.0559146Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.0559411Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup toolchain	2026-09-13T19:12:07.0559742Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0618748Z ##[end-action id=__dtolnay_rust-toolchain.__run_2;outcome=success;conclusion=success;duration_ms=12]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0621382Z ##[start-action display=Install rustup if needed on windows;id=__dtolnay_rust-toolchain.__run_3]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0629049Z ##[end-action id=__dtolnay_rust-toolchain.__run_3;outcome=skipped;conclusion=skipped;duration_ms=0]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0640704Z ##[start-action display=rustup toolchain install stable;id=__dtolnay_rust-toolchain.__run_4]
+benchmark	Setup toolchain	2026-09-13T19:12:07.0661242Z ##[group]Run rustup toolchain install stable --profile minimal --no-self-update
+benchmark	Setup toolchain	2026-09-13T19:12:07.0661904Z [36;1mrustup toolchain install stable --profile minimal --no-self-update[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.0694234Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.0694667Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.0694945Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup toolchain	2026-09-13T19:12:07.0695283Z   RUSTUP_PERMIT_COPY_RENAME: 1
+benchmark	Setup toolchain	2026-09-13T19:12:07.0695597Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.2546158Z info: syncing channel updates for stable-x86_64-unknown-linux-gnu
+benchmark	Setup toolchain	2026-09-13T19:12:07.3635180Z 
+benchmark	Setup toolchain	2026-09-13T19:12:07.3744426Z   stable-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+benchmark	Setup toolchain	2026-09-13T19:12:07.3745156Z 
+benchmark	Setup toolchain	2026-09-13T19:12:07.3775255Z ##[end-action id=__dtolnay_rust-toolchain.__run_4;outcome=success;conclusion=success;duration_ms=313]
+benchmark	Setup toolchain	2026-09-13T19:12:07.3782419Z ##[start-action display=rustup default stable;id=__dtolnay_rust-toolchain.__run_5]
+benchmark	Setup toolchain	2026-09-13T19:12:07.3803623Z ##[group]Run rustup default stable
+benchmark	Setup toolchain	2026-09-13T19:12:07.3803959Z [36;1mrustup default stable[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.3840344Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.3840730Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.3840960Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup toolchain	2026-09-13T19:12:07.3841233Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.3960535Z info: using existing install for stable-x86_64-unknown-linux-gnu
+benchmark	Setup toolchain	2026-09-13T19:12:07.3971101Z info: default toolchain set to stable-x86_64-unknown-linux-gnu
+benchmark	Setup toolchain	2026-09-13T19:12:07.3971597Z 
+benchmark	Setup toolchain	2026-09-13T19:12:07.4049822Z   stable-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+benchmark	Setup toolchain	2026-09-13T19:12:07.4050952Z 
+benchmark	Setup toolchain	2026-09-13T19:12:07.4053253Z info: note that the toolchain 'stable-x86_64-unknown-linux-gnu' is currently in use (overridden by '/home/runner/work/matrices-fast/matrices-fast/rust-toolchain')
+benchmark	Setup toolchain	2026-09-13T19:12:07.4066528Z ##[end-action id=__dtolnay_rust-toolchain.__run_5;outcome=success;conclusion=success;duration_ms=28]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4069695Z ##[start-action display=Create cachekey;id=__dtolnay_rust-toolchain.rustc-version]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4090388Z ##[group]Run DATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')
+benchmark	Setup toolchain	2026-09-13T19:12:07.4091262Z [36;1mDATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4091957Z [36;1mHASH=$(rustc +stable --version --verbose | sed -ne 's/^commit-hash: //p')[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4092514Z [36;1mecho "cachekey=$(echo $DATE$HASH | head -c12)" >> $GITHUB_OUTPUT[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4128622Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.4129004Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.4129243Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup toolchain	2026-09-13T19:12:07.4129520Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4479803Z ##[end-action id=__dtolnay_rust-toolchain.rustc-version;outcome=success;conclusion=success;duration_ms=40]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4482626Z ##[start-action display=Disable incremental compilation;id=__dtolnay_rust-toolchain.__run_6]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4501506Z ##[group]Run if [ -z "${CARGO_INCREMENTAL+set}" ]; then
+benchmark	Setup toolchain	2026-09-13T19:12:07.4501952Z [36;1mif [ -z "${CARGO_INCREMENTAL+set}" ]; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4502315Z [36;1m  echo CARGO_INCREMENTAL=0 >> $GITHUB_ENV[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4502623Z [36;1mfi[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4541530Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.4541920Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.4542159Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup toolchain	2026-09-13T19:12:07.4542434Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4601744Z ##[end-action id=__dtolnay_rust-toolchain.__run_6;outcome=success;conclusion=success;duration_ms=11]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4604027Z ##[start-action display=Enable colors in Cargo output;id=__dtolnay_rust-toolchain.__run_7]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4621882Z ##[group]Run if [ -z "${CARGO_TERM_COLOR+set}" ]; then
+benchmark	Setup toolchain	2026-09-13T19:12:07.4622303Z [36;1mif [ -z "${CARGO_TERM_COLOR+set}" ]; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4622671Z [36;1m  echo CARGO_TERM_COLOR=always >> $GITHUB_ENV[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4622987Z [36;1mfi[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4656075Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.4656460Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.4656699Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup toolchain	2026-09-13T19:12:07.4656994Z   CARGO_INCREMENTAL: 0
+benchmark	Setup toolchain	2026-09-13T19:12:07.4657238Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4717362Z ##[end-action id=__dtolnay_rust-toolchain.__run_7;outcome=success;conclusion=success;duration_ms=11]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4720283Z ##[start-action display=Enable Cargo sparse registry;id=__dtolnay_rust-toolchain.__run_8]
+benchmark	Setup toolchain	2026-09-13T19:12:07.4739360Z ##[group]Run # implemented in 1.66, stabilized in 1.68, made default in 1.70
+benchmark	Setup toolchain	2026-09-13T19:12:07.4739923Z [36;1m# implemented in 1.66, stabilized in 1.68, made default in 1.70[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4740701Z [36;1mif [ -z "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL+set}" -o -f "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol ]; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4741468Z [36;1m  if rustc +stable --version --verbose | grep -q '^release: 1\.6[89]\.'; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4742081Z [36;1m    touch "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4742653Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse >> $GITHUB_ENV[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4743194Z [36;1m  elif rustc +stable --version --verbose | grep -q '^release: 1\.6[67]\.'; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4743796Z [36;1m    touch "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4744502Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git >> $GITHUB_ENV[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4744880Z [36;1m  fi[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4745103Z [36;1mfi[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.4778363Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.4778758Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.4778985Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup toolchain	2026-09-13T19:12:07.4779279Z   CARGO_INCREMENTAL: 0
+benchmark	Setup toolchain	2026-09-13T19:12:07.4779522Z   CARGO_TERM_COLOR: always
+benchmark	Setup toolchain	2026-09-13T19:12:07.4779766Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.5091037Z ##[end-action id=__dtolnay_rust-toolchain.__run_8;outcome=success;conclusion=success;duration_ms=36]
+benchmark	Setup toolchain	2026-09-13T19:12:07.5095865Z ##[start-action display=Work around spurious network errors in curl 8.0;id=__dtolnay_rust-toolchain.__run_9]
+benchmark	Setup toolchain	2026-09-13T19:12:07.5120138Z ##[group]Run # https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation
+benchmark	Setup toolchain	2026-09-13T19:12:07.5120966Z [36;1m# https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.5121638Z [36;1mif rustc +stable --version --verbose | grep -q '^release: 1\.7[01]\.'; then[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.5122127Z [36;1m  echo CARGO_HTTP_MULTIPLEXING=false >> $GITHUB_ENV[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.5122662Z [36;1mfi[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.5160040Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.5160593Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.5160828Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup toolchain	2026-09-13T19:12:07.5161122Z   CARGO_INCREMENTAL: 0
+benchmark	Setup toolchain	2026-09-13T19:12:07.5161365Z   CARGO_TERM_COLOR: always
+benchmark	Setup toolchain	2026-09-13T19:12:07.5161608Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.5345698Z ##[end-action id=__dtolnay_rust-toolchain.__run_9;outcome=success;conclusion=success;duration_ms=24]
+benchmark	Setup toolchain	2026-09-13T19:12:07.5349988Z ##[start-action display=rustc +stable --version --verbose;id=__dtolnay_rust-toolchain.__run_10]
+benchmark	Setup toolchain	2026-09-13T19:12:07.5368689Z ##[group]Run rustc +stable --version --verbose
+benchmark	Setup toolchain	2026-09-13T19:12:07.5369079Z [36;1mrustc +stable --version --verbose[0m
+benchmark	Setup toolchain	2026-09-13T19:12:07.5404910Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+benchmark	Setup toolchain	2026-09-13T19:12:07.5405300Z env:
+benchmark	Setup toolchain	2026-09-13T19:12:07.5405530Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup toolchain	2026-09-13T19:12:07.5405826Z   CARGO_INCREMENTAL: 0
+benchmark	Setup toolchain	2026-09-13T19:12:07.5406085Z   CARGO_TERM_COLOR: always
+benchmark	Setup toolchain	2026-09-13T19:12:07.5406331Z ##[endgroup]
+benchmark	Setup toolchain	2026-09-13T19:12:07.5567498Z rustc 1.98.1 (48a229cea 2026-09-01)
+benchmark	Setup toolchain	2026-09-13T19:12:07.5568662Z binary: rustc
+benchmark	Setup toolchain	2026-09-13T19:12:07.5569302Z commit-hash: 48a229ceaefd4985c50990b14116b6d856af0985
+benchmark	Setup toolchain	2026-09-13T19:12:07.5570081Z commit-date: 2026-09-01
+benchmark	Setup toolchain	2026-09-13T19:12:07.5570716Z host: x86_64-unknown-linux-gnu
+benchmark	Setup toolchain	2026-09-13T19:12:07.5571169Z release: 1.98.1
+benchmark	Setup toolchain	2026-09-13T19:12:07.5571449Z LLVM version: 22.1.8
+benchmark	Setup toolchain	2026-09-13T19:12:07.5589928Z ##[end-action id=__dtolnay_rust-toolchain.__run_10;outcome=success;conclusion=success;duration_ms=23]
+benchmark	Install cargo-deny	﻿2026-09-13T19:12:07.5649052Z ##[group]Run cargo install cargo-deny --version 0.20.2 --locked
+benchmark	Install cargo-deny	2026-09-13T19:12:07.5649582Z [36;1mcargo install cargo-deny --version 0.20.2 --locked[0m
+benchmark	Install cargo-deny	2026-09-13T19:12:07.5687062Z shell: /usr/bin/bash -e {0}
+benchmark	Install cargo-deny	2026-09-13T19:12:07.5687357Z env:
+benchmark	Install cargo-deny	2026-09-13T19:12:07.5687582Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Install cargo-deny	2026-09-13T19:12:07.5688135Z   CARGO_INCREMENTAL: 0
+benchmark	Install cargo-deny	2026-09-13T19:12:07.5688387Z   CARGO_TERM_COLOR: always
+benchmark	Install cargo-deny	2026-09-13T19:12:07.5688638Z ##[endgroup]
+benchmark	Install cargo-deny	2026-09-13T19:12:07.6746350Z [1m[92m    Updating[0m crates.io index
+benchmark	Install cargo-deny	2026-09-13T19:12:07.7412895Z [1m[92m Downloading[0m crates ...
+benchmark	Install cargo-deny	2026-09-13T19:12:07.8386976Z [1m[92m  Downloaded[0m cargo-deny v0.20.2
+benchmark	Install cargo-deny	2026-09-13T19:12:07.9047158Z [1m[92m  Installing[0m cargo-deny v0.20.2
+benchmark	Install cargo-deny	2026-09-13T19:12:07.9052762Z [1m[33mwarning[0m: default toolchain implicitly overridden with `stable-x86_64-unknown-linux-gnu` by rustup toolchain file
+benchmark	Install cargo-deny	2026-09-13T19:12:07.9053647Z   [1m[94m|[0m
+benchmark	Install cargo-deny	2026-09-13T19:12:07.9054175Z   [1m[94m= [0m[1mhelp[0m: use `cargo +stable install` if you meant to use the stable toolchain
+benchmark	Install cargo-deny	2026-09-13T19:12:07.9055206Z   [1m[94m= [0m[1mnote[0m: rustup selects the toolchain based on the parent environment and not the environment of the package being installed
+benchmark	Install cargo-deny	2026-09-13T19:12:07.9109287Z [1m[92m    Updating[0m crates.io index
+benchmark	Install cargo-deny	2026-09-13T19:12:08.2878769Z [1m[92m    Updating[0m crates.io index
+benchmark	Install cargo-deny	2026-09-13T19:12:08.3447513Z [1m[92m Downloading[0m crates ...
+benchmark	Install cargo-deny	2026-09-13T19:12:08.3627032Z [1m[92m  Downloaded[0m scopeguard v1.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.3750266Z [1m[92m  Downloaded[0m aho-corasick v1.1.4
+benchmark	Install cargo-deny	2026-09-13T19:12:08.3869356Z [1m[92m  Downloaded[0m cfg-expr v0.20.7
+benchmark	Install cargo-deny	2026-09-13T19:12:08.3914124Z [1m[92m  Downloaded[0m goblin v0.10.5
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4002711Z [1m[92m  Downloaded[0m equivalent v1.0.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4018345Z [1m[92m  Downloaded[0m anyhow v1.0.103
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4100035Z [1m[92m  Downloaded[0m globset v0.4.18
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4117628Z [1m[92m  Downloaded[0m camino v1.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4139557Z [1m[92m  Downloaded[0m litemap v0.8.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4179622Z [1m[92m  Downloaded[0m crossbeam-channel v0.5.15
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4220578Z [1m[92m  Downloaded[0m allocator-api2 v0.2.21
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4250228Z [1m[92m  Downloaded[0m cfg-if v1.0.4
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4264643Z [1m[92m  Downloaded[0m icu_properties_data v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4378854Z [1m[92m  Downloaded[0m anstyle v1.0.14
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4394208Z [1m[92m  Downloaded[0m heck v0.5.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4413048Z [1m[92m  Downloaded[0m crypto-common v0.1.7
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4426166Z [1m[92m  Downloaded[0m icu_locale_core v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4521157Z [1m[92m  Downloaded[0m unicode-normalization v0.1.25
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4555245Z [1m[92m  Downloaded[0m untrusted v0.9.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4572703Z [1m[92m  Downloaded[0m clap_lex v1.1.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4583037Z [1m[92m  Downloaded[0m nu-ansi-term v0.50.3
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4606508Z [1m[92m  Downloaded[0m anstyle-parse v1.0.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4622625Z [1m[92m  Downloaded[0m parking_lot_core v0.9.12
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4643443Z [1m[92m  Downloaded[0m crossbeam v0.8.4
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4654626Z [1m[92m  Downloaded[0m semver v1.0.28
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4677510Z [1m[92m  Downloaded[0m thiserror-impl v2.0.18
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4692351Z [1m[92m  Downloaded[0m tap v1.0.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4701650Z [1m[92m  Downloaded[0m borsh v1.6.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4773604Z [1m[92m  Downloaded[0m either v1.16.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4787856Z [1m[92m  Downloaded[0m anstream v1.0.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4807989Z [1m[92m  Downloaded[0m codespan v0.13.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4819017Z [1m[92m  Downloaded[0m getrandom v0.2.17
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4848513Z [1m[92m  Downloaded[0m krates v0.21.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4872590Z [1m[92m  Downloaded[0m rayon-core v1.13.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4909606Z [1m[92m  Downloaded[0m version_check v0.9.5
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4923918Z [1m[92m  Downloaded[0m writeable v0.6.3
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4943121Z [1m[92m  Downloaded[0m funty v2.0.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.4951329Z [1m[92m  Downloaded[0m hashbrown v0.17.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5006026Z [1m[92m  Downloaded[0m idna v1.1.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5040654Z [1m[92m  Downloaded[0m syn v2.0.117
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5163811Z [1m[92m  Downloaded[0m utf8_iter v1.0.4
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5173872Z [1m[92m  Downloaded[0m clap_builder v4.6.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5236587Z [1m[92m  Downloaded[0m crossbeam-queue v0.3.12
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5248424Z [1m[92m  Downloaded[0m memmap2 v0.9.11
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5265137Z [1m[92m  Downloaded[0m same-file v1.0.6
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5278136Z [1m[92m  Downloaded[0m unicode-ident v1.0.24
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5305295Z [1m[92m  Downloaded[0m utf8parse v0.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5314632Z [1m[92m  Downloaded[0m smol_str v0.3.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5329585Z [1m[92m  Downloaded[0m strsim v0.11.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5342020Z [1m[92m  Downloaded[0m synstructure v0.13.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5351619Z [1m[92m  Downloaded[0m twox-hash v2.1.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5373838Z [1m[92m  Downloaded[0m yoke-derive v0.8.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5385121Z [1m[92m  Downloaded[0m zerotrie v0.2.4
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5423002Z [1m[92m  Downloaded[0m cfg_aliases v0.2.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5432318Z [1m[92m  Downloaded[0m crossbeam-utils v0.8.21
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5458229Z [1m[92m  Downloaded[0m memchr v2.8.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5512007Z [1m[92m  Downloaded[0m serde_core v1.0.228
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5538593Z [1m[92m  Downloaded[0m smallvec v1.15.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5558916Z [1m[92m  Downloaded[0m anstyle-query v1.1.5
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5570305Z [1m[92m  Downloaded[0m crossbeam-deque v0.8.6
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5583654Z [1m[92m  Downloaded[0m idna_adapter v1.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5592479Z [1m[92m  Downloaded[0m tame-index v0.26.3
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5634906Z [1m[92m  Downloaded[0m termcolor v1.4.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5647567Z [1m[92m  Downloaded[0m colorchoice v1.0.5
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5657136Z [1m[92m  Downloaded[0m crossbeam-epoch v0.9.20
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5681646Z [1m[92m  Downloaded[0m sha2 v0.10.9
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5758665Z [1m[92m  Downloaded[0m zerofrom v0.1.8
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5759528Z [1m[92m  Downloaded[0m cc v1.2.62
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5767047Z [1m[92m  Downloaded[0m indexmap v2.14.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5810893Z [1m[92m  Downloaded[0m percent-encoding v2.3.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5819621Z [1m[92m  Downloaded[0m scroll_derive v0.13.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5827498Z [1m[92m  Downloaded[0m tinyvec v1.11.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5853815Z [1m[92m  Downloaded[0m form_urlencoded v1.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5862095Z [1m[92m  Downloaded[0m potential_utf v0.1.5
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5872998Z [1m[92m  Downloaded[0m cpufeatures v0.2.17
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5886913Z [1m[92m  Downloaded[0m displaydoc v0.2.5
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5917529Z [1m[92m  Downloaded[0m itoa v1.0.18
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5932069Z [1m[92m  Downloaded[0m jobserver v0.1.34
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5952902Z [1m[92m  Downloaded[0m radium v0.7.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5962965Z [1m[92m  Downloaded[0m fixedbitset v0.5.7
+benchmark	Install cargo-deny	2026-09-13T19:12:08.5981779Z [1m[92m  Downloaded[0m http v1.4.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6017677Z [1m[92m  Downloaded[0m icu_normalizer_data v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6038494Z [1m[92m  Downloaded[0m shlex v1.3.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6051115Z [1m[92m  Downloaded[0m wyz v0.5.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6063219Z [1m[92m  Downloaded[0m zerofrom-derive v0.1.7
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6074831Z [1m[92m  Downloaded[0m icu_normalizer v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6111521Z [1m[92m  Downloaded[0m quote v1.0.45
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6138693Z [1m[92m  Downloaded[0m tinystr v0.8.3
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6159812Z [1m[92m  Downloaded[0m url v2.5.8
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6185184Z [1m[92m  Downloaded[0m is_terminal_polyfill v1.70.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6194520Z [1m[92m  Downloaded[0m strum v0.28.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6203134Z [1m[92m  Downloaded[0m thiserror v2.0.18
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6268287Z [1m[92m  Downloaded[0m walkdir v2.5.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6286201Z [1m[92m  Downloaded[0m zstd-safe v7.2.4
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6300996Z [1m[92m  Downloaded[0m block-buffer v0.10.4
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6311257Z [1m[92m  Downloaded[0m icu_properties v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6334126Z [1m[92m  Downloaded[0m icu_provider v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6359833Z [1m[92m  Downloaded[0m plain v0.2.3
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6370407Z [1m[92m  Downloaded[0m zerovec v0.11.6
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6429325Z [1m[92m  Downloaded[0m rustc-stable-hash v0.1.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6444910Z [1m[92m  Downloaded[0m zstd-sys v2.0.16+zstd.1.5.7
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6606143Z [1m[92m  Downloaded[0m generic-array v0.14.7
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6619730Z [1m[92m  Downloaded[0m zmij v1.0.21
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6637213Z [1m[92m  Downloaded[0m stable_deref_trait v1.2.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6645753Z [1m[92m  Downloaded[0m tinyvec_macros v0.1.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6653992Z [1m[92m  Downloaded[0m typenum v1.20.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6687810Z [1m[92m  Downloaded[0m strum_macros v0.28.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6711868Z [1m[92m  Downloaded[0m yoke v0.8.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6729506Z [1m[92m  Downloaded[0m toml-span v0.7.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6744895Z [1m[92m  Downloaded[0m zstd v0.13.3
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6774549Z [1m[92m  Downloaded[0m unicode-width v0.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6829316Z [1m[92m  Downloaded[0m zerovec-derive v0.11.3
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6844464Z [1m[92m  Downloaded[0m foldhash v0.1.5
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6856714Z [1m[92m  Downloaded[0m pkg-config v0.3.33
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6872527Z [1m[92m  Downloaded[0m clap v4.6.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6967923Z [1m[92m  Downloaded[0m digest v0.10.7
+benchmark	Install cargo-deny	2026-09-13T19:12:08.6985926Z [1m[92m  Downloaded[0m find-msvc-tools v0.1.9
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7002419Z [1m[92m  Downloaded[0m parking_lot v0.12.5
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7026600Z [1m[92m  Downloaded[0m scroll v0.13.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7040399Z [1m[92m  Downloaded[0m regex v1.12.3
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7092701Z [1m[92m  Downloaded[0m codespan-reporting v0.13.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7167775Z [1m[92m  Downloaded[0m proc-macro2 v1.0.106
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7197056Z [1m[92m  Downloaded[0m bytes v1.11.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7238456Z [1m[92m  Downloaded[0m regex-syntax v0.8.10
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7303464Z [1m[92m  Downloaded[0m serde_derive v1.0.228
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7333573Z [1m[92m  Downloaded[0m hashbrown v0.15.5
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7381177Z [1m[92m  Downloaded[0m log v0.4.29
+benchmark	Install cargo-deny	2026-09-13T19:12:08.7405414Z [1m[92m  Downloaded[0m spdx v0.13.4
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8052810Z [1m[92m  Downloaded[0m icu_collections v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8115580Z [1m[92m  Downloaded[0m lock_api v0.4.14
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8128656Z [1m[92m  Downloaded[0m serde v1.0.228
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8164086Z [1m[92m  Downloaded[0m serde_json v1.0.150
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8237357Z [1m[92m  Downloaded[0m rayon v1.12.0
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8334259Z [1m[92m  Downloaded[0m target-lexicon v0.13.3
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8354956Z [1m[92m  Downloaded[0m bitvec v1.0.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8522610Z [1m[92m  Downloaded[0m fern v0.7.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8565151Z [1m[92m  Downloaded[0m bstr v1.12.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8642629Z [1m[92m  Downloaded[0m regex-***mata v0.4.14
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8779869Z [1m[92m  Downloaded[0m petgraph v0.8.1
+benchmark	Install cargo-deny	2026-09-13T19:12:08.8967350Z [1m[92m  Downloaded[0m libc v0.2.186
+benchmark	Install cargo-deny	2026-09-13T19:12:08.9357638Z [1m[92m  Downloaded[0m jiff v0.2.24
+benchmark	Install cargo-deny	2026-09-13T19:12:08.9523825Z [1m[92m  Downloaded[0m ring v0.17.14
+benchmark	Install cargo-deny	2026-09-13T19:12:09.0398995Z [1m[92m   Compiling[0m proc-macro2 v1.0.106
+benchmark	Install cargo-deny	2026-09-13T19:12:09.0399761Z [1m[92m   Compiling[0m quote v1.0.45
+benchmark	Install cargo-deny	2026-09-13T19:12:09.0400314Z [1m[92m   Compiling[0m unicode-ident v1.0.24
+benchmark	Install cargo-deny	2026-09-13T19:12:09.0401034Z [1m[92m   Compiling[0m libc v0.2.186
+benchmark	Install cargo-deny	2026-09-13T19:12:09.3359157Z [1m[92m   Compiling[0m stable_deref_trait v1.2.1
+benchmark	Install cargo-deny	2026-09-13T19:12:09.4921849Z [1m[92m   Compiling[0m serde_core v1.0.228
+benchmark	Install cargo-deny	2026-09-13T19:12:09.5731166Z [1m[92m   Compiling[0m find-msvc-tools v0.1.9
+benchmark	Install cargo-deny	2026-09-13T19:12:09.6463653Z [1m[92m   Compiling[0m shlex v1.3.0
+benchmark	Install cargo-deny	2026-09-13T19:12:09.7573314Z [1m[92m   Compiling[0m smallvec v1.15.1
+benchmark	Install cargo-deny	2026-09-13T19:12:10.0628178Z [1m[92m   Compiling[0m crossbeam-utils v0.8.21
+benchmark	Install cargo-deny	2026-09-13T19:12:10.3038990Z [1m[92m   Compiling[0m memchr v2.8.0
+benchmark	Install cargo-deny	2026-09-13T19:12:10.4192450Z [1m[92m   Compiling[0m syn v2.0.117
+benchmark	Install cargo-deny	2026-09-13T19:12:10.4849670Z [1m[92m   Compiling[0m jobserver v0.1.34
+benchmark	Install cargo-deny	2026-09-13T19:12:10.7589634Z [1m[92m   Compiling[0m cc v1.2.62
+benchmark	Install cargo-deny	2026-09-13T19:12:11.8770350Z [1m[92m   Compiling[0m version_check v0.9.5
+benchmark	Install cargo-deny	2026-09-13T19:12:12.1079455Z [1m[92m   Compiling[0m serde v1.0.228
+benchmark	Install cargo-deny	2026-09-13T19:12:12.2161538Z [1m[92m   Compiling[0m generic-array v0.14.7
+benchmark	Install cargo-deny	2026-09-13T19:12:12.2340488Z [1m[92m   Compiling[0m litemap v0.8.2
+benchmark	Install cargo-deny	2026-09-13T19:12:12.2690712Z [1m[92m   Compiling[0m pkg-config v0.3.33
+benchmark	Install cargo-deny	2026-09-13T19:12:12.2929725Z [1m[92m   Compiling[0m crossbeam-epoch v0.9.20
+benchmark	Install cargo-deny	2026-09-13T19:12:12.3875077Z [1m[92m   Compiling[0m writeable v0.6.3
+benchmark	Install cargo-deny	2026-09-13T19:12:12.5479859Z [1m[92m   Compiling[0m synstructure v0.13.2
+benchmark	Install cargo-deny	2026-09-13T19:12:12.7029222Z [1m[92m   Compiling[0m zstd-sys v2.0.16+zstd.1.5.7
+benchmark	Install cargo-deny	2026-09-13T19:12:12.9219020Z [1m[92m   Compiling[0m icu_normalizer_data v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:13.0063483Z [1m[92m   Compiling[0m cfg-if v1.0.4
+benchmark	Install cargo-deny	2026-09-13T19:12:13.0129002Z [1m[92m   Compiling[0m utf8_iter v1.0.4
+benchmark	Install cargo-deny	2026-09-13T19:12:13.0342862Z [1m[92m   Compiling[0m typenum v1.20.0
+benchmark	Install cargo-deny	2026-09-13T19:12:13.0960510Z [1m[92m   Compiling[0m icu_properties_data v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:13.4639796Z [1m[92m   Compiling[0m zerofrom-derive v0.1.7
+benchmark	Install cargo-deny	2026-09-13T19:12:13.5559346Z [1m[92m   Compiling[0m yoke-derive v0.8.2
+benchmark	Install cargo-deny	2026-09-13T19:12:13.6849200Z [1m[92m   Compiling[0m zerovec-derive v0.11.3
+benchmark	Install cargo-deny	2026-09-13T19:12:14.0330626Z [1m[92m   Compiling[0m zerofrom v0.1.8
+benchmark	Install cargo-deny	2026-09-13T19:12:14.1100276Z [1m[92m   Compiling[0m displaydoc v0.2.5
+benchmark	Install cargo-deny	2026-09-13T19:12:14.1556591Z [1m[92m   Compiling[0m yoke v0.8.2
+benchmark	Install cargo-deny	2026-09-13T19:12:14.3004850Z [1m[92m   Compiling[0m serde_derive v1.0.228
+benchmark	Install cargo-deny	2026-09-13T19:12:14.4939580Z [1m[92m   Compiling[0m zerovec v0.11.6
+benchmark	Install cargo-deny	2026-09-13T19:12:14.5710308Z [1m[92m   Compiling[0m zerotrie v0.2.4
+benchmark	Install cargo-deny	2026-09-13T19:12:15.0709136Z [1m[92m   Compiling[0m tinystr v0.8.3
+benchmark	Install cargo-deny	2026-09-13T19:12:15.2239224Z [1m[92m   Compiling[0m icu_locale_core v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:15.4559199Z [1m[92m   Compiling[0m potential_utf v0.1.5
+benchmark	Install cargo-deny	2026-09-13T19:12:15.5126598Z [1m[92m   Compiling[0m icu_collections v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:15.9619312Z [1m[92m   Compiling[0m zmij v1.0.21
+benchmark	Install cargo-deny	2026-09-13T19:12:16.0689202Z [1m[92m   Compiling[0m crossbeam-deque v0.8.6
+benchmark	Install cargo-deny	2026-09-13T19:12:16.2319101Z [1m[92m   Compiling[0m icu_provider v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:16.7559488Z [1m[92m   Compiling[0m aho-corasick v1.1.4
+benchmark	Install cargo-deny	2026-09-13T19:12:17.1999974Z [1m[92m   Compiling[0m serde_json v1.0.150
+benchmark	Install cargo-deny	2026-09-13T19:12:17.2859786Z [1m[92m   Compiling[0m rayon-core v1.13.0
+benchmark	Install cargo-deny	2026-09-13T19:12:17.3669063Z [1m[92m   Compiling[0m equivalent v1.0.2
+benchmark	Install cargo-deny	2026-09-13T19:12:17.3939090Z [1m[92m   Compiling[0m termcolor v1.4.1
+benchmark	Install cargo-deny	2026-09-13T19:12:17.6754437Z [1m[92m   Compiling[0m target-lexicon v0.13.3
+benchmark	Install cargo-deny	2026-09-13T19:12:17.7684869Z [1m[92m   Compiling[0m camino v1.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:17.8919191Z [1m[92m   Compiling[0m zstd-safe v7.2.4
+benchmark	Install cargo-deny	2026-09-13T19:12:17.9344893Z [1m[92m   Compiling[0m unicode-width v0.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:17.9629595Z [1m[92m   Compiling[0m itoa v1.0.18
+benchmark	Install cargo-deny	2026-09-13T19:12:18.0991011Z [1m[92m   Compiling[0m regex-syntax v0.8.10
+benchmark	Install cargo-deny	2026-09-13T19:12:18.1164566Z [1m[92m   Compiling[0m utf8parse v0.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:18.1549428Z [1m[92m   Compiling[0m anstyle-parse v1.0.0
+benchmark	Install cargo-deny	2026-09-13T19:12:18.2848279Z [1m[92m   Compiling[0m codespan-reporting v0.13.1
+benchmark	Install cargo-deny	2026-09-13T19:12:19.2509078Z [1m[92m   Compiling[0m icu_properties v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:20.0019408Z [1m[92m   Compiling[0m regex-***mata v0.4.14
+benchmark	Install cargo-deny	2026-09-13T19:12:20.6189081Z [1m[92m   Compiling[0m icu_normalizer v2.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:22.1272283Z [1m[92m   Compiling[0m block-buffer v0.10.4
+benchmark	Install cargo-deny	2026-09-13T19:12:22.2063843Z [1m[92m   Compiling[0m crypto-common v0.1.7
+benchmark	Install cargo-deny	2026-09-13T19:12:22.2642823Z [1m[92m   Compiling[0m anstyle v1.0.14
+benchmark	Install cargo-deny	2026-09-13T19:12:22.4194631Z [1m[92m   Compiling[0m is_terminal_polyfill v1.70.2
+benchmark	Install cargo-deny	2026-09-13T19:12:22.4443416Z [1m[92m   Compiling[0m allocator-api2 v0.2.21
+benchmark	Install cargo-deny	2026-09-13T19:12:22.7659040Z [1m[92m   Compiling[0m tinyvec_macros v0.1.1
+benchmark	Install cargo-deny	2026-09-13T19:12:22.7878548Z [1m[92m   Compiling[0m log v0.4.29
+benchmark	Install cargo-deny	2026-09-13T19:12:22.8271780Z [1m[92m   Compiling[0m hashbrown v0.17.1
+benchmark	Install cargo-deny	2026-09-13T19:12:22.9026328Z [1m[92m   Compiling[0m anstyle-query v1.1.5
+benchmark	Install cargo-deny	2026-09-13T19:12:22.9345660Z [1m[92m   Compiling[0m foldhash v0.1.5
+benchmark	Install cargo-deny	2026-09-13T19:12:23.0459551Z [1m[92m   Compiling[0m radium v0.7.0
+benchmark	Install cargo-deny	2026-09-13T19:12:23.1679105Z [1m[92m   Compiling[0m thiserror v2.0.18
+benchmark	Install cargo-deny	2026-09-13T19:12:23.3469082Z [1m[92m   Compiling[0m colorchoice v1.0.5
+benchmark	Install cargo-deny	2026-09-13T19:12:23.3802133Z [1m[92m   Compiling[0m parking_lot_core v0.9.12
+benchmark	Install cargo-deny	2026-09-13T19:12:23.4542451Z [1m[92m   Compiling[0m anstream v1.0.0
+benchmark	Install cargo-deny	2026-09-13T19:12:23.5068496Z [1m[92m   Compiling[0m indexmap v2.14.0
+benchmark	Install cargo-deny	2026-09-13T19:12:23.7789080Z [1m[92m   Compiling[0m hashbrown v0.15.5
+benchmark	Install cargo-deny	2026-09-13T19:12:24.3099545Z [1m[92m   Compiling[0m tinyvec v1.11.0
+benchmark	Install cargo-deny	2026-09-13T19:12:24.3483186Z [1m[92m   Compiling[0m digest v0.10.7
+benchmark	Install cargo-deny	2026-09-13T19:12:24.7326178Z [1m[92m   Compiling[0m idna_adapter v1.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:26.2839154Z [1m[92m   Compiling[0m scroll_derive v0.13.1
+benchmark	Install cargo-deny	2026-09-13T19:12:26.5367234Z [1m[92m   Compiling[0m thiserror-impl v2.0.18
+benchmark	Install cargo-deny	2026-09-13T19:12:26.7010082Z [1m[92m   Compiling[0m ring v0.17.14
+benchmark	Install cargo-deny	2026-09-13T19:12:26.9259145Z [1m[92m   Compiling[0m semver v1.0.28
+benchmark	Install cargo-deny	2026-09-13T19:12:27.0346731Z [1m[92m   Compiling[0m either v1.16.0
+benchmark	Install cargo-deny	2026-09-13T19:12:27.2009091Z [1m[92m   Compiling[0m cpufeatures v0.2.17
+benchmark	Install cargo-deny	2026-09-13T19:12:27.2343581Z [1m[92m   Compiling[0m scopeguard v1.2.0
+benchmark	Install cargo-deny	2026-09-13T19:12:27.2789522Z [1m[92m   Compiling[0m bytes v1.11.1
+benchmark	Install cargo-deny	2026-09-13T19:12:27.3279619Z [1m[92m   Compiling[0m strsim v0.11.1
+benchmark	Install cargo-deny	2026-09-13T19:12:27.5916271Z [1m[92m   Compiling[0m heck v0.5.0
+benchmark	Install cargo-deny	2026-09-13T19:12:27.7204750Z [1m[92m   Compiling[0m percent-encoding v2.3.2
+benchmark	Install cargo-deny	2026-09-13T19:12:27.8489480Z [1m[92m   Compiling[0m tap v1.0.1
+benchmark	Install cargo-deny	2026-09-13T19:12:27.8679122Z [1m[92m   Compiling[0m anyhow v1.0.103
+benchmark	Install cargo-deny	2026-09-13T19:12:27.8788905Z [1m[92m   Compiling[0m clap_lex v1.1.0
+benchmark	Install cargo-deny	2026-09-13T19:12:27.9145501Z [1m[92m   Compiling[0m fixedbitset v0.5.7
+benchmark	Install cargo-deny	2026-09-13T19:12:28.0889499Z [1m[92m   Compiling[0m clap_builder v4.6.0
+benchmark	Install cargo-deny	2026-09-13T19:12:28.1039284Z [1m[92m   Compiling[0m wyz v0.5.1
+benchmark	Install cargo-deny	2026-09-13T19:12:28.2419008Z [1m[92m   Compiling[0m petgraph v0.8.1
+benchmark	Install cargo-deny	2026-09-13T19:12:28.2699525Z [1m[92m   Compiling[0m form_urlencoded v1.2.2
+benchmark	Install cargo-deny	2026-09-13T19:12:28.4092601Z [1m[92m   Compiling[0m http v1.4.0
+benchmark	Install cargo-deny	2026-09-13T19:12:29.7859520Z [1m[92m   Compiling[0m strum_macros v0.28.0
+benchmark	Install cargo-deny	2026-09-13T19:12:30.1339055Z [1m[92m   Compiling[0m lock_api v0.4.14
+benchmark	Install cargo-deny	2026-09-13T19:12:30.3330751Z [1m[92m   Compiling[0m sha2 v0.10.9
+benchmark	Install cargo-deny	2026-09-13T19:12:31.0923971Z [1m[92m   Compiling[0m rayon v1.12.0
+benchmark	Install cargo-deny	2026-09-13T19:12:33.4419044Z [1m[92m   Compiling[0m scroll v0.13.0
+benchmark	Install cargo-deny	2026-09-13T19:12:33.6419113Z [1m[92m   Compiling[0m cfg-expr v0.20.7
+benchmark	Install cargo-deny	2026-09-13T19:12:34.3679031Z [1m[92m   Compiling[0m idna v1.1.0
+benchmark	Install cargo-deny	2026-09-13T19:12:35.0070575Z [1m[92m   Compiling[0m unicode-normalization v0.1.25
+benchmark	Install cargo-deny	2026-09-13T19:12:35.7019239Z [1m[92m   Compiling[0m regex v1.12.3
+benchmark	Install cargo-deny	2026-09-13T19:12:35.8819200Z [1m[92m   Compiling[0m toml-span v0.7.1
+benchmark	Install cargo-deny	2026-09-13T19:12:36.4296319Z [1m[92m   Compiling[0m smol_str v0.3.2
+benchmark	Install cargo-deny	2026-09-13T19:12:36.5679108Z [1m[92m   Compiling[0m getrandom v0.2.17
+benchmark	Install cargo-deny	2026-09-13T19:12:36.6549972Z [1m[92m   Compiling[0m crossbeam-queue v0.3.12
+benchmark	Install cargo-deny	2026-09-13T19:12:36.7248372Z [1m[92m   Compiling[0m crossbeam-channel v0.5.15
+benchmark	Install cargo-deny	2026-09-13T19:12:37.0808385Z [1m[92m   Compiling[0m bstr v1.12.1
+benchmark	Install cargo-deny	2026-09-13T19:12:37.5579172Z [1m[92m   Compiling[0m funty v2.0.0
+benchmark	Install cargo-deny	2026-09-13T19:12:37.8709994Z [1m[92m   Compiling[0m same-file v1.0.6
+benchmark	Install cargo-deny	2026-09-13T19:12:37.9525100Z [1m[92m   Compiling[0m untrusted v0.9.0
+benchmark	Install cargo-deny	2026-09-13T19:12:38.0082291Z [1m[92m   Compiling[0m rustc-stable-hash v0.1.2
+benchmark	Install cargo-deny	2026-09-13T19:12:38.1196848Z [1m[92m   Compiling[0m twox-hash v2.1.2
+benchmark	Install cargo-deny	2026-09-13T19:12:38.2299617Z [1m[92m   Compiling[0m plain v0.2.3
+benchmark	Install cargo-deny	2026-09-13T19:12:38.2828041Z [1m[92m   Compiling[0m goblin v0.10.5
+benchmark	Install cargo-deny	2026-09-13T19:12:38.2910169Z [1m[92m   Compiling[0m tame-index v0.26.3
+benchmark	Install cargo-deny	2026-09-13T19:12:42.2443057Z [1m[92m   Compiling[0m bitvec v1.0.1
+benchmark	Install cargo-deny	2026-09-13T19:12:44.6139992Z [1m[92m   Compiling[0m walkdir v2.5.0
+benchmark	Install cargo-deny	2026-09-13T19:12:44.9964663Z [1m[92m   Compiling[0m globset v0.4.18
+benchmark	Install cargo-deny	2026-09-13T19:12:45.4981049Z [1m[92m   Compiling[0m crossbeam v0.8.4
+benchmark	Install cargo-deny	2026-09-13T19:12:45.5309629Z [1m[92m   Compiling[0m parking_lot v0.12.5
+benchmark	Install cargo-deny	2026-09-13T19:12:46.0780583Z [1m[92m   Compiling[0m url v2.5.8
+benchmark	Install cargo-deny	2026-09-13T19:12:46.6629259Z [1m[92m   Compiling[0m krates v0.21.2
+benchmark	Install cargo-deny	2026-09-13T19:12:47.3132738Z [1m[92m   Compiling[0m strum v0.28.0
+benchmark	Install cargo-deny	2026-09-13T19:12:47.3491927Z [1m[92m   Compiling[0m clap v4.6.1
+benchmark	Install cargo-deny	2026-09-13T19:12:47.7179233Z [1m[92m   Compiling[0m fern v0.7.1
+benchmark	Install cargo-deny	2026-09-13T19:12:48.3709175Z [1m[92m   Compiling[0m codespan v0.13.1
+benchmark	Install cargo-deny	2026-09-13T19:12:48.5419477Z [1m[92m   Compiling[0m memmap2 v0.9.11
+benchmark	Install cargo-deny	2026-09-13T19:12:48.6725084Z [1m[92m   Compiling[0m jiff v0.2.24
+benchmark	Install cargo-deny	2026-09-13T19:12:48.7279085Z [1m[92m   Compiling[0m nu-ansi-term v0.50.3
+benchmark	Install cargo-deny	2026-09-13T19:12:57.0957196Z [1m[92m   Compiling[0m zstd v0.13.3
+benchmark	Install cargo-deny	2026-09-13T19:12:57.2370716Z [1m[92m   Compiling[0m spdx v0.13.4
+benchmark	Install cargo-deny	2026-09-13T19:12:57.6634299Z [1m[92m   Compiling[0m cargo-deny v0.20.2
+benchmark	Install cargo-deny	2026-09-13T19:14:03.4315365Z [1m[92m    Finished[0m `release` profile [optimized] target(s) in 1m 55s
+benchmark	Install cargo-deny	2026-09-13T19:14:03.4426804Z [1m[92m  Installing[0m /home/runner/.cargo/bin/cargo-deny
+benchmark	Install cargo-deny	2026-09-13T19:14:03.4435655Z [1m[92m   Installed[0m package `cargo-deny v0.20.2` (executable `cargo-deny`)
+benchmark	Install sandbox tools	﻿2026-09-13T19:14:03.5265466Z ##[group]Run set -euo pipefail
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5266042Z [36;1mset -euo pipefail[0m
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5266433Z [36;1msudo apt-get update[0m
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5266976Z [36;1msudo apt-get install --yes --no-install-recommends bubblewrap[0m
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5267489Z [36;1mbwrap --version[0m
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5268509Z [36;1mprlimit --version[0m
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5305943Z shell: /usr/bin/bash -e {0}
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5306368Z env:
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5306687Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5307128Z   CARGO_INCREMENTAL: 0
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5307535Z   CARGO_TERM_COLOR: always
+benchmark	Install sandbox tools	2026-09-13T19:14:03.5308212Z ##[endgroup]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.6160652Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.6395286Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.7161426Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [414 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.7315895Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+benchmark	Install sandbox tools	2026-09-13T19:14:03.7360921Z Get:8 https://dl.google.com/linux/chrome-stable/deb stable InRelease [2548 B]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.7369690Z Get:9 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [463 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.7371297Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.7412369Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.7446076Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.8884027Z Get:10 https://dl.google.com/linux/chrome-stable/deb stable/main amd64 Packages [1408 B]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9017529Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1263 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9161991Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [292 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9191911Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Components [181 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9228952Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1690 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9329072Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Components [388 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9351382Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1544 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9453964Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [354 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9473210Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Components [940 B]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9588943Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-backports/main amd64 Components [5772 B]
+benchmark	Install sandbox tools	2026-09-13T19:14:03.9590750Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Components [12.6 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:04.0489603Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1006 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:04.0553586Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [213 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:04.0575947Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Components [46.4 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:04.0592162Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1206 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:04.0663869Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Components [76.3 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:04.0681122Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1445 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:04.0764614Z Get:27 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [336 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:08.0577921Z Fetched 11.3 MB in 1s (8546 kB/s)
+benchmark	Install sandbox tools	2026-09-13T19:14:08.8326372Z Reading package lists...
+benchmark	Install sandbox tools	2026-09-13T19:14:08.8627510Z Reading package lists...
+benchmark	Install sandbox tools	2026-09-13T19:14:09.0229828Z Building dependency tree...
+benchmark	Install sandbox tools	2026-09-13T19:14:09.0237194Z Reading state information...
+benchmark	Install sandbox tools	2026-09-13T19:14:09.1679322Z The following NEW packages will be installed:
+benchmark	Install sandbox tools	2026-09-13T19:14:09.1685213Z   bubblewrap
+benchmark	Install sandbox tools	2026-09-13T19:14:09.1849579Z 0 upgraded, 1 newly installed, 0 to remove and 50 not upgraded.
+benchmark	Install sandbox tools	2026-09-13T19:14:09.1850213Z Need to get 50.2 kB of archives.
+benchmark	Install sandbox tools	2026-09-13T19:14:09.1850623Z After this operation, 133 kB of additional disk space will be used.
+benchmark	Install sandbox tools	2026-09-13T19:14:09.1851074Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+benchmark	Install sandbox tools	2026-09-13T19:14:09.2219120Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 bubblewrap amd64 0.9.0-1ubuntu0.1 [50.2 kB]
+benchmark	Install sandbox tools	2026-09-13T19:14:09.4703398Z Fetched 50.2 kB in 0s (1035 kB/s)
+benchmark	Install sandbox tools	2026-09-13T19:14:09.4930493Z Selecting previously unselected package bubblewrap.
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5283279Z (Reading database ... 
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5283720Z (Reading database ... 5%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5284191Z (Reading database ... 10%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5284625Z (Reading database ... 15%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5285033Z (Reading database ... 20%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5285516Z (Reading database ... 25%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5285979Z (Reading database ... 30%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5286442Z (Reading database ... 35%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5286897Z (Reading database ... 40%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5287375Z (Reading database ... 45%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5288225Z (Reading database ... 50%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.5344076Z (Reading database ... 55%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.6490773Z (Reading database ... 60%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.8382239Z (Reading database ... 65%
+benchmark	Install sandbox tools	2026-09-13T19:14:09.9926527Z (Reading database ... 70%
+benchmark	Install sandbox tools	2026-09-13T19:14:10.1394864Z (Reading database ... 75%
+benchmark	Install sandbox tools	2026-09-13T19:14:10.3011870Z (Reading database ... 80%
+benchmark	Install sandbox tools	2026-09-13T19:14:10.4841377Z (Reading database ... 85%
+benchmark	Install sandbox tools	2026-09-13T19:14:10.6418703Z (Reading database ... 90%
+benchmark	Install sandbox tools	2026-09-13T19:14:10.8054917Z (Reading database ... 95%
+benchmark	Install sandbox tools	2026-09-13T19:14:10.8055494Z (Reading database ... 100%
+benchmark	Install sandbox tools	2026-09-13T19:14:10.8056170Z (Reading database ... 201818 files and directories currently installed.)
+benchmark	Install sandbox tools	2026-09-13T19:14:10.8096957Z Preparing to unpack .../bubblewrap_0.9.0-1ubuntu0.1_amd64.deb ...
+benchmark	Install sandbox tools	2026-09-13T19:14:10.8130057Z Unpacking bubblewrap (0.9.0-1ubuntu0.1) ...
+benchmark	Install sandbox tools	2026-09-13T19:14:10.8567000Z Setting up bubblewrap (0.9.0-1ubuntu0.1) ...
+benchmark	Install sandbox tools	2026-09-13T19:14:10.8614585Z Processing triggers for man-db (2.12.0-4build2) ...
+benchmark	Install sandbox tools	2026-09-13T19:14:10.8637970Z Not building database; man-db/***-update is not 'true'.
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5043637Z 
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5044833Z Running kernel seems to be up-to-date.
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5045260Z 
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5045440Z No services need to be restarted.
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5045804Z 
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5046033Z No containers need to be restarted.
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5046420Z 
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5046686Z No user sessions are running outdated binaries.
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5047130Z 
+benchmark	Install sandbox tools	2026-09-13T19:14:11.5047544Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+benchmark	Install sandbox tools	2026-09-13T19:14:12.2924047Z bubblewrap 0.9.0
+benchmark	Install sandbox tools	2026-09-13T19:14:12.2991836Z prlimit from util-linux 2.39.3
+benchmark	Allow unprivileged user namespaces (Ubuntu 24.04)	﻿2026-09-13T19:14:12.3031095Z ##[group]Run sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+benchmark	Allow unprivileged user namespaces (Ubuntu 24.04)	2026-09-13T19:14:12.3031748Z [36;1msudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0[0m
+benchmark	Allow unprivileged user namespaces (Ubuntu 24.04)	2026-09-13T19:14:12.3067578Z shell: /usr/bin/bash -e {0}
+benchmark	Allow unprivileged user namespaces (Ubuntu 24.04)	2026-09-13T19:14:12.3068277Z env:
+benchmark	Allow unprivileged user namespaces (Ubuntu 24.04)	2026-09-13T19:14:12.3068506Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Allow unprivileged user namespaces (Ubuntu 24.04)	2026-09-13T19:14:12.3068808Z   CARGO_INCREMENTAL: 0
+benchmark	Allow unprivileged user namespaces (Ubuntu 24.04)	2026-09-13T19:14:12.3069058Z   CARGO_TERM_COLOR: always
+benchmark	Allow unprivileged user namespaces (Ubuntu 24.04)	2026-09-13T19:14:12.3069300Z ##[endgroup]
+benchmark	Allow unprivileged user namespaces (Ubuntu 24.04)	2026-09-13T19:14:12.3180116Z kernel.apparmor_restrict_unprivileged_userns = 0
+benchmark	Prepare build (validate deps, vendor, scan tree)	﻿2026-09-13T19:14:12.3229153Z ##[group]Run bash scripts/prepare-build.sh
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:12.3229561Z [36;1mbash scripts/prepare-build.sh[0m
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:12.3261939Z shell: /usr/bin/bash -e {0}
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:12.3262214Z env:
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:12.3262437Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:12.3262727Z   CARGO_INCREMENTAL: 0
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:12.3262968Z   CARGO_TERM_COLOR: always
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:12.3263216Z ##[endgroup]
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.2974531Z prepare-build: wrote Cargo.toml and candidate-worker/Cargo.toml
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3211822Z [1m[92m Downloading[0m crates ...
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3484596Z [1m[92m  Downloaded[0m bytemuck v1.25.0
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3528392Z [1m[92m  Downloaded[0m bitflags v2.13.0
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3578623Z [1m[92m  Downloaded[0m num-traits v0.2.19
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3613229Z [1m[92m  Downloaded[0m reborrow v0.5.5
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3627435Z [1m[92m  Downloaded[0m feral-amd v0.2.1
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3668681Z [1m[92m  Downloaded[0m feral-amf v0.2.1
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3678695Z [1m[92m  Downloaded[0m feral-metis v0.2.1
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3698852Z [1m[92m  Downloaded[0m ***cfg v1.5.1
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3728808Z [1m[92m  Downloaded[0m feral-kahip v0.2.1
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3758746Z [1m[92m  Downloaded[0m crossbeam-epoch v0.9.18
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3768762Z [1m[92m  Downloaded[0m num-complex v0.4.6
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3769470Z [1m[92m  Downloaded[0m quote v1.0.46
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3788738Z [1m[92m  Downloaded[0m pulp-wasm-simd-flag v0.1.1
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3818865Z [1m[92m  Downloaded[0m feral-scotch v0.2.1
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3839017Z [1m[92m  Downloaded[0m paste v1.0.15
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3839788Z [1m[92m  Downloaded[0m memchr v2.8.2
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3890254Z [1m[92m  Downloaded[0m raw-cpuid v11.6.0
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.3923961Z [1m[92m  Downloaded[0m libm v0.2.16
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4034443Z [1m[92m  Downloaded[0m feral-ordering-core v0.2.1
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4048216Z [1m[92m  Downloaded[0m pulp v0.22.3
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4098695Z [1m[92m  Downloaded[0m syn v2.0.118
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4203431Z [1m[92m  Downloaded[0m feral v0.11.0
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4365666Z [1m[92m   Vendoring[0m ***cfg v1.5.1 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/***cfg-1.5.1) to vendor/***cfg
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4408527Z [1m[92m   Vendoring[0m bitflags v2.13.0 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitflags-2.13.0) to vendor/bitflags
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4461010Z [1m[92m   Vendoring[0m bytemuck v1.25.0 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bytemuck-1.25.0) to vendor/bytemuck
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4496065Z [1m[92m   Vendoring[0m cfg-if v1.0.4 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cfg-if-1.0.4) to vendor/cfg-if
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4510693Z [1m[92m   Vendoring[0m crossbeam-deque v0.8.6 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-deque-0.8.6) to vendor/crossbeam-deque
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4527962Z [1m[92m   Vendoring[0m crossbeam-epoch v0.9.18 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-epoch-0.9.18) to vendor/crossbeam-epoch
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4555798Z [1m[92m   Vendoring[0m crossbeam-utils v0.8.21 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-utils-0.8.21) to vendor/crossbeam-utils
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4587021Z [1m[92m   Vendoring[0m either v1.16.0 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/either-1.16.0) to vendor/either
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4603487Z [1m[92m   Vendoring[0m feral v0.11.0 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/feral-0.11.0) to vendor/feral
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4728398Z [1m[92m   Vendoring[0m feral-amd v0.2.1 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/feral-amd-0.2.1) to vendor/feral-amd
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4751398Z [1m[92m   Vendoring[0m feral-amf v0.2.1 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/feral-amf-0.2.1) to vendor/feral-amf
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4763162Z [1m[92m   Vendoring[0m feral-kahip v0.2.1 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/feral-kahip-0.2.1) to vendor/feral-kahip
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4781039Z [1m[92m   Vendoring[0m feral-metis v0.2.1 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/feral-metis-0.2.1) to vendor/feral-metis
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4799513Z [1m[92m   Vendoring[0m feral-ordering-core v0.2.1 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/feral-ordering-core-0.2.1) to vendor/feral-ordering-core
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4816496Z [1m[92m   Vendoring[0m feral-scotch v0.2.1 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/feral-scotch-0.2.1) to vendor/feral-scotch
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4834581Z [1m[92m   Vendoring[0m itoa v1.0.18 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/itoa-1.0.18) to vendor/itoa
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4850635Z [1m[92m   Vendoring[0m libm v0.2.16 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16) to vendor/libm
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.4982350Z [1m[92m   Vendoring[0m memchr v2.8.2 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memchr-2.8.2) to vendor/memchr
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5048980Z [1m[92m   Vendoring[0m num-complex v0.4.6 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-complex-0.4.6) to vendor/num-complex
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5065350Z [1m[92m   Vendoring[0m num-traits v0.2.19 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-traits-0.2.19) to vendor/num-traits
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5095147Z [1m[92m   Vendoring[0m paste v1.0.15 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/paste-1.0.15) to vendor/paste
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5132097Z [1m[92m   Vendoring[0m proc-macro2 v1.0.106 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro2-1.0.106) to vendor/proc-macro2
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5165256Z [1m[92m   Vendoring[0m pulp v0.22.3 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pulp-0.22.3) to vendor/pulp
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5227323Z [1m[92m   Vendoring[0m pulp-wasm-simd-flag v0.1.1 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pulp-wasm-simd-flag-0.1.1) to vendor/pulp-wasm-simd-flag
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5234716Z [1m[92m   Vendoring[0m quote v1.0.46 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.46) to vendor/quote
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5265757Z [1m[92m   Vendoring[0m raw-cpuid v11.6.0 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/raw-cpuid-11.6.0) to vendor/raw-cpuid
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5304970Z [1m[92m   Vendoring[0m rayon v1.12.0 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rayon-1.12.0) to vendor/rayon
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5420172Z [1m[92m   Vendoring[0m rayon-core v1.13.0 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rayon-core-1.13.0) to vendor/rayon-core
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5463308Z [1m[92m   Vendoring[0m reborrow v0.5.5 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reborrow-0.5.5) to vendor/reborrow
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5470811Z [1m[92m   Vendoring[0m serde v1.0.228 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228) to vendor/serde
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5512807Z [1m[92m   Vendoring[0m serde_core v1.0.228 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_core-1.0.228) to vendor/serde_core
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5544955Z [1m[92m   Vendoring[0m serde_derive v1.0.228 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_derive-1.0.228) to vendor/serde_derive
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5580968Z [1m[92m   Vendoring[0m serde_json v1.0.150 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_json-1.0.150) to vendor/serde_json
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5667529Z [1m[92m   Vendoring[0m syn v2.0.118 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/syn-2.0.118) to vendor/syn
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5797039Z [1m[92m   Vendoring[0m unicode-ident v1.0.24 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-ident-1.0.24) to vendor/unicode-ident
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5828073Z [1m[92m   Vendoring[0m version_check v0.9.5 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/version_check-0.9.5) to vendor/version_check
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5841599Z [1m[92m   Vendoring[0m zmij v1.0.21 (/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zmij-1.0.21) to vendor/zmij
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5866339Z To use vendored sources, add this to your .cargo/config.toml for this project:
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.5867108Z 
+benchmark	Prepare build (validate deps, vendor, scan tree)	2026-09-13T19:14:13.7010663Z prepare-build: vendored tree scanned clean
+benchmark	Setup	﻿2026-09-13T19:14:13.7042394Z ##[group]Run set -euo pipefail
+benchmark	Setup	2026-09-13T19:14:13.7042784Z [36;1mset -euo pipefail[0m
+benchmark	Setup	2026-09-13T19:14:13.7043067Z [36;1mtest "$(id -u)" -ne 0[0m
+benchmark	Setup	2026-09-13T19:14:13.7043368Z [36;1mscripts/grader-sandbox.sh self-check[0m
+benchmark	Setup	2026-09-13T19:14:13.7043791Z [36;1mscripts/grader-sandbox.sh trusted-build[0m
+benchmark	Setup	2026-09-13T19:14:13.7044159Z [36;1mscripts/grader-sandbox.sh candidate-build[0m
+benchmark	Setup	2026-09-13T19:14:13.7078352Z shell: /usr/bin/bash -e {0}
+benchmark	Setup	2026-09-13T19:14:13.7078624Z env:
+benchmark	Setup	2026-09-13T19:14:13.7078847Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Setup	2026-09-13T19:14:13.7079154Z   CARGO_INCREMENTAL: 0
+benchmark	Setup	2026-09-13T19:14:13.7079396Z   CARGO_TERM_COLOR: always
+benchmark	Setup	2026-09-13T19:14:13.7079660Z ##[endgroup]
+benchmark	Setup	2026-09-13T19:14:13.7539335Z assert-no-network: outbound to 1.1.1.1:443 blocked — network isolation looks effective.
+benchmark	Setup	2026-09-13T19:14:13.7543839Z grader-sandbox: build boundary self-check passed
+benchmark	Setup	2026-09-13T19:14:13.8705492Z    Compiling crossbeam-utils v0.8.21
+benchmark	Setup	2026-09-13T19:14:13.8706683Z    Compiling proc-macro2 v1.0.106
+benchmark	Setup	2026-09-13T19:14:13.8712024Z    Compiling unicode-ident v1.0.24
+benchmark	Setup	2026-09-13T19:14:13.8714887Z    Compiling feral-ordering-core v0.2.1
+benchmark	Setup	2026-09-13T19:14:13.9257525Z    Compiling ***cfg v1.5.1
+benchmark	Setup	2026-09-13T19:14:14.0018600Z    Compiling quote v1.0.46
+benchmark	Setup	2026-09-13T19:14:14.2348703Z    Compiling num-traits v0.2.19
+benchmark	Setup	2026-09-13T19:14:14.3132694Z    Compiling serde_core v1.0.228
+benchmark	Setup	2026-09-13T19:14:14.6985991Z    Compiling crossbeam-epoch v0.9.18
+benchmark	Setup	2026-09-13T19:14:14.7514531Z    Compiling feral-amd v0.2.1
+benchmark	Setup	2026-09-13T19:14:14.7800138Z    Compiling zmij v1.0.21
+benchmark	Setup	2026-09-13T19:14:14.7877493Z    Compiling rayon-core v1.13.0
+benchmark	Setup	2026-09-13T19:14:14.8558802Z    Compiling paste v1.0.15
+benchmark	Setup	2026-09-13T19:14:14.8649405Z    Compiling libm v0.2.16
+benchmark	Setup	2026-09-13T19:14:14.9077108Z    Compiling version_check v0.9.5
+benchmark	Setup	2026-09-13T19:14:14.9925741Z    Compiling crossbeam-deque v0.8.6
+benchmark	Setup	2026-09-13T19:14:15.0500553Z    Compiling feral-metis v0.2.1
+benchmark	Setup	2026-09-13T19:14:15.1124680Z    Compiling pulp v0.22.3
+benchmark	Setup	2026-09-13T19:14:15.1529655Z    Compiling syn v2.0.118
+benchmark	Setup	2026-09-13T19:14:15.9477001Z    Compiling serde v1.0.228
+benchmark	Setup	2026-09-13T19:14:16.0948812Z    Compiling bitflags v2.13.0
+benchmark	Setup	2026-09-13T19:14:16.4169833Z    Compiling bytemuck v1.25.0
+benchmark	Setup	2026-09-13T19:14:16.5969137Z    Compiling serde_json v1.0.150
+benchmark	Setup	2026-09-13T19:14:16.6759096Z    Compiling num-complex v0.4.6
+benchmark	Setup	2026-09-13T19:14:16.9278870Z    Compiling raw-cpuid v11.6.0
+benchmark	Setup	2026-09-13T19:14:17.5669805Z    Compiling serde_derive v1.0.228
+benchmark	Setup	2026-09-13T19:14:19.1600193Z    Compiling memchr v2.8.2
+benchmark	Setup	2026-09-13T19:14:20.3648884Z    Compiling pulp-wasm-simd-flag v0.1.1
+benchmark	Setup	2026-09-13T19:14:20.3934709Z    Compiling either v1.16.0
+benchmark	Setup	2026-09-13T19:14:20.4005358Z    Compiling itoa v1.0.18
+benchmark	Setup	2026-09-13T19:14:20.4129597Z    Compiling reborrow v0.5.5
+benchmark	Setup	2026-09-13T19:14:20.4618894Z    Compiling cfg-if v1.0.4
+benchmark	Setup	2026-09-13T19:14:20.5440137Z    Compiling rayon v1.12.0
+benchmark	Setup	2026-09-13T19:14:21.2148844Z    Compiling feral-kahip v0.2.1
+benchmark	Setup	2026-09-13T19:14:23.1539106Z    Compiling feral-scotch v0.2.1
+benchmark	Setup	2026-09-13T19:14:23.4548670Z    Compiling feral-amf v0.2.1
+benchmark	Setup	2026-09-13T19:14:23.5579884Z    Compiling ssi-purity v0.1.0 (/workspace/ssi-purity)
+benchmark	Setup	2026-09-13T19:14:24.9328931Z    Compiling feral v0.11.0
+benchmark	Setup	2026-09-13T19:14:30.6981798Z    Compiling ssi-scoring v0.1.0 (/workspace/ssi-scoring)
+benchmark	Setup	2026-09-13T19:14:30.7912421Z    Compiling ssi-worker-protocol v0.1.0 (/workspace/ssi-worker-protocol)
+benchmark	Setup	2026-09-13T19:14:31.0722935Z    Compiling matrices-fast v0.1.0 (/workspace)
+benchmark	Setup	2026-09-13T19:14:31.8360181Z     Finished `release` profile [optimized] target(s) in 18.05s
+benchmark	Setup	2026-09-13T19:14:31.9580237Z    Compiling crossbeam-utils v0.8.21
+benchmark	Setup	2026-09-13T19:14:31.9580871Z    Compiling proc-macro2 v1.0.106
+benchmark	Setup	2026-09-13T19:14:31.9582389Z    Compiling feral-ordering-core v0.2.1
+benchmark	Setup	2026-09-13T19:14:31.9590255Z    Compiling unicode-ident v1.0.24
+benchmark	Setup	2026-09-13T19:14:32.0159114Z    Compiling ***cfg v1.5.1
+benchmark	Setup	2026-09-13T19:14:32.1058859Z    Compiling quote v1.0.46
+benchmark	Setup	2026-09-13T19:14:32.3239610Z    Compiling num-traits v0.2.19
+benchmark	Setup	2026-09-13T19:14:32.4029410Z    Compiling serde_core v1.0.228
+benchmark	Setup	2026-09-13T19:14:32.7676236Z    Compiling crossbeam-epoch v0.9.18
+benchmark	Setup	2026-09-13T19:14:32.7858842Z    Compiling feral-amd v0.2.1
+benchmark	Setup	2026-09-13T19:14:32.8526483Z    Compiling zmij v1.0.21
+benchmark	Setup	2026-09-13T19:14:32.8680183Z    Compiling version_check v0.9.5
+benchmark	Setup	2026-09-13T19:14:32.8858706Z    Compiling paste v1.0.15
+benchmark	Setup	2026-09-13T19:14:32.9798506Z    Compiling rayon-core v1.13.0
+benchmark	Setup	2026-09-13T19:14:33.0225854Z    Compiling libm v0.2.16
+benchmark	Setup	2026-09-13T19:14:33.0669717Z    Compiling pulp v0.22.3
+benchmark	Setup	2026-09-13T19:14:33.0697462Z    Compiling crossbeam-deque v0.8.6
+benchmark	Setup	2026-09-13T19:14:33.1810013Z    Compiling feral-metis v0.2.1
+benchmark	Setup	2026-09-13T19:14:33.2308892Z    Compiling syn v2.0.118
+benchmark	Setup	2026-09-13T19:14:34.0078877Z    Compiling bytemuck v1.25.0
+benchmark	Setup	2026-09-13T19:14:34.1890853Z    Compiling bitflags v2.13.0
+benchmark	Setup	2026-09-13T19:14:34.5048783Z    Compiling serde_json v1.0.150
+benchmark	Setup	2026-09-13T19:14:34.5869805Z    Compiling serde v1.0.228
+benchmark	Setup	2026-09-13T19:14:34.7489026Z    Compiling raw-cpuid v11.6.0
+benchmark	Setup	2026-09-13T19:14:35.0627533Z    Compiling num-complex v0.4.6
+benchmark	Setup	2026-09-13T19:14:35.5290456Z    Compiling serde_derive v1.0.228
+benchmark	Setup	2026-09-13T19:14:37.7949476Z    Compiling either v1.16.0
+benchmark	Setup	2026-09-13T19:14:37.8738866Z    Compiling memchr v2.8.2
+benchmark	Setup	2026-09-13T19:14:37.9462353Z    Compiling cfg-if v1.0.4
+benchmark	Setup	2026-09-13T19:14:37.9742049Z    Compiling pulp-wasm-simd-flag v0.1.1
+benchmark	Setup	2026-09-13T19:14:38.0048797Z    Compiling itoa v1.0.18
+benchmark	Setup	2026-09-13T19:14:38.1939019Z    Compiling reborrow v0.5.5
+benchmark	Setup	2026-09-13T19:14:38.2429077Z    Compiling rayon v1.12.0
+benchmark	Setup	2026-09-13T19:14:39.1778890Z    Compiling feral-scotch v0.2.1
+benchmark	Setup	2026-09-13T19:14:40.8508892Z    Compiling feral-kahip v0.2.1
+benchmark	Setup	2026-09-13T19:14:41.0168781Z    Compiling feral-amf v0.2.1
+benchmark	Setup	2026-09-13T19:14:42.4486105Z    Compiling feral v0.11.0
+benchmark	Setup	2026-09-13T19:14:48.1504184Z    Compiling ssi-scoring v0.1.0 (/workspace/ssi-scoring)
+benchmark	Setup	2026-09-13T19:14:48.2399805Z    Compiling ssi-worker-protocol v0.1.0 (/workspace/ssi-worker-protocol)
+benchmark	Setup	2026-09-13T19:14:48.5143742Z    Compiling ssi-candidate-worker v0.1.0 (/workspace/candidate-worker)
+benchmark	Setup	2026-09-13T19:14:48.6005288Z warning: unused doc comment
+benchmark	Setup	2026-09-13T19:14:48.6006274Z     --> candidate-worker/src/../../src/ordering/mod.rs:5361:9
+benchmark	Setup	2026-09-13T19:14:48.6007047Z      |
+benchmark	Setup	2026-09-13T19:14:48.6008110Z 5361 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+benchmark	Setup	2026-09-13T19:14:48.6009268Z 5362 | |         /// rows, all of them in-window). Structural, never per-matrix.
+benchmark	Setup	2026-09-13T19:14:48.6010241Z      | |_______________________________________________________________________^
+benchmark	Setup	2026-09-13T19:14:48.6011030Z 5363 | /         let shipped_ladder = || {
+benchmark	Setup	2026-09-13T19:14:48.6011654Z 5364 | |             if nnz < 3 * n {
+benchmark	Setup	2026-09-13T19:14:48.6012339Z 5365 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+benchmark	Setup	2026-09-13T19:14:48.6013066Z 5366 | |             } else if dense_rung_on && nnz >= 10 * n {
+benchmark	Setup	2026-09-13T19:14:48.6013493Z ...    |
+benchmark	Setup	2026-09-13T19:14:48.6013738Z 5371 | |         };
+benchmark	Setup	2026-09-13T19:14:48.6014142Z      | |__________- rustdoc does not generate documentation for statements
+benchmark	Setup	2026-09-13T19:14:48.6014892Z      |
+benchmark	Setup	2026-09-13T19:14:48.6015171Z      = help: use `//` for a plain comment
+benchmark	Setup	2026-09-13T19:14:48.6015715Z      = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+benchmark	Setup	2026-09-13T19:14:48.6016143Z 
+benchmark	Setup	2026-09-13T19:14:49.0196107Z warning: value assigned to `d` is never read
+benchmark	Setup	2026-09-13T19:14:49.0196909Z    --> candidate-worker/src/../../src/ordering/rgreedy.rs:733:29
+benchmark	Setup	2026-09-13T19:14:49.0197579Z     |
+benchmark	Setup	2026-09-13T19:14:49.0198192Z 733 |                 let mut d = 0u32;
+benchmark	Setup	2026-09-13T19:14:49.0198824Z     |                             ^^^^ this value is reassigned later and never used
+benchmark	Setup	2026-09-13T19:14:49.0199449Z ...
+benchmark	Setup	2026-09-13T19:14:49.0199868Z 751 |                     d = self.deg[u] + added as u32;
+benchmark	Setup	2026-09-13T19:14:49.0200739Z     |                     ------------------------------ `d` is overwritten here before the previous value is read
+benchmark	Setup	2026-09-13T19:14:49.0201563Z     |
+benchmark	Setup	2026-09-13T19:14:49.0202163Z     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+benchmark	Setup	2026-09-13T19:14:49.0202763Z 
+benchmark	Setup	2026-09-13T19:14:49.3798676Z warning: constant `RELABEL_BUDGET` is never used
+benchmark	Setup	2026-09-13T19:14:49.3800218Z    --> candidate-worker/src/../../src/ordering/mod.rs:882:7
+benchmark	Setup	2026-09-13T19:14:49.3801081Z     |
+benchmark	Setup	2026-09-13T19:14:49.3801724Z 882 | const RELABEL_BUDGET: usize = 300_000;
+benchmark	Setup	2026-09-13T19:14:49.3802521Z     |       ^^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3803151Z     |
+benchmark	Setup	2026-09-13T19:14:49.3803930Z     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+benchmark	Setup	2026-09-13T19:14:49.3804727Z 
+benchmark	Setup	2026-09-13T19:14:49.3805108Z warning: constant `RELABEL_MAX_RESTARTS` is never used
+benchmark	Setup	2026-09-13T19:14:49.3805760Z    --> candidate-worker/src/../../src/ordering/mod.rs:883:7
+benchmark	Setup	2026-09-13T19:14:49.3806300Z     |
+benchmark	Setup	2026-09-13T19:14:49.3806659Z 883 | const RELABEL_MAX_RESTARTS: usize = 24;
+benchmark	Setup	2026-09-13T19:14:49.3807132Z     |       ^^^^^^^^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3807390Z 
+benchmark	Setup	2026-09-13T19:14:49.3807614Z warning: constant `SUBTREE_MAX_N` is never used
+benchmark	Setup	2026-09-13T19:14:49.3808627Z    --> candidate-worker/src/../../src/ordering/mod.rs:946:7
+benchmark	Setup	2026-09-13T19:14:49.3809348Z     |
+benchmark	Setup	2026-09-13T19:14:49.3809795Z 946 | const SUBTREE_MAX_N: usize = 250_000;
+benchmark	Setup	2026-09-13T19:14:49.3810397Z     |       ^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3810683Z 
+benchmark	Setup	2026-09-13T19:14:49.3810999Z warning: function `relabel_restarts` is never used
+benchmark	Setup	2026-09-13T19:14:49.3811694Z     --> candidate-worker/src/../../src/ordering/mod.rs:1235:4
+benchmark	Setup	2026-09-13T19:14:49.3812127Z      |
+benchmark	Setup	2026-09-13T19:14:49.3812540Z 1235 | fn relabel_restarts(budget: usize, cap: usize, nnz: usize) -> usize {
+benchmark	Setup	2026-09-13T19:14:49.3813062Z      |    ^^^^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3813253Z 
+benchmark	Setup	2026-09-13T19:14:49.3813445Z warning: function `paired_swap_refine` is never used
+benchmark	Setup	2026-09-13T19:14:49.3813958Z     --> candidate-worker/src/../../src/ordering/mod.rs:1369:4
+benchmark	Setup	2026-09-13T19:14:49.3814382Z      |
+benchmark	Setup	2026-09-13T19:14:49.3814824Z 1369 | fn paired_swap_refine(pattern: &Pattern, mut best: Vec<usize>) -> Vec<usize> {
+benchmark	Setup	2026-09-13T19:14:49.3815386Z      |    ^^^^^^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3815584Z 
+benchmark	Setup	2026-09-13T19:14:49.3815750Z warning: function `plateau_refine` is never used
+benchmark	Setup	2026-09-13T19:14:49.3816237Z     --> candidate-worker/src/../../src/ordering/mod.rs:1392:4
+benchmark	Setup	2026-09-13T19:14:49.3816835Z      |
+benchmark	Setup	2026-09-13T19:14:49.3817321Z 1392 | fn plateau_refine(pattern: &Pattern, start: Vec<usize>, neutral: bool) -> Vec<usize> {
+benchmark	Setup	2026-09-13T19:14:49.3818147Z      |    ^^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3818315Z 
+benchmark	Setup	2026-09-13T19:14:49.3818433Z warning: function `capture` is never used
+benchmark	Setup	2026-09-13T19:14:49.3818848Z   --> candidate-worker/src/../../src/ordering/transplant_probe.rs:11:15
+benchmark	Setup	2026-09-13T19:14:49.3819236Z    |
+benchmark	Setup	2026-09-13T19:14:49.3819496Z 11 | pub(super) fn capture(pool: &[(u64, Vec<usize>)]) {
+benchmark	Setup	2026-09-13T19:14:49.3819826Z    |               ^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3819970Z 
+benchmark	Setup	2026-09-13T19:14:49.3820104Z warning: function `terminal_pass` is never used
+benchmark	Setup	2026-09-13T19:14:49.3820529Z    --> candidate-worker/src/../../src/ordering/transplant_probe.rs:240:4
+benchmark	Setup	2026-09-13T19:14:49.3821131Z     |
+benchmark	Setup	2026-09-13T19:14:49.3821329Z 240 | fn terminal_pass(
+benchmark	Setup	2026-09-13T19:14:49.3821566Z     |    ^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3821696Z 
+benchmark	Setup	2026-09-13T19:14:49.3821808Z warning: function `refine` is never used
+benchmark	Setup	2026-09-13T19:14:49.3822175Z   --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+benchmark	Setup	2026-09-13T19:14:49.3822521Z    |
+benchmark	Setup	2026-09-13T19:14:49.3822718Z 12 | pub(super) fn refine(
+benchmark	Setup	2026-09-13T19:14:49.3822956Z    |               ^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3823101Z 
+benchmark	Setup	2026-09-13T19:14:49.3823222Z warning: function `candidates` is never used
+benchmark	Setup	2026-09-13T19:14:49.3823622Z   --> candidate-worker/src/../../src/ordering/peo_extract.rs:63:15
+benchmark	Setup	2026-09-13T19:14:49.3823969Z    |
+benchmark	Setup	2026-09-13T19:14:49.3824174Z 63 | pub(super) fn candidates(
+benchmark	Setup	2026-09-13T19:14:49.3824429Z    |               ^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3824586Z 
+benchmark	Setup	2026-09-13T19:14:49.3824699Z warning: type alias `PermFn` is never used
+benchmark	Setup	2026-09-13T19:14:49.3825083Z   --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+benchmark	Setup	2026-09-13T19:14:49.3825426Z    |
+benchmark	Setup	2026-09-13T19:14:49.3825760Z 80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+benchmark	Setup	2026-09-13T19:14:49.3826287Z    |                 ^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3826439Z 
+benchmark	Setup	2026-09-13T19:14:49.3826557Z warning: function `run_perms` is never used
+benchmark	Setup	2026-09-13T19:14:49.3826931Z    --> candidate-worker/src/../../src/ordering/parallel.rs:189:15
+benchmark	Setup	2026-09-13T19:14:49.3827277Z     |
+benchmark	Setup	2026-09-13T19:14:49.3827476Z 189 | pub(crate) fn run_perms(
+benchmark	Setup	2026-09-13T19:14:49.3828119Z     |               ^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3828341Z 
+benchmark	Setup	2026-09-13T19:14:49.3828472Z warning: function `accept` is never used
+benchmark	Setup	2026-09-13T19:14:49.3828851Z    --> candidate-worker/src/../../src/ordering/parallel.rs:314:15
+benchmark	Setup	2026-09-13T19:14:49.3829206Z     |
+benchmark	Setup	2026-09-13T19:14:49.3829631Z 314 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+benchmark	Setup	2026-09-13T19:14:49.3830137Z     |               ^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3830293Z 
+benchmark	Setup	2026-09-13T19:14:49.3830425Z warning: function `minl_is_clique` is never used
+benchmark	Setup	2026-09-13T19:14:49.3830807Z    --> candidate-worker/src/../../src/ordering/minl.rs:134:4
+benchmark	Setup	2026-09-13T19:14:49.3831147Z     |
+benchmark	Setup	2026-09-13T19:14:49.3831450Z 134 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+benchmark	Setup	2026-09-13T19:14:49.3831834Z     |    ^^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3831972Z 
+benchmark	Setup	2026-09-13T19:14:49.3832124Z warning: function `minl_try_delete_edge` is never used
+benchmark	Setup	2026-09-13T19:14:49.3832518Z    --> candidate-worker/src/../../src/ordering/minl.rs:230:4
+benchmark	Setup	2026-09-13T19:14:49.3832837Z     |
+benchmark	Setup	2026-09-13T19:14:49.3833041Z 230 | fn minl_try_delete_edge(
+benchmark	Setup	2026-09-13T19:14:49.3833293Z     |    ^^^^^^^^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3833448Z 
+benchmark	Setup	2026-09-13T19:14:49.3833555Z warning: function `order` is never used
+benchmark	Setup	2026-09-13T19:14:49.3833960Z   --> candidate-worker/src/../../src/ordering/chordal_certificate.rs:32:15
+benchmark	Setup	2026-09-13T19:14:49.3834338Z    |
+benchmark	Setup	2026-09-13T19:14:49.3834670Z 32 | pub(crate) fn order(n: usize, cp: &[usize], ri: &[usize]) -> Option<Vec<usize>> {
+benchmark	Setup	2026-09-13T19:14:49.3835070Z    |               ^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3835220Z 
+benchmark	Setup	2026-09-13T19:14:49.3835361Z warning: function `run_sequential_180` is never used
+benchmark	Setup	2026-09-13T19:14:49.3835760Z    --> candidate-worker/src/../../src/ordering/indep_first.rs:725:4
+benchmark	Setup	2026-09-13T19:14:49.3836112Z     |
+benchmark	Setup	2026-09-13T19:14:49.3836468Z 725 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+benchmark	Setup	2026-09-13T19:14:49.3836919Z     |    ^^^^^^^^^^^^^^^^^^
+benchmark	Setup	2026-09-13T19:14:49.3837072Z 
+benchmark	Setup	2026-09-13T19:14:55.1303331Z warning: `ssi-candidate-worker` (bin "ssi-candidate-worker") generated 19 warnings
+benchmark	Setup	2026-09-13T19:14:55.1304191Z     Finished `release` profile [optimized] target(s) in 23.25s
+benchmark	Verify per-worker sandbox	﻿2026-09-13T19:14:55.1373493Z ##[group]Run set -euo pipefail
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1373843Z [36;1mset -euo pipefail[0m
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1374271Z [36;1m./target/trusted/release/matrices-fast --grader --sandbox-self-check[0m
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1375104Z [36;1m./target/trusted/release/matrices-fast --grader --sandbox-timeout-self-check[0m
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1375666Z [36;1mcargo test --offline --locked --package matrices-fast \[0m
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1376174Z [36;1m  sandbox::tests::bubblewrap_timeout_tears_down_candidate_descendants \[0m
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1376602Z [36;1m  -- --ignored[0m
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1412173Z shell: /usr/bin/bash -e {0}
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1412595Z env:
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1412989Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1413295Z   CARGO_INCREMENTAL: 0
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1413582Z   CARGO_TERM_COLOR: always
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1413849Z   SSI_GRADER_SANDBOX: bubblewrap
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1414412Z   SSI_CANDIDATE_WORKER: /home/runner/work/matrices-fast/matrices-fast/target/candidate/release/ssi-candidate-worker
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1415040Z ##[endgroup]
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.1601078Z per-worker bubblewrap self-check passed
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.3658949Z bubblewrap timeout teardown self-check passed
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.4375045Z [1m[92m   Compiling[0m crossbeam-utils v0.8.21
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.4375878Z [1m[92m   Compiling[0m proc-macro2 v1.0.106
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.4376552Z [1m[92m   Compiling[0m unicode-ident v1.0.24
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.4377239Z [1m[92m   Compiling[0m feral-ordering-core v0.2.1
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.4946985Z [1m[92m   Compiling[0m quote v1.0.46
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.6129126Z [1m[92m   Compiling[0m ***cfg v1.5.1
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.7259138Z [1m[92m   Compiling[0m serde_core v1.0.228
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.9198330Z [1m[92m   Compiling[0m feral-amd v0.2.1
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.9525531Z [1m[92m   Compiling[0m num-traits v0.2.19
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:55.9970024Z [1m[92m   Compiling[0m libm v0.2.16
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:56.1419547Z [1m[92m   Compiling[0m crossbeam-epoch v0.9.18
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:56.1720863Z [1m[92m   Compiling[0m zmij v1.0.21
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:56.2785281Z [1m[92m   Compiling[0m version_check v0.9.5
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:56.3210435Z [1m[92m   Compiling[0m rayon-core v1.13.0
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:56.3238723Z [1m[92m   Compiling[0m paste v1.0.15
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:56.4133805Z [1m[92m   Compiling[0m crossbeam-deque v0.8.6
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:56.4462359Z [1m[92m   Compiling[0m syn v2.0.118
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:56.5051764Z [1m[92m   Compiling[0m pulp v0.22.3
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:56.5510555Z [1m[92m   Compiling[0m feral-metis v0.2.1
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:57.0734750Z [1m[92m   Compiling[0m serde_json v1.0.150
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:57.1289304Z [1m[92m   Compiling[0m bytemuck v1.25.0
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:57.1749198Z [1m[92m   Compiling[0m bitflags v2.13.0
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:57.2801248Z [1m[92m   Compiling[0m serde v1.0.228
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:57.3225931Z [1m[92m   Compiling[0m raw-cpuid v11.6.0
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:57.4709129Z [1m[92m   Compiling[0m num-complex v0.4.6
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:58.8350608Z [1m[92m   Compiling[0m serde_derive v1.0.228
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:59.6259247Z [1m[92m   Compiling[0m cfg-if v1.0.4
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:59.6434169Z [1m[92m   Compiling[0m memchr v2.8.2
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:59.6491721Z [1m[92m   Compiling[0m either v1.16.0
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:59.7870687Z [1m[92m   Compiling[0m reborrow v0.5.5
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:59.8251063Z [1m[92m   Compiling[0m pulp-wasm-simd-flag v0.1.1
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:59.8509135Z [1m[92m   Compiling[0m itoa v1.0.18
+benchmark	Verify per-worker sandbox	2026-09-13T19:14:59.9715595Z [1m[92m   Compiling[0m rayon v1.12.0
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:01.6459180Z [1m[92m   Compiling[0m feral-scotch v0.2.1
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:02.0689195Z [1m[92m   Compiling[0m feral-kahip v0.2.1
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:02.1439126Z [1m[92m   Compiling[0m feral-amf v0.2.1
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:02.2129719Z [1m[92m   Compiling[0m prototype-oracle v0.1.0 (/home/runner/work/matrices-fast/matrices-fast/prototype-oracle)
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:03.0179364Z [1m[92m   Compiling[0m feral v0.11.0
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:05.0245607Z [1m[92m   Compiling[0m ssi-scoring v0.1.0 (/home/runner/work/matrices-fast/matrices-fast/ssi-scoring)
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:05.0976809Z [1m[92m   Compiling[0m ssi-worker-protocol v0.1.0 (/home/runner/work/matrices-fast/matrices-fast/ssi-worker-protocol)
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:05.1928992Z [1m[92m   Compiling[0m matrices-fast v0.1.0 (/home/runner/work/matrices-fast/matrices-fast)
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.0650005Z [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 10.69s
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.0671462Z [1m[92m     Running[0m unittests src/main.rs (target/debug/deps/matrices_fast-42399a26ce091bfa)
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.0684143Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.0684467Z running 1 test
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2740142Z test sandbox::tests::bubblewrap_timeout_tears_down_candidate_descendants ... ok
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2740654Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2741295Z [1m[92m     Running[0m tests/exact_equivalence.rs (target/debug/deps/exact_equivalence-a0ee54e703a06ced)
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2742204Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.20s
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2742713Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2745266Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2745510Z running 0 tests
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2745808Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2746276Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2746927Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2748380Z [1m[92m     Running[0m tests/scorer_crosscheck.rs (target/debug/deps/scorer_crosscheck-4e6cf07f9d3ae241)
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2757230Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2757428Z running 0 tests
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2757644Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2758228Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2765926Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2766742Z [1m[92m     Running[0m tests/security_boundary.rs (target/debug/deps/security_boundary-5080f7360994ca56)
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2768969Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2769129Z running 0 tests
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2769394Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2769697Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2770065Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2771668Z [1m[92m     Running[0m tests/time_cap.rs (target/debug/deps/time_cap-0e88487439caaaea)
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2781084Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2781396Z running 0 tests
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2781652Z 
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2782122Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+benchmark	Verify per-worker sandbox	2026-09-13T19:15:06.2782777Z 
+benchmark	Fetch eval corpus	﻿2026-09-13T19:15:06.2835768Z ##[group]Run if [ -z "${EVAL_BUCKET_NAME:-}" ]; then
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2836201Z [36;1mif [ -z "${EVAL_BUCKET_NAME:-}" ]; then[0m
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2836695Z [36;1m  echo "No EVAL_BUCKET_NAME secret set; grading the committed public dev corpus."[0m
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2837177Z [36;1m  echo "corpus_file=" >> "$GITHUB_OUTPUT"[0m
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2837490Z [36;1melse[0m
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2838323Z [36;1m  ./.github/scripts/fetch-eval-corpus.sh "$RUNNER_TEMP/eval.jsonl"[0m
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2838843Z [36;1m  echo "corpus_file=$RUNNER_TEMP/eval.jsonl" >> "$GITHUB_OUTPUT"[0m
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2839229Z [36;1mfi[0m
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2873059Z shell: /usr/bin/bash -e {0}
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2873339Z env:
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2873573Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2873868Z   CARGO_INCREMENTAL: 0
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2874109Z   CARGO_TERM_COLOR: always
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2874484Z   EVAL_BUCKET_NAME: ***
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2874943Z   EVAL_BUCKET_ENDPOINT: ***
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2875290Z   AWS_ACCESS_KEY_ID: ***
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2875698Z   AWS_SECRET_ACCESS_KEY: ***
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2875983Z   AWS_DEFAULT_REGION: ***
+benchmark	Fetch eval corpus	2026-09-13T19:15:06.2876221Z ##[endgroup]
+benchmark	Fetch eval corpus	2026-09-13T19:15:07.7769860Z fetch-eval-corpus: pointer resolved
+benchmark	Fetch eval corpus	2026-09-13T19:15:12.5852987Z fetch-eval-corpus: checksum OK
+benchmark	Fetch eval corpus	2026-09-13T19:15:12.5853813Z fetch-eval-corpus: corpus downloaded and verified
+benchmark	Benchmark	﻿2026-09-13T19:15:12.5901986Z ##[group]Run set -euo pipefail
+benchmark	Benchmark	2026-09-13T19:15:12.5902320Z [36;1mset -euo pipefail[0m
+benchmark	Benchmark	2026-09-13T19:15:12.5902589Z [36;1mtest "$(id -u)" -ne 0[0m
+benchmark	Benchmark	2026-09-13T19:15:12.5902918Z [36;1mexec ./target/trusted/release/matrices-fast --grader[0m
+benchmark	Benchmark	2026-09-13T19:15:12.5937180Z shell: /usr/bin/bash -e {0}
+benchmark	Benchmark	2026-09-13T19:15:12.5937452Z env:
+benchmark	Benchmark	2026-09-13T19:15:12.5937928Z   CARGO_HOME: /home/runner/.cargo
+benchmark	Benchmark	2026-09-13T19:15:12.5938272Z   CARGO_INCREMENTAL: 0
+benchmark	Benchmark	2026-09-13T19:15:12.5938525Z   CARGO_TERM_COLOR: always
+benchmark	Benchmark	2026-09-13T19:15:12.5938818Z   SSI_CORPUS_FILE: /home/runner/work/_temp/eval.jsonl
+benchmark	Benchmark	2026-09-13T19:15:12.5939154Z   SSI_GRADER_SANDBOX: bubblewrap
+benchmark	Benchmark	2026-09-13T19:15:12.5939696Z   SSI_CANDIDATE_WORKER: /home/runner/work/matrices-fast/matrices-fast/target/candidate/release/ssi-candidate-worker
+benchmark	Benchmark	2026-09-13T19:15:12.5940273Z ##[endgroup]
+benchmark	Benchmark	2026-09-13T19:16:38.3278690Z 
+benchmark	Benchmark	2026-09-13T19:16:38.3279435Z RUN FAILED: hidden matrix: order() exceeded the 2.0s per-matrix cap and was killed
+benchmark	Benchmark	2026-09-13T19:16:38.3524732Z ##[error]Process completed with exit code 1.
+benchmark	Post Checkout dispatched ref	﻿2026-09-13T19:16:38.3666008Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.3667603Z Post job cleanup.
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4480899Z [command]/usr/bin/git version
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4517401Z git version 2.55.0
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4553914Z Temporarily overriding HOME='/home/runner/work/_temp/a52fb4cd-0e0b-4a84-94a0-1e3f2f1bb5d1' before making global git config changes
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4555287Z Adding repository directory to the temporary git global config as a safe directory
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4559735Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/matrices-fast/matrices-fast
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4594911Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4628237Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4856012Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4881611Z http.https://github.com/.extraheader
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4891812Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.4922138Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.5170674Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+benchmark	Post Checkout dispatched ref	2026-09-13T19:16:38.5199808Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+benchmark	Complete job	﻿2026-09-13T19:16:38.5551515Z Cleaning up orphan processes
+benchmark	Complete job	2026-09-13T19:16:38.5871091Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@11d5960a326750d5838078e36cf38b85af677262. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

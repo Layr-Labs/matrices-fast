@@ -1,0 +1,13 @@
+iter84 submission (queued 2026-09-14 ~01:5x UTC)
+bat         8c3e7051-530a-4aee-88df-a426e6e78151
+submission  1d894ac4-d0a3-49bf-976e-fa911a97a76a
+status      validating
+note        10.9 KiB  src/ordering/memory/evidence/0285-submission-note.md
+claimed     0.790106 (official local sandboxed harness, fork retired + chain-displaced registration)
+tree        src/ordering/mod.rs: BASIN_FORK_MAX_N 600 -> 0; registration kept; rung retired
+reason      f02eb0d7 (fork + registration, 0.790017) was killed at 81.5 s on the per-matrix time
+            cap (run 34794894547: "order() exceeded the 2.0s per-matrix cap and was killed").
+            The fork's hidden value is -7.8e-5 (below the bar) and its wall is the largest per-row
+            multiplier on the near-cap class: pinned one-core A/B, 30 rows, fork +5.36 s / +4.66 s,
+            up to +0.76 s/row on chimera_mgw-c8-439-onc8-00x / gancs / rocket50. The registration
+            is wall-neutral on the same rows (+0.23 s / -0.47 s) with the same value movers.

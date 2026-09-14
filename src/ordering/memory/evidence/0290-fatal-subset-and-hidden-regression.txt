@@ -1,0 +1,56 @@
+# iter86 raw evidence — the hidden regression of the tip, the controlled fence pair, and the fatal-class subset instrument
+
+## A. Remote receipts (board + Actions logs)
+
+| bat | tree | sweeps | remote | hidden score |
+|---|---|---|---|---|
+| `3587d1b` | crown + fork@600 | 12 | completed | 0.840545 (rejected, −7.8e-5) |
+| `f02eb0d7` | crown + fork@600 + registration | 12 | **killed, 81.5 s** | n/a |
+| `0df9f508` | the same tree | 6 | **completed** | **0.840900** (rejected, **+2.77e-4**) |
+| crown `bbf58495` | — | 12 | promoted | 0.840623 |
+
+* `0df9f508`: `gh run view 34798699000`, benchmark step 02:17:04 → 02:29:59; `score.json`
+  `{"score": 0.840900, "metrics": {"geomean_flop_ratio": 0.840900, "geomean_fill_ratio": 0.944130}}`
+  (`gh run download 34798699000 -n score`). Board ledger: `0df9f50 newjordan rejected 0.8409 ...
+  +0.000277 (+0.03%)`.
+* Its tree is −2.14e-4 *better* than the crown on the dev frame (0.790049 vs 0.790263) and +2.77e-4
+  *worse* on hidden: the lane's dev→hidden transfer model inverts for this device pair.
+* The fence is therefore a completion device with a hidden price; the lane's own transfer datum on
+  the same axis (6 → 12 sweeps = −3.7e-5 dev → −1.59e-4 hidden, 4.3×) predicts ≈ +1.6e-4 for the
+  reverse step.
+
+## B. Local tree ledger this iteration (official sandboxed harness, 300 rows, 2 calls/row)
+
+| tree | score | tiebreak | wall |
+|---|---|---|---|
+| registration (evicting) + 12 sweeps | 0.790017 | 0.923134 | 284 s |
+| registration (evicting) + 6 sweeps (shipped as `0df9f508`) | 0.790049 | 0.923141 | 277 s (iter85 frame) |
+| registration (additive: `truncate(PEO_ALT_SEEDS + 1)`) + 12 sweeps | **0.789998** | **0.923120** | 286 s |
+| fork@600 + 12 sweeps + registration OFF + AMF pass-3 | 0.790951 | 0.923392 | 290 s |
+| crown's recorded frame | 0.790263 | 0.923134 | — |
+
+* The eviction removal is worth −1.9e-5 dev and cannot remove a pool entry any consumer would see.
+* The third AMF pass is worth **+7.8e-4 dev** (worse) on the fork-only profile — the non-monotone
+  "better portfolio incumbent, worse final result" effect (cf. 0219).
+* `cargo test --release -p ssi-candidate-worker`: 126 passed / 0 failed.
+
+## C. The fatal-class subset instrument (new)
+
+`.scratch/iter86/mksubset.py` + `runfatal.sh`: 55 rows = the 12 heaviest 4-core rows (W4.tsv), the
+10 heaviest pinned-1-core rows (C1.tsv), every row with `nnz >= 10n, n <= 12 000`, plus `st_bsj2`,
+`gasprod_sarawak16`, `chimera_mgw-c8-439-onc8-001`. Written to a non-canonical `SSI_CORPUS_FILE`,
+so the official harness grades it on the *hidden* path (no census, redacted failures) and unlinks
+it after loading; the runner regenerates it per invocation.
+
+| arm (fork + registration + 6 sweeps base) | subset score | subset tiebreak | host wall |
+|---|---|---|---|
+| base (3 runs) | 0.7109, 0.7109, 0.7109 | 0.8743 | 49.7 / 51.5 / 53.3 s |
+| dense-band rung ON | 0.7108 | 0.8742 | 51.5 s |
+| AMF relabel `num_passes` 2 → 1 | **0.7115** (2 runs) | 0.8745 | 48.7 / 49.0 s |
+
+* The score/tiebreak are exactly repeatable; host wall drifts ~7 % between runs minutes apart, so
+  only ≥0.5 s wall deltas are readable.
+* The AMF *pass* axis is a second lottery: its second pass is worth 6.0e-4 of subset score. The
+  `RELABEL_BUDGET` doc table's "past 300 000 buys under 0.0002" is an AMD-budget-axis statement.
+* Pinned variant (`PIN=1 taskset -c 0`) dies on the cap at **20.5 s**: time-to-kill is a usable
+  margin proxy for the frame the cap is actually paid in.

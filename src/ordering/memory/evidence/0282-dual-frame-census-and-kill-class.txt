@@ -1,0 +1,107 @@
+iter82 — THE DUAL-FRAME CENSUS (4-core wall vs 1-core CPU), THE SAME-CORPUS SIX-RUN LEDGER,
+AND THE KILLER CLASS THE CROWN CENSUS CANNOT SEE
+=========================================================================================
+
+0. RECEIPTS FETCHED THIS ITERATION (gh api; all times UTC, so all six runs below are on
+   the SAME eval prefix — one corpus, one day)
+   run id      job id        bat            grader step                 dur      verdict
+   34783530155 103794753955  3587d1b7      21:23:36.094 -> 21:34:11.457  635.36 s COMPLETED, 0.8405
+   34780761777 103787235306  (20:26 bat)   20:29:50.003 -> 20:31:15.209   85.21 s cap kill
+   34779792660 103784577801  5e7259a4      20:11:06.122 -> 20:12:32.317   86.20 s cap kill
+   34785503709 103800130823  f70480c1      22:04:35.748 -> 22:06:01.934   86.19 s cap kill
+   34788456500 103808150760  fe17562d (RIVAL, claimed 0.790086)
+                                              23:04:13.212 -> 23:05:55.512  102.30 s cap kill
+   34788974416 103809544356  69bc2fc5      23:14:45.369 -> 23:16:11.357   85.99 s cap kill
+   [.scratch/iter82/remote/job-10379{4753955,130823,4235306,4577801},job-10380{8150760,9544356}.log]
+   * FOUR of our five kills land in an 85.2-86.2 s band (1.0 s spread) while their device
+     increment sets differ by 5.6 s of corpus wall in total (+0.87 s dense draws, +6.48 s
+     wide gate, +1.9 s 5e8 rung) => the killer row is reached at a nearly fixed point in
+     the run, and the increments land mostly AFTER it. The rival's tree reaches its
+     over-cap row 16 s later (their prefix is more expensive).
+   * 69bc2fc5's own verdict string is the per-matrix cap; the earlier "291 s job" was the
+     whole job (build + gate), the grader step is 85.99 s.
+
+1. NEW INSTRUMENT: THE DUAL-FRAME FULL-CORPUS CENSUS (one binary, one session, 300 rows)
+   probe (SSI_MARK_NOSCORE=1, pre-class off, fork@600, sweeps 12/step 5, contract corpus):
+     arm W4 `taskset -c 0-3`  SCORE 0.790145  WORST 1.405 s  corpus total 181.1 s  (183 s wall)
+     arm C1 `taskset -c 0`    SCORE 0.790145  WORST 2.404 s  corpus total 249.0 s  (251 s wall)
+   => the 1-core/4-core corpus factor is 1.375, and the SCORE is bit-identical across core
+      counts (determinism gate holds across frames).
+   [.scratch/iter82/{W4,C1}.tsv, batch.log]
+   * 1-core max = `arki0016` 2.404 s (4-core 1.405 s). THREE dev rows exceed the 2.0 s cap in
+     the 1-core frame: arki0016 2.404, crudeoil_lee4_10 2.120, crudeoil_lee4_09 2.023.
+     No row exceeds 1.41 s at 4 cores.
+   * 39 rows >= 1.5 s at 1 core vs 12 rows >= 1.2 s at 4 cores (35 rows >= 1.0 s at 4 cores).
+   * The two frames' top-10 sets overlap 7/10. 1-core-only: crudeoil_lee1_07 (1.906),
+     crudeoil_lee2_06 (1.923), sfacloc2_3_80 (1.824), sfacloc2_4_80 (1.810). 4-core-only:
+     powerflow0118p, rsyn0840m04m, transswitch0300p.
+   * `sfacloc2_4_80` (n=5067, nnz/n 5.2) is 0.931 s at 4 cores (rank 40, outside every crown
+     census) and 1.810 s at 1 core: factor 1.94, the corpus maximum.
+
+2. THE IN-FLIGHT DEVICE'S WALL PRICE AS A DELTA (it was only ever priced as score)
+   `SSI_TERM_DENSE_RUNG=0` (the seam is NOT forwarded by target/probe-sandbox.sh — patched
+   this iteration, one line, target/ is gitignored):
+     W4 0.790145 -> D0 0.790171 (-2.6e-5, reproduces iter81's -2.5e-5; WORST 1.405 -> 1.395)
+     C1 0.790145 -> D1 0.790171 (WORST 2.404 -> 2.375)
+   wall price over the 38 dense-band rows: +0.873 s (W4) / +1.195 s (C1); max per row
+   +0.116 (W4) / +0.179 (C1), on rows whose own wall is 0.46-0.65 s
+   (st_m1 0.649 +0.116, graphpart_clique-20 0.535 +0.099, graphpart_clique-30 0.540 +0.094,
+   st_m2 0.526 +0.090, torsion50 0.652 +0.059).
+   [.scratch/iter82/{W4,C1,D0,D1}.tsv, batch.log]
+
+3. THE PROBE FRAME'S PER-ROW NOISE, QUANTIFIED (not guessed)
+   Using the 262 rows the dense rung provably cannot touch (not `nnz>=10n and n<=10000`), the
+   per-row delta between the two arms is: mean -0.010/+0.004, sd 0.026 s both frames,
+   p50 0.00, p90 +0.008/+0.032, p99 +0.040/+0.076, max +0.083 (W4) / +0.149 (C1).
+   So the probe resolves >=0.05 s per row, not the +-0.05 s the iter81 note assumed, and the
+   p99 tail is 0.04-0.08 s.
+   [.scratch/iter82/analyze3.py output over {W4,D0} and {C1,D1}]
+
+4. THE COMPLETED DEVICE'S INCREMENT SET, AND WHY "PROTECT THE CROWN" IS NOT THE RULE
+   `SSI_NO_BASIN_FORK=1` (fork@600 off, same binary/session): F0 SCORE 0.790234, WORST 1.387 s
+   => the fork@600 is worth **-8.9e-5** in this frame (the largest value device the lane owns).
+   Its per-row increments are the LARGEST in the corpus: +0.615 `st_bsj2` (n=13, W4 0.886),
+   +0.559 `ex6_1_4` (n=10), +0.511 `nvs02` (n=11), +0.505 `pooling_haverly1pq` (n=31),
+   +0.462 `st_bpaf1a` (n=30), +0.194 `ex8_3_9`, +0.170 `chimera_mgw-c8-439-onc8-002` — 100+
+   rows over +0.05 s — and this is the ONLY bat that completed the hidden corpus.
+   => a device that nearly DOUBLES the cost of an early corpus row (st_bsj2 sits at 8.8 % of
+      the corpus's cumulative wall) still completed, so the killer is not simply "the first
+      heavy row" and the crown census is not the risk set.
+   [.scratch/iter82/F0.tsv, batch.log; window membership from corpus order]
+
+5. THE CORPUS ORDER IS CONTENT-HASH ORDER (structure fact, never recorded)
+   `corpus/dev/patterns.jsonl` is sorted ascending by its own `hash` field (raw string order),
+   and `hash != sha256(source)` (checked over all 300 rows). So the corpus order is
+   content-derived, i.e. effectively random with respect to family/size — which is why a
+   kill-position argument cannot name a row, only a class, and why the hidden corpus's
+   early region is a different set of rows than dev's.
+   [file:corpus/dev/patterns.jsonl + the sortedness/hash check]
+
+6. THE KILLER MUST BE A ROW THE COMPLETED DEVICE DOES NOT TOUCH
+   The two killed devices with recoverable increment sets (dense ladder, wide gate) intersect,
+   at >0.02 s, on exactly TWO rows: `pooling_digabel19` (n=514, nnz/n 11.4, +0.042/+0.224) and
+   `primary` (n=378, nnz/n 15.8, +0.066/+0.141). Both satisfy the fork@600 gate's n-clause
+   (n<=600), where the
+   COMPLETED device's increment is only +0.006 / +0.021 s.
+   Every other class the killed devices touch is disjoint from the completed device's set:
+   the wide gate's 30 rows over +0.10 s are n=645..1200 sparse rows (multiplants_stg1b/c/5,
+   ndcc12/13, edgecross10-*, lop97icx) — all n>600, i.e. outside the only gate that ever
+   completed the hidden corpus; the dense ladder's rows are the dense band.
+   [.scratch/iter80/{base,forkB}.tsv x .scratch/iter82/{W4,D0}.tsv; analyze4/5 this iteration]
+
+7. WHAT THE LEDGER SAYS THE NEXT DEVICE MAY NOT DO
+   * Any increment >= ~0.05 s on a row whose local cost is 0.4-1.2 s in a class present in the
+     hidden corpus is a coin flip at best: every killed bat's largest increments are exactly
+     there (wide gate +0.369 on multiplants_stg1b at local 0.813; dense ladder +0.179 C1 on
+     graphpart_clique-30 at local 0.540), and the completed bat's largest increments are on
+     n<=32 rows where even a doubling stays far from 2.0 s.
+   * The in-window-increment model was tested and REFUTED before shipping: the completed
+     device's in-window (first 13.5 % of cumulative wall) increment sum is 3.925 s, larger
+     than the wide gate's 1.109 s and the dense ladder's 0.489 s. [analyze5 output]
+   * No local frame maps linearly onto the remote one: the completed pass was 635 s against a
+     240 s local harness pass (2.65x), yet it carried `st_bsj2` at 0.886 s local *with* the
+     fork — a uniform 2.65x per-row slowdown would have killed it at 2.35 s. So the excess is
+     per-row overhead / corpus composition, not per-row slowness.
+
+FILES: .scratch/iter82/{run-dual-frame.sh, run-rungoff.sh, run-nofork.sh, analyze*.py}
+       .scratch/iter82/{W4,C1,D0,D1,F0}.tsv, batch.log, remote/job-103*.log

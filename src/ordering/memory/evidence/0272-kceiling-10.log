@@ -1,0 +1,256 @@
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1299:1
+     |
+1299 | / /// TEST-ONLY sweep switch for the mid-size `rgreedy` stream opened by the 0154
+1300 | | /// engine census. Returns `(ops_budget, gate_variant, stream_count)`; a zero
+1301 | | /// budget disables the stream, which is what production compiles to — the
+1302 | | /// switch can never change a submitted ordering. Configured through
+1303 | | /// `SSI_MID_ENGINE="<variant>:<budget>[:<streams>]"` so one build can sweep
+1304 | | /// several gate/budget points.
+     | |_------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:1585:1
+     |
+1585 | / /// TEST-ONLY kill switch for the heavy-tier arm (metrics + no-dense AMD +
+1586 | | /// extra AMF α), so a probe can A/B the arm in one process.
+     | |_-----------------------------------------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:335:1
+    |
+335 | / /// TEST-ONLY switch forcing every batch onto the sequential path, so a probe
+336 | | /// can run the SAME `order()` both ways in one process and compare the
+337 | | /// returned permutations element by element. Production builds compile
+338 | | /// [`force_sequential`] down to a constant `false`.
+    | |_---------------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+   --> candidate-worker/src/../../src/ordering/parallel.rs:369:1
+    |
+369 | / /// TEST-ONLY per-phase wall-clock marks: `phase_mark(label, t0)` appends
+370 | | /// `(label, secs since t0)`; `phase_take()` drains them. Lets a probe see which
+371 | | /// stage of `order()` sets a row's critical path. Never compiled into the
+372 | | /// shipped binary.
+    | |_------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5162:5
+     |
+5162 | /     /// ── 0192: the window is the frontier's own chain scope ─────────────────
+5163 | |     /// The chain no longer reaches above n = 10 000 (see `PEO_ALT_MAX_N`), so
+5164 | |     /// the draw takes over the whole band the chain used to own. Measured on the
+5165 | |     /// 300 dev rows: with the window at 50 000 instead of 12 000 the draw adds
+...    |
+5171 | |     /// spender there), and its worst row is 1.127 s against the frontier's
+5172 | |     /// 1.160 s base, so the wide band stays below the frontier's own footprint.
+     | |________________________________________________________________________________^
+5173 |       #[cfg(test)]
+5174 | /     let window_n: usize = std::env::var("SSI_TERM_WIN_N")
+5175 | |         .ok()
+5176 | |         .and_then(|v| v.trim().parse::<usize>().ok())
+5177 | |         .unwrap_or(50_000);
+     | |___________________________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> candidate-worker/src/../../src/ordering/mod.rs:5314:9
+     |
+5314 | /         /// `nnz < 3n` = the sparse band of the 0184 price law (66 of the 300 dev
+5315 | |         /// rows, all of them in-window). Structural, never per-matrix.
+     | |_______________________________________________________________________^
+5316 | /         let shipped_ladder = || {
+5317 | |             if nnz < 3 * n {
+5318 | |                 SHIPPED_SPARSE_LADDER.to_vec()
+5319 | |             } else {
+...    |
+5322 | |         };
+     | |__________- rustdoc does not generate documentation for statements
+     |
+     = help: use `//` for a plain comment
+
+warning: variable does not need to be mutable
+    --> candidate-worker/src/../../src/ordering/probe.rs:4165:9
+     |
+4165 |     let mut next = |s: &mut u64| -> u64 {
+     |         ----^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `t_refine`
+   --> candidate-worker/src/../../src/ordering/rgreedy/window_dp.rs:677:17
+    |
+677 |             let t_refine = std::time::Instant::now();
+    |                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_t_refine`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `d` is never read
+   --> candidate-worker/src/../../src/ordering/rgreedy.rs:752:29
+    |
+752 |                 let mut d = 0u32;
+    |                             ^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `SUBTREE_MAX_N` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:946:7
+    |
+946 | const SUBTREE_MAX_N: usize = 250_000;
+    |       ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `refine` is never used
+  --> candidate-worker/src/../../src/ordering/completion.rs:12:15
+   |
+12 | pub(super) fn refine(
+   |               ^^^^^^
+
+warning: function `audit_enabled` is never used
+   --> candidate-worker/src/../../src/ordering/symbolic_flat.rs:316:15
+    |
+316 | pub(super) fn audit_enabled() -> bool {
+    |               ^^^^^^^^^^^^^
+
+warning: type alias `PermFn` is never used
+  --> candidate-worker/src/../../src/ordering/parallel.rs:80:17
+   |
+80 | pub(crate) type PermFn<'a> = Box<dyn Fn() -> Option<Vec<usize>> + Sync + 'a>;
+   |                 ^^^^^^
+
+warning: function `run_perms` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:189:15
+    |
+189 | pub(crate) fn run_perms(
+    |               ^^^^^^^^^
+
+warning: function `accept` is never used
+   --> candidate-worker/src/../../src/ordering/parallel.rs:314:15
+    |
+314 | pub(crate) fn accept(results: &mut [CandOut], best_flops: &mut u64, best_perm: &mut Vec<usize>) -> bool {
+    |               ^^^^^^
+
+warning: function `minl_is_clique` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:134:4
+    |
+134 | fn minl_is_clique(adj: &[Vec<u32>], c: &[u32], ops: &mut i64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `minl_try_delete_edge` is never used
+   --> candidate-worker/src/../../src/ordering/minl.rs:230:4
+    |
+230 | fn minl_try_delete_edge(
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_sequential_180` is never used
+   --> candidate-worker/src/../../src/ordering/indep_first.rs:725:4
+    |
+725 | fn run_sequential_180(sp: &ScoringPattern, ledger: u64) -> Option<(u64, Vec<usize>)> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `reset` is never used
+   --> candidate-worker/src/../../src/ordering/mod.rs:560:19
+    |
+560 |     pub(crate) fn reset() {
+    |                   ^^^^^
+
+warning: `ssi-candidate-worker` (bin "ssi-candidate-worker" test) generated 19 warnings (run `cargo fix --bin "ssi-candidate-worker" -p ssi-candidate-worker --tests` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.01s
+     Running unittests src/main.rs (target/release/deps/ssi_candidate_worker-9bc17c144118ca64)
+
+running 1 test
+test ordering::probe::probe_timing_and_score ... LADGATE	28368	10000	0.981	0
+LADGATE	28368	10000	0.886	0
+LIFT	mpbp_48	28368	16000	66180	16000
+COUNTS	mpbp_48	28368	91016	33835023	16128625
+COPYSTATS	mpbp_48	secs=0.966	asm_calls=356	asm_words=51028512	asm_ms=19.4	rst_calls=33190	rst_words=133325748	rst_ms=37.7	rst_tail_ms=13.9	elims=7984848	fullclear_words=117156686	sparse_words=12786276	sparse_clears=7984848
+LADGATE	30660	10000	0.875	0
+LADGATE	30660	10000	0.810	0
+LIFT	crudeoil_pooling_dt3	30660	15957	134914	15957
+COUNTS	crudeoil_pooling_dt3	30660	152210	48975085	34682375
+COPYSTATS	crudeoil_pooling_dt3	secs=0.948	asm_calls=420	asm_words=60651532	asm_ms=22.9	rst_calls=13906	rst_words=124368688	rst_ms=39.4	rst_tail_ms=7.0	elims=4300952	fullclear_words=105400634	sparse_words=9295752	sparse_clears=4300952
+LADGATE	2031	10000	0.687	1
+LADGATE	2031	10000	0.645	1
+LIFT	chimera_selby-c16-01	2031	1517	13662	1517
+COUNTS	chimera_selby-c16-01	2031	10964	3605628	2419077
+COPYSTATS	chimera_selby-c16-01	secs=0.744	asm_calls=266	asm_words=4664766	asm_ms=1.1	rst_calls=66592	rst_words=28645694	rst_ms=7.7	rst_tail_ms=6.5	elims=2834736	fullclear_words=25102234	sparse_words=6384980	sparse_clears=2834736
+LADGATE	14416	10000	0.791	0
+LADGATE	14416	10000	0.780	0
+LIFT	procurement1large	14416	6606	28248	6606
+COUNTS	procurement1large	14416	41068	13858240	7365572
+COPYSTATS	procurement1large	secs=0.939	asm_calls=598	asm_words=93996780	asm_ms=35.6	rst_calls=108074	rst_words=161906708	rst_ms=51.0	rst_tail_ms=21.4	elims=11738010	fullclear_words=121302702	sparse_words=18290344	sparse_clears=11738010
+LADGATE	2031	10000	0.724	1
+LADGATE	2031	10000	0.736	1
+LIFT	chimera_selby-c16-02	2031	1436	15878	1436
+COUNTS	chimera_selby-c16-02	2031	10878	4280329	2298384
+COPYSTATS	chimera_selby-c16-02	secs=0.851	asm_calls=246	asm_words=4248596	asm_ms=1.1	rst_calls=125610	rst_words=37305542	rst_ms=11.4	rst_tail_ms=11.9	elims=5074628	fullclear_words=30657604	sparse_words=10318076	sparse_clears=5074628
+LADGATE	33155	10000	0.668	0
+LADGATE	33155	10000	0.588	0
+LIFT	nd_netgen-3000-1-1-b-b-ns_7	33155	15155	54000	15155
+COUNTS	nd_netgen-3000-1-1-b-b-ns_7	33155	90000	922197	883821
+COPYSTATS	nd_netgen-3000-1-1-b-b-ns_7	secs=0.873	asm_calls=346	asm_words=310470460	asm_ms=118.9	rst_calls=29496	rst_words=208721362	rst_ms=73.1	rst_tail_ms=10.3	elims=6723426	fullclear_words=204588596	sparse_words=7592152	sparse_clears=6723426
+LADGATE	17493	10000	0.821	0
+LADGATE	17493	10000	0.813	0
+LIFT	nuclear10a	17493	15309	159656	15309
+COUNTS	nuclear10a	17493	163816	82406325	55746870
+COPYSTATS	nuclear10a	secs=0.895	asm_calls=420	asm_words=49139090	asm_ms=18.6	rst_calls=53030	rst_words=154930508	rst_ms=37.5	rst_tail_ms=16.1	elims=6336768	fullclear_words=82227714	sparse_words=13050604	sparse_clears=6336768
+LADGATE	23999	10000	0.796	0
+LADGATE	23999	10000	0.767	0
+LIFT	methanol400	23999	19199	142128	19199
+COUNTS	methanol400	23999	151728	2586036	1844488
+COPYSTATS	methanol400	secs=0.908	asm_calls=302	asm_words=54066474	asm_ms=21.0	rst_calls=882698	rst_words=153958686	rst_ms=102.1	rst_tail_ms=43.4	elims=14591066	fullclear_words=125130580	sparse_words=15391534	sparse_clears=14591066
+LADGATE	15904	10000	1.075	0
+LADGATE	15904	10000	1.063	0
+LIFT	crudeoil_lee4_09	15904	10632	92014	10632
+COUNTS	crudeoil_lee4_09	15904	101792	208785578	130536393
+COPYSTATS	crudeoil_lee4_09	secs=1.170	asm_calls=426	asm_words=41511028	asm_ms=15.2	rst_calls=64822	rst_words=117834228	rst_ms=34.2	rst_tail_ms=13.8	elims=6538806	fullclear_words=72479318	sparse_words=11547166	sparse_clears=6538806
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+1.1702	crudeoil_lee4_09	15904	101792	0.6252
+0.9662	mpbp_48	28368	91016	0.4767
+0.9477	crudeoil_pooling_dt3	30660	152210	0.7082
+0.9392	procurement1large	14416	41068	0.5315
+0.9077	methanol400	23999	151728	0.7132
+0.8953	nuclear10a	17493	163816	0.6765
+0.8728	nd_netgen-3000-1-1-b-b-ns_7	33155	90000	0.9584
+0.8510	chimera_selby-c16-02	2031	10878	0.5370
+0.7435	chimera_selby-c16-01	2031	10964	0.6709
+matrices under 0.010s: 0/9
+matrices under 0.050s: 0/9
+matrices under 0.100s: 0/9
+matrices under 0.200s: 0/9
+matrices under 0.400s: 0/9
+
+--- per-bucket ---
+1k_10k   count=2     geomean=0.6002
+gt_10k   count=7     geomean=0.6553
+SCORE = 0.631674
+WORST order() = 1.170 s
+FORCEAUDIT	stage1b_sites=10	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=6	tie_pass_run=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 180 filtered out; finished in 17.47s
+

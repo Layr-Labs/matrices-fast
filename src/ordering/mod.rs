@@ -234,6 +234,44 @@ const PEO_ALT_ALLOWANCE: u64 = 4_000_000;
 /// a nonzero chain yield, so this shape is dev-neutral by construction.
 const PEO_ALT_MAX_LNNZ: usize = 4_000_000;
 const PEO_ALT_SEEDS: usize = 8;
+/// The wider dense/hub twin shape `10/4/4` is admitted only inside the
+/// dimension span its own dev census measured (1 000..=5 205); every other twin
+/// row keeps the shipped `8/4/3`. See the call site for the arm table.
+const DENSE_TWIN_WIDE_MIN_N: usize = 1_000;
+const DENSE_TWIN_WIDE_MAX_N: usize = 5_205;
+/// TEST-ONLY seam: the size of the displaced-ordering pool `flush_batch`
+/// retains. Sole consumers are the `13.alt` PEO chain (seeds), the terminal
+/// transplant (donors) and the disabled terminal-exchange pool, and every one
+/// of them draws against its own ledger, so WIDENING the pool sponsors no new
+/// candidate evaluation — it only lets the downstream stages choose among
+/// orderings the portfolio already scored and paid for. Env
+/// `SSI_PEO_ALT_SEEDS`; unset (or a `cfg(not(test))` build) is the shipped 8.
+#[cfg(test)]
+fn peo_alt_seeds() -> usize {
+    std::env::var("SSI_PEO_ALT_SEEDS")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(PEO_ALT_SEEDS)
+}
+#[cfg(not(test))]
+#[inline(always)]
+fn peo_alt_seeds() -> usize {
+    PEO_ALT_SEEDS
+}
+/// TEST-ONLY seam for the `13.alt` chain's own `n` ceiling (shipped
+/// `PEO_ALT_MAX_N`). Production compiles the constant.
+#[cfg(test)]
+fn peo_alt_max_n() -> usize {
+    std::env::var("SSI_PEO_ALT_MAX_N")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(PEO_ALT_MAX_N)
+}
+#[cfg(not(test))]
+#[inline(always)]
+fn peo_alt_max_n() -> usize {
+    PEO_ALT_MAX_N
+}
 /// ── 0192: the chain's scope is narrowed to the survivor's own band ──────────
 /// Eleven hidden receipts now separate the two builds that ever finished from
 /// the seven that did not. Completed: the frontier (chain at the full 4e6
@@ -262,7 +300,20 @@ const PEO_ALT_SEEDS: usize = 8;
 /// on the board complete. So the draw is retired and the chain — the one spender
 /// whose removal has a measured hidden price — gets the frontier's own scope
 /// back, with its allowance doubled above (PEO_ALT_ALLOWANCE).
-const PEO_ALT_MAX_N: usize = 50_000;
+///
+/// ── iter67: the window is narrowed back to 10 000, on a fresh census ─────────
+/// The receipt above was never acted on: the constant stayed at 50 000, and the
+/// chain has spent its allowance on rows in `10 000 < n <= 50 000` ever since.
+/// Measured this session on the synced crown, one binary, one session, full
+/// 300-row corpus, graded-closest frame (`SSI_MARK_NOSCORE=1`): over the **38
+/// dev rows in that band that this gate admits** (`n + nnz < PEO_ALT_LEDGER`),
+/// the chain's own mark sums to **8.11 s**, median **0.21 s** and worst 0.335 s
+/// (`methanol400`) per row — wall spent on a band where the same record measures
+/// its yield at zero. A targeted same-session arm pair on the heaviest rows of
+/// that band (`PEO_ALT_MAX_N` 50 000 vs 10 000, 10 rows, identical binaries)
+/// returns **bit-identical flop counters on all 10**, i.e. narrowing is an
+/// output-preserving scope change here, not a dose trim. [0277]
+const PEO_ALT_MAX_N: usize = 10_000;
 /// 0187: re-priced against the whole corpus. The chain's marks account for
 /// 6.73 s of the pipeline's 115.5 s (5.8 %) and 0.0059 of running-best ratio,
 /// and every beneficiary it has been measured to have is small (mpbp_15 9858,
@@ -1669,7 +1720,7 @@ fn flush_batch<'a>(
             if f < *best_flops { r.push((*best_flops, best_perm.clone())); } else { r.push((f, perm.clone())); }
             r.sort_by_key(|(s, _)| *s);
             r.dedup_by_key(|(s, _)| *s);
-            r.truncate(PEO_ALT_SEEDS);
+            r.truncate(peo_alt_seeds());
         }
         if f < *best_flops {
             *best_flops = f;
@@ -4363,7 +4414,7 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // unchanged; only the allowance it may spend per admitted row is doubled
     // (PEO_ALT_ALLOWANCE). See the PEO_ALT_MAX_N comment for the receipt law
     // that retired the draw and restored this scope.
-    if n >= 16 && n <= PEO_ALT_MAX_N && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
+    if n >= 16 && n <= peo_alt_max_n() && (n as u64 + nnz as u64) < PEO_ALT_LEDGER
         && !peo_alt_danger
     {
         let ledger_cap: u64 = PEO_ALT_ALLOWANCE;
@@ -5618,6 +5669,43 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 );
                 #[cfg(not(test))]
                 let (dense_w, dense_s, dense_t): (usize, usize, usize) = (8, 4, 3);
+                // ── iter67: the wider shape, bounded to its own census ───────
+                // The dense/hub twin still ran the 8/4/3 shape the class block
+                // outgrew. In-frame, one binary, one session, on the twin's own
+                // 24-row census the wider shape measured 8/4/3 **0.776753** vs
+                // **10/4/4 0.776456** (-2.21e-5 dev), with movers
+                // `chimera_lga-01` -0.52 %, `chimera_mgw-c16-2031-01` -0.38 %,
+                // `chimera_rfr-02` -0.10 %. That census stops at n = 5 205 while
+                // the twin's gate (`nnz > 16n || max_deg > n/2`) reaches every
+                // n <= 45 000, so the shape is admitted only through the top of
+                // its measured census. Every admission is a strict exact
+                // decrease, so the shape cannot lose value on a row it reaches;
+                // the price is one extra 10-wide sweep on 1 000 <= n <= 5 205
+                // only. Test seams: an explicit `SSI_DENSE_W` overrides the band
+                // for the whole corpus (so an arm table can still price the shape
+                // anywhere), and `SSI_DENSE_TWIN_WIDE=1` forces the wide shape
+                // outside the band. [0271, 0277]
+                #[cfg(test)]
+                let dense_twin_wide = match std::env::var("SSI_DENSE_TWIN_WIDE")
+                    .ok()
+                    .and_then(|v| v.trim().parse::<u8>().ok())
+                {
+                    Some(0) => false,
+                    Some(1) => true,
+                    _ => n >= DENSE_TWIN_WIDE_MIN_N && n <= DENSE_TWIN_WIDE_MAX_N,
+                };
+                #[cfg(not(test))]
+                let dense_twin_wide = n >= DENSE_TWIN_WIDE_MIN_N && n <= DENSE_TWIN_WIDE_MAX_N;
+                #[cfg(test)]
+                let dense_explicit = std::env::var("SSI_DENSE_W").is_ok();
+                #[cfg(not(test))]
+                let dense_explicit = false;
+                let (dense_w, dense_s, dense_t): (usize, usize, usize) =
+                    if dense_twin_wide && !dense_explicit {
+                        (10, 4, 4)
+                    } else {
+                        (dense_w, dense_s, dense_t)
+                    };
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     dense_w, dense_s, dense_t, dense_window_ledger,

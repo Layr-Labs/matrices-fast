@@ -117,7 +117,11 @@ pub(crate) fn rank_alpha_three_quarters_cmp(
 /// ~`n²/4` bytes per `Game` (2 · n · ⌈n/64⌉ · 8 = 506 MB at 45 000, versus 156 MB
 /// at 25 000) — the graded 4 GiB `RLIMIT_AS` is enforced by the local runner too,
 /// so the sandboxed 300-row run is the memory check. [0264-ceil{25000,36000,45000}-2G-4cpu.log]
-pub(crate) const MAX_N: usize = 45_000;
+/// General implementation guard.  Production terminal admission is tighter:
+/// its one-GiB adjacency-image law binds near 92k vertices.  Keeping this guard
+/// at the next power of two makes it a representation safety ceiling rather
+/// than a corpus-selected admission boundary.
+pub(crate) const MAX_N: usize = 1 << 17;
 
 /// The ceiling every `n`-gate in this module reads. Production: the constant,
 /// so the shipped `order()` is unchanged. Test builds: `SSI_MAX_N` re-points it
@@ -174,7 +178,11 @@ fn below(s: &mut u64, m: u32) -> u32 {
 pub(crate) struct Game<'a> {
     n: usize,
     w: usize,
-    adj0: &'a [u64],
+    /// Dense pristine image for the ordinary path. Large sparse games keep the
+    /// CSR instead and reconstruct the same bits on reset, avoiding a second
+    /// `n * ceil(n/64)` allocation solely as a memcpy source.
+    adj0: Option<&'a [u64]>,
+    sparse0: Option<(&'a [usize], &'a [usize])>,
     adj: Vec<u64>,
     /// Degrees of the pristine graph, cached once per game. `reset` must keep
     /// the old ops charge because it is part of the deterministic run budget.
@@ -239,42 +247,84 @@ struct GameCpuStats {
 pub(crate) struct Pristine {
     pub(crate) n: usize,
     w: usize,
-    adj0: std::rc::Rc<Vec<u64>>,
-    deg0: std::rc::Rc<Vec<u32>>,
+    col_ptr: std::rc::Rc<Vec<usize>>,
+    row_idx: std::rc::Rc<Vec<usize>>,
+    dense: Option<(std::rc::Rc<Vec<u64>>, std::rc::Rc<Vec<u32>>)>,
+}
+
+/// Above the mutable-buffer pool ceiling, retaining a second dense image costs
+/// hundreds of MiB and the initial full-image copy dominates sparse large-row
+/// setup. The CSR has enough information to reconstruct the exact same graph.
+const SPARSE_PRISTINE_MIN_WORDS: usize = ADJ_POOL_MAX_WORDS;
+
+#[inline]
+fn use_sparse_pristine(words: usize) -> bool {
+    #[cfg(test)]
+    {
+        match std::env::var("SSI_SPARSE_PRISTINE").ok().as_deref() {
+            Some("0") => false,
+            Some("1") => true,
+            _ => words > SPARSE_PRISTINE_MIN_WORDS,
+        }
+    }
+    #[cfg(not(test))]
+    {
+        words > SPARSE_PRISTINE_MIN_WORDS
+    }
 }
 
 impl Pristine {
     pub(crate) fn build(n: usize, col_ptr: &[usize], row_idx: &[usize]) -> Option<Pristine> {
-        let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
-        let w = n.div_ceil(64);
-        let mut deg0 = vec![0u32; n];
-        for (v, d) in deg0.iter_mut().enumerate() {
-            *d = adj0[v * w..v * w + w]
-                .iter()
-                .map(|word| word.count_ones())
-                .sum();
+        if n == 0
+            || n > max_n_limit()
+            || col_ptr.len() != n + 1
+            || col_ptr.first().copied() != Some(0)
+            || col_ptr.last().copied() != Some(row_idx.len())
+            || col_ptr.windows(2).any(|p| p[0] > p[1])
+            || row_idx.iter().any(|&v| v >= n)
+        {
+            return None;
         }
+        let w = n.div_ceil(64);
+        let dense = if use_sparse_pristine(n * w) {
+            None
+        } else {
+            let adj0 = Game::build_adj(n, col_ptr, row_idx)?;
+            let mut deg0 = vec![0u32; n];
+            for (v, d) in deg0.iter_mut().enumerate() {
+                *d = adj0[v * w..v * w + w]
+                    .iter()
+                    .map(|word| word.count_ones())
+                    .sum();
+            }
+            Some((std::rc::Rc::new(adj0), std::rc::Rc::new(deg0)))
+        };
         Some(Pristine {
             n,
             w,
-            adj0: std::rc::Rc::new(adj0),
-            deg0: std::rc::Rc::new(deg0),
+            col_ptr: std::rc::Rc::new(col_ptr.to_vec()),
+            row_idx: std::rc::Rc::new(row_idx.to_vec()),
+            dense,
         })
     }
 
     /// Bytes this image keeps alive (bitset + degree vector).
     pub(crate) fn bytes(&self) -> usize {
-        self.n * self.w * 8 + self.n * 4
+        self.dense.as_ref().map_or(0, |_| self.n * self.w * 8 + self.n * 4)
+            + (self.col_ptr.len() + self.row_idx.len()) * std::mem::size_of::<usize>()
     }
 
     pub(crate) fn game(&self) -> Option<Game<'_>> {
-        Game::new_with_degrees(self.n, &self.adj0[..], self.deg0.as_ref().clone())
+        match &self.dense {
+            Some((adj0, deg0)) => {
+                Game::new_with_degrees(self.n, &adj0[..], deg0.as_ref().clone())
+            }
+            None => Game::new_sparse(self.n, &self.col_ptr, &self.row_idx),
+        }
     }
 }
 
 struct PristineMemo {
-    col_ptr: Vec<usize>,
-    row_idx: Vec<usize>,
     pristine: std::rc::Rc<Pristine>,
 }
 
@@ -342,6 +392,29 @@ fn adj_pool_give(buf: Vec<u64>) {
     });
 }
 
+/// Initialize a fresh large image with four disjoint writers. The spare region
+/// remains `MaybeUninit<u64>` until all workers have joined, so no reference to
+/// an uninitialized `u64` is ever formed.
+fn alloc_parallel_zeroed_u64_vec(len: usize) -> Vec<u64> {
+    if len == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::<u64>::with_capacity(len);
+    let chunk_len = len.div_ceil(4);
+    {
+        let spare = &mut out.spare_capacity_mut()[..len];
+        std::thread::scope(|scope| {
+            for chunk in spare.chunks_mut(chunk_len) {
+                scope.spawn(move || chunk.fill(std::mem::MaybeUninit::new(0)));
+            }
+        });
+    }
+    // SAFETY: the scoped workers initialized every element in `0..len` and
+    // joined before the spare-capacity borrow ended.
+    unsafe { out.set_len(len) };
+    out
+}
+
 impl Drop for Game<'_> {
     fn drop(&mut self) {
         adj_pool_give(std::mem::take(&mut self.adj));
@@ -379,7 +452,11 @@ pub(crate) fn pristine_memo(
         let mut memo = cell.borrow_mut();
         let found = memo
             .iter()
-            .position(|m| m.pristine.n == n && m.col_ptr == col_ptr && m.row_idx == row_idx);
+            .position(|m| {
+                m.pristine.n == n
+                    && m.pristine.col_ptr.as_slice() == col_ptr
+                    && m.pristine.row_idx.as_slice() == row_idx
+            });
         match found {
             Some(i) => {
                 let entry = memo.remove(i);
@@ -400,8 +477,6 @@ pub(crate) fn pristine_memo(
             memo.remove(0);
         }
         memo.push(PristineMemo {
-            col_ptr: col_ptr.to_vec(),
-            row_idx: row_idx.to_vec(),
             pristine: std::rc::Rc::clone(&built),
         });
     });
@@ -508,7 +583,83 @@ impl<'a> Game<'a> {
             n,
             w,
             adj,
-            adj0,
+            adj0: Some(adj0),
+            sparse0: None,
+            deg0,
+            deg: vec![0; n],
+            livelist: Vec::with_capacity(n),
+            pos: vec![0; n],
+            use_buckets: n > SCAN_MAX_N,
+            bhead: vec![-1; n + 1],
+            bnext: vec![-1; n],
+            bprev: vec![-1; n],
+            mind: 0,
+            nlive: 0,
+            nelim: n,
+            nlist: Vec::with_capacity(n),
+            nonzero_words: Vec::with_capacity(w),
+            cand: Vec::with_capacity(n),
+            tmp: vec![0u64; w],
+            known_clique: vec![0u64; w],
+            #[cfg(test)]
+            reference_kernels: false,
+            #[cfg(test)]
+            cpu_stats: GameCpuStats::default(),
+            ops: 0,
+        })
+    }
+
+    /// Construct the mutable image directly from a sparse CSR. Setting both
+    /// directed bits for every off-diagonal entry is exactly `build_adj`; the
+    /// guarded degree increments make duplicate and two-triangle entries
+    /// idempotent in the same way as bitwise OR followed by popcount.
+    fn new_sparse(
+        n: usize,
+        col_ptr: &'a [usize],
+        row_idx: &'a [usize],
+    ) -> Option<Game<'a>> {
+        if n == 0 || n > max_n_limit() || col_ptr.len() != n + 1 {
+            return None;
+        }
+        let w = n.div_ceil(64);
+        let words = n * w;
+        let mut adj = adj_pool_take(words);
+        if adj.capacity() == 0 {
+            adj = alloc_parallel_zeroed_u64_vec(words);
+        } else {
+            // A recycled buffer can contain arbitrary old graph state.
+            adj.clear();
+            adj.resize(words, 0);
+        }
+        let mut deg0 = vec![0u32; n];
+        for v in 0..n {
+            for &r in &row_idx[col_ptr[v]..col_ptr[v + 1]] {
+                if r >= n {
+                    return None;
+                }
+                if r == v {
+                    continue;
+                }
+                let vi = v * w + (r >> 6);
+                let vb = 1u64 << (r & 63);
+                if adj[vi] & vb == 0 {
+                    adj[vi] |= vb;
+                    deg0[v] += 1;
+                }
+                let ri = r * w + (v >> 6);
+                let rb = 1u64 << (v & 63);
+                if adj[ri] & rb == 0 {
+                    adj[ri] |= rb;
+                    deg0[r] += 1;
+                }
+            }
+        }
+        Some(Game {
+            n,
+            w,
+            adj,
+            adj0: None,
+            sparse0: Some((col_ptr, row_idx)),
             deg0,
             deg: vec![0; n],
             livelist: Vec::with_capacity(n),
@@ -534,7 +685,20 @@ impl<'a> Game<'a> {
     }
 
     fn reset(&mut self) {
-        self.adj.copy_from_slice(&self.adj0[..self.n * self.w]);
+        if let Some(adj0) = self.adj0 {
+            self.adj.copy_from_slice(&adj0[..self.n * self.w]);
+        } else {
+            self.adj.fill(0);
+            let (col_ptr, row_idx) = self.sparse0.expect("game has a reset image");
+            for v in 0..self.n {
+                for &r in &row_idx[col_ptr[v]..col_ptr[v + 1]] {
+                    if r != v {
+                        self.adj[v * self.w + (r >> 6)] |= 1u64 << (r & 63);
+                        self.adj[r * self.w + (v >> 6)] |= 1u64 << (v & 63);
+                    }
+                }
+            }
+        }
         self.bhead.fill(-1);
         self.livelist.clear();
         self.deg.copy_from_slice(&self.deg0);
@@ -854,10 +1018,9 @@ mod game_cpu_tests {
         missing / 2
     }
 
-    fn same_state(actual: &Game<'_>, expected: &Game<'_>) {
+    fn same_runtime_state(actual: &Game<'_>, expected: &Game<'_>) {
         assert_eq!(actual.n, expected.n);
         assert_eq!(actual.w, expected.w);
-        assert_eq!(actual.adj0, expected.adj0);
         assert_eq!(actual.adj, expected.adj);
         assert_eq!(actual.deg0, expected.deg0);
         assert_eq!(actual.deg, expected.deg);
@@ -874,6 +1037,60 @@ mod game_cpu_tests {
         assert_eq!(actual.cand, expected.cand);
         assert_eq!(actual.tmp, expected.tmp);
         assert_eq!(actual.ops, expected.ops);
+    }
+
+    fn same_state(actual: &Game<'_>, expected: &Game<'_>) {
+        assert_eq!(actual.adj0, expected.adj0);
+        assert_eq!(actual.sparse0, expected.sparse0);
+        same_runtime_state(actual, expected);
+    }
+
+    fn check_sparse_sequence(p: &Pattern, order: &[usize]) {
+        let adj = Game::build_adj(p.n, &p.col_ptr, &p.row_idx).unwrap();
+        let mut actual = Game::new_sparse(p.n, &p.col_ptr, &p.row_idx).unwrap();
+        let mut expected = Game::new(p.n, &adj).unwrap();
+        actual.reset();
+        expected.reset();
+        same_runtime_state(&actual, &expected);
+        for (step, &v) in order.iter().enumerate() {
+            for &probe in order[step..].iter().take(if p.n <= 5 { p.n } else { 3 }) {
+                assert_eq!(actual.deficiency(probe), expected.deficiency(probe));
+                same_runtime_state(&actual, &expected);
+            }
+            if actual.use_buckets {
+                actual.advance_mind();
+                expected.advance_mind();
+                same_runtime_state(&actual, &expected);
+            }
+            assert_eq!(actual.eliminate(v), expected.eliminate(v));
+            same_runtime_state(&actual, &expected);
+        }
+    }
+
+    #[test]
+    fn sparse_pristine_matches_dense_state_and_trajectory() {
+        let mut rng = 0x73a8d93f2c194e61;
+        for n in [2, 5, 65, 129, SCAN_MAX_N + 1] {
+            let mut edges = Vec::new();
+            for u in 0..n {
+                for v in u + 1..n {
+                    if xs64(&mut rng) % 19 < 3 {
+                        edges.push((u, v));
+                    }
+                }
+            }
+            let p = Pattern::from_edges(n, &edges);
+            let mut order: Vec<_> = (0..n).collect();
+            shuffle(&mut order, &mut rng);
+            check_sparse_sequence(&p, &order);
+        }
+
+        // Explicit duplicate/two-triangle storage: OR and guarded increments
+        // must produce the same image and degrees as the dense builder.
+        let col_ptr = vec![0, 4, 7, 9];
+        let row_idx = vec![0, 1, 1, 2, 0, 0, 2, 0, 1];
+        let p = Pattern { n: 3, col_ptr, row_idx };
+        check_sparse_sequence(&p, &[2, 0, 1]);
     }
 
     fn check_sequence(p: &Pattern, nelim: usize, order: &[usize]) -> GameCpuStats {

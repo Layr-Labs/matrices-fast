@@ -5617,23 +5617,30 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // block's gate excludes (`nnz > 16n || max_deg > n/2`) and it
                 // still calls the 8/4/3 shape the class block outgrew. The
                 // family curve (0234) prices 12/* on the class block only.
+                const DENSE_TWIN_WIDE_MIN_N: usize = 1_000;
+                const DENSE_TWIN_WIDE_MAX_N: usize = 5_205;
+                let dense_default = if (DENSE_TWIN_WIDE_MIN_N..=DENSE_TWIN_WIDE_MAX_N).contains(&n) {
+                    (10, 4, 4)
+                } else {
+                    (8, 4, 3)
+                };
                 #[cfg(test)]
                 let (dense_w, dense_s, dense_t): (usize, usize, usize) = (
                     std::env::var("SSI_DENSE_W")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(8),
+                        .unwrap_or(dense_default.0),
                     std::env::var("SSI_DENSE_S")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(4),
+                        .unwrap_or(dense_default.1),
                     std::env::var("SSI_DENSE_T")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(3),
+                        .unwrap_or(dense_default.2),
                 );
                 #[cfg(not(test))]
-                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (8, 4, 3);
+                let (dense_w, dense_s, dense_t): (usize, usize, usize) = dense_default;
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     dense_w, dense_s, dense_t, dense_window_ledger,

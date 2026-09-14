@@ -92,8 +92,10 @@ fn xch_plateau_min_n() -> usize {
 /// itself, so the ledger still bounds this window's spend; only the *order* in
 /// which components are offered to it changes. Determinism is preserved: the
 /// walk is a stable sort of a deterministic enumeration (ties broken by the
-/// component's bit mask).
-const PRODUCTION_XCH_ALLOC: usize = 0;
+/// Ships policy 1: skip-the-unfunded-component in position order (the mild,
+/// wall-bounded half of the rewrite; smallest-first reordering stays behind
+/// the SSI_XCH_ALLOC=2 seam for separate attribution).
+const PRODUCTION_XCH_ALLOC: usize = 1;
 
 #[inline]
 fn xch_alloc() -> usize {
@@ -608,7 +610,7 @@ fn subset_window_descent_config(
     }
     #[cfg(test)]
     let t_new = std::time::Instant::now();
-    let mut game = pristine.game()?;
+    let mut game = pristine.game_reset_first()?;
     #[cfg(test)]
     {
         report.new_ns += t_new.elapsed().as_nanos();

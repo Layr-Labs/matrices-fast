@@ -322,6 +322,15 @@ impl Pristine {
             None => Game::new_sparse(self.n, &self.col_ptr, &self.row_idx),
         }
     }
+
+    pub(crate) fn game_reset_first(&self) -> Option<Game<'_>> {
+        match &self.dense {
+            Some((adj0, deg0)) => {
+                Game::new_reset_first_with_degrees(self.n, &adj0[..], deg0.as_ref().clone())
+            }
+            None => Game::new_sparse(self.n, &self.col_ptr, &self.row_idx),
+        }
+    }
 }
 
 struct PristineMemo {
@@ -571,14 +580,60 @@ impl<'a> Game<'a> {
         Game::assemble(n, adj0, deg0)
     }
 
+    /// Variant for a caller that guarantees [`Game::reset`] is the first
+    /// operation that can read the mutable adjacency. A recycled buffer may
+    /// contain arbitrary words; `reset` overwrites all of them.
+    pub(crate) fn new_reset_first_with_degrees(
+        n: usize,
+        adj0: &'a [u64],
+        deg0: Vec<u32>,
+    ) -> Option<Game<'a>> {
+        if n == 0 || n > max_n_limit() || deg0.len() != n {
+            return None;
+        }
+        let w = n.div_ceil(64);
+        if adj0.len() < n * w {
+            return None;
+        }
+        let mut adj = adj_pool_take(n * w);
+        adj.clear();
+        adj.resize(n * w, 0);
+        Some(Game {
+            n,
+            w,
+            adj,
+            adj0: Some(adj0),
+            sparse0: None,
+            deg0,
+            deg: vec![0; n],
+            livelist: Vec::with_capacity(n),
+            pos: vec![0; n],
+            use_buckets: n > SCAN_MAX_N,
+            bhead: vec![-1; n + 1],
+            bnext: vec![-1; n],
+            bprev: vec![-1; n],
+            mind: 0,
+            nlive: 0,
+            nelim: n,
+            nlist: Vec::with_capacity(n),
+            nonzero_words: Vec::with_capacity(w),
+            cand: Vec::with_capacity(n),
+            tmp: vec![0u64; w],
+            known_clique: vec![0u64; w],
+            #[cfg(test)]
+            reference_kernels: false,
+            #[cfg(test)]
+            cpu_stats: GameCpuStats::default(),
+            ops: 0,
+        })
+    }
+
     fn assemble(n: usize, adj0: &'a [u64], deg0: Vec<u32>) -> Option<Game<'a>> {
         let w = n.div_ceil(64);
         // iter69: reuse a recycled bitset buffer instead of `adj0[..n*w].to_vec()`.
-        // `resize` + `copy_from_slice` leaves the buffer bit-identical to a fresh
-        // allocation; `Drop for Game` returns it to the thread-local pool.
         let mut adj = adj_pool_take(n * w);
-        adj.resize(n * w, 0);
-        adj.copy_from_slice(&adj0[..n * w]);
+        adj.clear();
+        adj.extend_from_slice(&adj0[..n * w]);
         Some(Game {
             n,
             w,
@@ -626,6 +681,19 @@ impl<'a> Game<'a> {
         let mut adj = adj_pool_take(words);
         if adj.capacity() == 0 {
             adj = alloc_parallel_zeroed_u64_vec(words);
+        } else if words >= 1_000_000 {
+            adj.clear();
+            adj.reserve_exact(words.saturating_sub(adj.capacity()));
+            let chunk_len = words.div_ceil(4);
+            {
+                let spare = &mut adj.spare_capacity_mut()[..words];
+                std::thread::scope(|scope| {
+                    for chunk in spare.chunks_mut(chunk_len) {
+                        scope.spawn(move || chunk.fill(std::mem::MaybeUninit::new(0)));
+                    }
+                });
+            }
+            unsafe { adj.set_len(words) };
         } else {
             // A recycled buffer can contain arbitrary old graph state.
             adj.clear();
@@ -688,7 +756,16 @@ impl<'a> Game<'a> {
         if let Some(adj0) = self.adj0 {
             self.adj.copy_from_slice(&adj0[..self.n * self.w]);
         } else {
-            self.adj.fill(0);
+            if self.adj.len() >= 1_000_000 {
+                let chunk_len = self.adj.len().div_ceil(4);
+                std::thread::scope(|scope| {
+                    for chunk in self.adj.chunks_mut(chunk_len) {
+                        scope.spawn(move || chunk.fill(0));
+                    }
+                });
+            } else {
+                self.adj.fill(0);
+            }
             let (col_ptr, row_idx) = self.sparse0.expect("game has a reset image");
             for v in 0..self.n {
                 for &r in &row_idx[col_ptr[v]..col_ptr[v + 1]] {

@@ -188,7 +188,7 @@ fn probe_timing_and_score() {
             );
         }
     }
-    println!("SCORE = {:.6}", aggregate(&log_sums, &counts));
+    println!("SCORE = {:.12}", aggregate(&log_sums, &counts));
     println!("WORST order() = {:.3} s", rows[0].0);
     // 0196: soundness audit of the stage-1b force-adoption (see `force_audit`).
     println!("{}", super::force_audit::report());
@@ -4341,4 +4341,36 @@ fn probe_floor_battery() {
         }
         println!("{line}");
     }
+}
+
+/// Exact old/new oracle for the first-reset image-copy elision. Run this test
+/// with the same structural and score-arm environment intended for production.
+#[test]
+#[ignore]
+fn probe_first_reset_elision_equivalence() {
+    let corpus = match std::env::var("SSI_CORPUS_FILE") {
+        Ok(path) if !path.trim().is_empty() => {
+            ssi_scoring::load_corpus_jsonl(std::path::Path::new(&path))
+                .unwrap_or_else(|_| crate::corpus::corpus())
+        }
+        _ => crate::corpus::corpus(),
+    };
+    let only: Option<std::collections::HashSet<String>> = std::env::var("SSI_PROBE_ONLY")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.trim().to_string()).collect());
+    for (name, pattern) in &corpus {
+        if only.as_ref().is_some_and(|set| !set.contains(name)) {
+            continue;
+        }
+        // SAFETY: this ignored test must run with `--test-threads=1`; each
+        // `order` call joins its scoped workers before the next environment
+        // mutation, and no other test code executes concurrently.
+        unsafe { std::env::set_var("SSI_RESTORE_FIRST_IMAGE", "1") };
+        let restored = order(pattern);
+        unsafe { std::env::remove_var("SSI_RESTORE_FIRST_IMAGE") };
+        let elided = order(pattern);
+        assert_eq!(elided, restored, "first-reset mismatch on {name}");
+        println!("RESETEQ\t{name}\t{}", pattern.n);
+    }
+    unsafe { std::env::remove_var("SSI_RESTORE_FIRST_IMAGE") };
 }

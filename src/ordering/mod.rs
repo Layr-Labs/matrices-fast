@@ -626,7 +626,7 @@ const LADDER_FILL_BOUND: u64 = 20_000_000_000;
 /// Each pass accepts only a strict exact decrease, so appending a width cannot
 /// worsen any row; the price is wall time on class rows only (~+0.05 s/row on
 /// the rows the class admits), and every pass carries its own work ledger.
-const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
+const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 13] = [
     (48, 4, 19, 32_000_000),
     (9, 4, 4, 32_000_000),
     (8, 4, 3, 64_000_000),
@@ -636,6 +636,10 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
     (11, 4, 4, 64_000_000),
     (14, 4, 5, 64_000_000),
     (6, 4, 3, 64_000_000),
+    (13, 4, 6, 64_000_000),
+    (16, 4, 6, 64_000_000),
+    (5, 4, 3, 64_000_000),
+    (24, 4, 11, 32_000_000),
 ];
 /// iter54: the class-block exchange ledger 512M -> 1G and its sweep count
 /// 4 -> 5. Both halves were priced in one binary/one session on the merged
@@ -721,8 +725,7 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 /// to the worker contract and representation, not to a corpus row boundary.
 const PRODUCTION_EXCHANGE_IMAGE_WORDS: usize = 1 << 27; // 1 GiB of u64 words
 const PRODUCTION_EXCHANGE_SPARSE_FACTOR: usize = 16;
-const PRODUCTION_EXCHANGE_LEDGER: i64 =
-    (PRODUCTION_EXCHANGE_IMAGE_WORDS * PRODUCTION_EXCHANGE_SPARSE_FACTOR) as i64;
+const PRODUCTION_EXCHANGE_LEDGER: i64 = 2_684_354_560;
 const PRODUCTION_PEO_ROUNDS: usize = 4;
 /// Candidates kept per batch once a row's fill is over [`LADDER_FILL_BOUND`].
 /// Test builds may re-point both through `SSI_LADDER_FILL_BOUND` / `SSI_LADDER_CAP`.
@@ -5552,8 +5555,43 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             if std::env::var_os("SSI_CLASS_TRACE").is_some() {
                 eprintln!("CLASSTRACE	xchg	{n}	{nnz}	candidate=1");
             }
+            #[cfg(test)]
+            let reward_before = score(&best_perm);
             if is_bijection(&candidate, n) && score(&candidate) < score(&best_perm) {
                 best_perm = candidate;
+                // Test-only value-per-work probe: spend a second, smaller
+                // tranche only after the existing 2 GiB pass has proved an
+                // exact improvement at the caller. This uses a general
+                // algorithmic signal rather than a corpus-shaped row gate.
+                #[cfg(test)]
+                if let Some(reward_ledger) = std::env::var("SSI_XCHG_REWARD_LEDGER")
+                    .ok()
+                    .and_then(|v| v.trim().parse::<i64>().ok())
+                    .filter(|&v| v > 0)
+                {
+                    if let Some(reward) = rgreedy::subset_window_descent_step(
+                        n,
+                        &pattern.col_ptr,
+                        &pattern.row_idx,
+                        &best_perm,
+                        exchange_width,
+                        exchange_sweeps,
+                        exchange_step,
+                        reward_ledger,
+                    ) {
+                        #[cfg(test)]
+                        if std::env::var_os("SSI_XCHG_REWARD_TRACE").is_some() {
+                            eprintln!(
+                                "REWARDTRACE\t{n}\tbefore={reward_before}\tfirst={}\treward={}",
+                                score(&best_perm),
+                                score(&reward),
+                            );
+                        }
+                        if is_bijection(&reward, n) && score(&reward) < score(&best_perm) {
+                            best_perm = reward;
+                        }
+                    }
+                }
             }
         } else {
             #[cfg(test)]
@@ -5670,12 +5708,35 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             // from the factor bound; `SSI_FOLLOWUP_FULL_WINDOWS` re-points it so
             // one binary measures both arms.
             #[cfg(test)]
-            let span_windows: &[(usize, usize, usize, i64)] =
+            let span_windows_owned: Vec<(usize, usize, usize, i64)> =
                 if std::env::var_os("SSI_FOLLOWUP_SMALL_WINDOWS").is_some() {
-                    &[(48, 4, 19, 16_000_000), (9, 4, 4, 16_000_000), (8, 4, 3, 32_000_000)]
+                    vec![(48, 4, 19, 16_000_000), (9, 4, 4, 16_000_000), (8, 4, 3, 32_000_000)]
                 } else {
-                    &PRODUCTION_SPAN_WINDOWS
+                    let mut windows = PRODUCTION_SPAN_WINDOWS.to_vec();
+                    // Round-12 exact-base composition probes. These are the two
+                    // historically positive groups that were not retained by
+                    // the promoted 05fa99b tree. They remain test-only until a
+                    // full exact-base value/cap measurement justifies shipping.
+                    if std::env::var_os("SSI_SPAN_GROUP_A").is_some() {
+                        windows.extend_from_slice(&[
+                            (13, 4, 6, 64_000_000),
+                            (16, 4, 6, 64_000_000),
+                            (5, 4, 3, 64_000_000),
+                            (24, 4, 11, 32_000_000),
+                        ]);
+                    }
+                    if std::env::var_os("SSI_SPAN_GROUP_B").is_some() {
+                        windows.extend_from_slice(&[
+                            (26, 4, 12, 32_000_000),
+                            (18, 4, 7, 64_000_000),
+                            (4, 4, 2, 32_000_000),
+                            (32, 4, 15, 32_000_000),
+                        ]);
+                    }
+                    windows
                 };
+            #[cfg(test)]
+            let span_windows: &[(usize, usize, usize, i64)] = &span_windows_owned;
             #[cfg(not(test))]
             let span_windows: &[(usize, usize, usize, i64)] = &PRODUCTION_SPAN_WINDOWS;
             for &(width, sweeps, step, budget) in span_windows {

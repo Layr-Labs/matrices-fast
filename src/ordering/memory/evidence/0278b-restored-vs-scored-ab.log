@@ -1,0 +1,68 @@
+
+running 1 test
+test ordering::probe::probe_slow_row_stage ... STAGED	slay06m	357	1080	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/slay06m.bin
+STAGED	chimera_mgw-c8-439-onc8-002	440	3038	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_mgw-c8-439-onc8-002.bin
+STAGED	chimera_mgw-c16-2031-01	2032	15900	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_mgw-c16-2031-01.bin
+STAGED	transswitch0300p	11659	48446	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/transswitch0300p.bin
+STAGED	crudeoil_pooling_dt3	30660	152210	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/crudeoil_pooling_dt3.bin
+STAGED	nvs02	11	46	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/nvs02.bin
+STAGED	syn15hfsg	399	1022	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/syn15hfsg.bin
+STAGED	himmel11	14	60	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/himmel11.bin
+STAGED	pooling_rt2tp	118	654	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pooling_rt2tp.bin
+STAGED	waterund14	333	2204	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/waterund14.bin
+STAGED	gancns	548	2800	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/gancns.bin
+STAGED	chimera_mgw-c8-439-onc8-001	440	3040	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_mgw-c8-439-onc8-001.bin
+STAGED	chimera_rfr-02	2032	15140	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_rfr-02.bin
+STAGED	methanol400	23999	151728	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/methanol400.bin
+STAGED	chimera_lga-01	1120	6400	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_lga-01.bin
+STAGED_TOTAL	15
+WALL	arm	matrix	min	median	max	ratio
+WALL	crown	slay06m	0.9738	1.0473	1.0473	1.000000000
+WALL	scored	slay06m	0.9915	1.0548	1.0548	1.000000000
+WALL	restored	slay06m	1.0092	1.2420	1.2420	1.000000000
+WALL	crown	chimera_mgw-c8-439-onc8-002	2.0356	2.1220	2.1220	0.881986308
+WALL	scored	chimera_mgw-c8-439-onc8-002	1.9118	1.9990	1.9990	0.881986308
+WALL	restored	chimera_mgw-c8-439-onc8-002	2.0548	2.0792	2.0792	0.881986308
+WALL	crown	chimera_mgw-c16-2031-01	2.3656	2.3823	2.3823	0.772227953
+WALL	scored	chimera_mgw-c16-2031-01	2.4132	2.4177	2.4177	0.769289916
+WALL	restored	chimera_mgw-c16-2031-01	2.3616	2.4612	2.4612	0.769289916
+WALL	crown	transswitch0300p	3.6740	3.7077	3.7077	0.926445893
+WALL	scored	transswitch0300p	3.3449	3.5862	3.5862	0.926445893
+WALL	restored	transswitch0300p	3.7088	3.7335	3.7335	0.926445893
+WALL	crown	crudeoil_pooling_dt3	3.4583	3.7132	3.7132	0.691487988
+WALL	scored	crudeoil_pooling_dt3	3.1477	3.8027	3.8027	0.691487988
+WALL	restored	crudeoil_pooling_dt3	3.5557	3.6217	3.6217	0.691487988
+WALL	crown	nvs02	0.5630	0.5752	0.5752	1.000000000
+WALL	scored	nvs02	0.5887	0.6169	0.6169	1.000000000
+WALL	restored	nvs02	0.6929	0.7130	0.7130	1.000000000
+WALL	crown	syn15hfsg	1.0215	1.0528	1.0528	0.991515152
+WALL	scored	syn15hfsg	0.9754	1.0096	1.0096	0.991515152
+WALL	restored	syn15hfsg	1.0089	1.0162	1.0162	0.991515152
+WALL	crown	himmel11	0.7001	0.8113	0.8113	1.000000000
+WALL	scored	himmel11	0.6252	0.6280	0.6280	1.000000000
+WALL	restored	himmel11	0.6228	0.6681	0.6681	1.000000000
+WALL	crown	pooling_rt2tp	0.9998	1.1659	1.1659	0.986385296
+WALL	scored	pooling_rt2tp	1.0325	1.0718	1.0718	0.986385296
+WALL	restored	pooling_rt2tp	1.1026	1.1463	1.1463	0.986385296
+WALL	crown	waterund14	1.4333	1.4677	1.4677	0.360048682
+WALL	scored	waterund14	1.4641	1.6141	1.6141	0.351589154
+WALL	restored	waterund14	1.6132	1.6751	1.6751	0.351589154
+WALL	crown	gancns	1.8665	2.0852	2.0852	0.842057371
+WALL	scored	gancns	2.0642	2.3182	2.3182	0.840656325
+WALL	restored	gancns	2.0297	2.3044	2.3044	0.840656325
+WALL	crown	chimera_mgw-c8-439-onc8-001	1.8645	2.1213	2.1213	0.752167094
+WALL	scored	chimera_mgw-c8-439-onc8-001	2.1712	2.6531	2.6531	0.734689469
+WALL	restored	chimera_mgw-c8-439-onc8-001	2.2716	2.3249	2.3249	0.734689469
+WALL	crown	chimera_rfr-02	2.4779	2.8139	2.8139	0.644961547
+WALL	scored	chimera_rfr-02	2.5691	2.6676	2.6676	0.644297374
+WALL	restored	chimera_rfr-02	2.5094	2.6865	2.6865	0.644297374
+WALL	crown	methanol400	2.7022	2.7327	2.7327	0.693062664
+WALL	scored	methanol400	2.5041	2.5348	2.5348	0.693062664
+WALL	restored	methanol400	2.6999	2.7463	2.7463	0.693062664
+WALL	crown	chimera_lga-01	2.0494	2.3162	2.3162	0.740586720
+WALL	scored	chimera_lga-01	2.1024	2.1050	2.1050	0.736724554
+WALL	restored	chimera_lga-01	2.0113	2.0469	2.0469	0.736724554
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 177.82s
+

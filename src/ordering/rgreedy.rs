@@ -117,8 +117,8 @@ pub(crate) fn rank_alpha_three_quarters_cmp(
 /// ~`n²/4` bytes per `Game` (2 · n · ⌈n/64⌉ · 8 = 506 MB at 45 000, versus 156 MB
 /// at 25 000) — the graded 4 GiB `RLIMIT_AS` is enforced by the local runner too,
 /// so the sandboxed 300-row run is the memory check. [0264-ceil{25000,36000,45000}-2G-4cpu.log]
-/// General implementation guard.  Production terminal admission is tighter:
-/// its one-GiB adjacency-image law binds near 92k vertices.  Keeping this guard
+/// General implementation guard. Production terminal admission is tighter:
+/// its one-GiB adjacency-image law binds near 92k vertices. Keeping this guard
 /// at the next power of two makes it a representation safety ceiling rather
 /// than a corpus-selected admission boundary.
 pub(crate) const MAX_N: usize = 1 << 17;
@@ -183,6 +183,10 @@ pub(crate) struct Game<'a> {
     /// `n * ceil(n/64)` allocation solely as a memcpy source.
     adj0: Option<&'a [u64]>,
     sparse0: Option<(&'a [usize], &'a [usize])>,
+    /// `new_sparse` has already materialized the pristine graph while deriving
+    /// `deg0`. The window driver always calls `reset` first, so let that first
+    /// reset reuse the identical image instead of clearing and rebuilding it.
+    sparse_adj_is_pristine: bool,
     adj: Vec<u64>,
     /// Degrees of the pristine graph, cached once per game. `reset` must keep
     /// the old ops charge because it is part of the deterministic run budget.
@@ -255,7 +259,7 @@ pub(crate) struct Pristine {
 /// Above the mutable-buffer pool ceiling, retaining a second dense image costs
 /// hundreds of MiB and the initial full-image copy dominates sparse large-row
 /// setup. The CSR has enough information to reconstruct the exact same graph.
-const SPARSE_PRISTINE_MIN_WORDS: usize = ADJ_POOL_MAX_WORDS;
+const SPARSE_PRISTINE_MIN_WORDS: usize = 20_000_000; // 160 MB
 
 #[inline]
 fn use_sparse_pristine(words: usize) -> bool {
@@ -314,10 +318,19 @@ impl Pristine {
             + (self.col_ptr.len() + self.row_idx.len()) * std::mem::size_of::<usize>()
     }
 
-    pub(crate) fn game(&self) -> Option<Game<'_>> {
+    pub(crate) fn game_reset_first(&self) -> Option<Game<'_>> {
         match &self.dense {
             Some((adj0, deg0)) => {
-                Game::new_with_degrees(self.n, &adj0[..], deg0.as_ref().clone())
+                #[cfg(test)]
+                let eager = std::env::var_os("SSI_XCH_EAGER_ADJ").is_some();
+                #[cfg(not(test))]
+                let eager = false;
+                Game::new_reset_first_with_degrees(
+                    self.n,
+                    &adj0[..],
+                    deg0.as_ref().clone(),
+                    eager,
+                )
             }
             None => Game::new_sparse(self.n, &self.col_ptr, &self.row_idx),
         }
@@ -345,21 +358,25 @@ thread_local! {
     /// **0.73 s wall** — 3 repeats each, same binary, same patterns.
     ///
     /// Retaining ONE buffer per thread removes the churn outright. This changes
-    /// no value the game ever reads: every word of `adj` is written by
-    /// `copy_from_slice` before the game touches it (`reset` and the pristine
-    /// image are the only other writers, and both are full-width writes), so
-    /// the ordering is bit-identical — verified by hashing the worker's output
-    /// permutation before/after.
+    /// no value the game ever reads: the dense path overwrites every word by
+    /// `copy_from_slice`, while the sparse path clears every recycled word
+    /// before reconstructing the graph from CSR.
     ///
-    /// Bounded on purpose: a buffer larger than `ADJ_POOL_MAX_WORDS` is
-    /// released as before, so the retained address space stays small next to
-    /// the graded 4 GiB RLIMIT_AS.
+    /// Bounded on purpose: ordinary games keep the original 160 MiB ceiling.
+    /// Only a one-image sparse-pristine game may retain up to the same 1 GiB
+    /// image envelope that admitted it under the graded 4 GiB RLIMIT_AS.
     static ADJ_POOL: std::cell::RefCell<Vec<Vec<u64>>> = const {
         std::cell::RefCell::new(Vec::new())
     };
 }
 
-const ADJ_POOL_MAX_WORDS: usize = 20_000_000; // 160 MB — above that, free as before
+// Sparse-pristine games keep only this mutable image, and the caller already
+// admits at most `1 << 27` words (1 GiB) under the 4 GiB address-space law.
+// Retain that same one image between sequential window calls so the allocator
+// does not repeatedly unmap and fault it back in. This changes lifetime, not
+// the maximum number or size of simultaneously live adjacency images.
+const DENSE_ADJ_POOL_MAX_WORDS: usize = 20_000_000;
+const SPARSE_ADJ_POOL_MAX_WORDS: usize = 1 << 27;
 
 fn adj_pool_take(len: usize) -> Vec<u64> {
     ADJ_POOL.with(|cell| {
@@ -377,8 +394,8 @@ fn adj_pool_take(len: usize) -> Vec<u64> {
     })
 }
 
-fn adj_pool_give(buf: Vec<u64>) {
-    if buf.capacity() == 0 || buf.capacity() > ADJ_POOL_MAX_WORDS {
+fn adj_pool_give(buf: Vec<u64>, max_words: usize) {
+    if buf.capacity() == 0 || buf.capacity() > max_words {
         return;
     }
     ADJ_POOL.with(|cell| {
@@ -417,7 +434,16 @@ fn alloc_parallel_zeroed_u64_vec(len: usize) -> Vec<u64> {
 
 impl Drop for Game<'_> {
     fn drop(&mut self) {
-        adj_pool_give(std::mem::take(&mut self.adj));
+        // Only the one-image sparse-pristine path may retain an image above the
+        // old 160 MiB ceiling. Other Game constructors can run on several
+        // worker threads; keeping their large images per-thread would multiply
+        // the address-space footprint.
+        let max_words = if self.sparse0.is_some() {
+            SPARSE_ADJ_POOL_MAX_WORDS
+        } else {
+            DENSE_ADJ_POOL_MAX_WORDS
+        };
+        adj_pool_give(std::mem::take(&mut self.adj), max_words);
     }
 }
 
@@ -551,7 +577,7 @@ impl<'a> Game<'a> {
                 .map(|word| word.count_ones())
                 .sum();
         }
-        Game::assemble(n, adj0, deg0)
+        Game::assemble(n, adj0, deg0, true)
     }
 
     /// Same game as [`Game::new`] when `deg0` is the degree vector of `adj0`,
@@ -568,23 +594,49 @@ impl<'a> Game<'a> {
         if adj0.len() < n * n.div_ceil(64) {
             return None;
         }
-        Game::assemble(n, adj0, deg0)
+        Game::assemble(n, adj0, deg0, true)
     }
 
-    fn assemble(n: usize, adj0: &'a [u64], deg0: Vec<u32>) -> Option<Game<'a>> {
+    /// Variant for a caller that guarantees [`Game::reset`] is the first
+    /// operation that can read the mutable adjacency. A recycled buffer may
+    /// contain arbitrary words; `reset` overwrites all of them.
+    fn new_reset_first_with_degrees(
+        n: usize,
+        adj0: &'a [u64],
+        deg0: Vec<u32>,
+        eager: bool,
+    ) -> Option<Game<'a>> {
+        if n == 0 || n > max_n_limit() || deg0.len() != n {
+            return None;
+        }
+        if adj0.len() < n * n.div_ceil(64) {
+            return None;
+        }
+        Game::assemble(n, adj0, deg0, eager)
+    }
+
+    fn assemble(
+        n: usize,
+        adj0: &'a [u64],
+        deg0: Vec<u32>,
+        initialize_adj: bool,
+    ) -> Option<Game<'a>> {
         let w = n.div_ceil(64);
         // iter69: reuse a recycled bitset buffer instead of `adj0[..n*w].to_vec()`.
         // `resize` + `copy_from_slice` leaves the buffer bit-identical to a fresh
         // allocation; `Drop for Game` returns it to the thread-local pool.
         let mut adj = adj_pool_take(n * w);
         adj.resize(n * w, 0);
-        adj.copy_from_slice(&adj0[..n * w]);
+        if initialize_adj {
+            adj.copy_from_slice(&adj0[..n * w]);
+        }
         Some(Game {
             n,
             w,
             adj,
             adj0: Some(adj0),
             sparse0: None,
+            sparse_adj_is_pristine: false,
             deg0,
             deg: vec![0; n],
             livelist: Vec::with_capacity(n),
@@ -660,6 +712,7 @@ impl<'a> Game<'a> {
             adj,
             adj0: None,
             sparse0: Some((col_ptr, row_idx)),
+            sparse_adj_is_pristine: true,
             deg0,
             deg: vec![0; n],
             livelist: Vec::with_capacity(n),
@@ -687,6 +740,11 @@ impl<'a> Game<'a> {
     fn reset(&mut self) {
         if let Some(adj0) = self.adj0 {
             self.adj.copy_from_slice(&adj0[..self.n * self.w]);
+        } else if self.sparse_adj_is_pristine {
+            // `new_sparse` built this exact image and no adjacency operation
+            // has occurred yet. Keep the logical reset charge below unchanged:
+            // budgets and search trajectories must remain identical.
+            self.sparse_adj_is_pristine = false;
         } else {
             self.adj.fill(0);
             let (col_ptr, row_idx) = self.sparse0.expect("game has a reset image");
@@ -1022,6 +1080,7 @@ mod game_cpu_tests {
         assert_eq!(actual.n, expected.n);
         assert_eq!(actual.w, expected.w);
         assert_eq!(actual.adj, expected.adj);
+        assert_eq!(actual.sparse_adj_is_pristine, expected.sparse_adj_is_pristine);
         assert_eq!(actual.deg0, expected.deg0);
         assert_eq!(actual.deg, expected.deg);
         assert_eq!(actual.livelist, expected.livelist);

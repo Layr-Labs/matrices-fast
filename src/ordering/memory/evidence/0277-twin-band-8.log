@@ -1,0 +1,52 @@
+
+running 1 test
+test ordering::probe::probe_timing_and_score ... LADGATE	5030	10000	1.515	1
+LIFT	pooling_sppa9pq	5030	2509	126346	2509
+COUNTS	pooling_sppa9pq	5030	120730	23971280	15130622
+LADGATE	4405	10000	0.491	1
+LIFT	meanvar-orl400_05_e_8	4405	2403	168400	2403
+COUNTS	meanvar-orl400_05_e_8	4405	171604	21923414	21922611
+LADGATE	2032	10000	2.026	1
+LIFT	chimera_mgw-c16-2031-01	2032	2021	15902	2021
+COUNTS	chimera_mgw-c16-2031-01	2032	15900	3328073	2569662
+LADGATE	1310	10000	0.447	1
+LIFT	watercontamination0303r	1310	755	35918	755
+COUNTS	watercontamination0303r	1310	37028	2171882	2171882
+LADGATE	5205	10000	0.465	1
+LIFT	meanvar-orl400_05_e_7	5205	2803	170000	2803
+COUNTS	meanvar-orl400_05_e_7	5205	174804	21939414	21935811
+LADGATE	2032	10000	2.729	1
+LIFT	chimera_rfr-02	2032	2012	15234	2012
+COUNTS	chimera_rfr-02	2032	15140	3860441	2486435
+LADGATE	5040	10000	2.669	1
+LIFT	pooling_sppa9tp	5040	2642	116234	2642
+COUNTS	pooling_sppa9tp	5040	121302	104609262	16877457
+LADGATE	1120	10000	1.908	1
+LIFT	chimera_lga-01	1120	721	5500	721
+COUNTS	chimera_lga-01	1120	6400	668019	497058
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+3.2013	chimera_rfr-02	2032	15140	0.6441
+2.7182	pooling_sppa9tp	5040	121302	0.1613
+2.4363	chimera_lga-01	1120	6400	0.7441
+2.3980	chimera_mgw-c16-2031-01	2032	15900	0.7721
+1.5668	pooling_sppa9pq	5030	120730	0.6312
+0.8415	meanvar-orl400_05_e_7	5205	174804	0.9998
+0.8266	meanvar-orl400_05_e_8	4405	171604	1.0000
+0.4829	watercontamination0303r	1310	37028	1.0000
+matrices under 0.010s: 0/8
+matrices under 0.050s: 0/8
+matrices under 0.100s: 0/8
+matrices under 0.200s: 0/8
+matrices under 0.400s: 0/8
+
+--- per-bucket ---
+1k_10k   count=8     geomean=0.6638
+SCORE = 0.663754
+WORST order() = 3.201 s
+FORCEAUDIT	stage1b_sites=2	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=0	tie_pass_run=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 16.14s
+

@@ -117,8 +117,8 @@ pub(crate) fn rank_alpha_three_quarters_cmp(
 /// ~`n²/4` bytes per `Game` (2 · n · ⌈n/64⌉ · 8 = 506 MB at 45 000, versus 156 MB
 /// at 25 000) — the graded 4 GiB `RLIMIT_AS` is enforced by the local runner too,
 /// so the sandboxed 300-row run is the memory check. [0264-ceil{25000,36000,45000}-2G-4cpu.log]
-/// General implementation guard.  Production terminal admission is tighter:
-/// its one-GiB adjacency-image law binds near 92k vertices.  Keeping this guard
+/// General implementation guard. Production terminal admission is tighter:
+/// its one-GiB adjacency-image law binds near 92k vertices. Keeping this guard
 /// at the next power of two makes it a representation safety ceiling rather
 /// than a corpus-selected admission boundary.
 pub(crate) const MAX_N: usize = 1 << 17;
@@ -255,7 +255,7 @@ pub(crate) struct Pristine {
 /// Above the mutable-buffer pool ceiling, retaining a second dense image costs
 /// hundreds of MiB and the initial full-image copy dominates sparse large-row
 /// setup. The CSR has enough information to reconstruct the exact same graph.
-const SPARSE_PRISTINE_MIN_WORDS: usize = ADJ_POOL_MAX_WORDS;
+const SPARSE_PRISTINE_MIN_WORDS: usize = 20_000_000; // 160 MB
 
 #[inline]
 fn use_sparse_pristine(words: usize) -> bool {
@@ -314,6 +314,9 @@ impl Pristine {
             + (self.col_ptr.len() + self.row_idx.len()) * std::mem::size_of::<usize>()
     }
 
+    /// Construct the working game the way the promoted tree does: the pooled
+    /// buffer is fully initialized here, so no later `reset` can ever read an
+    /// uninitialized word and the sparse path owns its own fresh image.
     pub(crate) fn game(&self) -> Option<Game<'_>> {
         match &self.dense {
             Some((adj0, deg0)) => {
@@ -345,21 +348,22 @@ thread_local! {
     /// **0.73 s wall** — 3 repeats each, same binary, same patterns.
     ///
     /// Retaining ONE buffer per thread removes the churn outright. This changes
-    /// no value the game ever reads: every word of `adj` is written by
-    /// `copy_from_slice` before the game touches it (`reset` and the pristine
-    /// image are the only other writers, and both are full-width writes), so
-    /// the ordering is bit-identical — verified by hashing the worker's output
-    /// permutation before/after.
+    /// no value the game ever reads: the dense path overwrites every word by
+    /// `copy_from_slice`, while the sparse path clears every recycled word
+    /// before reconstructing the graph from CSR.
     ///
-    /// Bounded on purpose: a buffer larger than `ADJ_POOL_MAX_WORDS` is
-    /// released as before, so the retained address space stays small next to
-    /// the graded 4 GiB RLIMIT_AS.
+    /// Bounded on purpose: ordinary games keep the original 160 MiB ceiling.
+    /// Only a one-image sparse-pristine game may retain up to the same 1 GiB
+    /// image envelope that admitted it under the graded 4 GiB RLIMIT_AS.
     static ADJ_POOL: std::cell::RefCell<Vec<Vec<u64>>> = const {
         std::cell::RefCell::new(Vec::new())
     };
 }
 
-const ADJ_POOL_MAX_WORDS: usize = 20_000_000; // 160 MB — above that, free as before
+/// Buffer retained per thread, as in the promoted tree. Above this the buffer
+/// is returned to the allocator instead of being kept alive: a large retained
+/// image is not free address space under the graded 4 GiB `RLIMIT_AS`.
+const ADJ_POOL_MAX_WORDS: usize = 20_000_000;
 
 fn adj_pool_take(len: usize) -> Vec<u64> {
     ADJ_POOL.with(|cell| {

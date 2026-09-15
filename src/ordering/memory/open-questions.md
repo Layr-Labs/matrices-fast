@@ -142,3 +142,25 @@ it, rather than deleting it — a resolved question is a useful signpost.
 Production-core stage-6 polishing at the 10M starting-fill estimate is below its screen: 2 final winners / 0.07338 dev bips ([0089](experiments/0089-production-core-stage6-screen.md)). Most improved cores lose to other completed pipeline candidates. Distinct core portfolios remain open; the exhibited blend718 portfolio win receives no proposal sets in this polish screen.
 
 The 100k transplant with verification reservation yields 26 winners / 0.93139 dev bips, retaining every winner when gated below raw AMD and reducing paid rows 196→152 ([0090](experiments/0090-transplant-verification-reservation-screen.md)). It misses the predeclared three-bip floor. Reserving final verification before spending the last donor allowance is useful bookkeeping; larger ledgers or different donor choices remain separate experiments with unvalidated runtime exposure.
+
+## Queued by [0279](experiments/0279-mining-under-threshold-rejections.md) (the wall-provenance shortlist)
+
+- [ ] **Re-derive the appended MCS-root stage** (public submission `69be95b`): after the complete
+      incumbent, add seed orders (reversed incumbent; incumbent with its first vertex swapped to a
+      max-degree vertex of the reconstructed completion), both traversal directions, at most four
+      rounds, each accepted only on a fresh exact strict `<`. The shape is the point — it *appends*
+      rather than perturbs, and per-round work is linear in the reconstructed completion.
+      `peo_extract.rs` already reconstructs and scores; the new stage is a sibling entry point.
+- [ ] **Price the subtree max-`n` ceiling** (public submission `a30dc6c`): a vertex-count ceiling
+      that skips the 313k-vertex outlier class costs no flops if the chain is value-flat above it,
+      and removes wall from the class the cap lives on. The only shortlist item whose primary effect
+      is a wall *reduction*, so it can pay for another device.
+- [ ] **Test the free-plus-conditioned pairing recipe** (public submission `e5dcd69`): a wall-free
+      component stacked with a second mechanism gated behind a strict win. Adopt only after the
+      merged arm is priced in the worker frame — [0279](experiments/0279-mining-under-threshold-rejections.md)
+      §4 is why the score of such a merge cannot be predicted from the public gaps.
+- [ ] **Reuse one `Game` across the nine terminal sparse-span passes.** [0280](experiments/0280-reset-first-adjacency-copy.md)
+      removes the overwritten eager bitset copy and cuts paired worker medians 4.2–12.9% on six
+      large rows. Each pass still constructs/drops the other game vectors. A batch API can retain
+      them, but must preserve every pass's logical charge and mandatory reset and let the caller's
+      exact scorer accept/reject each candidate before choosing the next seed.

@@ -1,0 +1,108 @@
+
+running 1 test
+test ordering::probe::probe_slow_row_stage ... STAGED	slay06m	357	1080	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/slay06m.bin
+STAGED	chimera_mgw-c8-439-onc8-002	440	3038	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_mgw-c8-439-onc8-002.bin
+STAGED	chimera_mgw-c16-2031-01	2032	15900	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_mgw-c16-2031-01.bin
+STAGED	nvs02	11	46	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/nvs02.bin
+STAGED	syn15hfsg	399	1022	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/syn15hfsg.bin
+STAGED	watercontamination0303r	1310	37028	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/watercontamination0303r.bin
+STAGED	himmel11	14	60	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/himmel11.bin
+STAGED	pooling_rt2tp	118	654	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pooling_rt2tp.bin
+STAGED	waterund14	333	2204	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/waterund14.bin
+STAGED	st_glmp_ss1	24	66	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/st_glmp_ss1.bin
+STAGED	st_rv2	40	340	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/st_rv2.bin
+STAGED	gancns	548	2800	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/gancns.bin
+STAGED	pooling_haverly1tp	31	96	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pooling_haverly1tp.bin
+STAGED	chimera_mgw-c8-439-onc8-001	440	3040	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_mgw-c8-439-onc8-001.bin
+STAGED	wastepaper4	115	724	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/wastepaper4.bin
+STAGED	tls6	413	2860	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/tls6.bin
+STAGED	st_rv9	90	840	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/st_rv9.bin
+STAGED	chimera_rfr-02	2032	15140	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_rfr-02.bin
+STAGED	pooling_adhya4pq	170	932	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pooling_adhya4pq.bin
+STAGED	chimera_lga-01	1120	6400	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_lga-01.bin
+STAGED_TOTAL	20
+WALL	arm	matrix	min	median	max	ratio
+WALL	crown	slay06m	1.4850	1.6984	2.4034	1.000000000
+WALL	iter67	slay06m	1.2381	1.3121	1.6330	1.000000000
+WALL	fork	slay06m	1.2834	1.6814	1.8930	1.000000000
+WALL	gated	slay06m	1.5881	1.5980	1.7775	1.000000000
+WALL	crown	chimera_mgw-c8-439-onc8-002	1.8759	1.8793	2.1148	0.881986308
+WALL	iter67	chimera_mgw-c8-439-onc8-002	1.8272	1.8483	1.9219	0.881986308
+WALL	fork	chimera_mgw-c8-439-onc8-002	2.1052	2.1347	2.3167	0.881986308
+WALL	gated	chimera_mgw-c8-439-onc8-002	1.9612	2.0012	2.0601	0.881986308
+WALL	crown	chimera_mgw-c16-2031-01	2.3669	2.4270	2.4784	0.772227953
+WALL	iter67	chimera_mgw-c16-2031-01	2.4443	2.5042	2.7863	0.769289916
+WALL	fork	chimera_mgw-c16-2031-01	2.3990	2.6571	2.8469	0.769289916
+WALL	gated	chimera_mgw-c16-2031-01	2.4495	2.4919	2.5235	0.769289916
+WALL	crown	nvs02	0.6103	0.6424	0.6826	1.000000000
+WALL	iter67	nvs02	0.6163	0.6277	0.7366	1.000000000
+WALL	fork	nvs02	0.6351	0.6428	0.6517	1.000000000
+WALL	gated	nvs02	0.6155	0.6171	0.6819	1.000000000
+WALL	crown	syn15hfsg	1.0000	1.1061	1.1228	0.991515152
+WALL	iter67	syn15hfsg	0.9656	1.0081	1.0484	0.991515152
+WALL	fork	syn15hfsg	1.0179	1.0585	1.0829	0.991515152
+WALL	gated	syn15hfsg	1.0120	1.0202	1.0696	0.991515152
+WALL	crown	watercontamination0303r	0.4026	0.4088	0.4173	1.000000000
+WALL	iter67	watercontamination0303r	0.4131	0.4234	0.4235	1.000000000
+WALL	fork	watercontamination0303r	0.4058	0.4250	0.4377	1.000000000
+WALL	gated	watercontamination0303r	0.4057	0.5024	0.5168	1.000000000
+WALL	crown	himmel11	0.6612	0.6931	0.7086	1.000000000
+WALL	iter67	himmel11	0.6040	0.6319	0.6466	1.000000000
+WALL	fork	himmel11	0.6417	0.7188	0.7511	1.000000000
+WALL	gated	himmel11	0.6870	0.7093	0.7280	1.000000000
+WALL	crown	pooling_rt2tp	1.0435	1.0606	1.0955	0.986385296
+WALL	iter67	pooling_rt2tp	1.0741	1.1389	1.1899	0.986385296
+WALL	fork	pooling_rt2tp	1.0424	1.0704	1.1109	0.986385296
+WALL	gated	pooling_rt2tp	1.0404	1.1079	1.1937	0.986385296
+WALL	crown	waterund14	1.4747	1.4766	1.5052	0.360048682
+WALL	iter67	waterund14	1.3266	1.4115	1.4225	0.360048682
+WALL	fork	waterund14	1.6486	1.6709	1.7038	0.351589154
+WALL	gated	waterund14	1.5764	1.6185	1.6651	0.351589154
+WALL	crown	st_glmp_ss1	0.5855	0.5987	0.6269	1.000000000
+WALL	iter67	st_glmp_ss1	0.5460	0.5757	0.5981	1.000000000
+WALL	fork	st_glmp_ss1	0.5694	0.5916	0.6594	1.000000000
+WALL	gated	st_glmp_ss1	0.5895	0.6086	0.6300	1.000000000
+WALL	crown	st_rv2	0.8671	0.9131	1.0378	1.000000000
+WALL	iter67	st_rv2	0.8235	0.8326	0.9452	1.000000000
+WALL	fork	st_rv2	0.8210	0.8582	0.8803	1.000000000
+WALL	gated	st_rv2	0.8951	0.8978	0.9058	1.000000000
+WALL	crown	gancns	1.8693	1.8814	1.9432	0.842057371
+WALL	iter67	gancns	1.9014	1.9474	2.0001	0.842057371
+WALL	fork	gancns	2.2136	2.4750	2.5876	0.840656325
+WALL	gated	gancns	2.1649	2.1894	2.2715	0.840656325
+WALL	crown	pooling_haverly1tp	0.8280	0.8857	1.0031	0.952718676
+WALL	iter67	pooling_haverly1tp	0.8105	0.9151	0.9354	0.952718676
+WALL	fork	pooling_haverly1tp	0.8629	0.9152	0.9368	0.952718676
+WALL	gated	pooling_haverly1tp	0.8763	0.9015	0.9390	0.952718676
+WALL	crown	chimera_mgw-c8-439-onc8-001	1.8684	1.9218	2.0317	0.752167094
+WALL	iter67	chimera_mgw-c8-439-onc8-001	1.8972	1.9176	1.9391	0.752167094
+WALL	fork	chimera_mgw-c8-439-onc8-001	2.1013	2.1322	2.2396	0.734689469
+WALL	gated	chimera_mgw-c8-439-onc8-001	2.0648	2.1128	2.1176	0.734689469
+WALL	crown	wastepaper4	1.1759	1.3037	1.3079	0.739676655
+WALL	iter67	wastepaper4	1.1993	1.2174	1.2345	0.739676655
+WALL	fork	wastepaper4	1.2247	1.2465	1.3302	0.739676655
+WALL	gated	wastepaper4	1.2168	1.2292	1.3242	0.739676655
+WALL	crown	tls6	1.6134	1.6136	1.9309	0.947411135
+WALL	iter67	tls6	1.6516	1.9750	2.0136	0.947411135
+WALL	fork	tls6	1.8299	1.8869	1.9864	0.947411135
+WALL	gated	tls6	1.5636	1.6473	1.7592	0.947411135
+WALL	crown	st_rv9	1.0511	1.0633	1.0671	0.944701838
+WALL	iter67	st_rv9	1.0786	1.1187	1.1224	0.944701838
+WALL	fork	st_rv9	1.0429	1.0687	1.1146	0.944701838
+WALL	gated	st_rv9	1.0453	1.0764	1.1011	0.944701838
+WALL	crown	chimera_rfr-02	2.4669	2.4984	2.5121	0.644961547
+WALL	iter67	chimera_rfr-02	2.5641	2.7219	2.7657	0.644297374
+WALL	fork	chimera_rfr-02	2.6316	2.6917	2.7001	0.644297374
+WALL	gated	chimera_rfr-02	2.6176	2.7302	2.9578	0.644297374
+WALL	crown	pooling_adhya4pq	1.0282	1.1175	1.1304	0.680924570
+WALL	iter67	pooling_adhya4pq	1.0052	1.1055	1.1352	0.680924570
+WALL	fork	pooling_adhya4pq	1.2142	1.2771	1.3255	0.680924570
+WALL	gated	pooling_adhya4pq	1.1604	1.2413	1.2510	0.680924570
+WALL	crown	chimera_lga-01	2.0509	2.1178	2.1828	0.740586720
+WALL	iter67	chimera_lga-01	2.0525	2.0695	2.1017	0.736724554
+WALL	fork	chimera_lga-01	1.9745	2.1222	2.1616	0.736724554
+WALL	gated	chimera_lga-01	2.0642	2.1311	2.1758	0.736724554
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 340.41s
+

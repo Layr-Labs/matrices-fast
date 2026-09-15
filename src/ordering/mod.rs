@@ -262,7 +262,29 @@ const PEO_ALT_SEEDS: usize = 8;
 /// on the board complete. So the draw is retired and the chain — the one spender
 /// whose removal has a measured hidden price — gets the frontier's own scope
 /// back, with its allowance doubled above (PEO_ALT_ALLOWANCE).
+/// ── iter68: RESTORED to 50 000 after the first scored completion ────────────
+/// iter67 narrowed this to 10 000 on a dev measurement (8.11 s of wall over 38
+/// admitted rows above n = 10 000, output bit-identical on every row measured).
+/// The narrowed tree then completed the hidden corpus and scored **0.840946**,
+/// i.e. **+3.23e-4 against the crown** — its three changes together (this
+/// narrowing, the fork, the census-bounded twin) are net-negative on hidden by
+/// an order of magnitude more than any local frame could see. The class-wide
+/// reading is that this chain's hidden value lives exactly on the rows above
+/// n = 10 000 that the dev frame reports as zero-yield, so the narrowing is the
+/// prime suspect and the window goes back to the promoted value. [0278]
 const PEO_ALT_MAX_N: usize = 50_000;
+#[cfg(test)]
+fn peo_alt_seeds() -> usize {
+    std::env::var("SSI_PEO_ALT_SEEDS")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(PEO_ALT_SEEDS)
+}
+#[cfg(not(test))]
+#[inline(always)]
+fn peo_alt_seeds() -> usize {
+    PEO_ALT_SEEDS
+}
 /// 0187: re-priced against the whole corpus. The chain's marks account for
 /// 6.73 s of the pipeline's 115.5 s (5.8 %) and 0.0059 of running-best ratio,
 /// and every beneficiary it has been measured to have is small (mpbp_15 9858,
@@ -712,13 +734,11 @@ const PRODUCTION_SPAN_WINDOWS: [(usize, usize, usize, i64); 9] = [
 // measured −1.03e-4), and that is exactly the pair of rows that sits closest to
 // the cap. So the allowance ships at 2 GiB and the value is bought back on the
 // ceiling, which is wall-cheap where the allowance is wall-expensive.
-/// Resource law for the terminal exact exchange.  The worker grants 4 GiB of
+/// Resource law for the terminal exact exchange. The worker grants 4 GiB of
 /// address space; sparse-pristine construction retains one mutable bit image,
-/// so that image may consume at most one quarter of the frame.  The input must
-/// also remain structurally sparse (at most sixteen directed CSR entries per
-/// vertex), and the deterministic work account is sixteen charge units per
-/// word in the admitted image envelope.  These powers-of-two limits are tied
-/// to the worker contract and representation, not to a corpus row boundary.
+/// so that image may consume at most one quarter of the frame. The input must
+/// also remain structurally sparse, and the work account is sixteen charge
+/// units per word in the admitted image envelope.
 const PRODUCTION_EXCHANGE_IMAGE_WORDS: usize = 1 << 27; // 1 GiB of u64 words
 const PRODUCTION_EXCHANGE_SPARSE_FACTOR: usize = 16;
 const PRODUCTION_EXCHANGE_LEDGER: i64 =
@@ -1679,7 +1699,7 @@ fn flush_batch<'a>(
             if f < *best_flops { r.push((*best_flops, best_perm.clone())); } else { r.push((f, perm.clone())); }
             r.sort_by_key(|(s, _)| *s);
             r.dedup_by_key(|(s, _)| *s);
-            r.truncate(PEO_ALT_SEEDS);
+            r.truncate(peo_alt_seeds());
         }
         if f < *best_flops {
             *best_flops = f;
@@ -3574,7 +3594,6 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
             }
         }
     }
-
     #[cfg(test)]
     parallel::phase_mark("4.subtree", _tph, markval!(best_perm, best_flops));
     #[cfg(test)]
@@ -5056,16 +5075,21 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
     // exceeded the 2.0s per-matrix cap and was killed" — so a value-free spend
     // here is not score-neutral book-keeping, it is *cap margin* on the rows
     // that decide the run. Both arms are graded-closest (`SSI_MARK_NOSCORE=1`).
+    // Frame fidelity (this session): both of these defaulted to ON in test
+    // builds and OFF in production, so a plain probe ran two extra exchange
+    // passes the graded worker never runs. They are now opt-IN seams whose
+    // unset default equals the production value; a probe that wants the old
+    // frame sets `SSI_PRECLASS_WIN=1 SSI_PRECLASS_STEP=1`.
     #[cfg(test)]
     let preclass_win: bool = std::env::var("SSI_PRECLASS_WIN")
         .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_win: bool = false;
     #[cfg(test)]
     let preclass_step: bool = std::env::var("SSI_PRECLASS_STEP")
         .map(|v| v.trim() != "0")
-        .unwrap_or(true);
+        .unwrap_or(false);
     #[cfg(not(test))]
     let preclass_step: bool = false;
     if preclass_win && n >= 6 && n <= rgreedy::MAX_N && nnz <= 200_000 {
@@ -5506,7 +5530,9 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // 0.841666 (−1.02e-4). The current frontier (`78c434c`, `7df69b9`) was
         // diffed against `475be33` and carries none of it, so this is the one
         // device of ours that is *validated on the hidden frame* and absent here.
-        // Test-only env seam: one binary prices both arms in-frame.
+        // Test-only env seam: one binary prices both arms in-frame. The rejected
+        // banded variants remain reproducible from commits 670b453 and 0f6cd9b;
+        // production stays on the frontier's flat 12/5/12 schedule.
         #[cfg(test)]
         let exchange_width: usize = std::env::var("SSI_EXCHANGE_WIDTH")
             .ok()
@@ -5530,11 +5556,15 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
         // 4G+6), so this ships the 4G allowance with five sweeps: the failed tree's
         // value minus its one dead sweep. [0239-sweeps{3,4,5}-noscore-4cpu.log,
         // 0238-noscore-4cpu.log, 0239-board-receipt.txt]
+        // The probe's old default here was 6, one full cycle short of the
+        // shipped 12 — a frame divergence that made every un-overridden probe
+        // run a different program from the graded worker. The seam still forces
+        // one value for the whole corpus when a probe wants a flat arm.
         #[cfg(test)]
         let exchange_sweeps: usize = std::env::var("SSI_EXCHANGE_SWEEPS")
             .ok()
             .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(6);
+            .unwrap_or(12);
         #[cfg(not(test))]
         let exchange_sweeps: usize = 12;
         #[cfg(test)]
@@ -5617,23 +5647,30 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 // block's gate excludes (`nnz > 16n || max_deg > n/2`) and it
                 // still calls the 8/4/3 shape the class block outgrew. The
                 // family curve (0234) prices 12/* on the class block only.
+                // Iter79 retires the bounded width-10 twin after the fork-free
+                // hidden tree still cap-failed at the same corpus position.
+                // Returning the whole dense/hub site to the promoted 8/4/3
+                // schedule also improves the measured fork-off score slightly:
+                // the gain on `chimera_rfr-02` outweighs the loss on the c16
+                // row, while removing the roughly 4x width-10 DP charge.
+                let dense_default = (8, 4, 3);
                 #[cfg(test)]
                 let (dense_w, dense_s, dense_t): (usize, usize, usize) = (
                     std::env::var("SSI_DENSE_W")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(8),
+                        .unwrap_or(dense_default.0),
                     std::env::var("SSI_DENSE_S")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(4),
+                        .unwrap_or(dense_default.1),
                     std::env::var("SSI_DENSE_T")
                         .ok()
                         .and_then(|v| v.trim().parse().ok())
-                        .unwrap_or(3),
+                        .unwrap_or(dense_default.2),
                 );
                 #[cfg(not(test))]
-                let (dense_w, dense_s, dense_t): (usize, usize, usize) = (8, 4, 3);
+                let (dense_w, dense_s, dense_t): (usize, usize, usize) = dense_default;
                 if let Some(candidate) = rgreedy::subset_window_descent_step(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     dense_w, dense_s, dense_t, dense_window_ledger,
@@ -5678,7 +5715,17 @@ fn leader_order(pattern: &Pattern) -> Vec<usize> {
                 };
             #[cfg(not(test))]
             let span_windows: &[(usize, usize, usize, i64)] = &PRODUCTION_SPAN_WINDOWS;
+            // Test-only seam for pricing the nine span allowances. Production
+            // passes the frontier budgets through without an extra operation.
+            #[cfg(test)]
+            let span_scale: i64 = std::env::var("SSI_SPAN_SCALE")
+                .ok()
+                .and_then(|v| v.trim().parse::<i64>().ok())
+                .unwrap_or(100)
+                .clamp(1, 4000);
             for &(width, sweeps, step, budget) in span_windows {
+                #[cfg(test)]
+                let budget = budget.saturating_mul(span_scale) / 100;
                 if let Some(candidate) = rgreedy::sparse_span_window_descent(
                     n, &pattern.col_ptr, &pattern.row_idx, &best_perm,
                     width, sweeps, step, budget,

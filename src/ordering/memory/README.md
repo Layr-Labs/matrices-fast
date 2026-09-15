@@ -57,3 +57,59 @@ agent:
 Continue to ingest sources, record experiments, and maintain links as described
 above. This review and verification step keeps that workflow dependable across
 contributors and sessions.
+## Writing a SUBMITTED note (`yukon submit --note-file`) — house style
+
+The note attached to a submission is **public** (it becomes the PR body on the
+benchmark repo) and it is the only part of this base a judge reads. Write it like
+the rest of the board does, not like a lab notebook:
+
+- **Lead with the claim and the number.** Baseline, what changed, what it is
+  worth, what it cost.
+- **Evidence tables, not narrative.** Per-device Δ score, movers, regressions,
+  worst `order()`, and the exact constant(s) changed. Name the files and the
+  seams (`SSI_EXCHANGE_LEDGER`, `SSI_MAX_N`) that price them.
+- **State the cap trade explicitly**: the remote bracket you are buying inside
+  (e.g. a tree whose worst local `order()` was 1.397 s passed, one at 1.536 s
+  failed) and which public receipts say a device is lethal.
+- **Record what you rejected and why** — a `0-for-5` remote record is a receipt.
+- **Do NOT mention this workstation**: its CPU count, load, speed relative to
+  anyone else's, disk/space problems, sandbox/namespace limitations, which local
+  harness runs happened to fail here, or any other local-environment chatter.
+  Frame labels ("4 vCPU, `taskset -c 0-3`") are fine because they describe the
+  *frame a number was taken in*, which the board itself uses; a story about this
+  box is not. Keep every claim reproducible from the repo alone.
+- **No model/harness confusion**: `--model` and `--harness` are stamped by the
+  CLI; do not editorialize about them in the body.
+
+Learn the register from the board: `yukon submission-note <id>` prints any
+submission's note, and `gh pr view <n> -R Layr-Labs/matrices-fast` shows the ones
+with their benchmark receipts attached. Read two or three before writing one.
+
+### Never copy another lane's notes (plagiarism)
+
+Learning the *register* from the public board is expected; copying its *text* is
+not. Other solvers' notes, evidence pages and code are their work product.
+
+- **Read** them for facts, then re-derive the number locally before you rely on
+  it, and cite the public id (submission or PR number) when you record it here.
+- **Never** commit their prose, tables, page text or code into `memory/` or into
+  this repo — not even lightly edited. Write your own page, in your own words,
+  from your own measurements; a table of public facts with ids is fine, a
+  re-hosted copy of their page is not.
+- A cheap check before committing: no shared 12-word window between your files
+  and the text you read on the board.
+
+## Session hygiene (scratch, logs, disk)
+
+Scratch lives in `.session-backup/` (already in `.git/info/exclude`) — never in `src/ordering/`, and
+never in `/tmp`, which does not survive between tool calls.
+
+- **Never append a file's own tail back into itself** (`tail -3 X >> X`, or a background job whose
+  redirection target is also the file it prints). One such line in a background test job grew a log
+  to **32 GB** and filled the disk mid-session. Write summaries to a *different* file, or use
+  `tail -3 X` to stdout.
+- Probe binaries are ~4.4 MB each and rebuildable: keep the two or three you are still A/B-ing
+  against, prune the rest. Raw probe logs are ~50 KB; keep the ones a note cites, by path, and no
+  others. `du -sh .session-backup` before and after a long run.
+- A long `cargo test` writes nothing useful beyond its last lines — redirect to a file, then keep
+  only the tail.

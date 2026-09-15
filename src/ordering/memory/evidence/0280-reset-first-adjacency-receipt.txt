@@ -1,0 +1,37 @@
+0280 reset-first adjacency receipt — 2026-09-14
+base: 6283436
+candidate: same tree; only the overwritten Game::assemble adjacency copy removed
+
+FULL DEV, SSI_MARK_NOSCORE=1
+  eager base:      rows=300 score=0.790230 buckets=0.8873/0.8372/0.6822 worst=5.573s
+  lazy candidate: rows=300 score=0.790230 buckets=0.8873/0.8372/0.6822 worst=4.812s
+  diff of all 300 COUNTS(name,n,nnz,amd_flops,mine_flops): empty
+
+PRODUCTION WORKER BINARIES
+  eager sha256 adbf5bafad7c0c72f2e16b9d82b3a3ed3224f1dc377df847d8ecb809972a1e92
+  lazy  sha256 fe1fc13d117dac7ed1c68030fb7802cceb149498fb86fdc0c868d0afa84a1bf8
+
+REVERSED-ORDER WORKER FRAME, three processes/arm/row
+  row                                  eager median  lazy median  ratio (both)
+  crudeoil_pooling_dt3                 3.6635        3.4930       0.691487988
+  nd_netgen-3000-1-1-b-b-ns_7         3.3001        2.8760       0.958386332
+  ringpack_30_2                        4.5018        3.9397       0.231087490
+  methanol400                          2.8530        2.7008       0.693062664
+  crudeoil_lee4_09                     4.7092        4.2643       0.617148810
+  arki0013                             4.5853        4.3941       0.399278668
+
+RAW WORKER OUTPUT IDENTITY (eager sha256 == lazy sha256)
+  arki0013                         80051d2f3c5e45925fad707899f576542302b0d9c6466a790182335eb749553e
+  nd_netgen-3000-1-1-b-b-ns_7     3e67001ac9717eaa817beee353db9b1b3f5a98bdf2a3d0a995480de0b7baa080
+  crudeoil_pooling_dt3             244e0ec49afd67d44ffc2f45a7965ba4408d08153adf29a559cb9d57179fa689
+  ringpack_30_2                    9c802a4ef46be9441c909fc659fa0eb17762919b49e502e62628aa824c8f08b9
+  methanol400                      c96f378582a444f74544d6e034429c887e4f301d0f90e225ed7243345536b0ce
+  crudeoil_lee4_09                 a16d88445b07fbc377d354a478d4971098d87422c6c97872ef6da5b474c892ab
+
+FULL RELEASE TESTS
+  126 passed; 0 failed; 56 ignored; finished in 169.93s
+
+Scratch logs for this checkout:
+  .session-backup/iter70-baseline-noscore.log
+  .session-backup/iter70-lazy-noscore.log
+  .session-backup/iter70-worker-ab-reverse.log

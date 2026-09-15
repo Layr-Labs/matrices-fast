@@ -1,3 +1,23 @@
+[0287: retire the bounded dense twin](experiments/0287-retire-bounded-dense-twin.md):
+fork-free iter78 still cap-failed after 84.681 s, exonerating the fork on the binding row. Restore
+the dense/hub site to promoted 8/4/3 everywhere; existing arms derive score 0.790253862267, a small
+improvement over iter78 while removing width-10 exponential work.
+
+[0286: retire the basin fork](experiments/0286-retire-basin-fork.md):
+iter77's 20% margin still cap-failed after 84.509 s, essentially the iter76 position. Retire the
+fork in production and make it an opt-in test seam. Complete 300-row fork-off score 0.790255990203;
+exactly three movers lost and 297 flop records identical.
+
+[0285: cap-priced fork margin](experiments/0285-cap-priced-fork-margin.md):
+iter76 / PR #740 still cap-failed after 83.422 s, so price the remaining fork movers instead of
+requiring all of them to survive. Margin 14%→20% retires `gancns` (+0.35 s measured fork wall for
+only 97 flops) while retaining the two high-value movers; exact derived score 0.790169175640.
+
+[0284: cap trim — dense sweep and fork margin](experiments/0284-cap-trim-dense-sweep-and-fork-margin.md):
+iter75 / PR #739 cap-failed at essentially the same hidden position as iter74, so trim outside the
+sparse branch: dense twin 10/4/4→10/3/4 and fork AMD margin 10%→14%. Full dense-arm score 0.790166;
+all known movers retained; 15% is the measured fork boundary and loses `gancns`.
+
 [0150: remove the three narrow stage-1b force-adoption windows](experiments/0150-stage1b-window-removal-isolated.md):
 compliance removal of `400..=1000`, `1800..=2500` and `8k..20k && nnz>=50k`,
 keeping only the monotone `n >= INDEP_FORCE_MIN_N = 20_000`. Dev **0.792300 ->
@@ -289,3 +309,118 @@ _(hypotheses run against the corpus — see [experiments/_TEMPLATE.md](experimen
 - [0230: span schedule 9 → 13 widths + exchange-site ledger 512M → 1G](experiments/0230-span13-ledger1g.md) — four-arm in-frame sweep: shipped **0.791498** → **0.791437** (−0.61 bip, 17 rows better / 0 worse); the ledger's knee is 1G (2G buys 5e-6 more), `SSI_PEO_ROUNDS=5` is rejected; official local 300/300 at 0.791437 / 0.924075, submitted `6279dc68`.
 
 - [0231: the order-equivalence frame (schedule axis of determinism)](experiments/0231-order-equivalence-frame.md) — new test-only probe compares parallel / forced-sequential / parallel runs of the same row element-wise: **0 divergences on 300 dev + 14 peak + 33 structural rows**, which kills parallel-order nondeterminism as the explanation of the two parity FAILs; also records the silent dev-corpus fallback trap for `SSI_CORPUS_FILE=/tmp/...` inside the probe sandbox (fixed by `probe-sandbox-corpora.sh`).
+
+## This lane (the `f9b2fe4e` line) — synced into the frontier tree 2026-09-14
+
+- [NEXT-PROMPT.md — the handoff brief for the next session](NEXT-PROMPT.md): read after this index.
+  State of the tree, the measurement frames and their trap, the cap bracket, the ranked next steps,
+  and the rules of the road (benchmark before shipping, never copy another lane's notes).
+  Updated after iter66: the tree now carries the shared-prefix, stage-4-gated basin fork plus the
+  census-bounded dense-twin shape, all three value gates are measured in the production-worker frame,
+  and the open decision is the hidden cap trade (see [0276](experiments/0276-shared-prefix-fork-and-bounded-twin.md)).
+
+- [0238: one shared exact-kernel engine per `order()`](experiments/0238-shared-class-engine-ceiling-45k.md):
+  the class used to build its kernel up to **eleven** times per row; one shared `Game` per `order()`
+  is output-preserving and pays for `MAX_N` 25 000 → **45 000** (probe 0.790425 → 0.790295). Also
+  records the negative giant-tier relabel probe.
+
+- [0239: public-board receipts](experiments/0239-public-board-receipts.md): facts only, each with its
+  submission id — the cap bracket (1.397 s passed / 1.536 s failed), the allowance record (**2 GiB
+  completes; 3 GiB and 4 GiB are cap-killed**), the ceiling's remote pass at hidden 0.840725, and the
+  frame warning that the `#[cfg(test)]` probe frame is not the graded program.
+
+- [0271: basin fork on the cheap tier, and the exchange's width *band*](experiments/0271-basin-fork-and-width-band.md):
+  post-session audit of three measured but unshipped devices — a 14-wide exchange band (−5.94e-5 dev),
+  the dense/hub twin's shape 8/4/3 → **10/4/4** (−2.21e-5 dev), and a **second pipeline lineage with the
+  `4.subtree` cascade withheld**, merged by exact flops on `n <= 600 && nnz <= 5 000` (−7.90e-5 dev,
+  3 rows). Four submitted configurations cap-failed and one intermediate tree failed its production
+  build; the redacted/rotating hidden frame does not isolate an individual device. The final graded
+  path is restored to the frontier behavior. Also closes: the `{v} ∪ N(v)` star neighbourhood (0 wins / 189 rows), relabelled seeds on
+  at-anchor rows (0 / 144), and nested dissection on every `n > 45 000` row (2.2x–9500x AMD).
+  Both probe-frame divergences (`SSI_PRECLASS_*`, `SSI_EXCHANGE_SWEEPS`) are fixed at the source.
+
+- [0276: shared-prefix basin fork and the bounded dense-twin shape](experiments/0276-shared-prefix-fork-and-bounded-twin.md):
+  the iter65 follow-up, built and measured in the **production-worker frame**. The pipeline now runs
+  once through `3.search` and duplicates only the divergent suffix, started only when stage 4 accepted
+  a strict improvement; the twin's `10/4/4` is bounded to its measured census (`1000 <= n <= 5205`).
+  **6 movers / 0 regressions / implied dev −1.279e-4** on 130 admitted rows, `126/126` tests, two-run
+  determinism asserted. Added wall over the gated rows: **+0.2 % median** against **+9.0 %** for the
+  same fork with both suffixes unconditional, and **≈+22 %** for the submitted whole-pipeline form
+  that was cap-killed twice. **Shipped and cap-killed too** (`7febce96`, PR #707, ≈307 s into the
+  benchmark vs 81–184 s for the earlier kills): the cost cut was real but the cap still binds, and the
+  redacted failing row does not implicate the fork band.
+
+- [0277: the cap priced per stage, and the `13.alt` window](experiments/0277-cap-margin-census-and-peo-alt-window.md):
+  the iter67 census — 300/300 dev rows, per-stage wall in one binary/one session (**570.9 s total,
+  mean 1.90 s against the 2.00 s cap**; `1.portfolio` 20.8 %, the unmarked terminal tail 15.9 %,
+  `3.search` 10.6 %, `4.subtree` 5.0 %), no dominant stage and no dominant row. Adds the
+  real-worker frame for named rows (`probe_slow_row_stage`; slowest 28 dev rows at 3.4–4.6 s).
+  Ships `PEO_ALT_MAX_N` 50 000 → **10 000** (8.11 s of dev wall removed from 38 rows; output
+  bit-identical on every measured row — worker-frame A/B 20/21) and the dense-twin `10/4/4` bounded
+  to `1 000 ≤ n ≤ 5 205` (one mover in each of two frames, dln −5.2e-3 / −3.7e-3). Closes: the
+  displaced-ordering pool is not starved at 8 (8 → 32 gives 3 better / 3 worse, worst +3.48 %), and
+  the basin fork's wall is concentrated on its cheapest rows (`syn15hfsg` +0.83 s, `himmel11`
+  +0.68 s, both from the iter66 receipt). Also records that the Benchmark step of the last kill ran
+  85.5 s (not 307 s) and that the whole completion band this round is 3.6e-4 wide against an 8.4e-5
+  promotion bar. **Submitted `5d0bd3e6` and cap-killed at 83.1 s** — the fastest of this lane's six
+  kills, from a tree that adds no fork at all, which turns the census into a receipt: the binding
+  row is one no device here has ever moved.
+
+- [0281: the terminal class gate as a resource law](experiments/0281-resource-law-class-gate.md):
+  **−9.7e-5 dev, the largest single gain since the ceiling work.** The class gate's two literals
+  (`n <= 45 000`, `nnz <= 200 000`) excluded five *sparse* dev rows, not a dense tail; the ceiling
+  moves to **80 000** (the dimension where the block's two bitset images still fit the graded 4 GiB
+  address space) and `nnz` to **400 000**. Movers are exactly the newly admitted rows and all four
+  start at the AMD anchor: `transswitch2736spr` −1.218 %, `transswitch2383wpr` −0.147 %,
+  `nuclear104` −0.115 %, `gams05` −0.113 %; 296 rows bit-identical, `lt_1k`/`1k_10k` untouched.
+  Same page carries the lane's first **production-worker ablation receipt** for the terminal region
+  (31 % of a binding row's wall, up to 70 %; and switching it off costs real score, so it is not dead
+  weight) and a **verified negative**: narrowing `solve_component`'s union table to window-local bits
+  is wrong — a window is not closed under its vertices' neighbours — changing 26 of 53 rows.
+
+- [0282: sparse-pristine + cheap fork + bounded twin](experiments/0282-sparse-pristine-fork-twin-composition.md):
+  composes the promoted PR #719 one-image sparse representation with the disjoint shared-prefix
+  fork (`n <= 600`, `nnz <= 5 000`), bounded dense twin (`1 000..=5 205`), reset-first, and
+  `XCH_ALLOC=1`. Full dev **0.7901906 → 0.790142**; the four large sparse movers and all six
+  fork/twin movers are retained without overlap. Sparse-vs-dense trajectory equivalence passes;
+  scratch release suite **127 passed / 0 failed**. Both the no-margin (`48e929aa`) and restored
+  10%-margin (`c4613ce`) forms cap-failed on the 2026-09-14 hidden corpus.
+
+- [0283: sparse first-reset elision and one-image buffer retention](experiments/0283-sparse-first-reset-and-buffer-retention.md):
+  output-preserving cap work after both 0282 failures. `new_sparse` already materialized the exact
+  pristine adjacency before the mandatory first reset cleared and rebuilt it; that reset now reuses
+  the image while retaining its logical charge. Sparse games alone may retain their one mutable
+  image up to the existing 1 GiB admission envelope; all parallel/dense games keep the old 160 MiB
+  pool ceiling. Production-worker medians fall **4.1% aggregate** over the four affected dev rows,
+  with identical ratios; full-dev score stays **0.790142**.
+
+- [0280: remove the exact-window game's overwritten adjacency copy](experiments/0280-reset-first-adjacency-copy.md):
+  **score-neutral cap-margin win.** `Game::assemble` copied the full mutable bitset immediately
+  before the first sweep's mandatory `reset()` overwrote every word. Production now skips only that
+  dead copy; general `Game` constructors remain eager and `SSI_XCH_EAGER_ADJ=1` restores the old arm
+  in test builds. Full dev **0.790230 → 0.790230**, all 300 flop records identical; six raw worker
+  permutations byte-identical. Reversed-order production-worker medians improve **4.2–12.9%** on
+  six large class rows. `126 passed / 0 failed`. **Submitted `4bb9bdd2`; hidden cap-killed after
+  175.832 s of Benchmark-step wall** (PR #715), later than this lane's earlier same-day kills but
+  still no completion.
+
+- [0279: mining under-threshold rejections](experiments/0279-mining-under-threshold-rejections.md):
+  **methodology, no code changed.** The public ledger's reopenable set — submissions that beat the
+  best known at the time and were still closed — is **52 of 716 rows** (against **464 cap kills**),
+  gains −1e-6 … −7.9e-5. Calibrates `minScoreImprovementBips = 1` as **relative**: the bar is
+  bracketed at **9.35e-5 … 1.03e-4 × current best** by the largest gain rejected and the smallest
+  gain accepted. Closes *stacking sub-threshold deltas to clear the bar* as a primary strategy (the
+  same-day completion band is 4.0e-4 ≈ 4× the bar, and merging adds wall, which is the axis the 464
+  kills live on); keeps the set as a **wall-provenance map** and lists five mechanisms worth
+  re-deriving on today's tree. Reproducible from `../evidence/0279-*`.
+
+- [0278: the exchange's admission policy, the daily corpus, and the fork's retirement](experiments/0278-xch-alloc-and-daily-corpus.md):
+  **the hidden eval corpus rotates DAILY** (`fetch-eval-corpus.sh` reads `eval/current.txt`), so a
+  verdict is comparable only within one day. Ships `PRODUCTION_XCH_ALLOC` 0 → **1** (skip a component
+  the precharged ledger cannot fund instead of abandoning the rest of the window): one binary, one
+  session, 300/300 dev rows, **0.790236 → 0.790230, 299 rows bit-identical, one mover, zero
+  regressions**, wall-neutral in the worker frame. Also seals `SSI_XCH_ALLOC=2` (smallest-first) as a
+  no-op — identical on all 300 rows — and `SSI_ENGINE_FLOOR=2` as value-neutral. **Retires the basin
+  fork** to a seam: its receipt charges it +0.68 s on a 14-vertex row and +0.83 s on a 399-vertex row
+  with zero output change, and the day's fork-with-margin tree completed where the no-margin one was
+  killed earliest.

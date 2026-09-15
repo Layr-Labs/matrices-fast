@@ -1,0 +1,26 @@
+
+running 1 test
+test ordering::probe::probe_slow_row_stage ... STAGED	pooling_sppa9pq	5030	120730	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pooling_sppa9pq.bin
+STAGED	meanvar-orl400_05_e_8	4405	171604	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/meanvar-orl400_05_e_8.bin
+STAGED	watercontamination0303r	1310	37028	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/watercontamination0303r.bin
+STAGED	meanvar-orl400_05_e_7	5205	174804	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/meanvar-orl400_05_e_7.bin
+STAGED	pooling_sppa9tp	5040	121302	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/pooling_sppa9tp.bin
+STAGED	chimera_lga-01	1120	6400	/home/ivanludvig/dev/yukon/matrices-fast/candidate-worker/../.session-backup/patterns/chimera_lga-01.bin
+STAGED_TOTAL	6
+WALL	arm	matrix	min	median	max	ratio
+WALL	crown	pooling_sppa9pq	1.8125	2.0632	2.9290	0.634036313
+WALL	cand	pooling_sppa9pq	1.7996	1.8828	2.0820	0.634036313
+WALL	crown	meanvar-orl400_05_e_8	1.0506	1.1198	1.5395	0.999963372
+WALL	cand	meanvar-orl400_05_e_8	1.0148	1.1608	1.8404	0.999963372
+WALL	crown	watercontamination0303r	0.5096	0.5489	0.6732	1.000000000
+WALL	cand	watercontamination0303r	0.5239	0.5399	0.9147	1.000000000
+WALL	crown	meanvar-orl400_05_e_7	0.8973	1.0164	1.5895	0.999835775
+WALL	cand	meanvar-orl400_05_e_7	0.9061	0.9950	1.1049	0.999835775
+WALL	crown	pooling_sppa9tp	3.0687	3.6770	3.9536	0.161338075
+WALL	cand	pooling_sppa9tp	3.1131	3.6520	3.7572	0.161338075
+WALL	crown	chimera_lga-01	2.6622	3.0397	4.4075	0.740586720
+WALL	cand	chimera_lga-01	2.6060	2.9237	3.1810	0.736724554
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 118.87s
+

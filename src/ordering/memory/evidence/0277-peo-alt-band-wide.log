@@ -1,0 +1,62 @@
+
+running 1 test
+test ordering::probe::probe_timing_and_score ... LADGATE	19995	10000	4.097	0
+LIFT	pinene200	19995	15795	89590	15795
+COUNTS	pinene200	19995	97990	1358716	1132609
+LADGATE	11659	10000	4.450	0
+LIFT	transswitch0300p	11659	6750	41276	6750
+COUNTS	transswitch0300p	11659	48446	404940	373515
+LADGATE	30660	10000	4.482	0
+LIFT	crudeoil_pooling_dt3	30660	15957	134914	15957
+COUNTS	crudeoil_pooling_dt3	30660	152210	48975085	34556239
+LADGATE	118	10000	1.129	1
+LIFT	pooling_rt2tp	118	66	554	66
+COUNTS	pooling_rt2tp	118	654	5876	5796
+LADGATE	333	10000	1.146	1
+LIFT	waterund14	333	191	2068	191
+COUNTS	waterund14	333	2204	200484	72184
+LADGATE	548	10000	1.815	1
+LIFT	gancns	548	318	2280	318
+COUNTS	gancns	548	2800	69234	58299
+LADGATE	16364	10000	4.607	0
+LIFT	chp_shorttermplan2d	16364	8902	38240	8902
+COUNTS	chp_shorttermplan2d	16364	52108	4089003	2054862
+LADGATE	23999	10000	3.158	0
+LIFT	methanol400	23999	19199	142128	19199
+COUNTS	methanol400	23999	151728	2586036	1792285
+LADGATE	9858	10000	3.423	1
+LIFT	mpbp_15	9858	5550	25800	5550
+COUNTS	mpbp_15	9858	31692	1496502	1163008
+LADGATE	1120	10000	2.528	1
+LIFT	chimera_lga-01	1120	721	5500	721
+COUNTS	chimera_lga-01	1120	6400	668019	497058
+
+--- every order() call, slowest first (TSV) ---
+secs	matrix	n	nnz	ratio
+6.1577	transswitch0300p	11659	48446	0.9224
+5.8434	chp_shorttermplan2d	16364	52108	0.5025
+5.4668	crudeoil_pooling_dt3	30660	152210	0.7056
+5.0043	pinene200	19995	97990	0.8336
+4.3861	mpbp_15	9858	31692	0.7772
+3.8978	methanol400	23999	151728	0.6931
+3.3528	chimera_lga-01	1120	6400	0.7441
+2.7162	gancns	548	2800	0.8421
+1.6106	pooling_rt2tp	118	654	0.9864
+1.5711	waterund14	333	2204	0.3600
+matrices under 0.010s: 0/10
+matrices under 0.050s: 0/10
+matrices under 0.100s: 0/10
+matrices under 0.200s: 0/10
+matrices under 0.400s: 0/10
+
+--- per-bucket ---
+lt_1k    count=3     geomean=0.6687
+1k_10k   count=2     geomean=0.7604
+gt_10k   count=5     geomean=0.7166
+SCORE = 0.715385
+WORST order() = 6.158 s
+FORCEAUDIT	stage1b_sites=5	force_fires=0	unsound=0	core_total_mismatch=0	max_drift_ppm=0	worst_incumbent=0	worst_adopted=0	tie_window_opened=3	tie_pass_run=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 41.77s
+
